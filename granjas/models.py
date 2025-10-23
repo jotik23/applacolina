@@ -3,11 +3,11 @@ from django.db import models
 
 
 class Farm(models.Model):
-    name = models.CharField(max_length=150)
+    name = models.CharField("Nombre", max_length=150)
 
     class Meta:
-        verbose_name = "Farm"
-        verbose_name_plural = "Farms"
+        verbose_name = "Granja"
+        verbose_name_plural = "Granjas"
         ordering = ("name",)
 
     def __str__(self) -> str:
@@ -19,13 +19,14 @@ class ChickenHouse(models.Model):
         Farm,
         on_delete=models.CASCADE,
         related_name="chicken_houses",
+        verbose_name="Granja",
     )
-    name = models.CharField(max_length=150)
-    area_m2 = models.DecimalField(max_digits=10, decimal_places=2)
+    name = models.CharField("Nombre", max_length=150)
+    area_m2 = models.DecimalField("Area (m2)", max_digits=10, decimal_places=2)
 
     class Meta:
-        verbose_name = "Chicken House"
-        verbose_name_plural = "Chicken Houses"
+        verbose_name = "Galpon"
+        verbose_name_plural = "Galpones"
         ordering = ("farm__name", "name")
         unique_together = ("farm", "name")
 
@@ -38,11 +39,14 @@ class Room(models.Model):
         ChickenHouse,
         on_delete=models.CASCADE,
         related_name="rooms",
+        verbose_name="Galpon",
     )
-    name = models.CharField(max_length=150)
-    area_m2 = models.DecimalField(max_digits=10, decimal_places=2)
+    name = models.CharField("Nombre", max_length=150)
+    area_m2 = models.DecimalField("Area (m2)", max_digits=10, decimal_places=2)
 
     class Meta:
+        verbose_name = "Salon"
+        verbose_name_plural = "Salones"
         ordering = ("chicken_house__farm__name", "chicken_house__name", "name")
         unique_together = ("chicken_house", "name")
 
@@ -59,13 +63,18 @@ class BirdBatch(models.Model):
         Farm,
         on_delete=models.CASCADE,
         related_name="bird_batches",
+        verbose_name="Granja",
     )
-    status = models.CharField(max_length=8, choices=Status.choices, default=Status.ACTIVE)
-    birth_date = models.DateField()
-    initial_quantity = models.PositiveIntegerField()
-    breed = models.CharField(max_length=150)
+    status = models.CharField(
+        "Estado", max_length=8, choices=Status.choices, default=Status.ACTIVE
+    )
+    birth_date = models.DateField("Fecha de nacimiento")
+    initial_quantity = models.PositiveIntegerField("Cantidad inicial")
+    breed = models.CharField("Raza", max_length=150)
 
     class Meta:
+        verbose_name = "Lote de aves"
+        verbose_name_plural = "Lotes de aves"
         ordering = ("-birth_date", "farm__name")
 
     def __str__(self) -> str:
@@ -77,18 +86,20 @@ class BirdBatchRoomAllocation(models.Model):
         BirdBatch,
         on_delete=models.CASCADE,
         related_name="allocations",
+        verbose_name="Lote",
     )
     room = models.ForeignKey(
         Room,
         on_delete=models.CASCADE,
         related_name="allocations",
+        verbose_name="Salon",
     )
-    quantity = models.PositiveIntegerField()
+    quantity = models.PositiveIntegerField("Cantidad")
 
     class Meta:
         unique_together = ("bird_batch", "room")
-        verbose_name = "Bird Batch Allocation"
-        verbose_name_plural = "Bird Batch Allocations"
+        verbose_name = "Asignacion de lote"
+        verbose_name_plural = "Asignaciones de lotes"
 
     def clean(self) -> None:
         super().clean()
@@ -99,10 +110,10 @@ class BirdBatchRoomAllocation(models.Model):
         batch_farm_id = self.bird_batch.farm_id
 
         if room_farm_id != batch_farm_id:
-            raise ValidationError("The selected room must belong to the same farm as the bird batch.")
+            raise ValidationError("El salon seleccionado debe pertenecer a la misma granja del lote.")
 
         if self.quantity <= 0:
-            raise ValidationError("Quantity must be greater than zero.")
+            raise ValidationError("La cantidad debe ser mayor que cero.")
 
     def __str__(self) -> str:
         return f"{self.bird_batch} -> {self.room} ({self.quantity})"
