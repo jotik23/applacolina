@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+
+# IDE
+.idea/
+
+# Local database
+db.sqlite3
