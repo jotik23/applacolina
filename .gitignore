@@ -3,6 +3,7 @@ __pycache__/
 
 # IDE
 .idea/
+.venv
 
 # Local database
 db.sqlite3
