@@ -3,18 +3,26 @@ from __future__ import annotations
 from typing import Any
 
 from django import forms
-from django.db.models import Q
+from django.db import IntegrityError, transaction
+from django.db.models import IntegerField, Max, Q
+from django.db.models.functions import Cast
 
 from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
+    CATEGORY_SHIFT_MAP,
+    OverloadAllowance,
     OperatorCapability,
+    OperatorFarmPreference,
     PositionDefinition,
+    RestRule,
     ShiftAssignment,
     ShiftCalendar,
+    ShiftType,
     complexity_score,
 )
-from users.models import UserProfile
+from .models import RestPreference
+from users.models import Role, UserProfile
 
 
 class CalendarGenerationForm(forms.Form):
@@ -129,7 +137,7 @@ class BaseAssignmentForm(forms.Form):
 
         if max_score < required_score and not position.allow_lower_complexity:
             raise forms.ValidationError(
-                "La posición requiere mayor complejidad y no admite coberturas inferiores."
+                "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
             )
 
         conflict = (
@@ -223,3 +231,171 @@ class AssignmentCreateForm(BaseAssignmentForm):
         cleaned_data["alert_level"] = alert_level
         cleaned_data["target_date"] = target_date
         return cleaned_data
+
+
+class PositionDefinitionForm(forms.ModelForm):
+    class Meta:
+        model = PositionDefinition
+        fields = [
+            "name",
+            "category",
+            "farm",
+            "chicken_house",
+            "room",
+            "complexity",
+            "allow_lower_complexity",
+            "valid_from",
+            "valid_until",
+            "is_active",
+            "notes",
+        ]
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        category = cleaned_data.get("category")
+        if category:
+            self.instance.shift_type = CATEGORY_SHIFT_MAP.get(category, ShiftType.DAY)
+        return cleaned_data
+
+    @staticmethod
+    def _generate_code() -> str:
+        numeric_codes = (
+            PositionDefinition.objects.filter(code__regex=r"^\d+$")
+            .annotate(code_int=Cast("code", IntegerField()))
+            .aggregate(max_code=Max("code_int"))
+        )
+        current_max = numeric_codes.get("max_code") or 0
+        candidate = current_max + 1
+        # Ensure uniqueness in case non-numeric codes collide with numeric range
+        while PositionDefinition.objects.filter(code=str(candidate)).exists():
+            candidate += 1
+        return str(candidate)
+
+    def save(self, commit: bool = True) -> PositionDefinition:
+        instance: PositionDefinition = super().save(commit=False)
+        is_new = instance.pk is None
+
+        if not commit:
+            if is_new and not instance.code:
+                instance.code = self._generate_code()
+            return instance
+
+        if is_new:
+            while True:
+                try:
+                    with transaction.atomic():
+                        if not instance.code:
+                            instance.code = self._generate_code()
+                        instance.save()
+                    break
+                except IntegrityError:
+                    instance.code = None
+        else:
+            instance.save()
+
+        self.save_m2m()
+        return instance
+
+
+class OperatorProfileForm(forms.ModelForm):
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.order_by("name"),
+        required=False,
+    )
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            "cedula",
+            "nombres",
+            "apellidos",
+            "telefono",
+            "email",
+            "roles",
+            "is_active",
+        ]
+
+    def clean_cedula(self) -> str:
+        cedula = self.cleaned_data.get("cedula", "")
+        return cedula.strip()
+
+    def clean_telefono(self) -> str:
+        telefono = self.cleaned_data.get("telefono", "")
+        return telefono.strip()
+
+    def save(self, commit: bool = True) -> UserProfile:
+        instance: UserProfile = super().save(commit=False)
+        if not instance.pk:
+            instance.set_unusable_password()
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+
+        return instance
+
+
+class OperatorCapabilityForm(forms.ModelForm):
+    class Meta:
+        model = OperatorCapability
+        fields = [
+            "operator",
+            "category",
+            "min_complexity",
+            "max_complexity",
+            "effective_from",
+            "effective_until",
+            "is_primary",
+            "notes",
+        ]
+
+
+class OperatorFarmPreferenceForm(forms.ModelForm):
+    class Meta:
+        model = OperatorFarmPreference
+        fields = [
+            "operator",
+            "farm",
+            "preference_weight",
+            "is_primary",
+            "notes",
+        ]
+
+
+class RestRuleForm(forms.ModelForm):
+    class Meta:
+        model = RestRule
+        fields = [
+            "role",
+            "shift_type",
+            "min_rest_frequency",
+            "min_consecutive_days",
+            "max_consecutive_days",
+            "post_shift_rest_days",
+            "monthly_rest_days",
+            "enforce_additional_rest",
+            "active_from",
+            "active_until",
+        ]
+
+
+class RestPreferenceForm(forms.ModelForm):
+    class Meta:
+        model = RestPreference
+        fields = [
+            "rest_rule",
+            "day_of_week",
+            "is_required",
+        ]
+
+
+class OverloadAllowanceForm(forms.ModelForm):
+    class Meta:
+        model = OverloadAllowance
+        fields = [
+            "role",
+            "max_consecutive_extra_days",
+            "highlight_level",
+            "active_from",
+            "active_until",
+        ]

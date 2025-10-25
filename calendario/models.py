@@ -21,9 +21,9 @@ class ShiftType(models.TextChoices):
 
 
 class ComplexityLevel(models.TextChoices):
-    BASIC = "basic", _("Básico")
-    INTERMEDIATE = "intermediate", _("Intermedio")
-    ADVANCED = "advanced", _("Avanzado")
+    BASIC = "basic", _("Criticidad baja")
+    INTERMEDIATE = "intermediate", _("Criticidad media")
+    ADVANCED = "advanced", _("Criticidad alta")
 
 
 COMPLEXITY_LEVEL_SCORE = {
@@ -37,7 +37,7 @@ def complexity_score(level: str) -> int:
     try:
         enumeration = ComplexityLevel(level)
     except ValueError as exc:  # pragma: no cover - defensive
-        raise ValidationError(f"Nivel de complejidad inválido: {level}") from exc
+        raise ValidationError(f"Nivel de criticidad inválido: {level}") from exc
     return COMPLEXITY_LEVEL_SCORE[enumeration]
 
 
@@ -52,6 +52,20 @@ class PositionCategory(models.TextChoices):
     SUPERVISOR = "SUPERVISOR", _("Supervisor")
     LIDER_TECNICO = "LIDER_TECNICO", _("Líder técnico")
     OFICIOS_VARIOS = "OFICIOS_VARIOS", _("Oficios varios")
+
+
+CATEGORY_SHIFT_MAP: dict[str, str] = {
+    PositionCategory.GALPONERO_PRODUCCION_DIA: ShiftType.DAY,
+    PositionCategory.GALPONERO_LEVANTE_DIA: ShiftType.DAY,
+    PositionCategory.GALPONERO_PRODUCCION_NOCHE: ShiftType.NIGHT,
+    PositionCategory.GALPONERO_LEVANTE_NOCHE: ShiftType.NIGHT,
+    PositionCategory.CLASIFICADOR_DIA: ShiftType.DAY,
+    PositionCategory.CLASIFICADOR_NOCHE: ShiftType.NIGHT,
+    PositionCategory.LIDER_GRANJA: ShiftType.DAY,
+    PositionCategory.SUPERVISOR: ShiftType.DAY,
+    PositionCategory.LIDER_TECNICO: ShiftType.DAY,
+    PositionCategory.OFICIOS_VARIOS: ShiftType.DAY,
+}
 
 
 class DayOfWeek(models.IntegerChoices):
@@ -118,15 +132,16 @@ class PositionDefinition(models.Model):
         max_length=16,
         choices=ShiftType.choices,
         default=ShiftType.DAY,
+        editable=False,
     )
     complexity = models.CharField(
-        "Complejidad",
+        "Nivel de criticidad",
         max_length=16,
         choices=ComplexityLevel.choices,
         default=ComplexityLevel.BASIC,
     )
     allow_lower_complexity = models.BooleanField(
-        "Permitir complejidad inferior", default=False
+        "Permitir cubrir con criticidad inferior", default=False
     )
     valid_from = models.DateField("Válido desde")
     valid_until = models.DateField("Válido hasta", null=True, blank=True)
@@ -157,6 +172,10 @@ class PositionDefinition(models.Model):
         if self.room and self.room.chicken_house_id != self.chicken_house_id:
             raise ValidationError("El salón seleccionado debe pertenecer al galpón indicado.")
 
+        inferred_shift = CATEGORY_SHIFT_MAP.get(self.category)
+        if inferred_shift:
+            self.shift_type = inferred_shift
+
     def is_active_on(self, target_date: date) -> bool:
         if not self.is_active:
             return False
@@ -180,13 +199,13 @@ class OperatorCapability(models.Model):
         choices=PositionCategory.choices,
     )
     max_complexity = models.CharField(
-        "Complejidad manejada",
+        "Criticidad máxima manejada",
         max_length=16,
         choices=ComplexityLevel.choices,
         default=ComplexityLevel.BASIC,
     )
     min_complexity = models.CharField(
-        "Complejidad mínima",
+        "Criticidad mínima",
         max_length=16,
         choices=ComplexityLevel.choices,
         default=ComplexityLevel.BASIC,
@@ -219,7 +238,7 @@ class OperatorCapability(models.Model):
             raise ValidationError("La fecha de fin debe ser igual o posterior a la de inicio.")
 
         if complexity_score(self.min_complexity) > complexity_score(self.max_complexity):
-            raise ValidationError("La complejidad mínima no puede ser mayor que la máxima.")
+            raise ValidationError("La criticidad mínima no puede ser mayor que la máxima.")
 
     def is_active_on(self, target_date: date) -> bool:
         if target_date < self.effective_from:

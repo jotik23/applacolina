@@ -1,0 +1,1632 @@
+<script>
+    (() => {
+      const app = document.getElementById('configurator-app');
+      if (!app) {
+        return;
+      }
+
+      const API = {
+        metadata: app.dataset.metadataUrl,
+        generate: app.dataset.generateUrl,
+        summaryTemplate: app.dataset.summaryUrlTemplate,
+        assignmentsTemplate: app.dataset.assignmentsUrlTemplate,
+        eligibleTemplate: app.dataset.eligibleUrlTemplate,
+        calendarDetailTemplate: app.dataset.calendarDetailUrlTemplate,
+        dashboard: app.dataset.dashboardUrl,
+        positions: app.dataset.positionsUrl,
+        positionDetailTemplate: app.dataset.positionDetailUrlTemplate,
+        capabilities: app.dataset.capabilitiesUrl,
+        capabilityDetailTemplate: app.dataset.capabilityDetailUrlTemplate,
+        preferences: app.dataset.preferencesUrl,
+        preferenceDetailTemplate: app.dataset.preferenceDetailUrlTemplate,
+        operators: app.dataset.operatorsUrl,
+        operatorDetailTemplate: app.dataset.operatorDetailUrlTemplate,
+        restRules: app.dataset.restRulesUrl,
+        restRuleDetailTemplate: app.dataset.restRuleDetailUrlTemplate,
+        overloadRules: app.dataset.overloadRulesUrl,
+        overloadRuleDetailTemplate: app.dataset.overloadRuleDetailUrlTemplate,
+      };
+
+      const state = {
+        metadata: null,
+        calendarId: null,
+        lastSummary: null,
+        lookups: {
+          housesByFarm: new Map(),
+          roomsByHouse: new Map(),
+          operatorsById: new Map(),
+          farmsById: new Map(),
+          rolesById: new Map(),
+          categoryLabels: new Map(),
+          complexityLabels: new Map(),
+          shiftLabels: new Map(),
+          alertLabels: new Map(),
+          dayLabels: new Map(),
+        },
+      };
+
+      const refs = {
+        sections: Array.from(app.querySelectorAll('[data-step-index]')),
+        navButtons: Array.from(app.querySelectorAll('[data-step-trigger]')),
+        metadataStatus: app.querySelector('#metadata-status'),
+        positionsBody: app.querySelector('#positions-body'),
+        positionAddBtn: app.querySelector('#position-add-btn'),
+        positionsRefreshBtn: app.querySelector('#refresh-metadata-btn'),
+        positionFormWrapper: app.querySelector('#position-form-wrapper'),
+        positionForm: app.querySelector('#position-form'),
+        positionMessage: app.querySelector('#position-form-message'),
+        positionId: app.querySelector('#position-id'),
+        positionName: app.querySelector('#position-name'),
+        positionCodeDisplay: app.querySelector('#position-code-display'),
+        positionCodeValue: app.querySelector('#position-code-value'),
+        positionCategory: app.querySelector('#position-category'),
+        positionFarm: app.querySelector('#position-farm'),
+        positionHouse: app.querySelector('#position-house'),
+        positionRoom: app.querySelector('#position-room'),
+        positionComplexity: app.querySelector('#position-complexity'),
+        positionValidFrom: app.querySelector('#position-valid-from'),
+        positionValidUntil: app.querySelector('#position-valid-until'),
+        positionAllowLower: app.querySelector('#position-allow-lower'),
+        positionIsActive: app.querySelector('#position-is-active'),
+        positionNotes: app.querySelector('#position-notes'),
+        positionCancelBtn: app.querySelector('#position-cancel-btn'),
+        restRuleAddBtn: app.querySelector('#rest-rule-add-btn'),
+        restRuleFormWrapper: app.querySelector('#rest-rule-form-wrapper'),
+        restRuleForm: app.querySelector('#rest-rule-form'),
+        restRuleMessage: app.querySelector('#rest-rule-form-message'),
+        restRuleId: app.querySelector('#rest-rule-id'),
+        restRuleRole: app.querySelector('#rest-rule-role'),
+        restRuleShift: app.querySelector('#rest-rule-shift'),
+        restRuleMinFrequency: app.querySelector('#rest-rule-min-frequency'),
+        restRuleMinConsecutive: app.querySelector('#rest-rule-min-consecutive'),
+        restRuleMaxConsecutive: app.querySelector('#rest-rule-max-consecutive'),
+        restRulePostShift: app.querySelector('#rest-rule-post-shift'),
+        restRuleMonthlyRest: app.querySelector('#rest-rule-monthly-rest'),
+        restRuleEnforce: app.querySelector('#rest-rule-enforce'),
+        restRuleActiveFrom: app.querySelector('#rest-rule-active-from'),
+        restRuleActiveUntil: app.querySelector('#rest-rule-active-until'),
+        restRulePreferences: app.querySelector('#rest-rule-preferences'),
+        restRuleCancelBtn: app.querySelector('#rest-rule-cancel-btn'),
+        restRuleCount: app.querySelector('#rest-rule-count'),
+        restRuleList: app.querySelector('#rest-rules-list'),
+        overloadAddBtn: app.querySelector('#overload-add-btn'),
+        overloadFormWrapper: app.querySelector('#overload-form-wrapper'),
+        overloadForm: app.querySelector('#overload-form'),
+        overloadMessage: app.querySelector('#overload-form-message'),
+        overloadId: app.querySelector('#overload-id'),
+        overloadRole: app.querySelector('#overload-role'),
+        overloadMaxExtra: app.querySelector('#overload-max-extra'),
+        overloadHighlight: app.querySelector('#overload-highlight'),
+        overloadActiveFrom: app.querySelector('#overload-active-from'),
+        overloadActiveUntil: app.querySelector('#overload-active-until'),
+        overloadCancelBtn: app.querySelector('#overload-cancel-btn'),
+        overloadCount: app.querySelector('#overload-count'),
+        overloadList: app.querySelector('#overload-list'),
+        operatorCount: app.querySelector('#operator-count'),
+        capabilityCount: app.querySelector('#capability-count'),
+        operatorBody: app.querySelector('#operator-body'),
+        operatorSearch: app.querySelector('#operator-search'),
+        operatorCategoryFilter: app.querySelector('#operator-category-filter'),
+        operatorAddBtn: app.querySelector('#operator-add-btn'),
+        operatorRefreshBtn: app.querySelector('#operator-refresh-btn'),
+        operatorFormWrapper: app.querySelector('#operator-form-wrapper'),
+        operatorForm: app.querySelector('#operator-form'),
+        operatorMessage: app.querySelector('#operator-form-message'),
+        operatorId: app.querySelector('#operator-id'),
+        operatorDocument: app.querySelector('#operator-document'),
+        operatorFirstName: app.querySelector('#operator-first-name'),
+        operatorLastName: app.querySelector('#operator-last-name'),
+        operatorPhone: app.querySelector('#operator-phone'),
+        operatorEmail: app.querySelector('#operator-email'),
+        operatorRoles: app.querySelector('#operator-roles'),
+        operatorIsActive: app.querySelector('#operator-is-active'),
+        operatorCancelBtn: app.querySelector('#operator-cancel-btn'),
+        capabilityAddBtn: app.querySelector('#capability-add-btn'),
+        capabilityList: app.querySelector('#capability-list'),
+        capabilityListCount: app.querySelector('#capability-list-count'),
+        capabilityFormWrapper: app.querySelector('#capability-form-wrapper'),
+        capabilityForm: app.querySelector('#capability-form'),
+        capabilityMessage: app.querySelector('#capability-form-message'),
+        capabilityId: app.querySelector('#capability-id'),
+        capabilityOperator: app.querySelector('#capability-operator'),
+        capabilityCategory: app.querySelector('#capability-category'),
+        capabilityMinComplexity: app.querySelector('#capability-min-complexity'),
+        capabilityMaxComplexity: app.querySelector('#capability-max-complexity'),
+        capabilityEffectiveFrom: app.querySelector('#capability-effective-from'),
+        capabilityEffectiveUntil: app.querySelector('#capability-effective-until'),
+        capabilityIsPrimary: app.querySelector('#capability-is-primary'),
+        capabilityNotes: app.querySelector('#capability-notes'),
+        capabilityCancelBtn: app.querySelector('#capability-cancel-btn'),
+        preferenceAddBtn: app.querySelector('#preference-add-btn'),
+        preferenceList: app.querySelector('#preference-list'),
+        preferenceListCount: app.querySelector('#preference-list-count'),
+        preferenceFormWrapper: app.querySelector('#preference-form-wrapper'),
+        preferenceForm: app.querySelector('#preference-form'),
+        preferenceMessage: app.querySelector('#preference-form-message'),
+        preferenceId: app.querySelector('#preference-id'),
+        preferenceOperator: app.querySelector('#preference-operator'),
+        preferenceFarm: app.querySelector('#preference-farm'),
+        preferenceWeight: app.querySelector('#preference-weight'),
+        preferenceIsPrimary: app.querySelector('#preference-is-primary'),
+        preferenceNotes: app.querySelector('#preference-notes'),
+        preferenceCancelBtn: app.querySelector('#preference-cancel-btn'),
+        summaryPreview: app.querySelector('#summary-preview'),
+        calendarFeedback: app.querySelector('#calendar-feedback'),
+        reloadSummaryBtn: app.querySelector('#reload-summary-btn'),
+        calendarActions: app.querySelector('#calendar-actions'),
+        calendarDetailLink: app.querySelector('#open-calendar-detail'),
+        generateCalendarBtn: document.getElementById('generate-calendar-btn'),
+      };
+
+      const toneClassSets = {
+        info: ['border-slate-200', 'bg-slate-50', 'text-slate-600'],
+        success: ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700'],
+        error: ['border-red-200', 'bg-red-50', 'text-red-700'],
+        warning: ['border-amber-200', 'bg-amber-50', 'text-amber-700'],
+      };
+      const allToneClasses = Object.values(toneClassSets).flat();
+
+      const escapeHtml = (value) => {
+        if (value === null || value === undefined) {
+          return '';
+        }
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
+      const replaceId = (template, id) => template.replace('/0/', `/${id}/`);
+
+      const setFormMessage = (element, message = '', tone = 'info') => {
+        if (!element) {
+          return;
+        }
+        if (!message) {
+          element.classList.add('hidden');
+          element.textContent = '';
+          return;
+        }
+        element.classList.remove('hidden');
+        element.classList.remove(...allToneClasses);
+        const classes = toneClassSets[tone] || toneClassSets.info;
+        element.classList.add(...classes);
+        element.textContent = message;
+      };
+
+      const updateMetadataStatus = (message, tone = 'info') => {
+        setFormMessage(refs.metadataStatus, message, tone);
+      };
+
+      const toggleWrapper = (wrapper, visible) => {
+        if (!wrapper) {
+          return;
+        }
+        wrapper.classList.toggle('hidden', !visible);
+      };
+
+      const resetForm = (form, messageEl) => {
+        if (form) {
+          form.reset();
+        }
+        if (messageEl) {
+          setFormMessage(messageEl, '');
+        }
+      };
+
+      const apiRequest = (url, { method = 'GET', body } = {}) => {
+        const options = {
+          method,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        };
+        if (body !== undefined) {
+          options.body = JSON.stringify(body);
+          options.headers['Content-Type'] = 'application/json';
+        }
+        return fetch(url, options);
+      };
+
+      const populateSelect = (
+        select,
+        items,
+        { valueKey = 'value', labelKey = 'label', includeBlank = true, blankLabel = 'Seleccione…', keepValue = true } = {}
+      ) => {
+        if (!select) {
+          return;
+        }
+        const previous = keepValue ? select.value : '';
+        select.innerHTML = '';
+        if (includeBlank) {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = blankLabel;
+          select.append(option);
+        }
+        (items || []).forEach((item) => {
+          const option = document.createElement('option');
+          option.value = String(item[valueKey]);
+          option.textContent = item[labelKey];
+          select.append(option);
+        });
+        if (keepValue && previous) {
+          select.value = previous;
+        }
+      };
+
+      const rebuildLookups = () => {
+        if (!state.metadata) {
+          return;
+        }
+
+        const housesByFarm = new Map();
+        state.metadata.chicken_houses.forEach((house) => {
+          const list = housesByFarm.get(house.farm_id) || [];
+          list.push(house);
+          housesByFarm.set(house.farm_id, list);
+        });
+        housesByFarm.forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
+
+        const roomsByHouse = new Map();
+        state.metadata.rooms.forEach((room) => {
+          const list = roomsByHouse.get(room.chicken_house_id) || [];
+          list.push(room);
+          roomsByHouse.set(room.chicken_house_id, list);
+        });
+        roomsByHouse.forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
+
+        const operatorsById = new Map();
+        state.metadata.operators.forEach((operator) => {
+          operatorsById.set(operator.id, operator);
+        });
+
+        const farmsById = new Map();
+        state.metadata.farms.forEach((farm) => {
+          farmsById.set(farm.id, farm);
+        });
+
+        const rolesById = new Map();
+        state.metadata.roles.forEach((role) => {
+          rolesById.set(role.id, role);
+        });
+
+        const choiceMap = (choices) => {
+          const map = new Map();
+          choices.forEach((choice) => {
+            map.set(choice.value, choice.label);
+          });
+          return map;
+        };
+
+        state.lookups = {
+          housesByFarm,
+          roomsByHouse,
+          operatorsById,
+          farmsById,
+          rolesById,
+          categoryLabels: choiceMap(state.metadata.choice_sets.position_categories),
+          complexityLabels: choiceMap(state.metadata.choice_sets.complexity_levels),
+          shiftLabels: choiceMap(state.metadata.choice_sets.shift_types),
+          alertLabels: choiceMap(state.metadata.choice_sets.alert_levels),
+          dayLabels: choiceMap(state.metadata.choice_sets.days_of_week),
+        };
+      };
+
+      const updateRoomOptions = (houseId, keepValue = true) => {
+        if (!refs.positionRoom) {
+          return;
+        }
+        if (!houseId) {
+          populateSelect(refs.positionRoom, [], { includeBlank: true, blankLabel: 'Todos los salones', keepValue: false });
+          return;
+        }
+        const rooms = state.lookups.roomsByHouse.get(Number(houseId)) || [];
+        populateSelect(refs.positionRoom, rooms, { valueKey: 'id', labelKey: 'name', includeBlank: true, blankLabel: 'Todos los salones', keepValue });
+      };
+
+      const updateHouseOptions = (farmId, keepValue = true) => {
+        if (!refs.positionHouse) {
+          return;
+        }
+        const houses = state.lookups.housesByFarm.get(Number(farmId)) || [];
+        populateSelect(refs.positionHouse, houses, { valueKey: 'id', labelKey: 'name', includeBlank: true, blankLabel: 'Todos los galpones', keepValue });
+        updateRoomOptions(refs.positionHouse.value, keepValue);
+      };
+
+      const populateStaticOptions = () => {
+        if (!state.metadata) {
+          return;
+        }
+
+        populateSelect(refs.positionCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
+        populateSelect(refs.positionFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
+        populateSelect(refs.positionComplexity, state.metadata.choice_sets.complexity_levels, { blankLabel: 'Selecciona nivel de criticidad' });
+
+        populateSelect(refs.restRuleRole, state.metadata.roles, { valueKey: 'id', labelKey: 'label', blankLabel: 'Selecciona rol' });
+        populateSelect(refs.restRuleShift, state.metadata.choice_sets.shift_types, { blankLabel: 'Selecciona turno' });
+
+        populateSelect(refs.overloadRole, state.metadata.roles, { valueKey: 'id', labelKey: 'label', blankLabel: 'Selecciona rol' });
+        populateSelect(refs.overloadHighlight, state.metadata.choice_sets.alert_levels, { blankLabel: 'Nivel de alerta' });
+
+        populateSelect(refs.operatorRoles, state.metadata.roles, { valueKey: 'id', labelKey: 'label', includeBlank: false, keepValue: false });
+
+        populateSelect(refs.capabilityOperator, state.metadata.operators, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona colaborador' });
+        populateSelect(refs.capabilityCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
+        populateSelect(refs.capabilityMinComplexity, state.metadata.choice_sets.complexity_levels, { blankLabel: 'Criticidad mínima' });
+        populateSelect(refs.capabilityMaxComplexity, state.metadata.choice_sets.complexity_levels, { blankLabel: 'Criticidad máxima' });
+
+        populateSelect(refs.preferenceOperator, state.metadata.operators, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona colaborador' });
+        populateSelect(refs.preferenceFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
+
+        if (refs.restRulePreferences) {
+          refs.restRulePreferences.innerHTML = state.metadata.choice_sets.days_of_week
+            .map(
+              (day) => `
+                <label class="flex flex-col gap-1 rounded border border-slate-200 bg-white px-3 py-2">
+                  <span class="text-sm font-semibold text-slate-700">${escapeHtml(day.label)}</span>
+                  <select data-day="${day.value}" class="rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
+                    <option value="">No usar</option>
+                    <option value="recommended">Recomendado</option>
+                    <option value="required">Obligatorio</option>
+                  </select>
+                </label>
+              `
+            )
+            .join('');
+        }
+
+        updateHouseOptions(refs.positionFarm?.value || '', true);
+      };
+
+      const readRestPreferences = () => {
+        if (!refs.restRulePreferences) {
+          return [];
+        }
+        const result = [];
+        refs.restRulePreferences.querySelectorAll('select[data-day]').forEach((select) => {
+          if (!select.value) {
+            return;
+          }
+          result.push({
+            day_of_week: Number(select.dataset.day),
+            is_required: select.value === 'required',
+          });
+        });
+        return result;
+      };
+
+      const setRestPreferences = (preferences = []) => {
+        if (!refs.restRulePreferences) {
+          return;
+        }
+        const preferenceMap = new Map(
+          preferences.map((pref) => [String(pref.day_of_week), pref.is_required ? 'required' : 'recommended'])
+        );
+        refs.restRulePreferences.querySelectorAll('select[data-day]').forEach((select) => {
+          select.value = preferenceMap.get(select.dataset.day) || '';
+        });
+      };
+
+      const getPositionPayload = () => ({
+        name: refs.positionName?.value.trim() || '',
+        category: refs.positionCategory?.value || '',
+        farm: refs.positionFarm?.value || '',
+        chicken_house: refs.positionHouse?.value || '',
+        room: refs.positionRoom?.value || '',
+        complexity: refs.positionComplexity?.value || '',
+        allow_lower_complexity: Boolean(refs.positionAllowLower?.checked),
+        valid_from: refs.positionValidFrom?.value || '',
+        valid_until: refs.positionValidUntil?.value || '',
+        is_active: Boolean(refs.positionIsActive?.checked),
+        notes: refs.positionNotes?.value.trim() || '',
+      });
+
+      const openPositionForm = (position = null) => {
+        resetForm(refs.positionForm, refs.positionMessage);
+        toggleWrapper(refs.positionFormWrapper, true);
+        if (!position) {
+          refs.positionId.value = '';
+          refs.positionIsActive.checked = true;
+          refs.positionAllowLower.checked = false;
+          if (refs.positionCodeDisplay) {
+            refs.positionCodeDisplay.classList.add('hidden');
+          }
+          if (refs.positionCodeValue) {
+            refs.positionCodeValue.textContent = '—';
+          }
+          updateHouseOptions(refs.positionFarm?.value || '', true);
+          updateRoomOptions(refs.positionHouse?.value || '', true);
+          return;
+        }
+        refs.positionId.value = position.id;
+        refs.positionName.value = position.name || '';
+        if (refs.positionCodeDisplay) {
+          const hasCode = Boolean(position.code);
+          refs.positionCodeDisplay.classList.toggle('hidden', !hasCode);
+        }
+        if (refs.positionCodeValue) {
+          refs.positionCodeValue.textContent = position.code || '—';
+        }
+        refs.positionCategory.value = position.category || '';
+        refs.positionComplexity.value = position.complexity || '';
+        refs.positionValidFrom.value = position.valid_from || '';
+        refs.positionValidUntil.value = position.valid_until || '';
+        refs.positionAllowLower.checked = Boolean(position.allow_lower_complexity);
+        refs.positionIsActive.checked = Boolean(position.is_active);
+        refs.positionNotes.value = position.notes || '';
+        refs.positionFarm.value = position.farm?.id ? String(position.farm.id) : '';
+        updateHouseOptions(refs.positionFarm.value || '', false);
+        refs.positionHouse.value = position.chicken_house?.id ? String(position.chicken_house.id) : '';
+        updateRoomOptions(refs.positionHouse.value || '', false);
+        refs.positionRoom.value = position.room?.id ? String(position.room.id) : '';
+      };
+
+      const closePositionForm = () => {
+        resetForm(refs.positionForm, refs.positionMessage);
+        toggleWrapper(refs.positionFormWrapper, false);
+        if (refs.positionCodeDisplay) {
+          refs.positionCodeDisplay.classList.add('hidden');
+        }
+        if (refs.positionCodeValue) {
+          refs.positionCodeValue.textContent = '—';
+        }
+      };
+
+      const getOperatorPayload = () => ({
+        cedula: refs.operatorDocument?.value.trim() || '',
+        telefono: refs.operatorPhone?.value.trim() || '',
+        nombres: refs.operatorFirstName?.value.trim() || '',
+        apellidos: refs.operatorLastName?.value.trim() || '',
+        email: refs.operatorEmail?.value.trim() || '',
+        roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
+        is_active: Boolean(refs.operatorIsActive?.checked),
+      });
+
+      const openOperatorForm = (operator = null) => {
+        resetForm(refs.operatorForm, refs.operatorMessage);
+        toggleWrapper(refs.operatorFormWrapper, true);
+        if (!operator) {
+          if (refs.operatorId) {
+            refs.operatorId.value = '';
+          }
+          if (refs.operatorDocument) {
+            refs.operatorDocument.value = '';
+          }
+          if (refs.operatorPhone) {
+            refs.operatorPhone.value = '';
+          }
+          if (refs.operatorFirstName) {
+            refs.operatorFirstName.value = '';
+          }
+          if (refs.operatorLastName) {
+            refs.operatorLastName.value = '';
+          }
+          if (refs.operatorEmail) {
+            refs.operatorEmail.value = '';
+          }
+          if (refs.operatorRoles) {
+            Array.from(refs.operatorRoles.options).forEach((option) => {
+              option.selected = false;
+            });
+          }
+          if (refs.operatorIsActive) {
+            refs.operatorIsActive.checked = true;
+          }
+          return;
+        }
+
+        if (refs.operatorId) {
+          refs.operatorId.value = operator.id ?? '';
+        }
+        if (refs.operatorDocument) {
+          refs.operatorDocument.value = operator.document || '';
+        }
+        if (refs.operatorPhone) {
+          refs.operatorPhone.value = operator.telefono || '';
+        }
+        if (refs.operatorFirstName) {
+          refs.operatorFirstName.value = operator.nombres || '';
+        }
+        if (refs.operatorLastName) {
+          refs.operatorLastName.value = operator.apellidos || '';
+        }
+        if (refs.operatorEmail) {
+          refs.operatorEmail.value = operator.email || '';
+        }
+        if (refs.operatorRoles) {
+          const selectedRoles = (operator.roles || []).map((role) => String(role.id));
+          Array.from(refs.operatorRoles.options).forEach((option) => {
+            option.selected = selectedRoles.includes(option.value);
+          });
+        }
+        if (refs.operatorIsActive) {
+          refs.operatorIsActive.checked = Boolean(operator.is_active);
+        }
+      };
+
+      const closeOperatorForm = () => {
+        resetForm(refs.operatorForm, refs.operatorMessage);
+        toggleWrapper(refs.operatorFormWrapper, false);
+      };
+
+      const getRestRulePayload = () => ({
+        role: refs.restRuleRole?.value || '',
+        shift_type: refs.restRuleShift?.value || '',
+        min_rest_frequency: refs.restRuleMinFrequency?.value || '',
+        min_consecutive_days: refs.restRuleMinConsecutive?.value || '',
+        max_consecutive_days: refs.restRuleMaxConsecutive?.value || '',
+        post_shift_rest_days: refs.restRulePostShift?.value || '',
+        monthly_rest_days: refs.restRuleMonthlyRest?.value || '',
+        enforce_additional_rest: Boolean(refs.restRuleEnforce?.checked),
+        active_from: refs.restRuleActiveFrom?.value || '',
+        active_until: refs.restRuleActiveUntil?.value || '',
+        preferences: readRestPreferences(),
+      });
+
+      const openRestRuleForm = (rule = null) => {
+        resetForm(refs.restRuleForm, refs.restRuleMessage);
+        toggleWrapper(refs.restRuleFormWrapper, true);
+        if (!rule) {
+          refs.restRuleId.value = '';
+          refs.restRuleEnforce.checked = false;
+          setRestPreferences([]);
+          return;
+        }
+        refs.restRuleId.value = rule.id;
+        refs.restRuleRole.value = rule.role?.id ? String(rule.role.id) : '';
+        refs.restRuleShift.value = rule.shift_type || '';
+        refs.restRuleMinFrequency.value = rule.min_rest_frequency;
+        refs.restRuleMinConsecutive.value = rule.min_consecutive_days;
+        refs.restRuleMaxConsecutive.value = rule.max_consecutive_days;
+        refs.restRulePostShift.value = rule.post_shift_rest_days;
+        refs.restRuleMonthlyRest.value = rule.monthly_rest_days;
+        refs.restRuleEnforce.checked = Boolean(rule.enforce_additional_rest);
+        refs.restRuleActiveFrom.value = rule.active_from || '';
+        refs.restRuleActiveUntil.value = rule.active_until || '';
+        setRestPreferences(rule.preferences || []);
+      };
+
+      const closeRestRuleForm = () => {
+        resetForm(refs.restRuleForm, refs.restRuleMessage);
+        setRestPreferences([]);
+        toggleWrapper(refs.restRuleFormWrapper, false);
+      };
+
+      const getOverloadPayload = () => ({
+        role: refs.overloadRole?.value || '',
+        max_consecutive_extra_days: refs.overloadMaxExtra?.value || '',
+        highlight_level: refs.overloadHighlight?.value || '',
+        active_from: refs.overloadActiveFrom?.value || '',
+        active_until: refs.overloadActiveUntil?.value || '',
+      });
+
+      const openOverloadForm = (rule = null) => {
+        resetForm(refs.overloadForm, refs.overloadMessage);
+        toggleWrapper(refs.overloadFormWrapper, true);
+        if (!rule) {
+          refs.overloadId.value = '';
+          return;
+        }
+        refs.overloadId.value = rule.id;
+        refs.overloadRole.value = rule.role?.id ? String(rule.role.id) : '';
+        refs.overloadMaxExtra.value = rule.max_consecutive_extra_days;
+        refs.overloadHighlight.value = rule.highlight_level || '';
+        refs.overloadActiveFrom.value = rule.active_from || '';
+        refs.overloadActiveUntil.value = rule.active_until || '';
+      };
+
+      const closeOverloadForm = () => {
+        resetForm(refs.overloadForm, refs.overloadMessage);
+        toggleWrapper(refs.overloadFormWrapper, false);
+      };
+
+      const getCapabilityPayload = () => ({
+        operator: refs.capabilityOperator?.value || '',
+        category: refs.capabilityCategory?.value || '',
+        min_complexity: refs.capabilityMinComplexity?.value || '',
+        max_complexity: refs.capabilityMaxComplexity?.value || '',
+        effective_from: refs.capabilityEffectiveFrom?.value || '',
+        effective_until: refs.capabilityEffectiveUntil?.value || '',
+        is_primary: Boolean(refs.capabilityIsPrimary?.checked),
+        notes: refs.capabilityNotes?.value.trim() || '',
+      });
+
+      const openCapabilityForm = (capability = null) => {
+        resetForm(refs.capabilityForm, refs.capabilityMessage);
+        toggleWrapper(refs.capabilityFormWrapper, true);
+        if (!capability) {
+          refs.capabilityId.value = '';
+          refs.capabilityIsPrimary.checked = false;
+          return;
+        }
+        refs.capabilityId.value = capability.id;
+        refs.capabilityOperator.value = capability.operator_id ? String(capability.operator_id) : '';
+        refs.capabilityCategory.value = capability.category || '';
+        refs.capabilityMinComplexity.value = capability.min_complexity || '';
+        refs.capabilityMaxComplexity.value = capability.max_complexity || '';
+        refs.capabilityEffectiveFrom.value = capability.effective_from || '';
+        refs.capabilityEffectiveUntil.value = capability.effective_until || '';
+        refs.capabilityIsPrimary.checked = Boolean(capability.is_primary);
+        refs.capabilityNotes.value = capability.notes || '';
+      };
+
+      const closeCapabilityForm = () => {
+        resetForm(refs.capabilityForm, refs.capabilityMessage);
+        toggleWrapper(refs.capabilityFormWrapper, false);
+      };
+
+      const getPreferencePayload = () => ({
+        operator: refs.preferenceOperator?.value || '',
+        farm: refs.preferenceFarm?.value || '',
+        preference_weight: refs.preferenceWeight?.value || '',
+        is_primary: Boolean(refs.preferenceIsPrimary?.checked),
+        notes: refs.preferenceNotes?.value.trim() || '',
+      });
+
+      const openPreferenceForm = (preference = null) => {
+        resetForm(refs.preferenceForm, refs.preferenceMessage);
+        toggleWrapper(refs.preferenceFormWrapper, true);
+        if (!preference) {
+          refs.preferenceId.value = '';
+          refs.preferenceIsPrimary.checked = false;
+          return;
+        }
+        refs.preferenceId.value = preference.id;
+        refs.preferenceOperator.value = preference.operator_id ? String(preference.operator_id) : '';
+        refs.preferenceFarm.value = preference.farm?.id ? String(preference.farm.id) : '';
+        refs.preferenceWeight.value = preference.preference_weight;
+        refs.preferenceIsPrimary.checked = Boolean(preference.is_primary);
+        refs.preferenceNotes.value = preference.notes || '';
+      };
+
+      const closePreferenceForm = () => {
+        resetForm(refs.preferenceForm, refs.preferenceMessage);
+        toggleWrapper(refs.preferenceFormWrapper, false);
+      };
+
+      const submitEntity = async ({ url, method, payload, messageRef, successMessage, onSuccess }) => {
+        if (messageRef) {
+          setFormMessage(messageRef, 'Guardando…', 'info');
+        }
+        try {
+          const response = await apiRequest(url, { method, body: payload });
+          if (!response.ok) {
+            let errorMessage = 'No fue posible guardar la información.';
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const data = await response.json();
+              if (data?.error) {
+                errorMessage = data.error;
+              } else if (data?.errors) {
+                const firstField = Object.keys(data.errors)[0];
+                if (firstField) {
+                  errorMessage = data.errors[firstField][0];
+                }
+              }
+            } else {
+              const text = await response.text();
+              if (text) {
+                errorMessage = text;
+              }
+            }
+            if (messageRef) {
+              setFormMessage(messageRef, errorMessage, 'error');
+            }
+            return;
+          }
+
+          if (messageRef) {
+            setFormMessage(messageRef, successMessage || 'Cambios guardados correctamente.', 'success');
+          }
+          if (onSuccess) {
+            onSuccess();
+          }
+          await fetchMetadata();
+        } catch (error) {
+          console.error(error);
+          if (messageRef) {
+            setFormMessage(messageRef, 'Error inesperado. Intenta nuevamente.', 'error');
+          }
+        }
+      };
+
+      const deleteEntity = async (url, { afterSuccess } = {}) => {
+        try {
+          const response = await apiRequest(url, { method: 'DELETE' });
+          if (!response.ok) {
+            const contentType = response.headers.get('content-type') || '';
+            let errorMessage = 'No fue posible eliminar el registro.';
+            if (contentType.includes('application/json')) {
+              const data = await response.json();
+              if (data?.error) {
+                errorMessage = data.error;
+              }
+            } else {
+              const text = await response.text();
+              if (text) {
+                errorMessage = text;
+              }
+            }
+            updateMetadataStatus(errorMessage, 'error');
+            return;
+          }
+          if (afterSuccess) {
+            afterSuccess();
+          }
+          await fetchMetadata();
+        } catch (error) {
+          console.error(error);
+          updateMetadataStatus('Error eliminando el registro. Intenta nuevamente.', 'error');
+        }
+      };
+
+
+      refs.positionFarm?.addEventListener('change', (event) => {
+        updateHouseOptions(event.target.value, false);
+      });
+
+      refs.positionHouse?.addEventListener('change', (event) => {
+        updateRoomOptions(event.target.value, false);
+      });
+
+      const showStep = (step) => {
+        refs.sections.forEach((section) => {
+          const current = Number(section.getAttribute('data-step-index'));
+          if (current === step) {
+            section.classList.remove('hidden');
+          } else {
+            section.classList.add('hidden');
+          }
+        });
+
+        refs.navButtons.forEach((button) => {
+          const target = Number(button.getAttribute('data-step-trigger'));
+          if (target === step) {
+            button.classList.add('bg-brand', 'text-white');
+            button.classList.remove('text-slate-600');
+          } else {
+            button.classList.remove('bg-brand', 'text-white');
+            button.classList.add('text-slate-600');
+          }
+        });
+      };
+
+      refs.navButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = Number(button.getAttribute('data-step-trigger'));
+          showStep(target);
+        });
+      });
+
+      app.querySelectorAll('[data-action="next"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const next = Number(button.getAttribute('data-next-step'));
+          showStep(next);
+        });
+      });
+
+      app.querySelectorAll('[data-action="prev"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const prev = Number(button.getAttribute('data-prev-step'));
+          showStep(prev);
+        });
+      });
+
+      const renderPositions = () => {
+        if (!refs.positionsBody || !state.metadata) {
+          return;
+        }
+
+        const { positions } = state.metadata;
+        if (!positions.length) {
+          refs.positionsBody.innerHTML =
+            '<tr><td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">No hay posiciones activas en este momento.</td></tr>';
+          return;
+        }
+
+        refs.positionsBody.innerHTML = positions
+          .map((position) => {
+            const complexityLabel = state.lookups.complexityLabels.get(position.complexity) || position.complexity;
+            const shiftLabel = state.lookups.shiftLabels.get(position.shift_type) || position.shift_type;
+            const validity = position.valid_until
+              ? `${escapeHtml(position.valid_from)} → ${escapeHtml(position.valid_until)}`
+              : `${escapeHtml(position.valid_from)} → vigencia abierta`;
+            return `
+              <tr>
+                <td class="px-3 py-3 align-top">
+                  <p class="font-semibold text-slate-800">${escapeHtml(position.name)}</p>
+                  <p class="text-xs text-slate-500">${escapeHtml(position.code)} · ${escapeHtml(position.farm?.name || '')}</p>
+                </td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(complexityLabel)}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(shiftLabel)}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${validity}</td>
+                <td class="px-3 py-3 align-top">
+                  <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                    position.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                  }">
+                    ${position.is_active ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td class="px-3 py-3 align-top">
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="position-edit" data-id="${position.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="position-delete" data-id="${position.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          })
+          .join('');
+      };
+
+      const renderRestRules = () => {
+        if (!state.metadata || !refs.restRuleList || !refs.restRuleCount) {
+          return;
+        }
+
+        const restRules = state.metadata.rest_rules || [];
+        refs.restRuleCount.textContent = `${restRules.length} reglas`;
+
+        if (!restRules.length) {
+          refs.restRuleList.innerHTML =
+            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Sin información disponible.</p>';
+          return;
+        }
+
+        refs.restRuleList.innerHTML = restRules
+          .map((rule) => {
+            const preferences = (rule.preferences || [])
+              .map((pref) => `${escapeHtml(state.lookups.dayLabels.get(pref.day_of_week) || pref.day_of_week)}${pref.is_required ? ' (obligatorio)' : ''}`)
+              .join(', ');
+            return `
+              <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p class="font-semibold text-slate-800">${escapeHtml(rule.role.label)}</p>
+                    <p class="text-xs text-slate-500">Turno: ${escapeHtml(state.lookups.shiftLabels.get(rule.shift_type) || rule.shift_type)}</p>
+                    <p class="text-xs text-slate-500">${escapeHtml(rule.active_from)} → ${escapeHtml(rule.active_until || 'vigente')}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="rest-rule-edit" data-id="${rule.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="rest-rule-delete" data-id="${rule.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
+                  </div>
+                </header>
+                <dl class="mt-3 grid grid-cols-2 gap-3 text-xs text-slate-600">
+                  <div>
+                    <dt class="font-medium text-slate-700">Descanso cada</dt>
+                    <dd>${rule.min_rest_frequency} días</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-slate-700">Mín/Máx consecutivos</dt>
+                    <dd>${rule.min_consecutive_days} / ${rule.max_consecutive_days}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-slate-700">Descanso post turno</dt>
+                    <dd>${rule.post_shift_rest_days} días</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-slate-700">Descansos mensuales</dt>
+                    <dd>${rule.monthly_rest_days}</dd>
+                  </div>
+                </dl>
+                ${preferences ? `<p class="mt-3 text-xs text-slate-500">Preferencias: ${escapeHtml(preferences)}</p>` : ''}
+              </article>
+            `;
+          })
+          .join('');
+      };
+
+      const renderOverloadRules = () => {
+        if (!state.metadata || !refs.overloadList || !refs.overloadCount) {
+          return;
+        }
+
+        const overloads = state.metadata.overload_rules || [];
+        refs.overloadCount.textContent = `${overloads.length} reglas`;
+
+        if (!overloads.length) {
+          refs.overloadList.innerHTML =
+            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Sin reglas de sobrecarga activas.</p>';
+          return;
+        }
+
+        refs.overloadList.innerHTML = overloads
+          .map(
+            (rule) => `
+              <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p class="font-semibold text-slate-800">${escapeHtml(rule.role.label)}</p>
+                    <p class="text-xs text-slate-500">${escapeHtml(rule.active_from)} → ${escapeHtml(rule.active_until || 'vigente')}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="overload-edit" data-id="${rule.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="overload-delete" data-id="${rule.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
+                  </div>
+                </header>
+                <p class="mt-2 text-xs text-slate-600">Máximo de días extra consecutivos: <span class="font-semibold">${rule.max_consecutive_extra_days}</span></p>
+                <p class="mt-1 text-xs text-slate-500">Nivel de alerta: ${escapeHtml(state.lookups.alertLabels.get(rule.highlight_level) || rule.highlight_level)}</p>
+              </article>
+            `
+          )
+          .join('');
+      };
+
+      const renderOperators = () => {
+        if (!state.metadata || !refs.operatorBody) {
+          return;
+        }
+
+        const searchTerm = (refs.operatorSearch?.value || '').toLowerCase();
+        const categoryFilter = refs.operatorCategoryFilter?.value || '';
+
+        const { operators = [], capabilities = [], preferences = [] } = state.metadata;
+        const capabilitiesByOperator = capabilities.reduce((acc, capability) => {
+          const list = acc.get(capability.operator_id) || [];
+          list.push(capability);
+          acc.set(capability.operator_id, list);
+          return acc;
+        }, new Map());
+
+        const preferencesByOperator = preferences.reduce((acc, pref) => {
+          const list = acc.get(pref.operator_id) || [];
+          list.push(pref);
+          acc.set(pref.operator_id, list);
+          return acc;
+        }, new Map());
+
+        const filtered = operators.filter((operator) => {
+          const name = (operator.name || '').toLowerCase();
+          const document = (operator.document || '').toLowerCase();
+          const matchesSearch = !searchTerm || name.includes(searchTerm) || document.includes(searchTerm);
+          if (!matchesSearch) {
+            return false;
+          }
+
+          if (!categoryFilter) {
+            return true;
+          }
+
+          const operatorCapabilities = capabilitiesByOperator.get(operator.id) || [];
+          return operatorCapabilities.some((item) => item.category === categoryFilter);
+        });
+
+        if (refs.operatorCount) {
+          refs.operatorCount.textContent = `${filtered.length} colaboradores`;
+        }
+        if (refs.capabilityCount) {
+          refs.capabilityCount.textContent = `${capabilities.length} fortalezas activas`;
+        }
+
+        if (!filtered.length) {
+          refs.operatorBody.innerHTML =
+            '<tr><td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">No encontramos colaboradores con ese criterio.</td></tr>';
+          return;
+        }
+
+        refs.operatorBody.innerHTML = filtered
+          .map((operator) => {
+            const operatorCapabilities = (capabilitiesByOperator.get(operator.id) || [])
+              .map((capability) => `${escapeHtml(state.lookups.categoryLabels.get(capability.category) || capability.category)} (${escapeHtml(state.lookups.complexityLabels.get(capability.min_complexity) || capability.min_complexity)} → ${escapeHtml(state.lookups.complexityLabels.get(capability.max_complexity) || capability.max_complexity)})`)
+              .join(', ');
+
+            const operatorPreferences = (preferencesByOperator.get(operator.id) || [])
+              .map((pref) => `${escapeHtml(state.lookups.farmsById.get(pref.farm.id)?.name || pref.farm.name)} (peso ${pref.preference_weight})`)
+              .join(', ');
+
+            const roles = (operator.roles || []).map((role) => escapeHtml(role.label)).join(', ');
+            const statusBadge = operator.is_active
+              ? '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Activo</span>'
+              : '<span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">Inactivo</span>';
+            const toggleLabel = operator.is_active ? 'Deshabilitar' : 'Habilitar';
+            const toggleClasses = operator.is_active
+              ? 'border-red-200 text-red-700 hover:bg-red-50'
+              : 'border-emerald-300 text-emerald-700 hover:bg-emerald-100';
+            const desiredState = operator.is_active ? 'false' : 'true';
+            const rowClasses = operator.is_active ? 'bg-white' : 'bg-slate-50';
+            const contactLine = operator.telefono
+              ? `${escapeHtml(operator.document)} · ${escapeHtml(operator.telefono)}`
+              : escapeHtml(operator.document);
+            const emailLine = operator.email
+              ? `<p class="text-xs text-slate-500">${escapeHtml(operator.email)}</p>`
+              : '';
+
+            return `
+              <tr class="${rowClasses}">
+                <td class="px-3 py-3 align-top">
+                  <p class="font-semibold text-slate-800">${escapeHtml(operator.name)}</p>
+                  <p class="text-xs text-slate-500">${contactLine}</p>
+                  ${emailLine}
+                </td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${roles || 'Sin rol asignado'}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${operatorCapabilities || 'Sin fortalezas activas'}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${operatorPreferences || 'Sin preferencias'}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${statusBadge}</td>
+                <td class="px-3 py-3 align-top">
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="operator-edit" data-id="${operator.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="operator-toggle" data-id="${operator.id}" data-active="${desiredState}" class="rounded border ${toggleClasses} px-2 py-1 text-xs">${toggleLabel}</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          })
+          .join('');
+      };
+
+      const populateCategoryFilter = () => {
+        if (!refs.operatorCategoryFilter || !state.metadata) {
+          return;
+        }
+
+        const select = refs.operatorCategoryFilter;
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Todas las categorías</option>' + state.metadata.choice_sets.position_categories
+          .map((choice) => `<option value="${escapeHtml(choice.value)}">${escapeHtml(choice.label)}</option>`)
+          .join('');
+
+        if (currentValue) {
+          select.value = currentValue;
+        }
+      };
+
+      const renderCapabilities = () => {
+        if (!state.metadata || !refs.capabilityList || !refs.capabilityListCount) {
+          return;
+        }
+        const capabilities = state.metadata.capabilities || [];
+        refs.capabilityListCount.textContent = `${capabilities.length} registros`;
+
+        if (!capabilities.length) {
+          refs.capabilityList.innerHTML =
+            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>';
+          return;
+        }
+
+        refs.capabilityList.innerHTML = capabilities
+          .map((capability) => {
+            const operator = state.lookups.operatorsById.get(capability.operator_id);
+            const operatorLabel = operator?.name || `Colaborador #${capability.operator_id}`;
+            const categoryLabel = state.lookups.categoryLabels.get(capability.category) || capability.category;
+            const minLabel = state.lookups.complexityLabels.get(capability.min_complexity) || capability.min_complexity;
+            const maxLabel = state.lookups.complexityLabels.get(capability.max_complexity) || capability.max_complexity;
+            const range = capability.effective_until
+              ? `${escapeHtml(capability.effective_from)} → ${escapeHtml(capability.effective_until)}`
+              : `${escapeHtml(capability.effective_from)} → vigencia abierta`;
+
+            return `
+              <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p class="font-semibold text-slate-800">${escapeHtml(operatorLabel)}</p>
+                    <p class="text-xs text-slate-500">${escapeHtml(categoryLabel)}</p>
+                    <p class="text-xs text-slate-500">${range}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="capability-edit" data-id="${capability.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="capability-delete" data-id="${capability.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
+                  </div>
+                </header>
+                <p class="mt-2 text-xs text-slate-600">Criticidad: ${escapeHtml(minLabel)} → ${escapeHtml(maxLabel)}</p>
+                <p class="mt-1 text-xs text-slate-500">${capability.is_primary ? 'Función principal' : 'Función secundaria'}</p>
+                ${capability.notes ? `<p class="mt-1 text-xs text-slate-500">${escapeHtml(capability.notes)}</p>` : ''}
+              </article>
+            `;
+          })
+          .join('');
+      };
+
+      const renderPreferences = () => {
+        if (!state.metadata || !refs.preferenceList || !refs.preferenceListCount) {
+          return;
+        }
+        const preferences = state.metadata.preferences || [];
+        refs.preferenceListCount.textContent = `${preferences.length} registros`;
+
+        if (!preferences.length) {
+          refs.preferenceList.innerHTML =
+            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay preferencias registradas.</p>';
+          return;
+        }
+
+        refs.preferenceList.innerHTML = preferences
+          .map((preference) => {
+            const operator = state.lookups.operatorsById.get(preference.operator_id);
+            const operatorLabel = operator?.name || `Colaborador #${preference.operator_id}`;
+            const farmLabel = state.lookups.farmsById.get(preference.farm.id)?.name || preference.farm.name;
+            return `
+              <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p class="font-semibold text-slate-800">${escapeHtml(operatorLabel)}</p>
+                    <p class="text-xs text-slate-500">${escapeHtml(farmLabel)}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="preference-edit" data-id="${preference.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="preference-delete" data-id="${preference.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
+                  </div>
+                </header>
+                <p class="mt-2 text-xs text-slate-600">Peso: ${preference.preference_weight}${preference.is_primary ? ' · Preferencia principal' : ''}</p>
+                ${preference.notes ? `<p class="mt-1 text-xs text-slate-500">${escapeHtml(preference.notes)}</p>` : ''}
+              </article>
+            `;
+          })
+          .join('');
+      };
+
+      const renderSummary = (summary) => {
+        if (!refs.summaryPreview) {
+          return;
+        }
+
+        if (!summary) {
+          refs.summaryPreview.innerHTML = '<p class="text-slate-500">El resumen aparecerá después de generar el calendario.</p>';
+          refs.calendarActions.hidden = true;
+          refs.reloadSummaryBtn.classList.add('hidden');
+          return;
+        }
+
+        const stats = summary.stats || {};
+        const rows = summary.rows || [];
+        const firstRows = rows.slice(0, 5).map((row) => {
+          const position = row.position;
+          const firstAssignment = (row.cells || []).find((cell) => cell.assignment);
+          const operatorName = firstAssignment?.assignment?.operator?.name || 'Sin cobertura';
+          const alertLabel = firstAssignment?.assignment?.alert_level || 'none';
+          return `
+            <tr>
+              <td class="px-3 py-2 text-sm text-slate-600">${escapeHtml(position.name)}</td>
+              <td class="px-3 py-2 text-sm text-slate-600">${escapeHtml(operatorName)}</td>
+              <td class="px-3 py-2 text-sm text-slate-600">${escapeHtml(alertLabel)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        refs.summaryPreview.innerHTML = `
+          <div class="grid gap-3 text-sm text-slate-600">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="rounded border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <p class="text-xs text-emerald-800">Asignaciones</p>
+                <p class="text-lg font-semibold text-emerald-800">${stats.total_assignments ?? 0}</p>
+              </div>
+              <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2">
+                <p class="text-xs text-amber-800">Alertas</p>
+                <p class="text-lg font-semibold text-amber-800">${(stats.warn ?? 0) + (stats.critical ?? 0)}</p>
+              </div>
+            </div>
+            <div class="rounded border border-slate-200">
+              <table class="min-w-full divide-y divide-slate-200 text-xs">
+                <thead class="bg-slate-100 font-semibold text-slate-600">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Posición</th>
+                    <th class="px-3 py-2 text-left">Operario inicial</th>
+                    <th class="px-3 py-2 text-left">Alerta</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">${firstRows || '<tr><td colspan="3" class="px-3 py-2 text-center text-slate-500">Sin asignaciones registradas.</td></tr>'}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        refs.calendarActions.hidden = false;
+        refs.reloadSummaryBtn.classList.remove('hidden');
+      };
+
+      const fetchSummary = () => {
+        if (!state.calendarId) {
+          renderSummary(null);
+          return;
+        }
+
+        apiRequest(replaceId(API.summaryTemplate, state.calendarId))
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('No fue posible obtener el resumen.');
+            }
+            return response.json();
+          })
+          .then((data) => {
+            state.lastSummary = data;
+            renderSummary(data);
+          })
+          .catch((error) => {
+            console.error(error);
+            refs.summaryPreview.innerHTML = '<p class="text-sm text-red-600">No se pudo actualizar el resumen, intenta más tarde.</p>';
+          });
+      };
+
+      const setFeedback = (message, tone = 'info') => {
+        if (!refs.calendarFeedback) {
+          return;
+        }
+
+        refs.calendarFeedback.classList.remove('hidden');
+        refs.calendarFeedback.className = 'rounded border px-4 py-3 text-sm';
+
+        if (tone === 'error') {
+          refs.calendarFeedback.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+        } else if (tone === 'success') {
+          refs.calendarFeedback.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+        } else {
+          refs.calendarFeedback.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-600');
+        }
+
+        refs.calendarFeedback.textContent = message;
+      };
+
+      const generateCalendar = () => {
+        const nameInput = document.getElementById('calendar-name');
+        const startInput = document.getElementById('calendar-start');
+        const endInput = document.getElementById('calendar-end');
+        const notesInput = document.getElementById('calendar-notes');
+
+        if (!startInput?.value || !endInput?.value) {
+          setFeedback('Debes ingresar fecha de inicio y fin antes de generar.', 'error');
+          return;
+        }
+
+        const payload = {
+          name: nameInput?.value || '',
+          start_date: startInput.value,
+          end_date: endInput.value,
+          notes: notesInput?.value || '',
+        };
+
+        setFeedback('Generando calendario, por favor espera…');
+
+        apiRequest(API.generate, { method: 'POST', body: payload })
+          .then((response) => {
+            if (!response.ok) {
+              return response.text().then((text) => {
+                throw new Error(text || 'No fue posible generar el calendario.');
+              });
+            }
+            return response.json();
+          })
+          .then((data) => {
+            state.calendarId = data.calendar_id;
+            setFeedback('Calendario generado con éxito. Revisa el resumen y ajusta las asignaciones antes de aprobar.', 'success');
+            if (refs.calendarDetailLink && API.calendarDetailTemplate) {
+              refs.calendarDetailLink.href = replaceId(API.calendarDetailTemplate, state.calendarId);
+            }
+            fetchSummary();
+          })
+          .catch((error) => {
+            console.error(error);
+            setFeedback(error.message || 'Ocurrió un error durante la generación.', 'error');
+          });
+      };
+
+      refs.operatorForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = getOperatorPayload();
+        const id = refs.operatorId?.value;
+        submitEntity({
+          url: id ? replaceId(API.operatorDetailTemplate, id) : API.operators,
+          method: id ? 'PATCH' : 'POST',
+          payload,
+          messageRef: refs.operatorMessage,
+          successMessage: id ? 'Colaborador actualizado correctamente.' : 'Colaborador registrado correctamente.',
+          onSuccess: () => {
+            closeOperatorForm();
+          },
+        });
+      });
+
+      
+      refs.positionForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = getPositionPayload();
+        const id = refs.positionId?.value;
+        submitEntity({
+          url: id ? replaceId(API.positionDetailTemplate, id) : API.positions,
+          method: id ? 'PATCH' : 'POST',
+          payload,
+          messageRef: refs.positionMessage,
+          successMessage: id ? 'Posición actualizada correctamente.' : 'Posición creada correctamente.',
+          onSuccess: () => {
+            closePositionForm();
+          },
+        });
+      });
+
+      refs.restRuleForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = getRestRulePayload();
+        const id = refs.restRuleId?.value;
+        submitEntity({
+          url: id ? replaceId(API.restRuleDetailTemplate, id) : API.restRules,
+          method: id ? 'PATCH' : 'POST',
+          payload,
+          messageRef: refs.restRuleMessage,
+          successMessage: id ? 'Regla de descanso actualizada.' : 'Regla de descanso creada.',
+          onSuccess: () => {
+            closeRestRuleForm();
+          },
+        });
+      });
+
+      refs.overloadForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = getOverloadPayload();
+        const id = refs.overloadId?.value;
+        submitEntity({
+          url: id ? replaceId(API.overloadRuleDetailTemplate, id) : API.overloadRules,
+          method: id ? 'PATCH' : 'POST',
+          payload,
+          messageRef: refs.overloadMessage,
+          successMessage: id ? 'Regla de sobrecarga actualizada.' : 'Regla de sobrecarga creada.',
+          onSuccess: () => {
+            closeOverloadForm();
+          },
+        });
+      });
+
+      refs.capabilityForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = getCapabilityPayload();
+        const id = refs.capabilityId?.value;
+        submitEntity({
+          url: id ? replaceId(API.capabilityDetailTemplate, id) : API.capabilities,
+          method: id ? 'PATCH' : 'POST',
+          payload,
+          messageRef: refs.capabilityMessage,
+          successMessage: id ? 'Fortaleza actualizada.' : 'Fortaleza creada.',
+          onSuccess: () => {
+            closeCapabilityForm();
+          },
+        });
+      });
+
+      refs.preferenceForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = getPreferencePayload();
+        const id = refs.preferenceId?.value;
+        submitEntity({
+          url: id ? replaceId(API.preferenceDetailTemplate, id) : API.preferences,
+          method: id ? 'PATCH' : 'POST',
+          payload,
+          messageRef: refs.preferenceMessage,
+          successMessage: id ? 'Preferencia actualizada.' : 'Preferencia creada.',
+          onSuccess: () => {
+            closePreferenceForm();
+          },
+        });
+      });
+
+      refs.operatorAddBtn?.addEventListener('click', () => openOperatorForm());
+      refs.operatorCancelBtn?.addEventListener('click', () => closeOperatorForm());
+      refs.operatorRefreshBtn?.addEventListener('click', () => fetchMetadata());
+      refs.positionAddBtn?.addEventListener('click', () => openPositionForm());
+      refs.positionCancelBtn?.addEventListener('click', () => closePositionForm());
+      refs.restRuleAddBtn?.addEventListener('click', () => openRestRuleForm());
+      refs.restRuleCancelBtn?.addEventListener('click', () => closeRestRuleForm());
+      refs.overloadAddBtn?.addEventListener('click', () => openOverloadForm());
+      refs.overloadCancelBtn?.addEventListener('click', () => closeOverloadForm());
+      refs.capabilityAddBtn?.addEventListener('click', () => openCapabilityForm());
+      refs.capabilityCancelBtn?.addEventListener('click', () => closeCapabilityForm());
+      refs.preferenceAddBtn?.addEventListener('click', () => openPreferenceForm());
+      refs.preferenceCancelBtn?.addEventListener('click', () => closePreferenceForm());
+      refs.positionsRefreshBtn?.addEventListener('click', () => fetchMetadata());
+      refs.reloadSummaryBtn?.addEventListener('click', () => fetchSummary());
+      refs.generateCalendarBtn?.addEventListener('click', () => generateCalendar());
+
+      const handleOperatorEdit = (id) => {
+        const operator = state.metadata?.operators?.find((item) => item.id === id);
+        if (!operator) {
+          updateMetadataStatus('No encontramos datos para el colaborador seleccionado.', 'warning');
+          return;
+        }
+        openOperatorForm(operator);
+      };
+
+      const handleOperatorToggle = (id, nextActive) => {
+        const enable = Boolean(nextActive);
+        if (!enable) {
+          const confirmed = confirm('¿Deshabilitar este colaborador? Podrás habilitarlo nuevamente cuando lo necesites.');
+          if (!confirmed) {
+            return;
+          }
+        }
+        submitEntity({
+          url: replaceId(API.operatorDetailTemplate, id),
+          method: 'PATCH',
+          payload: { is_active: enable },
+          messageRef: refs.metadataStatus,
+          successMessage: enable ? 'Colaborador habilitado.' : 'Colaborador deshabilitado.',
+        });
+      };
+
+      const handlePositionEdit = (id) => {
+        const position = state.metadata?.positions?.find((item) => item.id === id);
+        if (!position) {
+          return;
+        }
+        openPositionForm(position);
+      };
+
+      const handlePositionDelete = (id) => {
+        if (!confirm('¿Confirma eliminar esta posición? Esta acción no se puede deshacer.')) {
+          return;
+        }
+        deleteEntity(replaceId(API.positionDetailTemplate, id), {
+          afterSuccess: () => {
+            if (refs.positionId?.value === String(id)) {
+              closePositionForm();
+            }
+          },
+        });
+      };
+
+      const handleRestRuleEdit = (id) => {
+        const rule = state.metadata?.rest_rules?.find((item) => item.id === id);
+        if (!rule) {
+          return;
+        }
+        openRestRuleForm(rule);
+      };
+
+      const handleRestRuleDelete = (id) => {
+        if (!confirm('¿Eliminar esta regla de descanso?')) {
+          return;
+        }
+        deleteEntity(replaceId(API.restRuleDetailTemplate, id), {
+          afterSuccess: () => {
+            if (refs.restRuleId?.value === String(id)) {
+              closeRestRuleForm();
+            }
+          },
+        });
+      };
+
+      const handleOverloadEdit = (id) => {
+        const rule = state.metadata?.overload_rules?.find((item) => item.id === id);
+        if (!rule) {
+          return;
+        }
+        openOverloadForm(rule);
+      };
+
+      const handleOverloadDelete = (id) => {
+        if (!confirm('¿Eliminar esta regla de sobrecarga?')) {
+          return;
+        }
+        deleteEntity(replaceId(API.overloadRuleDetailTemplate, id), {
+          afterSuccess: () => {
+            if (refs.overloadId?.value === String(id)) {
+              closeOverloadForm();
+            }
+          },
+        });
+      };
+
+      const handleCapabilityEdit = (id) => {
+        const capability = state.metadata?.capabilities?.find((item) => item.id === id);
+        if (!capability) {
+          return;
+        }
+        openCapabilityForm(capability);
+      };
+
+      const handleCapabilityDelete = (id) => {
+        if (!confirm('¿Eliminar esta fortaleza?')) {
+          return;
+        }
+        deleteEntity(replaceId(API.capabilityDetailTemplate, id), {
+          afterSuccess: () => {
+            if (refs.capabilityId?.value === String(id)) {
+              closeCapabilityForm();
+            }
+          },
+        });
+      };
+
+      const handlePreferenceEdit = (id) => {
+        const preference = state.metadata?.preferences?.find((item) => item.id === id);
+        if (!preference) {
+          return;
+        }
+        openPreferenceForm(preference);
+      };
+
+      const handlePreferenceDelete = (id) => {
+        if (!confirm('¿Eliminar esta preferencia?')) {
+          return;
+        }
+        deleteEntity(replaceId(API.preferenceDetailTemplate, id), {
+          afterSuccess: () => {
+            if (refs.preferenceId?.value === String(id)) {
+              closePreferenceForm();
+            }
+          },
+        });
+      };
+
+      app.addEventListener('click', (event) => {
+        const target = event.target.closest('[data-action]');
+        if (!target) {
+          return;
+        }
+        const action = target.dataset.action;
+        const id = Number(target.dataset.id);
+        switch (action) {
+          case 'operator-edit':
+            handleOperatorEdit(id);
+            break;
+          case 'operator-toggle':
+            handleOperatorToggle(id, target.dataset.active === 'true');
+            break;
+          case 'position-edit':
+            handlePositionEdit(id);
+            break;
+          case 'position-delete':
+            handlePositionDelete(id);
+            break;
+          case 'rest-rule-edit':
+            handleRestRuleEdit(id);
+            break;
+          case 'rest-rule-delete':
+            handleRestRuleDelete(id);
+            break;
+          case 'overload-edit':
+            handleOverloadEdit(id);
+            break;
+          case 'overload-delete':
+            handleOverloadDelete(id);
+            break;
+          case 'capability-edit':
+            handleCapabilityEdit(id);
+            break;
+          case 'capability-delete':
+            handleCapabilityDelete(id);
+            break;
+          case 'preference-edit':
+            handlePreferenceEdit(id);
+            break;
+          case 'preference-delete':
+            handlePreferenceDelete(id);
+            break;
+          default:
+            break;
+        }
+      });
+
+      const fetchMetadata = async () => {
+        updateMetadataStatus('Cargando información…', 'info');
+        try {
+          const response = await apiRequest(API.metadata);
+          if (!response.ok) {
+            throw new Error('No fue posible obtener los datos.');
+          }
+          const data = await response.json();
+          state.metadata = data;
+          rebuildLookups();
+          populateStaticOptions();
+          renderPositions();
+          renderRestRules();
+          renderOverloadRules();
+          populateCategoryFilter();
+          renderOperators();
+          renderCapabilities();
+          renderPreferences();
+          updateMetadataStatus('Información actualizada.', 'success');
+        } catch (error) {
+          console.error(error);
+          updateMetadataStatus('Error cargando datos. Intenta nuevamente o revisa tu conexión.', 'error');
+        }
+      };
+
+      const initFilters = () => {
+        refs.operatorSearch?.addEventListener('input', () => renderOperators());
+        refs.operatorCategoryFilter?.addEventListener('change', () => renderOperators());
+      };
+
+      initFilters();
+      fetchMetadata();
+      showStep(1);
+      refs.generateCalendarBtn?.addEventListener('click', () => generateCalendar());
+      refs.reloadSummaryBtn?.addEventListener('click', () => fetchSummary());
+    })();
+  </script>

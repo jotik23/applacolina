@@ -3,29 +3,48 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import date, timedelta
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
+from django.db.models import ProtectedError, Q
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views import View
 
-from .forms import AssignmentCreateForm, AssignmentUpdateForm, CalendarGenerationForm
+from .forms import (
+    AssignmentCreateForm,
+    AssignmentUpdateForm,
+    CalendarGenerationForm,
+    OperatorProfileForm,
+    OperatorCapabilityForm,
+    OperatorFarmPreferenceForm,
+    OverloadAllowanceForm,
+    PositionDefinitionForm,
+    RestRuleForm,
+)
 from .models import (
     AssignmentAlertLevel,
+    DayOfWeek,
     CalendarStatus,
+    OverloadAllowance,
     OperatorCapability,
+    OperatorFarmPreference,
+    PositionCategory,
     PositionDefinition,
+    RestPreference,
+    RestRule,
     ShiftAssignment,
     ShiftCalendar,
     complexity_score,
 )
 from .services import CalendarScheduler, SchedulerOptions
-from users.models import UserProfile
+from granjas.models import ChickenHouse, Farm, Room
+from users.models import Role, UserProfile
 
 
 def _parse_date(value: str, field_name: str) -> date:
@@ -44,6 +63,7 @@ def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[
     date_columns = _date_range(calendar.start_date, calendar.end_date)
     assignment_list = list(
         calendar.assignments.select_related("position", "position__farm", "operator")
+        .prefetch_related("operator__roles")
     )
     assignments = {
         (assignment.position_id, assignment.date): assignment for assignment in assignment_list
@@ -226,9 +246,220 @@ def _refresh_workload_snapshots(calendar: ShiftCalendar) -> None:
     scheduler._rebuild_workload_snapshots()
 
 
+def _json_error(message: str, *, status: int = 400, errors: Optional[dict[str, Any]] = None) -> JsonResponse:
+    payload: dict[str, Any] = {"error": message}
+    if errors:
+        payload["errors"] = errors
+    return JsonResponse(payload, status=status)
+
+
+def _form_errors(form: forms.Form) -> dict[str, list[str]]:  # type: ignore[name-defined]
+    error_dict: dict[str, list[str]] = {}
+    for field, messages_list in form.errors.items():
+        error_dict[field] = [str(message) for message in messages_list]
+    non_field_errors = form.non_field_errors()
+    if non_field_errors:
+        error_dict.setdefault("__all__", []).extend(str(message) for message in non_field_errors)
+    return error_dict
+
+
+def _load_json_body(request: HttpRequest) -> tuple[Optional[dict[str, Any]], Optional[JsonResponse]]:
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return None, _json_error("JSON inválido")
+    if not isinstance(payload, dict):
+        return None, _json_error("El cuerpo debe ser un objeto JSON")
+    return payload, None
+
+
+def _sync_rest_preferences(rule: RestRule, preferences_payload: Iterable[dict[str, Any]]) -> None:
+    rule.preferred_days.all().delete()
+    days_seen: set[int] = set()
+    bulk_create: list[RestPreference] = []
+
+    for item in preferences_payload:
+        try:
+            day = int(item.get("day_of_week"))
+        except (TypeError, ValueError):
+            continue
+        if day in days_seen:
+            continue
+        days_seen.add(day)
+        bulk_create.append(
+            RestPreference(
+                rest_rule=rule,
+                day_of_week=day,
+                is_required=bool(item.get("is_required", False)),
+            )
+        )
+
+    if bulk_create:
+        RestPreference.objects.bulk_create(bulk_create)
+
+
+def _choice_payload(choices: Iterable[tuple[str, str]]) -> List[dict[str, str]]:
+    return [
+        {
+            "value": value,
+            "label": label,
+        }
+        for value, label in choices
+    ]
+
+
+def _position_payload(position: PositionDefinition) -> dict[str, Any]:
+    return {
+        "id": position.id,
+        "name": position.name,
+        "code": position.code,
+        "category": position.category,
+        "farm": {
+            "id": position.farm_id,
+            "name": position.farm.name if position.farm_id else None,
+        },
+        "chicken_house": {
+            "id": position.chicken_house_id,
+            "name": position.chicken_house.name if position.chicken_house_id else None,
+        },
+        "room": {
+            "id": position.room_id,
+            "name": position.room.name if position.room_id else None,
+        },
+        "shift_type": position.shift_type,
+        "complexity": position.complexity,
+        "allow_lower_complexity": position.allow_lower_complexity,
+        "valid_from": position.valid_from.isoformat(),
+        "valid_until": position.valid_until.isoformat() if position.valid_until else None,
+        "is_active": position.is_active,
+        "notes": position.notes,
+    }
+
+
+def _operator_payload(
+    operator: UserProfile,
+    *,
+    roles: Optional[Iterable[Role]] = None,
+) -> dict[str, Any]:
+    role_items = roles if roles is not None else list(operator.roles.all())
+    return {
+        "id": operator.id,
+        "name": operator.get_full_name() or operator.nombres,
+        "document": operator.cedula,
+        "nombres": operator.nombres,
+        "apellidos": operator.apellidos,
+        "telefono": operator.telefono,
+        "email": operator.email,
+        "roles": [
+            {
+                "id": role.id,
+                "code": role.name,
+                "label": role.get_name_display(),
+            }
+            for role in role_items
+        ],
+        "is_active": operator.is_active,
+    }
+
+
+def _capability_payload(capability: OperatorCapability) -> dict[str, Any]:
+    return {
+        "id": capability.id,
+        "operator_id": capability.operator_id,
+        "category": capability.category,
+        "min_complexity": capability.min_complexity,
+        "max_complexity": capability.max_complexity,
+        "effective_from": capability.effective_from.isoformat(),
+        "effective_until": capability.effective_until.isoformat() if capability.effective_until else None,
+        "is_primary": capability.is_primary,
+        "notes": capability.notes,
+    }
+
+
+def _rest_rule_payload(rule: RestRule) -> dict[str, Any]:
+    return {
+        "id": rule.id,
+        "role": {
+            "id": rule.role_id,
+            "label": rule.role.get_name_display(),
+            "code": rule.role.name,
+        },
+        "shift_type": rule.shift_type,
+        "min_rest_frequency": rule.min_rest_frequency,
+        "min_consecutive_days": rule.min_consecutive_days,
+        "max_consecutive_days": rule.max_consecutive_days,
+        "post_shift_rest_days": rule.post_shift_rest_days,
+        "monthly_rest_days": rule.monthly_rest_days,
+        "enforce_additional_rest": rule.enforce_additional_rest,
+        "active_from": rule.active_from.isoformat(),
+        "active_until": rule.active_until.isoformat() if rule.active_until else None,
+        "preferences": [
+            {
+                "id": preference.id,
+                "day_of_week": preference.day_of_week,
+                "label": preference.get_day_of_week_display(),
+                "is_required": preference.is_required,
+            }
+            for preference in rule.preferred_days.all()
+        ],
+    }
+
+
+def _overload_payload(allowance: OverloadAllowance) -> dict[str, Any]:
+    return {
+        "id": allowance.id,
+        "role": {
+            "id": allowance.role_id,
+            "label": allowance.role.get_name_display(),
+            "code": allowance.role.name,
+        },
+        "max_consecutive_extra_days": allowance.max_consecutive_extra_days,
+        "highlight_level": allowance.highlight_level,
+        "active_from": allowance.active_from.isoformat(),
+        "active_until": allowance.active_until.isoformat() if allowance.active_until else None,
+    }
+
+
+def _assignment_payload(assignment: Optional[ShiftAssignment]) -> Optional[dict[str, Any]]:
+    if assignment is None:
+        return None
+
+    operator_payload: Optional[dict[str, Any]] = None
+    if assignment.operator_id:
+        roles = list(assignment.operator.roles.all()) if assignment.operator_id else []
+        operator_payload = _operator_payload(assignment.operator, roles=roles) if assignment.operator_id else None
+
+    return {
+        "id": assignment.id,
+        "calendar_id": assignment.calendar_id,
+        "position": _position_payload(assignment.position),
+        "date": assignment.date.isoformat(),
+        "operator": operator_payload,
+        "alert_level": assignment.alert_level,
+        "is_overtime": assignment.is_overtime,
+        "is_auto_assigned": assignment.is_auto_assigned,
+        "notes": assignment.notes,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Vistas HTML para usuarios no administradores
 # ---------------------------------------------------------------------------
+
+
+class CalendarConfiguratorView(LoginRequiredMixin, View):
+    template_name = "calendario/configurator.html"
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
+        return render(
+            request,
+            self.template_name,
+            {
+                "alert_choices": _choice_payload(AssignmentAlertLevel.choices),
+                "shift_type_choices": _choice_payload(PositionDefinition._meta.get_field("shift_type").choices),
+                "status_choices": _choice_payload(CalendarStatus.choices),
+            },
+        )
 
 
 class CalendarDashboardView(LoginRequiredMixin, View):
@@ -304,6 +535,13 @@ class CalendarDashboardView(LoginRequiredMixin, View):
             messages.success(request, "Calendario generado exitosamente.")
 
         return redirect(reverse("calendario:calendar-detail", args=[calendar.id]))
+
+
+class CalendarRulesView(LoginRequiredMixin, View):
+    template_name = "calendario/rules.html"
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
+        return render(request, self.template_name)
 
 
 class CalendarDetailView(LoginRequiredMixin, View):
@@ -433,6 +671,280 @@ class CalendarGenerateView(LoginRequiredMixin, View):
         return JsonResponse(response_payload, status=201)
 
 
+class OperatorCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorProfileForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
+
+        operator = form.save()
+        operator = UserProfile.objects.prefetch_related("roles").get(pk=operator.pk)
+        return JsonResponse({"operator": _operator_payload(operator)}, status=201)
+
+
+class OperatorDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch"]
+
+    def patch(self, request: HttpRequest, operator_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        operator = get_object_or_404(UserProfile, pk=operator_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorProfileForm(payload, instance=operator, partial=True)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
+
+        operator = form.save()
+        operator = UserProfile.objects.prefetch_related("roles").get(pk=operator.pk)
+        return JsonResponse({"operator": _operator_payload(operator)})
+
+
+class PositionCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = PositionDefinitionForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la posición.", errors=_form_errors(form))
+
+        position = form.save()
+        return JsonResponse({"position": _position_payload(position)}, status=201)
+
+
+class PositionDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch", "delete"]
+
+    def patch(self, request: HttpRequest, position_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        position = get_object_or_404(PositionDefinition, pk=position_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = PositionDefinitionForm(payload, instance=position)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la posición.", errors=_form_errors(form))
+
+        position = form.save()
+        return JsonResponse({"position": _position_payload(position)})
+
+    def delete(self, request: HttpRequest, position_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        position = get_object_or_404(PositionDefinition, pk=position_id)
+        try:
+            position.delete()
+        except ProtectedError:
+            return _json_error(
+                "No es posible eliminar la posición porque tiene registros relacionados.",
+                status=409,
+            )
+        return JsonResponse({"status": "deleted"})
+
+
+class CapabilityCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorCapabilityForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la fortaleza.", errors=_form_errors(form))
+
+        capability = form.save()
+        return JsonResponse({"capability": _capability_payload(capability)}, status=201)
+
+
+class CapabilityDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch", "delete"]
+
+    def patch(self, request: HttpRequest, capability_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        capability = get_object_or_404(OperatorCapability, pk=capability_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorCapabilityForm(payload, instance=capability)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la fortaleza.", errors=_form_errors(form))
+
+        capability = form.save()
+        return JsonResponse({"capability": _capability_payload(capability)})
+
+    def delete(self, request: HttpRequest, capability_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        capability = get_object_or_404(OperatorCapability, pk=capability_id)
+        capability.delete()
+        return JsonResponse({"status": "deleted"})
+
+
+class PreferenceCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorFarmPreferenceForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la preferencia.", errors=_form_errors(form))
+
+        preference = form.save()
+        return JsonResponse(
+            {
+                "preference": {
+                    "id": preference.id,
+                    "operator_id": preference.operator_id,
+                    "farm": {
+                        "id": preference.farm_id,
+                        "name": preference.farm.name,
+                    },
+                    "preference_weight": preference.preference_weight,
+                    "is_primary": preference.is_primary,
+                    "notes": preference.notes,
+                }
+            },
+            status=201,
+        )
+
+
+class PreferenceDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch", "delete"]
+
+    def patch(self, request: HttpRequest, preference_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        preference = get_object_or_404(OperatorFarmPreference, pk=preference_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorFarmPreferenceForm(payload, instance=preference)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la preferencia.", errors=_form_errors(form))
+
+        preference = form.save()
+        return JsonResponse(
+            {
+                "preference": {
+                    "id": preference.id,
+                    "operator_id": preference.operator_id,
+                    "farm": {
+                        "id": preference.farm_id,
+                        "name": preference.farm.name,
+                    },
+                    "preference_weight": preference.preference_weight,
+                    "is_primary": preference.is_primary,
+                    "notes": preference.notes,
+                }
+            }
+        )
+
+    def delete(self, request: HttpRequest, preference_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        preference = get_object_or_404(OperatorFarmPreference, pk=preference_id)
+        preference.delete()
+        return JsonResponse({"status": "deleted"})
+
+
+class RestRuleCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        preferences_data = payload.pop("preferences", [])
+
+        form = RestRuleForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la regla.", errors=_form_errors(form))
+
+        rule = form.save()
+        _sync_rest_preferences(rule, preferences_data if isinstance(preferences_data, list) else [])
+
+        rule.refresh_from_db()
+        rule = RestRule.objects.select_related("role").prefetch_related("preferred_days").get(pk=rule.pk)
+        return JsonResponse({"rule": _rest_rule_payload(rule)}, status=201)
+
+
+class RestRuleDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch", "delete"]
+
+    def patch(self, request: HttpRequest, rule_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        rule = get_object_or_404(RestRule, pk=rule_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        preferences_data = payload.pop("preferences", [])
+
+        form = RestRuleForm(payload, instance=rule)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la regla.", errors=_form_errors(form))
+
+        rule = form.save()
+        _sync_rest_preferences(rule, preferences_data if isinstance(preferences_data, list) else [])
+
+        rule.refresh_from_db()
+        rule = RestRule.objects.select_related("role").prefetch_related("preferred_days").get(pk=rule.pk)
+        return JsonResponse({"rule": _rest_rule_payload(rule)})
+
+    def delete(self, request: HttpRequest, rule_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        rule = get_object_or_404(RestRule, pk=rule_id)
+        rule.delete()
+        return JsonResponse({"status": "deleted"})
+
+
+class OverloadCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OverloadAllowanceForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la regla de sobrecarga.", errors=_form_errors(form))
+
+        allowance = form.save()
+        allowance = OverloadAllowance.objects.select_related("role").get(pk=allowance.pk)
+        return JsonResponse({"overload": _overload_payload(allowance)}, status=201)
+
+
+class OverloadDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch", "delete"]
+
+    def patch(self, request: HttpRequest, overload_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        allowance = get_object_or_404(OverloadAllowance, pk=overload_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OverloadAllowanceForm(payload, instance=allowance)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para la regla de sobrecarga.", errors=_form_errors(form))
+
+        allowance = form.save()
+        allowance = OverloadAllowance.objects.select_related("role").get(pk=allowance.pk)
+        return JsonResponse({"overload": _overload_payload(allowance)})
+
+    def delete(self, request: HttpRequest, overload_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        allowance = get_object_or_404(OverloadAllowance, pk=overload_id)
+        allowance.delete()
+        return JsonResponse({"status": "deleted"})
+
+
 class CalendarApproveView(LoginRequiredMixin, View):
     http_method_names = ["post"]
 
@@ -476,3 +988,325 @@ class CalendarListView(LoginRequiredMixin, View):
         ]
 
         return JsonResponse({"results": response})
+
+
+class CalendarMetadataView(LoginRequiredMixin, View):
+    http_method_names = ["get"]
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        include_inactive = request.GET.get("include_inactive") == "true"
+        farm_filter = request.GET.get("farm")
+
+        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house", "room")
+        if farm_filter:
+            try:
+                position_qs = position_qs.filter(farm_id=int(farm_filter))
+            except (TypeError, ValueError):  # pragma: no cover - defensive casting
+                return HttpResponseBadRequest("Identificador de granja inválido.")
+        if not include_inactive:
+            position_qs = position_qs.filter(is_active=True)
+
+        positions_payload = [_position_payload(position) for position in position_qs.order_by("farm__name", "code")]
+
+        capability_qs = (
+            OperatorCapability.objects.select_related("operator")
+            .prefetch_related("operator__roles")
+            .order_by("operator__apellidos", "operator__nombres", "category")
+        )
+        capabilities_payload = [_capability_payload(capability) for capability in capability_qs]
+
+        preferences_qs = (
+            OperatorFarmPreference.objects.select_related("operator", "farm")
+            .order_by("operator__apellidos", "operator__nombres", "preference_weight")
+        )
+        preferences_payload = [
+            {
+                "id": preference.id,
+                "operator_id": preference.operator_id,
+                "farm": {
+                    "id": preference.farm_id,
+                    "name": preference.farm.name,
+                },
+                "preference_weight": preference.preference_weight,
+                "is_primary": preference.is_primary,
+                "notes": preference.notes,
+            }
+            for preference in preferences_qs
+        ]
+
+        rest_rules_qs = (
+            RestRule.objects.select_related("role")
+            .prefetch_related("preferred_days")
+            .order_by("role__name", "-active_from")
+        )
+        rest_rules_payload = [_rest_rule_payload(rule) for rule in rest_rules_qs]
+
+        overload_qs = (
+            OverloadAllowance.objects.select_related("role")
+            .order_by("role__name", "-active_from")
+        )
+        overload_payload = [_overload_payload(allowance) for allowance in overload_qs]
+
+        farms_payload = [
+            {
+                "id": farm.id,
+                "name": farm.name,
+            }
+            for farm in Farm.objects.order_by("name")
+        ]
+
+        chicken_houses_payload = [
+            {
+                "id": house.id,
+                "name": house.name,
+                "farm_id": house.farm_id,
+            }
+            for house in ChickenHouse.objects.select_related("farm").order_by("farm__name", "name")
+        ]
+
+        rooms_payload = [
+            {
+                "id": room.id,
+                "name": room.name,
+                "chicken_house_id": room.chicken_house_id,
+                "farm_id": room.chicken_house.farm_id,
+            }
+            for room in Room.objects.select_related("chicken_house", "chicken_house__farm").order_by("chicken_house__farm__name", "chicken_house__name", "name")
+        ]
+
+        roles_payload = [
+            {
+                "id": role.id,
+                "code": role.name,
+                "label": role.get_name_display(),
+            }
+            for role in Role.objects.order_by("name")
+        ]
+
+        operator_qs = UserProfile.objects.prefetch_related("roles").order_by("apellidos", "nombres")
+        operators_payload = [
+            _operator_payload(operator, roles=list(operator.roles.all()))
+            for operator in operator_qs
+        ]
+
+        response_payload: Dict[str, Any] = {
+            "positions": positions_payload,
+            "operators": operators_payload,
+            "capabilities": capabilities_payload,
+            "preferences": preferences_payload,
+            "rest_rules": rest_rules_payload,
+            "overload_rules": overload_payload,
+            "farms": farms_payload,
+            "chicken_houses": chicken_houses_payload,
+            "rooms": rooms_payload,
+            "roles": roles_payload,
+            "choice_sets": {
+                "position_categories": _choice_payload(PositionCategory.choices),
+                "complexity_levels": _choice_payload(PositionDefinition._meta.get_field("complexity").choices),
+                "shift_types": _choice_payload(PositionDefinition._meta.get_field("shift_type").choices),
+                "alert_levels": _choice_payload(AssignmentAlertLevel.choices),
+                "calendar_status": _choice_payload(CalendarStatus.choices),
+                "days_of_week": _choice_payload(DayOfWeek.choices),
+            },
+        }
+
+        return JsonResponse(response_payload)
+
+
+class CalendarSummaryView(LoginRequiredMixin, View):
+    http_method_names = ["get"]
+
+    def get(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(
+            ShiftCalendar.objects.select_related("created_by", "approved_by", "base_calendar"),
+            pk=calendar_id,
+        )
+
+        date_columns, rows = _build_assignment_matrix(calendar)
+        stats = _calculate_stats(rows)
+
+        row_payload = []
+        for row in rows:
+            position = row["position"]
+            cells_payload = []
+            for cell in row["cells"]:
+                cells_payload.append(
+                    {
+                        "date": cell["date"].isoformat(),
+                        "assignment": _assignment_payload(cell["assignment"]),
+                        "alert": cell["alert"],
+                        "is_overtime": cell["is_overtime"],
+                        "choices": cell.get("choices", []),
+                    }
+                )
+
+            row_payload.append(
+                {
+                    "position": _position_payload(position),
+                    "cells": cells_payload,
+                }
+            )
+
+        response_payload = {
+            "calendar": {
+                "id": calendar.id,
+                "name": calendar.name,
+                "status": calendar.status,
+                "start_date": calendar.start_date.isoformat(),
+                "end_date": calendar.end_date.isoformat(),
+                "notes": calendar.notes,
+            },
+            "dates": [column.isoformat() for column in date_columns],
+            "rows": row_payload,
+            "stats": stats,
+        }
+
+        return JsonResponse(response_payload)
+
+
+class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["get", "post"]
+
+    def get(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(
+            ShiftCalendar.objects.select_related("created_by", "approved_by"),
+            pk=calendar_id,
+        )
+        assignments = (
+            calendar.assignments.select_related("position", "position__farm", "operator")
+            .prefetch_related("operator__roles")
+            .order_by("date", "position__code")
+        )
+
+        payload = [_assignment_payload(assignment) for assignment in assignments]
+
+        return JsonResponse({
+            "calendar": {
+                "id": calendar.id,
+                "name": calendar.name,
+                "status": calendar.status,
+                "start_date": calendar.start_date.isoformat(),
+                "end_date": calendar.end_date.isoformat(),
+            },
+            "assignments": payload,
+        })
+
+    def post(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(ShiftCalendar, pk=calendar_id)
+
+        try:
+            payload = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return HttpResponseBadRequest("JSON inválido")
+
+        position_id = payload.get("position_id")
+        operator_id = payload.get("operator_id")
+        target_date_raw = payload.get("date")
+
+        if not position_id or not target_date_raw:
+            return HttpResponseBadRequest("Campos 'position_id' y 'date' son obligatorios.")
+
+        try:
+            target_date = _parse_date(target_date_raw, "date")
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
+
+        position = get_object_or_404(PositionDefinition, pk=position_id)
+
+        if calendar.status == CalendarStatus.APPROVED and target_date < timezone.localdate():
+            return HttpResponseBadRequest(
+                "No es posible modificar asignaciones de fechas pasadas en un calendario aprobado."
+            )
+
+        if not (calendar.start_date <= target_date <= calendar.end_date):
+            return HttpResponseBadRequest("La fecha indicada no pertenece al calendario.")
+
+        if not position.is_active_on(target_date):
+            return HttpResponseBadRequest("La posición no está vigente para la fecha seleccionada.")
+
+        if not operator_id:
+            return HttpResponseBadRequest("Debes seleccionar un colaborador para la asignación.")
+
+        operator = get_object_or_404(UserProfile.objects.prefetch_related("roles"), pk=operator_id)
+
+        alert_level = payload.get("alert_level", AssignmentAlertLevel.NONE)
+        valid_alerts = {choice[0] for choice in AssignmentAlertLevel.choices}
+        if alert_level not in valid_alerts:
+            return HttpResponseBadRequest("Nivel de alerta inválido.")
+
+        assignment, _created = ShiftAssignment.objects.update_or_create(
+            calendar=calendar,
+            position=position,
+            date=target_date,
+            defaults={
+                "operator": operator,
+                "alert_level": alert_level,
+                "is_auto_assigned": False,
+                "is_overtime": bool(payload.get("is_overtime", False)),
+                "notes": payload.get("notes", ""),
+            },
+        )
+
+        _refresh_workload_snapshots(calendar)
+
+        assignment = (
+            ShiftAssignment.objects.select_related("position", "position__farm", "operator")
+            .prefetch_related("operator__roles")
+            .get(pk=assignment.pk)
+        )
+
+        return JsonResponse({"assignment": _assignment_payload(assignment)}, status=201)
+
+
+class CalendarAssignmentDetailView(LoginRequiredMixin, View):
+    http_method_names = ["delete"]
+
+    def delete(self, request: HttpRequest, calendar_id: int, assignment_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(ShiftCalendar, pk=calendar_id)
+        assignment = get_object_or_404(
+            ShiftAssignment.objects.select_related("calendar"),
+            pk=assignment_id,
+            calendar=calendar,
+        )
+
+        if calendar.status == CalendarStatus.APPROVED and assignment.date < timezone.localdate():
+            return HttpResponseBadRequest(
+                "No es posible retirar asignaciones históricas de un calendario aprobado."
+            )
+
+        assignment.delete()
+        _refresh_workload_snapshots(calendar)
+
+        return JsonResponse({"status": "deleted"})
+
+
+class CalendarEligibleOperatorsView(LoginRequiredMixin, View):
+    http_method_names = ["get"]
+
+    def get(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(ShiftCalendar, pk=calendar_id)
+        position_id = request.GET.get("position")
+        date_raw = request.GET.get("date")
+
+        if not position_id or not date_raw:
+            return HttpResponseBadRequest("Se requieren los parámetros 'position' y 'date'.")
+
+        try:
+            position = PositionDefinition.objects.get(pk=int(position_id))
+        except (PositionDefinition.DoesNotExist, ValueError):
+            return HttpResponseBadRequest("Posición no encontrada.")
+
+        try:
+            target_date = _parse_date(date_raw, "date")
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
+
+        assignments = list(
+            calendar.assignments.select_related("position", "operator")
+            .prefetch_related("operator__roles")
+        )
+
+        choices_map = _eligible_operator_map(calendar, [position], [target_date], assignments)
+        choices = choices_map.get(position.id, {}).get(target_date, [])
+
+        return JsonResponse({"results": choices})

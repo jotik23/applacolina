@@ -274,7 +274,7 @@ class CalendarScheduler:
         if max_cap < required:
             difference = required - max_cap
             alert_level = AssignmentAlertLevel.WARN if difference == 1 else AssignmentAlertLevel.CRITICAL
-            notes = "Cobertura con operario de menor complejidad"
+            notes = "Cobertura con operario de menor criticidad"
 
         rest_rule = self._get_rest_rule_for_operator(capability.operator_id, position.shift_type, current_date)
         if rest_rule:

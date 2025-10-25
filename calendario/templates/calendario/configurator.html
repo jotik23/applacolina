@@ -1,0 +1,495 @@
+{% extends "calendario/base.html" %}
+
+{% block title %}Configurador de calendarios{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col gap-8">
+    <div class="grid gap-4 rounded-lg border border-slate-200 bg-white/90 p-4 text-sm text-slate-600">
+      <div class="flex items-start gap-3">
+        <span class="mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-700">1</span>
+        <div>
+          <p class="font-semibold text-slate-900">Gestiona las posiciones clave</p>
+          <p>Crea, actualiza y valida las posiciones activas antes de lanzar la generación.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <span class="mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700">2</span>
+        <div>
+          <p class="font-semibold text-slate-900">Confirma el equipo disponible</p>
+          <p>Consulta fortalezas, preferencias y descansos antes de asignar para evitar sorpresas al generar.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <span class="mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sm font-semibold text-sky-700">3</span>
+        <div>
+          <p class="font-semibold text-slate-900">Define el periodo y genera</p>
+          <p>Configura el rango, notas y revisa las indicaciones finales antes de crear el borrador sugerido.</p>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="configurator-app"
+      class="space-y-10"
+      data-view="configurator"
+      data-metadata-url="{% url 'calendario-api:calendar-metadata' %}"
+      data-generate-url="{% url 'calendario-api:calendar-generate' %}"
+      data-summary-url-template="{% url 'calendario-api:calendar-summary' 0 %}"
+      data-assignments-url-template="{% url 'calendario-api:calendar-assignments' 0 %}"
+      data-eligible-url-template="{% url 'calendario-api:calendar-eligible-operators' 0 %}"
+      data-calendar-detail-url-template="{% url 'calendario:calendar-detail' 0 %}"
+      data-dashboard-url="{% url 'calendario:dashboard' %}"
+      data-positions-url="{% url 'calendario-api:calendar-positions' %}"
+      data-position-detail-url-template="{% url 'calendario-api:calendar-position-detail' 0 %}"
+      data-capabilities-url="{% url 'calendario-api:calendar-capabilities' %}"
+      data-capability-detail-url-template="{% url 'calendario-api:calendar-capability-detail' 0 %}"
+      data-preferences-url="{% url 'calendario-api:calendar-preferences' %}"
+      data-preference-detail-url-template="{% url 'calendario-api:calendar-preference-detail' 0 %}"
+      data-operators-url="{% url 'calendario-api:calendar-operators' %}"
+      data-operator-detail-url-template="{% url 'calendario-api:calendar-operator-detail' 0 %}"
+      data-rest-rules-url="{% url 'calendario-api:calendar-rest-rules' %}"
+      data-rest-rule-detail-url-template="{% url 'calendario-api:calendar-rest-rule-detail' 0 %}"
+      data-overload-rules-url="{% url 'calendario-api:calendar-overload-rules' %}"
+      data-overload-rule-detail-url-template="{% url 'calendario-api:calendar-overload-rule-detail' 0 %}"
+    >
+      <div class="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs font-medium">
+        <button type="button" data-step-trigger="1" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">1. Posiciones</button>
+        <button type="button" data-step-trigger="2" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">2. Colaboradores</button>
+        <button type="button" data-step-trigger="3" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">3. Periodo y generación</button>
+      </div>
+
+      <div class="space-y-12">
+        <section data-step-index="3" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
+          <header class="flex flex-col gap-1">
+            <h2 class="text-xl font-semibold text-slate-900">3. Define el periodo y genera el borrador</h2>
+            <p class="text-sm text-slate-600">Con la información validada, genera el calendario sugerido. Podrás editar cada asignación antes de aprobar.</p>
+          </header>
+
+          <div class="mt-6 space-y-6">
+            <form id="calendar-basics-form" class="space-y-4">
+              <div class="grid gap-4 md:grid-cols-3">
+                <label class="flex flex-col text-sm text-slate-600">
+                  Nombre del calendario
+                  <input id="calendar-name" type="text" required placeholder="Semana 42 - Colina" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+                <label class="flex flex-col text-sm text-slate-600">
+                  Fecha de inicio
+                  <input id="calendar-start" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+                <label class="flex flex-col text-sm text-slate-600">
+                  Fecha de cierre
+                  <input id="calendar-end" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+              </div>
+
+              <label class="flex flex-col text-sm text-slate-600">
+                Notas internas (se guardan junto con el calendario)
+                <textarea id="calendar-notes" rows="3" placeholder="Observaciones relevantes, feriados, eventos especiales…" class="mt-1 resize-y rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
+              </label>
+
+              <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <p class="font-semibold">Tip operativo</p>
+                <p>Ingresa rangos completos (al menos una semana) para que el motor respete descansos y rotaciones. Si necesitas ajustes, puedes volver a este paso antes de aprobar.</p>
+              </div>
+            </form>
+
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div class="space-y-4">
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <p class="font-semibold text-slate-900">Antes de generar</p>
+                  <ul class="mt-2 list-disc pl-4">
+                    <li>Verifica que el rango de fechas sea correcto.</li>
+                    <li>Confirma que las posiciones activas cubran la operación completa.</li>
+                    <li>Revisa alertas de descanso o sobrecarga en la configuración de reglas.</li>
+                  </ul>
+                </div>
+
+                <button id="generate-calendar-btn" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-4 py-3 text-sm font-semibold text-white shadow hover:bg-brand-dark">
+                  Generar calendario sugerido
+                </button>
+
+                <div id="calendar-feedback" class="hidden rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-slate-800">Resumen del borrador</h3>
+                  <button type="button" id="reload-summary-btn" class="hidden rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">Actualizar resumen</button>
+                </div>
+                <div id="summary-preview" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                  <p class="text-slate-500">El resumen aparecerá después de generar el calendario.</p>
+                </div>
+                <div class="flex flex-wrap gap-2" id="calendar-actions" hidden>
+                  <a id="open-calendar-detail" href="#" class="inline-flex items-center gap-2 rounded border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/10">Abrir detalle de calendario</a>
+                  <a href="{% url 'calendario:dashboard' %}" class="inline-flex items-center gap-2 rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver al panel</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <p class="font-semibold text-slate-900">Pasos finales recomendados</p>
+              <ol class="list-decimal pl-4">
+                <li>Revisa alertas amarillas o rojas y reasigna desde el detalle si es necesario.</li>
+                <li>Comparte el enlace con el supervisor responsable para una segunda validación.</li>
+                <li>Aprueba el calendario cuando todas las incidencias estén resueltas.</li>
+              </ol>
+            </div>
+
+            <div class="mt-6 flex items-center justify-start">
+            <button type="button" data-action="prev" data-prev-step="1" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
+            </div>
+          </div>
+        </section>
+
+        <section data-step-index="1" class="rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
+          <header class="flex flex-col gap-1">
+            <h2 class="text-xl font-semibold text-slate-900">1. Gestiona las posiciones vigentes</h2>
+            <p class="text-sm text-slate-600">Confirma que las posiciones tienen fechas activas y la criticidad esperada. Usa los accesos rápidos para revisar en administración solo cuando sea necesario.</p>
+          </header>
+
+          <div class="mt-4 flex flex-col gap-4">
+            <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="position-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva posición</button>
+              <button type="button" id="refresh-metadata-btn" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Refrescar datos</button>
+              <a href="{% url 'calendario:dashboard' %}#calendarios" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Ir al panel</a>
+            </div>
+
+            <div class="overflow-hidden rounded-lg border border-slate-200">
+              <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Posición</th>
+                    <th class="px-3 py-2 text-left">Nivel de criticidad</th>
+                    <th class="px-3 py-2 text-left">Turno</th>
+                    <th class="px-3 py-2 text-left">Vigencia</th>
+                    <th class="px-3 py-2 text-left">Activo</th>
+                    <th class="px-3 py-2 text-left">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="positions-body" class="divide-y divide-slate-100 bg-white">
+                  <tr>
+                    <td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">Cargando posiciones…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="position-form-wrapper" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+              <form id="position-form" class="grid gap-4 md:grid-cols-2">
+                <input type="hidden" id="position-id" />
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Nombre
+                  <input id="position-name" type="text" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <div id="position-code-display" class="hidden flex flex-col gap-1 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <span class="font-semibold text-slate-700">Código asignado</span>
+                  <span id="position-code-value">—</span>
+                </div>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Categoría
+                  <select id="position-category" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Granja
+                  <select id="position-farm" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Galpón (opcional)
+                  <select id="position-house" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Salón (opcional)
+                  <select id="position-room" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Nivel de criticidad
+                  <select id="position-complexity" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente desde
+                  <input id="position-valid-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente hasta
+                  <input id="position-valid-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="position-allow-lower" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                  Permitir cubrir con criticidad inferior
+                </label>
+
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="position-is-active" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" checked />
+                  Posición activa
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
+                  Notas internas
+                  <textarea id="position-notes" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
+                </label>
+
+                <div id="position-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
+
+                <div class="flex items-center justify-end gap-2 md:col-span-2">
+                  <button type="button" id="position-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar posición</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <p class="font-semibold">¿Necesitas editar desde administración?</p>
+              <p>
+                Si requieres campos avanzados, abre la posición en el panel de administración, aplica los cambios y vuelve a presionar «Refrescar datos» para sincronizar la información.
+              </p>
+            </div>
+
+            <div class="flex items-center justify-end">
+              <button type="button" data-action="next" data-next-step="2" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar con colaboradores</button>
+            </div>
+          </div>
+        </section>
+
+        
+        <section data-step-index="2" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
+          <header class="flex flex-col gap-1">
+            <h2 class="text-xl font-semibold text-slate-900">2. Confirma colaboradores disponibles</h2>
+            <p class="text-sm text-slate-600">Identifica quién puede cubrir cada posición según sus fortalezas, criticidad y preferencias registradas.</p>
+          </header>
+
+          <div class="mt-4 space-y-6">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="text-xs text-slate-500">
+                <span id="operator-count">0 colaboradores</span>
+                <span class="mx-2">•</span>
+                <span id="capability-count">0 fortalezas activas</span>
+              </div>
+              <div class="flex flex-wrap gap-2 text-xs">
+                <input id="operator-search" type="search" placeholder="Buscar por nombre" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand sm:w-64" />
+                <select id="operator-category-filter" class="rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
+                  <option value="">Todas las categorías</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 text-xs">
+              <button type="button" id="operator-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nuevo colaborador</button>
+              <button type="button" id="operator-refresh-btn" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Actualizar colaboradores</button>
+            </div>
+
+            <div class="overflow-hidden rounded-lg border border-slate-200">
+              <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Colaborador</th>
+                    <th class="px-3 py-2 text-left">Roles</th>
+                    <th class="px-3 py-2 text-left">Fortalezas</th>
+                    <th class="px-3 py-2 text-left">Preferencias</th>
+                    <th class="px-3 py-2 text-left">Estado</th>
+                    <th class="px-3 py-2 text-left">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="operator-body" class="divide-y divide-slate-100 bg-white">
+                  <tr>
+                    <td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">Cargando colaboradores…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="operator-form-wrapper" class="hidden rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">
+              <form id="operator-form" class="grid gap-4 md:grid-cols-2">
+                <input type="hidden" id="operator-id" />
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Cédula
+                  <input id="operator-document" type="text" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Teléfono
+                  <input id="operator-phone" type="text" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Nombres
+                  <input id="operator-first-name" type="text" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Apellidos
+                  <input id="operator-last-name" type="text" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Correo electrónico (opcional)
+                  <input id="operator-email" type="email" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Roles
+                  <select id="operator-roles" multiple class="mt-1 h-32 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                  <span class="mt-1 text-xs text-slate-500">Usa Ctrl/⌘ + clic para seleccionar varios roles.</span>
+                </label>
+
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="operator-is-active" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                  Colaborador activo
+                </label>
+
+                <div id="operator-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
+
+                <div class="flex items-center justify-end gap-2 md:col-span-2">
+                  <button type="button" id="operator-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar colaborador</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="capability-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva fortaleza</button>
+              <button type="button" id="preference-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nueva preferencia</button>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-slate-800">Fortalezas registradas</h3>
+                  <span id="capability-list-count" class="text-xs text-slate-500">0 registros</span>
+                </div>
+                <div id="capability-list" class="space-y-3 text-sm text-slate-600">
+                  <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>
+                </div>
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-slate-800">Preferencias de granja</h3>
+                  <span id="preference-list-count" class="text-xs text-slate-500">0 registros</span>
+                </div>
+                <div id="preference-list" class="space-y-3 text-sm text-slate-600">
+                  <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay preferencias registradas.</p>
+                </div>
+              </div>
+            </div>
+
+            <div id="capability-form-wrapper" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+              <form id="capability-form" class="grid gap-4 md:grid-cols-2">
+                <input type="hidden" id="capability-id" />
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Colaborador
+                  <select id="capability-operator" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Categoría
+                  <select id="capability-category" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Criticidad mínima
+                  <select id="capability-min-complexity" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Criticidad máxima
+                  <select id="capability-max-complexity" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente desde
+                  <input id="capability-effective-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente hasta
+                  <input id="capability-effective-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="capability-is-primary" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                  Función principal
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
+                  Notas
+                  <textarea id="capability-notes" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
+                </label>
+
+                <div id="capability-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
+
+                <div class="flex items-center justify-end gap-2 md:col-span-2">
+                  <button type="button" id="capability-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar fortaleza</button>
+                </div>
+              </form>
+            </div>
+
+            <div id="preference-form-wrapper" class="hidden rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">
+              <form id="preference-form" class="grid gap-4 md:grid-cols-2">
+                <input type="hidden" id="preference-id" />
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Colaborador
+                  <select id="preference-operator" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Granja
+                  <select id="preference-farm" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Peso de preferencia
+                  <input id="preference-weight" type="number" min="1" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="preference-is-primary" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                  Marcar como preferencia principal
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
+                  Notas
+                  <textarea id="preference-notes" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
+                </label>
+
+                <div id="preference-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
+
+                <div class="flex items-center justify-end gap-2 md:col-span-2">
+                  <button type="button" id="preference-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar preferencia</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <p class="font-semibold">Consejo rápido</p>
+              <p>Para asignar manualmente dentro del borrador, usa el paso 3. Aquí gestionas disponibilidad antes de lanzar la generación automática.</p>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <button type="button" data-action="prev" data-prev-step="2" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
+            <button type="button" data-action="next" data-next-step="3" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar con periodo y generación</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  {% include "calendario/partials/configurator_app_scripts.html" %}
+{% endblock %}
