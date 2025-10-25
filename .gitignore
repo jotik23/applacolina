@@ -7,3 +7,6 @@ __pycache__/
 
 # Local database
 db.sqlite3
+
+# Environment configuration
+.env

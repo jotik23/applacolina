@@ -1,3 +1,7 @@
+import os
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
 """
 Django settings for applacolina project.
 
@@ -10,8 +14,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
-from pathlib import Path
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -20,12 +22,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ni*v43ft!*+)miwcxlu6rv03y_z91hw8m#$rq&6_#j)55d!h-@'
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in {"1", "true", "yes", "on"}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if host.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
@@ -73,14 +87,41 @@ TEMPLATES = [
 WSGI_APPLICATION = 'applacolina.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+def _build_database_from_url(database_url: str) -> dict[str, object]:
+    parsed = urlparse(database_url)
+    if parsed.scheme not in {"postgres", "postgresql", "postgis"}:
+        msg = "DATABASE_URL must be a Postgres connection string."
+        raise ValueError(msg)
+
+    query_params = parse_qs(parsed.query)
+    options = {}
+    if "sslmode" in query_params:
+        options["sslmode"] = query_params["sslmode"][-1]
+
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": parsed.path.lstrip("/") or os.getenv("POSTGRES_DB", ""),
+        "USER": parsed.username or os.getenv("POSTGRES_USER", ""),
+        "PASSWORD": parsed.password or os.getenv("POSTGRES_PASSWORD", ""),
+        "HOST": parsed.hostname or os.getenv("POSTGRES_HOST", "localhost"),
+        "PORT": str(parsed.port or os.getenv("POSTGRES_PORT", "5432")),
+        "OPTIONS": options,
+    }
+
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    "default": (
+        _build_database_from_url(database_url)
+        if (database_url := os.getenv("DATABASE_URL"))
+        else {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "applacolina"),
+            "USER": os.getenv("POSTGRES_USER", "applacolina"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "applacolina"),
+            "HOST": os.getenv("POSTGRES_HOST", "db"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        }
+    )
 }
 
 
@@ -118,7 +159,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
