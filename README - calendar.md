@@ -88,3 +88,24 @@ Criterios de asignación:
 Todas las opciones de configuración, ya sea de operarios, posiciones, habilidades, etc deben ser realizadas através del panel administrativo django. 
 
 Solo se debe proveer la funcionalidad de generar la programación de turnos (borrador) con los filtros anteriormente descritos, editar dicha programación, permitir guardar la versión final aplicable para el periodo de tiempo definido, y permitir navegar entre las programaciones ya definidas. No debe ser posible guardar programaciones solapadas en el tiempo; puesto que finalmente se espera que este módulo pueda representar la realidad de la asignación de turnos por operarios en el presente, futuro y el pasado.  
+
+Notas adicionales (sesión de validación 2024-XX-XX):
+- Horizonte estándar de planificación: se trabaja principalmente con periodos semanales, con opción de planificar hasta dos semanas manteniendo continuidad de rotaciones.
+- Estados del calendario: `Borrador` → `Aprobado`; cualquier ajuste posterior crea un estado `Modificado` que debe validarse nuevamente antes de reemplazar la versión aprobada vigente.
+- Gestión de versiones: no se permiten solapamientos con calendarios aprobados; si surgen cambios, se reconfiguran únicamente las fechas futuras del calendario activo.
+- Complejidad operario/posición: etiquetas `Básico`, `Intermedio`, `Avanzado`. Operarios con nivel superior pueden cubrir posiciones de menor complejidad. En emergencias, niveles inferiores pueden cubrir posiciones de mayor exigencia y deben resaltarse (ej. colores diferenciados) para seguimiento y alertas futuras.
+- Reglas de descanso: mínimo un día libre cada seis días trabajados. Turnos nocturnos incluyen posturno obligatorio antes del descanso. Preferencias de descanso configurables por rol (lista fija por rol; algunos roles sin preferencia).
+- Rotación y fairness: se evalúa el histórico mensual para equilibrar asignaciones y descansos, asegurando rotación entre galpones de una misma granja.
+- Sobrecargos: máximo tres días adicionales consecutivos. Cada sobrecargo debe marcarse en el calendario y registrar anotación para bono compensatorio y seguimiento por supervisión.
+- Flujo de aprobación: el responsable con permiso de gestión puede generar, aprobar y modificar calendarios; no se requiere workflow adicional de múltiples aprobadores.
+
+Implementación inicial (módulo calendario):
+- App `calendario` registrada con modelos para posiciones, capacidades operativas, reglas de descanso y versionamiento de calendarios (`ShiftCalendar`, `ShiftAssignment`, `AssignmentChangeLog`).
+- Servicios de generación (`CalendarScheduler`) que contemplan complejidad, descansos mensuales/semanales, posturnos nocturnos y sobrecargas con alertas diferenciadas.
+- API básica (`/api/calendars/…`) para listar, generar borradores y aprobar calendarios; integra el motor de asignación y devuelve huecos críticos.
+- Panel administrativo con formularios avanzados e inlines para gestionar posiciones, preferencias, capacidades y seguimiento de cambios/alertas.
+- Señales que registran auditoría automática (creación, actualización, eliminación) conservando trazabilidad incluso sobre modificaciones manuales.
+- Documentación de entidades y flujo de datos disponible en `calendario/docs/entities.md` para apoyar el diseño de formularios HTML/Tailwind.
+- Interfaz de usuarios (HTML + Tailwind) con panel de generación/listado (`/calendario/`) y vista de detalle con tabla dinámica, alertas y acción de aprobación.
+- Edición rápida en la vista de detalle: formularios embebidos permiten reasignar turnos o cubrir huecos. La validación comprueba complejidad y disponibilidad diaria, pero no recalcula automáticamente reglas de descanso ni sobrecargas (el supervisor debe confirmar manualmente estas excepciones).
+- Fixtures de prueba (`calendario/fixtures/initial_calendario.json`) con roles, operarios, posiciones y un calendario de ejemplo. Las credenciales preconfiguradas usan la contraseña `calendario123` y sirven únicamente para entornos de desarrollo.

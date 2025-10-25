@@ -1,0 +1,457 @@
+[
+  {
+    "model": "users.role",
+    "pk": 1,
+    "fields": {
+      "name": "GALPONERO"
+    }
+  },
+  {
+    "model": "users.role",
+    "pk": 2,
+    "fields": {
+      "name": "CLASIFICADOR"
+    }
+  },
+  {
+    "model": "users.role",
+    "pk": 3,
+    "fields": {
+      "name": "ADMINISTRADOR"
+    }
+  },
+  {
+    "model": "users.role",
+    "pk": 4,
+    "fields": {
+      "name": "SUPERVISOR"
+    }
+  },
+  {
+    "model": "granjas.farm",
+    "pk": 1,
+    "fields": {
+      "name": "Colina 1"
+    }
+  },
+  {
+    "model": "granjas.farm",
+    "pk": 2,
+    "fields": {
+      "name": "Colina 2"
+    }
+  },
+  {
+    "model": "granjas.chickenhouse",
+    "pk": 1,
+    "fields": {
+      "farm": 1,
+      "name": "Galpón Principal",
+      "area_m2": "1200.00"
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 1,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$hVQypw7HTJVUjNJBYO8aOX$8wkFcpdn4GiafRK2MU0eyAZYVNOroX+EtdyMfNW0RFg=",
+      "last_login": null,
+      "is_superuser": false,
+      "cedula": "1001",
+      "nombres": "Alex",
+      "apellidos": "Forero",
+      "telefono": "3001111111",
+      "email": "alex.forero@example.com",
+      "direccion": "Vereda La Colina",
+      "contacto_nombre": "Laura Forero",
+      "contacto_telefono": "3009998888",
+      "is_active": true,
+      "is_staff": false,
+      "date_joined": "2025-01-01T08:00:00Z",
+      "roles": [
+        1
+      ]
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 2,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$hVQypw7HTJVUjNJBYO8aOX$8wkFcpdn4GiafRK2MU0eyAZYVNOroX+EtdyMfNW0RFg=",
+      "last_login": null,
+      "is_superuser": false,
+      "cedula": "1002",
+      "nombres": "Cesar",
+      "apellidos": "Ortiz",
+      "telefono": "3002222222",
+      "email": "cesar.ortiz@example.com",
+      "direccion": "Vereda La Colina",
+      "contacto_nombre": "Angela Ortiz",
+      "contacto_telefono": "3001112233",
+      "is_active": true,
+      "is_staff": false,
+      "date_joined": "2025-01-01T08:05:00Z",
+      "roles": [
+        1
+      ]
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 3,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$hVQypw7HTJVUjNJBYO8aOX$8wkFcpdn4GiafRK2MU0eyAZYVNOroX+EtdyMfNW0RFg=",
+      "last_login": null,
+      "is_superuser": false,
+      "cedula": "1003",
+      "nombres": "Leiner",
+      "apellidos": "Garzón",
+      "telefono": "3003333333",
+      "email": "leiner.garzon@example.com",
+      "direccion": "Vereda La Colina",
+      "contacto_nombre": "Diana Garzón",
+      "contacto_telefono": "3004445555",
+      "is_active": true,
+      "is_staff": false,
+      "date_joined": "2025-01-01T08:10:00Z",
+      "roles": [
+        1
+      ]
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 4,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$hVQypw7HTJVUjNJBYO8aOX$8wkFcpdn4GiafRK2MU0eyAZYVNOroX+EtdyMfNW0RFg=",
+      "last_login": null,
+      "is_superuser": false,
+      "cedula": "2001",
+      "nombres": "Yina",
+      "apellidos": "Torres",
+      "telefono": "3004444444",
+      "email": "yina.torres@example.com",
+      "direccion": "Pueblo Nuevo",
+      "contacto_nombre": "Camila Torres",
+      "contacto_telefono": "3007778888",
+      "is_active": true,
+      "is_staff": false,
+      "date_joined": "2025-01-01T08:15:00Z",
+      "roles": [
+        2
+      ]
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 5,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$hVQypw7HTJVUjNJBYO8aOX$8wkFcpdn4GiafRK2MU0eyAZYVNOroX+EtdyMfNW0RFg=",
+      "last_login": null,
+      "is_superuser": false,
+      "cedula": "9001",
+      "nombres": "Sonia",
+      "apellidos": "Rojas",
+      "telefono": "3005555555",
+      "email": "sonia.rojas@example.com",
+      "direccion": "Centro Urbano",
+      "contacto_nombre": "Jorge Rojas",
+      "contacto_telefono": "3105556666",
+      "is_active": true,
+      "is_staff": true,
+      "date_joined": "2025-01-01T08:20:00Z",
+      "roles": [
+        4
+      ]
+    }
+  },
+  {
+    "model": "calendario.positiondefinition",
+    "pk": 1,
+    "fields": {
+      "name": "Galponero Producción Día",
+      "code": "COL1-GAL-D1",
+      "category": "GALPONERO_PRODUCCION_DIA",
+      "farm": 1,
+      "chicken_house": 1,
+      "room": null,
+      "shift_type": "day",
+      "complexity": "intermediate",
+      "allow_lower_complexity": true,
+      "valid_from": "2025-01-01",
+      "valid_until": null,
+      "is_active": true,
+      "notes": "Cobertura principal día"
+    }
+  },
+  {
+    "model": "calendario.positiondefinition",
+    "pk": 2,
+    "fields": {
+      "name": "Galponero Producción Noche",
+      "code": "COL1-GAL-N1",
+      "category": "GALPONERO_PRODUCCION_NOCHE",
+      "farm": 1,
+      "chicken_house": 1,
+      "room": null,
+      "shift_type": "night",
+      "complexity": "advanced",
+      "allow_lower_complexity": true,
+      "valid_from": "2025-01-01",
+      "valid_until": null,
+      "is_active": true,
+      "notes": "Cobertura nocturna"
+    }
+  },
+  {
+    "model": "calendario.positiondefinition",
+    "pk": 3,
+    "fields": {
+      "name": "Clasificador Día",
+      "code": "COL1-CLAS-D1",
+      "category": "CLASIFICADOR_DIA",
+      "farm": 1,
+      "chicken_house": null,
+      "room": null,
+      "shift_type": "day",
+      "complexity": "basic",
+      "allow_lower_complexity": false,
+      "valid_from": "2025-01-01",
+      "valid_until": null,
+      "is_active": true,
+      "notes": "Clasificación de huevo"
+    }
+  },
+  {
+    "model": "calendario.operatorcapability",
+    "pk": 1,
+    "fields": {
+      "operator": 1,
+      "category": "GALPONERO_PRODUCCION_DIA",
+      "max_complexity": "advanced",
+      "min_complexity": "intermediate",
+      "effective_from": "2025-01-01",
+      "effective_until": null,
+      "is_primary": true,
+      "notes": "Encargado principal del día"
+    }
+  },
+  {
+    "model": "calendario.operatorcapability",
+    "pk": 2,
+    "fields": {
+      "operator": 2,
+      "category": "GALPONERO_PRODUCCION_DIA",
+      "max_complexity": "intermediate",
+      "min_complexity": "basic",
+      "effective_from": "2025-01-01",
+      "effective_until": null,
+      "is_primary": true,
+      "notes": "Apoyo diurno"
+    }
+  },
+  {
+    "model": "calendario.operatorcapability",
+    "pk": 3,
+    "fields": {
+      "operator": 3,
+      "category": "GALPONERO_PRODUCCION_NOCHE",
+      "max_complexity": "advanced",
+      "min_complexity": "intermediate",
+      "effective_from": "2025-01-01",
+      "effective_until": null,
+      "is_primary": true,
+      "notes": "Cobertura nocturna"
+    }
+  },
+  {
+    "model": "calendario.operatorcapability",
+    "pk": 4,
+    "fields": {
+      "operator": 1,
+      "category": "GALPONERO_PRODUCCION_NOCHE",
+      "max_complexity": "intermediate",
+      "min_complexity": "basic",
+      "effective_from": "2025-01-01",
+      "effective_until": null,
+      "is_primary": false,
+      "notes": "Puede cubrir noche en emergencias"
+    }
+  },
+  {
+    "model": "calendario.operatorcapability",
+    "pk": 5,
+    "fields": {
+      "operator": 4,
+      "category": "CLASIFICADOR_DIA",
+      "max_complexity": "intermediate",
+      "min_complexity": "basic",
+      "effective_from": "2025-01-01",
+      "effective_until": null,
+      "is_primary": true,
+      "notes": "Clasificadora principal"
+    }
+  },
+  {
+    "model": "calendario.operatorfarmpreference",
+    "pk": 1,
+    "fields": {
+      "operator": 1,
+      "farm": 1,
+      "preference_weight": 1,
+      "is_primary": true,
+      "notes": "Vive cerca de Colina 1"
+    }
+  },
+  {
+    "model": "calendario.operatorfarmpreference",
+    "pk": 2,
+    "fields": {
+      "operator": 2,
+      "farm": 1,
+      "preference_weight": 2,
+      "is_primary": false,
+      "notes": "Prefiere turnos intermedios"
+    }
+  },
+  {
+    "model": "calendario.restrule",
+    "pk": 1,
+    "fields": {
+      "role": 1,
+      "shift_type": "day",
+      "min_rest_frequency": 6,
+      "min_consecutive_days": 5,
+      "max_consecutive_days": 6,
+      "post_shift_rest_days": 0,
+      "monthly_rest_days": 5,
+      "enforce_additional_rest": false,
+      "active_from": "2025-01-01",
+      "active_until": null
+    }
+  },
+  {
+    "model": "calendario.restrule",
+    "pk": 2,
+    "fields": {
+      "role": 1,
+      "shift_type": "night",
+      "min_rest_frequency": 6,
+      "min_consecutive_days": 6,
+      "max_consecutive_days": 8,
+      "post_shift_rest_days": 1,
+      "monthly_rest_days": 5,
+      "enforce_additional_rest": false,
+      "active_from": "2025-01-01",
+      "active_until": null
+    }
+  },
+  {
+    "model": "calendario.restrule",
+    "pk": 3,
+    "fields": {
+      "role": 2,
+      "shift_type": "day",
+      "min_rest_frequency": 6,
+      "min_consecutive_days": 5,
+      "max_consecutive_days": 6,
+      "post_shift_rest_days": 0,
+      "monthly_rest_days": 5,
+      "enforce_additional_rest": false,
+      "active_from": "2025-01-01",
+      "active_until": null
+    }
+  },
+  {
+    "model": "calendario.overloadallowance",
+    "pk": 1,
+    "fields": {
+      "role": 1,
+      "max_consecutive_extra_days": 3,
+      "highlight_level": "warn",
+      "active_from": "2025-01-01",
+      "active_until": null
+    }
+  },
+  {
+    "model": "calendario.shiftcalendar",
+    "pk": 1,
+    "fields": {
+      "name": "Semana 01 - Colina",
+      "start_date": "2025-01-06",
+      "end_date": "2025-01-12",
+      "status": "draft",
+      "base_calendar": null,
+      "created_by": 5,
+      "approved_by": null,
+      "approved_at": null,
+      "notes": "Borrador inicial para revisión",
+      "created_at": "2025-01-02T09:00:00Z",
+      "updated_at": "2025-01-02T09:00:00Z"
+    }
+  },
+  {
+    "model": "calendario.shiftassignment",
+    "pk": 1,
+    "fields": {
+      "calendar": 1,
+      "position": 1,
+      "date": "2025-01-06",
+      "operator": 1,
+      "is_auto_assigned": true,
+      "alert_level": "none",
+      "is_overtime": false,
+      "notes": "",
+      "created_at": "2025-01-02T09:00:00Z",
+      "updated_at": "2025-01-02T09:00:00Z"
+    }
+  },
+  {
+    "model": "calendario.shiftassignment",
+    "pk": 2,
+    "fields": {
+      "calendar": 1,
+      "position": 1,
+      "date": "2025-01-07",
+      "operator": 2,
+      "is_auto_assigned": true,
+      "alert_level": "warn",
+      "is_overtime": false,
+      "notes": "Cobertura con complejidad menor",
+      "created_at": "2025-01-02T09:00:00Z",
+      "updated_at": "2025-01-02T09:00:00Z"
+    }
+  },
+  {
+    "model": "calendario.shiftassignment",
+    "pk": 3,
+    "fields": {
+      "calendar": 1,
+      "position": 2,
+      "date": "2025-01-06",
+      "operator": 3,
+      "is_auto_assigned": true,
+      "alert_level": "none",
+      "is_overtime": false,
+      "notes": "Turno nocturno base",
+      "created_at": "2025-01-02T09:00:00Z",
+      "updated_at": "2025-01-02T09:00:00Z"
+    }
+  },
+  {
+    "model": "calendario.shiftassignment",
+    "pk": 4,
+    "fields": {
+      "calendar": 1,
+      "position": 3,
+      "date": "2025-01-06",
+      "operator": 4,
+      "is_auto_assigned": true,
+      "alert_level": "none",
+      "is_overtime": false,
+      "notes": "Clasificación matutina",
+      "created_at": "2025-01-02T09:00:00Z",
+      "updated_at": "2025-01-02T09:00:00Z"
+    }
+  }
+]

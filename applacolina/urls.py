@@ -15,7 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 
 admin.site.site_header = "Administracion de La Colina"
 admin.site.site_title = "Administracion de La Colina"
@@ -23,4 +23,6 @@ admin.site.index_title = "Panel de administracion"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('calendario/', include('calendario.urls', namespace='calendario')),
+    path('api/', include('calendario.api_urls', namespace='calendario-api')),
 ]

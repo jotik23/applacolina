@@ -1,0 +1,99 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Calendario operativo{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                DEFAULT: '#f59e0b',
+                dark: '#d97706'
+              }
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="min-h-full bg-slate-100 text-slate-800">
+    <header class="bg-white shadow-sm">
+      <div class="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-4 text-sm sm:px-6 lg:px-8">
+        <div class="flex items-center gap-6">
+          <a href="{% url 'calendario:dashboard' %}" class="text-lg font-semibold text-slate-900">Panel de Calendarios</a>
+          <nav class="hidden items-center gap-4 text-slate-600 md:flex">
+            <a href="{% url 'calendario:dashboard' %}" class="rounded px-3 py-1 hover:bg-slate-100">Inicio</a>
+            <a href="{% url 'calendario:dashboard' %}#calendarios" class="rounded px-3 py-1 hover:bg-slate-100">Calendarios</a>
+            <a href="{% url 'calendario:dashboard' %}#guia" class="rounded px-3 py-1 hover:bg-slate-100">Guía rápida</a>
+            <a href="{% url 'calendario-api:calendar-list' %}" class="rounded px-3 py-1 hover:bg-slate-100">API</a>
+          </nav>
+        </div>
+        <div class="hidden items-center space-x-4 text-sm text-slate-500 md:flex">
+          {% if request.user.is_authenticated %}
+            {% with full_name=request.user.get_full_name %}
+              <span>
+                {% if full_name %}
+                  {{ full_name }}
+                {% else %}
+                  {{ request.user.username|default:"Invitado" }}
+                {% endif %}
+              </span>
+            {% endwith %}
+            <a href="{% url 'admin:logout' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Salir</a>
+          {% else %}
+            <span>Invitado</span>
+            <a href="{% url 'admin:login' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Iniciar sesión</a>
+          {% endif %}
+        </div>
+      </div>
+    </header>
+
+    {% if messages %}
+      <div class="mx-auto mt-4 w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+        <div class="space-y-3">
+          {% for message in messages %}
+            {% if message.level_tag == 'success' %}
+              {% with bg='bg-emerald-100' text='text-emerald-800' border='border-emerald-200' %}
+                <div class="rounded border {{ border }} {{ bg }} px-4 py-3 text-sm font-medium {{ text }}">
+                  {{ message }}
+                </div>
+              {% endwith %}
+            {% elif message.level_tag == 'warning' %}
+              {% with bg='bg-amber-100' text='text-amber-800' border='border-amber-200' %}
+                <div class="rounded border {{ border }} {{ bg }} px-4 py-3 text-sm font-medium {{ text }}">
+                  {{ message }}
+                </div>
+              {% endwith %}
+            {% elif message.level_tag == 'error' %}
+              {% with bg='bg-red-100' text='text-red-800' border='border-red-200' %}
+                <div class="rounded border {{ border }} {{ bg }} px-4 py-3 text-sm font-medium {{ text }}">
+                  {{ message }}
+                </div>
+              {% endwith %}
+            {% else %}
+              <div class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                {{ message }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <main class="mx-auto mt-6 max-w-[1600px] px-3 pb-16 sm:px-4 lg:px-6">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/70 py-6">
+      <div class="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-xs text-slate-500 sm:flex-row sm:px-6 lg:px-8">
+        <span>Calendario operativo · La Colina</span>
+        <span>Diseñado para monitorear turnos, descansos y sobrecargas de manera justa.</span>
+      </div>
+    </footer>
+  </body>
+</html>
