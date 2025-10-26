@@ -695,6 +695,28 @@ class CalendarDetailView(LoginRequiredMixin, View):
         return redirect(reverse("calendario:calendar-detail", args=[calendar.id]))
 
 
+class CalendarDeleteView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> Any:
+        calendar = get_object_or_404(ShiftCalendar, pk=pk)
+        redirect_url = request.POST.get("next") or reverse("calendario:dashboard")
+
+        calendar_label = calendar.name or f"Calendario {calendar.start_date} -> {calendar.end_date}"
+
+        try:
+            calendar.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                "No es posible eliminar este calendario porque tiene modificaciones asociadas.",
+            )
+        else:
+            messages.success(request, f'Se eliminó el calendario "{calendar_label}".')
+
+        return redirect(redirect_url)
+
+
 # ---------------------------------------------------------------------------
 # API JSON
 # ---------------------------------------------------------------------------

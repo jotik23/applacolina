@@ -22,7 +22,7 @@
           {% endif %}
         </div>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
         {% if calendar.status != 'approved' %}
           <form method="post">
             {% csrf_token %}
@@ -38,6 +38,31 @@
             {% endif %}
           </span>
         {% endif %}
+        <div class="relative" data-double-confirm>
+          <button type="button" class="inline-flex items-center rounded border border-red-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-600 hover:border-red-300 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200" data-double-confirm-trigger>Eliminar calendario</button>
+          <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-panel>
+            <div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+              <p class="font-semibold text-slate-900">¿Eliminar este calendario?</p>
+              <p class="mt-1 text-xs text-slate-500">Se eliminarán todas las asignaciones relacionadas.</p>
+              <div class="mt-3 flex justify-end gap-2">
+                <button type="button" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel data-double-confirm-focus>Cancelar</button>
+                <button type="button" class="inline-flex items-center rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400" data-double-confirm-continue>Confirmar</button>
+              </div>
+            </div>
+          </div>
+          <form method="post" action="{% url 'calendario:calendar-delete' calendar.pk %}" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-final>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'calendario:dashboard' %}" />
+            <div class="w-full max-w-sm rounded-lg border border-red-200 bg-white p-4 text-left shadow-lg">
+              <p class="text-sm font-semibold text-red-700">Confirmación final</p>
+              <p class="mt-1 text-xs text-slate-500">Esta acción es irreversible.</p>
+              <div class="mt-3 flex justify-end gap-2">
+                <button type="button" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel>Cancelar</button>
+                <button type="submit" class="inline-flex items-center rounded bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300" data-double-confirm-final-submit data-double-confirm-focus>Eliminar definitivamente</button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
 

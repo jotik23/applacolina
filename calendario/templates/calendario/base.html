@@ -93,5 +93,112 @@
         <span>Diseñado para monitorear turnos, descansos y sobrecargas de manera justa.</span>
       </div>
     </footer>
+    <script>
+      (function () {
+        function toArray(collection) {
+          return Array.prototype.slice.call(collection);
+        }
+
+        var current = null;
+
+        function focusFirst(target) {
+          if (!target) {
+            return;
+          }
+          var focusable = target.querySelector('[data-double-confirm-focus]') ||
+            target.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          if (focusable && typeof focusable.focus === 'function') {
+            focusable.focus();
+          }
+        }
+
+        function hide(data) {
+          if (!data) {
+            return;
+          }
+          if (data.panel) {
+            data.panel.classList.add('hidden');
+          }
+          if (data.finalStage) {
+            data.finalStage.classList.add('hidden');
+          }
+          if (data.trigger) {
+            data.trigger.classList.remove('hidden');
+            data.trigger.focus();
+          }
+          if (current === data) {
+            current = null;
+          }
+        }
+
+        function attach(component) {
+          if (component.dataset.doubleConfirmBound === 'true') {
+            return;
+          }
+          component.dataset.doubleConfirmBound = 'true';
+
+          var trigger = component.querySelector('[data-double-confirm-trigger]');
+          var panel = component.querySelector('[data-double-confirm-panel]');
+          var finalStage = component.querySelector('[data-double-confirm-final]');
+          var continueButton = panel ? panel.querySelector('[data-double-confirm-continue]') : null;
+          var cancelButtons = toArray(component.querySelectorAll('[data-double-confirm-cancel]'));
+          var overlays = toArray(component.querySelectorAll('[data-double-confirm-panel], [data-double-confirm-final]'));
+
+          if (!trigger || !panel || !finalStage) {
+            return;
+          }
+
+          var data = {
+            trigger: trigger,
+            panel: panel,
+            finalStage: finalStage,
+          };
+          component.__doubleConfirm = data;
+
+          trigger.addEventListener('click', function () {
+            if (current && current !== data) {
+              hide(current);
+            }
+            trigger.classList.add('hidden');
+            panel.classList.remove('hidden');
+            focusFirst(panel);
+            current = data;
+          });
+
+          cancelButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              hide(data);
+            });
+          });
+
+          if (continueButton) {
+            continueButton.addEventListener('click', function () {
+              panel.classList.add('hidden');
+              finalStage.classList.remove('hidden');
+              focusFirst(finalStage);
+              current = data;
+            });
+          }
+
+          overlays.forEach(function (overlay) {
+            overlay.addEventListener('click', function (event) {
+              if (event.target === overlay) {
+                hide(data);
+              }
+            });
+          });
+        }
+
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && current) {
+            hide(current);
+          }
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+          toArray(document.querySelectorAll('[data-double-confirm]')).forEach(attach);
+        });
+      })();
+    </script>
   </body>
 </html>
