@@ -40,6 +40,7 @@ from .models import (
     RestRule,
     ShiftAssignment,
     ShiftCalendar,
+    ShiftType,
     complexity_score,
 )
 from .services import CalendarScheduler, SchedulerOptions
@@ -459,7 +460,7 @@ class CalendarConfiguratorView(LoginRequiredMixin, View):
             self.template_name,
             {
                 "alert_choices": _choice_payload(AssignmentAlertLevel.choices),
-                "shift_type_choices": _choice_payload(PositionDefinition._meta.get_field("shift_type").choices),
+                "shift_type_choices": _choice_payload(ShiftType.choices),
                 "status_choices": _choice_payload(CalendarStatus.choices),
             },
         )
@@ -1119,7 +1120,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             "choice_sets": {
                 "position_categories": _choice_payload(PositionCategory.choices),
                 "complexity_levels": _choice_payload(PositionDefinition._meta.get_field("complexity").choices),
-                "shift_types": _choice_payload(PositionDefinition._meta.get_field("shift_type").choices),
+                "shift_types": _choice_payload(ShiftType.choices),
                 "alert_levels": _choice_payload(AssignmentAlertLevel.choices),
                 "calendar_status": _choice_payload(CalendarStatus.choices),
                 "days_of_week": _choice_payload(DayOfWeek.choices),

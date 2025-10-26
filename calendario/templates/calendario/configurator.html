@@ -127,7 +127,6 @@
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex flex-wrap gap-2">
                 <button type="button" id="position-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva posición</button>
-                <button type="button" id="refresh-metadata-btn" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Actualizar listado</button>
               </div>
               <label class="inline-flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" id="position-include-inactive" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
@@ -141,7 +140,6 @@
                   <tr>
                     <th class="px-3 py-2 text-left">Posición</th>
                     <th class="px-3 py-2 text-left">Nivel de criticidad</th>
-                    <th class="px-3 py-2 text-left">Turno</th>
                     <th class="px-3 py-2 text-left">Vigencia</th>
                     <th class="px-3 py-2 text-left">Activo</th>
                     <th class="px-3 py-2 text-left">Acciones</th>
@@ -149,7 +147,7 @@
                 </thead>
                 <tbody id="positions-body" class="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">Cargando posiciones…</td>
+                    <td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">Cargando posiciones…</td>
                   </tr>
                 </tbody>
               </table>
@@ -250,15 +248,12 @@
                 <span id="capability-count">0 fortalezas activas</span>
               </div>
               <div class="flex flex-wrap gap-2 text-xs">
+                <button type="button" id="operator-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nuevo colaborador</button>
                 <input id="operator-search" type="search" placeholder="Buscar por nombre" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand sm:w-64" />
                 <select id="operator-category-filter" class="rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
                   <option value="">Todas las categorías</option>
                 </select>
               </div>
-            </div>
-
-            <div class="flex flex-wrap gap-2 text-xs">
-              <button type="button" id="operator-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nuevo colaborador</button>
             </div>
 
             <div class="overflow-hidden rounded-lg border border-slate-200">
@@ -446,11 +441,6 @@
                   <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar preferencia</button>
                 </div>
               </form>
-            </div>
-
-            <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              <p class="font-semibold">Consejo rápido</p>
-              <p>Para asignar manualmente dentro del borrador, usa el paso 3. Aquí gestionas disponibilidad antes de lanzar la generación automática.</p>
             </div>
 
             <div class="flex items-center justify-between">

@@ -39,7 +39,6 @@ class CalendarSchedulerTests(TestCase):
             code="G1-DIA",
             category=PositionCategory.GALPONERO_PRODUCCION_DIA,
             farm=self.farm,
-            shift_type=ShiftType.DAY,
             complexity=ComplexityLevel.INTERMEDIATE,
             allow_lower_complexity=False,
             valid_from=date(2025, 1, 1),

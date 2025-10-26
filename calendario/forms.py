@@ -10,7 +10,6 @@ from django.db.models.functions import Cast
 from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
-    CATEGORY_SHIFT_MAP,
     OverloadAllowance,
     OperatorCapability,
     OperatorFarmPreference,
@@ -18,7 +17,6 @@ from .models import (
     RestRule,
     ShiftAssignment,
     ShiftCalendar,
-    ShiftType,
     complexity_score,
 )
 from .models import RestPreference
@@ -261,9 +259,6 @@ class PositionDefinitionForm(forms.ModelForm):
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
         category = cleaned_data.get("category")
-        self.instance._manual_shift_type = False
-        if category:
-            self.instance.shift_type = CATEGORY_SHIFT_MAP.get(category, ShiftType.DAY)
         chicken_house = cleaned_data.get("chicken_house")
         rooms = cleaned_data.get("rooms")  # type: ignore[assignment]
         if rooms:

@@ -970,14 +970,13 @@
           const emptyMessage = state.filters.includeInactivePositions
             ? 'No hay posiciones registradas en este momento.'
             : 'No hay posiciones activas en este momento.';
-          refs.positionsBody.innerHTML = `<tr><td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">${emptyMessage}</td></tr>`;
+          refs.positionsBody.innerHTML = `<tr><td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">${emptyMessage}</td></tr>`;
           return;
         }
 
         refs.positionsBody.innerHTML = positions
           .map((position) => {
             const complexityLabel = state.lookups.complexityLabels.get(position.complexity) || position.complexity;
-            const shiftLabel = state.lookups.shiftLabels.get(position.shift_type) || position.shift_type;
             const validity = position.valid_until
               ? `${escapeHtml(position.valid_from)} → ${escapeHtml(position.valid_until)}`
               : `${escapeHtml(position.valid_from)} → vigencia abierta`;
@@ -1009,7 +1008,6 @@
                   }
                 </td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(complexityLabel)}</td>
-                <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(shiftLabel)}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${validity}</td>
                 <td class="px-3 py-3 align-top">
                   <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${

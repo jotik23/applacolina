@@ -62,11 +62,15 @@ CATEGORY_SHIFT_MAP: dict[str, str] = {
     PositionCategory.GALPONERO_LEVANTE_NOCHE: ShiftType.NIGHT,
     PositionCategory.CLASIFICADOR_DIA: ShiftType.DAY,
     PositionCategory.CLASIFICADOR_NOCHE: ShiftType.NIGHT,
-    PositionCategory.LIDER_GRANJA: ShiftType.DAY,
+    PositionCategory.LIDER_GRANJA: ShiftType.MIXED,
     PositionCategory.SUPERVISOR: ShiftType.DAY,
     PositionCategory.LIDER_TECNICO: ShiftType.DAY,
     PositionCategory.OFICIOS_VARIOS: ShiftType.DAY,
 }
+
+
+def shift_type_for_category(category: str) -> str:
+    return CATEGORY_SHIFT_MAP.get(category, ShiftType.DAY)
 
 
 class DayOfWeek(models.IntegerChoices):
@@ -126,12 +130,6 @@ class PositionDefinition(models.Model):
         verbose_name="Salones",
         blank=True,
     )
-    shift_type = models.CharField(
-        "Turno",
-        max_length=16,
-        choices=ShiftType.choices,
-        default=ShiftType.DAY,
-    )
     complexity = models.CharField(
         "Nivel de criticidad",
         max_length=16,
@@ -172,10 +170,15 @@ class PositionDefinition(models.Model):
                 if room_house_ids != {self.chicken_house_id}:
                     raise ValidationError("Todos los salones seleccionados deben pertenecer al galpón indicado.")
 
-        if not getattr(self, "_manual_shift_type", False):
-            inferred_shift = CATEGORY_SHIFT_MAP.get(self.category)
-            if inferred_shift:
-                self.shift_type = inferred_shift
+    @property
+    def shift_type(self) -> str:
+        return shift_type_for_category(self.category)
+
+    def get_shift_type_display(self) -> str:
+        try:
+            return ShiftType(self.shift_type).label
+        except ValueError:  # pragma: no cover - defensive
+            return self.shift_type
 
     def is_active_on(self, target_date: date) -> bool:
         if not self.is_active:

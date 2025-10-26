@@ -16,14 +16,13 @@ Representa un rol operativo disponible en un rango de fechas determinado.
 | `farm` | Relación | Sí | Granja asociada. |
 | `chicken_house` | Relación | No | Galpón específico (si aplica). |
 | `rooms` | Relación (múltiple) | No | Salones dentro del galpón (si aplica). |
-| `shift_type` | Enumeración | Sí | Turno (`day` / `night`). |
 | `complexity` | Enumeración | Sí | Nivel requerido (`basic`, `intermediate`, `advanced`). |
 | `allow_lower_complexity` | Booleano | No | Permite cubrir con operarios de menor complejidad en emergencia. |
 | `valid_from` / `valid_until` | Fecha | Sí / No | Ventana de vigencia. |
 | `is_active` | Booleano | No | Activa la posición para el motor de asignación. |
 | `notes` | Texto largo | No | Observaciones adicionales. |
 
-**Impacto:** una posición activa y vigente aparece en la generación del calendario. Si `allow_lower_complexity` es verdadero, el motor podrá asignar operarios con menor nivel, marcando la alerta correspondiente.
+**Impacto:** una posición activa y vigente aparece en la generación del calendario. Si `allow_lower_complexity` es verdadero, el motor podrá asignar operarios con menor nivel, marcando la alerta correspondiente. El turno se infiere automáticamente según la categoría seleccionada (día, noche o mixto), por lo que no se edita manualmente.
 
 ---
 
