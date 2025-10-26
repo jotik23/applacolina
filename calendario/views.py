@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import date, timedelta
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, Q
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,9 +21,8 @@ from .forms import (
     AssignmentCreateForm,
     AssignmentUpdateForm,
     CalendarGenerationForm,
-    OperatorProfileForm,
     OperatorCapabilityForm,
-    OperatorFarmPreferenceForm,
+    OperatorProfileForm,
     OverloadAllowanceForm,
     PositionDefinitionForm,
     RestRuleForm,
@@ -33,7 +33,6 @@ from .models import (
     CalendarStatus,
     OverloadAllowance,
     OperatorCapability,
-    OperatorFarmPreference,
     PositionCategory,
     PositionDefinition,
     RestPreference,
@@ -41,7 +40,7 @@ from .models import (
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
-    complexity_score,
+    required_skill_for_complexity,
 )
 from .services import CalendarScheduler, SchedulerOptions
 from granjas.models import ChickenHouse, Farm, Room
@@ -145,18 +144,16 @@ def _eligible_operator_map(
         OperatorCapability.objects.select_related("operator")
         .prefetch_related("operator__roles")
         .filter(category__in=categories)
-        .filter(effective_from__lte=end)
-        .filter(Q(effective_until__isnull=True) | Q(effective_until__gte=start))
     )
 
-    capability_index: dict[tuple[str, int], List[OperatorCapability]] = defaultdict(list)
+    capability_index: dict[tuple[str, int], OperatorCapability] = {}
     operators_by_category: dict[str, set[int]] = defaultdict(set)
     operator_cache: dict[int, Any] = {}
 
     for capability in capabilities_qs:
         operator = capability.operator
         operator_cache[operator.id] = operator
-        capability_index[(capability.category, operator.id)].append(capability)
+        capability_index[(capability.category, operator.id)] = capability
         operators_by_category[capability.category].add(operator.id)
 
     result: dict[int, dict[date, List[dict[str, Any]]]] = defaultdict(dict)
@@ -168,23 +165,21 @@ def _eligible_operator_map(
                 result[position.id][day] = []
             continue
 
-        required_score = complexity_score(position.complexity)
+        required_score = required_skill_for_complexity(position.complexity)
         for day in date_columns:
             choices: List[dict[str, Any]] = []
             for operator_id in operator_ids:
-                capabilities = capability_index.get((position.category, operator_id), [])
-                active_caps = [cap for cap in capabilities if cap.is_active_on(day)]
-                if not active_caps:
+                capability = capability_index.get((position.category, operator_id))
+                if not capability:
                     continue
 
-                cap = max(active_caps, key=lambda item: complexity_score(item.max_complexity))
-                max_score = complexity_score(cap.max_complexity)
-                if max_score < required_score and not position.allow_lower_complexity:
+                skill_score = capability.skill_score
+                if skill_score < required_score and not position.allow_lower_complexity:
                     continue
 
                 alert = AssignmentAlertLevel.NONE
-                if max_score < required_score:
-                    diff = required_score - max_score
+                if skill_score < required_score:
+                    diff = required_score - skill_score
                     alert = (
                         AssignmentAlertLevel.WARN
                         if diff == 1
@@ -346,6 +341,7 @@ def _operator_payload(
     roles: Optional[Iterable[Role]] = None,
 ) -> dict[str, Any]:
     role_items = roles if roles is not None else list(operator.roles.all())
+    preferred_farm = getattr(operator, "preferred_farm", None)
     return {
         "id": operator.id,
         "name": operator.get_full_name() or operator.nombres,
@@ -354,6 +350,15 @@ def _operator_payload(
         "apellidos": operator.apellidos,
         "telefono": operator.telefono,
         "email": operator.email,
+        "preferred_farm_id": operator.preferred_farm_id,
+        "preferred_farm": (
+            {
+                "id": operator.preferred_farm_id,
+                "name": preferred_farm.name,
+            }
+            if operator.preferred_farm_id and preferred_farm
+            else None
+        ),
         "roles": [
             {
                 "id": role.id,
@@ -371,13 +376,79 @@ def _capability_payload(capability: OperatorCapability) -> dict[str, Any]:
         "id": capability.id,
         "operator_id": capability.operator_id,
         "category": capability.category,
-        "min_complexity": capability.min_complexity,
-        "max_complexity": capability.max_complexity,
-        "effective_from": capability.effective_from.isoformat(),
-        "effective_until": capability.effective_until.isoformat() if capability.effective_until else None,
-        "is_primary": capability.is_primary,
-        "notes": capability.notes,
+        "skill_score": capability.skill_score,
     }
+
+
+def _normalize_capability_entries(data: Any) -> Tuple[Optional[dict[str, int]], dict[str, List[str]]]:
+    if data is None:
+        return None, {}
+
+    if not isinstance(data, list):
+        return None, {"capabilities": ["Formato inválido para las fortalezas."]}
+
+    normalized: dict[str, int] = {}
+    errors: dict[str, List[str]] = {}
+
+    for index, entry in enumerate(data):
+        prefix = f"capabilities[{index}]"
+        if not isinstance(entry, dict):
+            errors.setdefault(prefix, []).append("Formato inválido.")
+            continue
+
+        category = entry.get("category")
+        skill_value_raw = entry.get("skill_score")
+        entry_errors = False
+
+        if not category:
+            errors.setdefault(f"{prefix}.category", []).append("Selecciona la categoría.")
+            entry_errors = True
+        elif category not in PositionCategory.values:
+            errors.setdefault(f"{prefix}.category", []).append("Categoría inválida.")
+            entry_errors = True
+        elif category in normalized:
+            errors.setdefault(f"{prefix}.category", []).append("La categoría ya fue registrada.")
+            entry_errors = True
+
+        try:
+            skill_value = int(skill_value_raw)
+        except (TypeError, ValueError):
+            errors.setdefault(f"{prefix}.skill_score", []).append("El nivel debe ser numérico.")
+            entry_errors = True
+        else:
+            if not 1 <= skill_value <= 10:
+                errors.setdefault(f"{prefix}.skill_score", []).append("El nivel debe estar entre 1 y 10.")
+                entry_errors = True
+
+        if not entry_errors and category is not None:
+            normalized[category] = skill_value
+
+    return normalized, errors
+
+
+def _apply_capabilities(operator: UserProfile, capabilities: Optional[dict[str, int]]) -> None:
+    if capabilities is None:
+        return
+
+    existing = {cap.category: cap for cap in operator.capabilities.all()}
+    desired_categories = set(capabilities.keys())
+
+    for category, score in capabilities.items():
+        capability = existing.get(category)
+        if capability:
+            if capability.skill_score != score:
+                capability.skill_score = score
+                capability.save(update_fields=["skill_score"])
+        else:
+            OperatorCapability.objects.create(
+                operator=operator,
+                category=category,
+                skill_score=score,
+            )
+
+    for category, capability in existing.items():
+        if category not in desired_categories:
+            capability.delete()
 
 
 def _rest_rule_payload(rule: RestRule) -> dict[str, Any]:
@@ -643,14 +714,48 @@ class CalendarGenerateView(LoginRequiredMixin, View):
         except (TypeError, ValueError) as exc:
             return HttpResponseBadRequest(str(exc))
 
-        calendar = ShiftCalendar.objects.create(
-            name=payload.get("name", ""),
-            start_date=start_date,
-            end_date=end_date,
-            status=CalendarStatus.DRAFT,
-            created_by=request.user,
-            notes=payload.get("notes", ""),
-        )
+        name_value = payload.get("name")
+        notes_value = payload.get("notes")
+
+        defaults = {
+            "name": name_value or "",
+            "created_by": request.user,
+            "notes": notes_value or "",
+        }
+
+        try:
+            calendar, created = ShiftCalendar.objects.get_or_create(
+                start_date=start_date,
+                end_date=end_date,
+                status=CalendarStatus.DRAFT,
+                defaults=defaults,
+            )
+        except IntegrityError:
+            calendar = ShiftCalendar.objects.get(
+                start_date=start_date,
+                end_date=end_date,
+                status=CalendarStatus.DRAFT,
+            )
+            created = False
+
+        if not created:
+            updated_fields: List[str] = []
+
+            if "name" in payload and calendar.name != (name_value or ""):
+                calendar.name = name_value or ""
+                updated_fields.append("name")
+
+            if "notes" in payload and calendar.notes != (notes_value or ""):
+                calendar.notes = notes_value or ""
+                updated_fields.append("notes")
+
+            if calendar.created_by_id != request.user.id:
+                calendar.created_by = request.user
+                updated_fields.append("created_by")
+
+            if updated_fields:
+                updated_fields.append("updated_at")
+                calendar.save(update_fields=updated_fields)
 
         options = SchedulerOptions()
         scheduler = CalendarScheduler(calendar, options=options)
@@ -687,8 +792,19 @@ class OperatorCollectionView(LoginRequiredMixin, View):
         if not form.is_valid():
             return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
 
-        operator = form.save()
-        operator = UserProfile.objects.prefetch_related("roles").get(pk=operator.pk)
+        capabilities_map, capability_errors = _normalize_capability_entries(payload.get("capabilities"))
+        if capability_errors:
+            return _json_error("Datos inválidos para las fortalezas.", errors=capability_errors)
+
+        with transaction.atomic():
+            operator = form.save()
+            _apply_capabilities(operator, capabilities_map)
+
+        operator = (
+            UserProfile.objects.select_related("preferred_farm")
+            .prefetch_related("roles")
+            .get(pk=operator.pk)
+        )
         return JsonResponse({"operator": _operator_payload(operator)}, status=201)
 
 
@@ -707,6 +823,8 @@ class OperatorDetailView(LoginRequiredMixin, View):
         for field_name in form_fields:
             if field_name == "roles":
                 form_data[field_name] = list(operator.roles.values_list("pk", flat=True))
+            elif field_name == "preferred_farm":
+                form_data[field_name] = operator.preferred_farm_id
             else:
                 form_data[field_name] = getattr(operator, field_name)
 
@@ -714,12 +832,24 @@ class OperatorDetailView(LoginRequiredMixin, View):
             if key in form_data:
                 form_data[key] = value
 
+        capabilities_map, capability_errors = _normalize_capability_entries(payload.get("capabilities"))
+        if capability_errors:
+            return _json_error("Datos inválidos para las fortalezas.", errors=capability_errors)
+
         form = OperatorProfileForm(form_data, instance=operator)
         if not form.is_valid():
             return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
 
-        operator = form.save()
-        operator = UserProfile.objects.prefetch_related("roles").get(pk=operator.pk)
+        with transaction.atomic():
+            operator = form.save()
+            if capabilities_map is not None:
+                _apply_capabilities(operator, capabilities_map)
+
+        operator = (
+            UserProfile.objects.select_related("preferred_farm")
+            .prefetch_related("roles")
+            .get(pk=operator.pk)
+        )
         return JsonResponse({"operator": _operator_payload(operator)})
 
 
@@ -802,73 +932,6 @@ class CapabilityDetailView(LoginRequiredMixin, View):
     def delete(self, request: HttpRequest, capability_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
         capability = get_object_or_404(OperatorCapability, pk=capability_id)
         capability.delete()
-        return JsonResponse({"status": "deleted"})
-
-
-class PreferenceCollectionView(LoginRequiredMixin, View):
-    http_method_names = ["post"]
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
-        payload, error = _load_json_body(request)
-        if error:
-            return error
-
-        form = OperatorFarmPreferenceForm(payload)
-        if not form.is_valid():
-            return _json_error("Datos inválidos para la preferencia.", errors=_form_errors(form))
-
-        preference = form.save()
-        return JsonResponse(
-            {
-                "preference": {
-                    "id": preference.id,
-                    "operator_id": preference.operator_id,
-                    "farm": {
-                        "id": preference.farm_id,
-                        "name": preference.farm.name,
-                    },
-                    "preference_weight": preference.preference_weight,
-                    "is_primary": preference.is_primary,
-                    "notes": preference.notes,
-                }
-            },
-            status=201,
-        )
-
-
-class PreferenceDetailView(LoginRequiredMixin, View):
-    http_method_names = ["patch", "delete"]
-
-    def patch(self, request: HttpRequest, preference_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
-        preference = get_object_or_404(OperatorFarmPreference, pk=preference_id)
-        payload, error = _load_json_body(request)
-        if error:
-            return error
-
-        form = OperatorFarmPreferenceForm(payload, instance=preference)
-        if not form.is_valid():
-            return _json_error("Datos inválidos para la preferencia.", errors=_form_errors(form))
-
-        preference = form.save()
-        return JsonResponse(
-            {
-                "preference": {
-                    "id": preference.id,
-                    "operator_id": preference.operator_id,
-                    "farm": {
-                        "id": preference.farm_id,
-                        "name": preference.farm.name,
-                    },
-                    "preference_weight": preference.preference_weight,
-                    "is_primary": preference.is_primary,
-                    "notes": preference.notes,
-                }
-            }
-        )
-
-    def delete(self, request: HttpRequest, preference_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
-        preference = get_object_or_404(OperatorFarmPreference, pk=preference_id)
-        preference.delete()
         return JsonResponse({"status": "deleted"})
 
 
@@ -1032,25 +1095,6 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         )
         capabilities_payload = [_capability_payload(capability) for capability in capability_qs]
 
-        preferences_qs = (
-            OperatorFarmPreference.objects.select_related("operator", "farm")
-            .order_by("operator__apellidos", "operator__nombres", "preference_weight")
-        )
-        preferences_payload = [
-            {
-                "id": preference.id,
-                "operator_id": preference.operator_id,
-                "farm": {
-                    "id": preference.farm_id,
-                    "name": preference.farm.name,
-                },
-                "preference_weight": preference.preference_weight,
-                "is_primary": preference.is_primary,
-                "notes": preference.notes,
-            }
-            for preference in preferences_qs
-        ]
-
         rest_rules_qs = (
             RestRule.objects.select_related("role")
             .prefetch_related("preferred_days")
@@ -1100,7 +1144,11 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             for role in Role.objects.order_by("name")
         ]
 
-        operator_qs = UserProfile.objects.prefetch_related("roles").order_by("apellidos", "nombres")
+        operator_qs = (
+            UserProfile.objects.select_related("preferred_farm")
+            .prefetch_related("roles")
+            .order_by("apellidos", "nombres")
+        )
         operators_payload = [
             _operator_payload(operator, roles=list(operator.roles.all()))
             for operator in operator_qs
@@ -1110,7 +1158,6 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             "positions": positions_payload,
             "operators": operators_payload,
             "capabilities": capabilities_payload,
-            "preferences": preferences_payload,
             "rest_rules": rest_rules_payload,
             "overload_rules": overload_payload,
             "farms": farms_payload,
@@ -1120,6 +1167,10 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             "choice_sets": {
                 "position_categories": _choice_payload(PositionCategory.choices),
                 "complexity_levels": _choice_payload(PositionDefinition._meta.get_field("complexity").choices),
+                "skill_levels": [
+                    {"value": str(score), "label": f"{score}/10"}
+                    for score in range(1, 11)
+                ],
                 "shift_types": _choice_payload(ShiftType.choices),
                 "alert_levels": _choice_payload(AssignmentAlertLevel.choices),
                 "calendar_status": _choice_payload(CalendarStatus.choices),

@@ -4,7 +4,7 @@ from typing import Any
 
 from django import forms
 from django.db import IntegrityError, transaction
-from django.db.models import IntegerField, Max, Q
+from django.db.models import IntegerField, Max
 from django.db.models.functions import Cast
 
 from .models import (
@@ -12,21 +12,20 @@ from .models import (
     CalendarStatus,
     OverloadAllowance,
     OperatorCapability,
-    OperatorFarmPreference,
     PositionDefinition,
     RestRule,
     ShiftAssignment,
     ShiftCalendar,
-    complexity_score,
+    required_skill_for_complexity,
 )
 from .models import RestPreference
 from users.models import Role, UserProfile
-from granjas.models import Room
+from granjas.models import Farm, Room
 
 
 class CalendarGenerationForm(forms.Form):
     name = forms.CharField(
-        label="Nombre del calendario",
+        label="Nombre",
         max_length=150,
         required=False,
         widget=forms.TextInput(
@@ -118,23 +117,18 @@ class BaseAssignmentForm(forms.Form):
         *,
         exclude_assignment: ShiftAssignment | None = None,
     ) -> AssignmentAlertLevel:
-        capabilities = (
-            OperatorCapability.objects.filter(operator=operator, category=position.category)
-            .filter(effective_from__lte=target_date)
-            .filter(Q(effective_until__isnull=True) | Q(effective_until__gte=target_date))
-        )
-
-        active_caps = [cap for cap in capabilities if cap.is_active_on(target_date)]
-        if not active_caps:
+        capability = OperatorCapability.objects.filter(
+            operator=operator, category=position.category
+        ).first()
+        if not capability:
             raise forms.ValidationError(
                 "El operario no está habilitado para esta posición en la fecha seleccionada."
             )
 
-        best_cap = max(active_caps, key=lambda cap: complexity_score(cap.max_complexity))
-        required_score = complexity_score(position.complexity)
-        max_score = complexity_score(best_cap.max_complexity)
+        required_score = required_skill_for_complexity(position.complexity)
+        skill_score = capability.skill_score
 
-        if max_score < required_score and not position.allow_lower_complexity:
+        if skill_score < required_score and not position.allow_lower_complexity:
             raise forms.ValidationError(
                 "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
             )
@@ -153,10 +147,10 @@ class BaseAssignmentForm(forms.Form):
                 "El operario ya tiene un turno asignado en esta fecha dentro del calendario."
             )
 
-        if max_score >= required_score:
+        if skill_score >= required_score:
             return AssignmentAlertLevel.NONE
 
-        diff = required_score - max_score
+        diff = required_score - skill_score
         return AssignmentAlertLevel.WARN if diff == 1 else AssignmentAlertLevel.CRITICAL
 
 
@@ -321,6 +315,11 @@ class OperatorProfileForm(forms.ModelForm):
         queryset=Role.objects.order_by("name"),
         required=False,
     )
+    preferred_farm = forms.ModelChoiceField(
+        queryset=Farm.objects.order_by("name"),
+        required=False,
+        empty_label="(sin preferencia)",
+    )
 
     class Meta:
         model = UserProfile
@@ -330,6 +329,7 @@ class OperatorProfileForm(forms.ModelForm):
             "apellidos",
             "telefono",
             "email",
+            "preferred_farm",
             "roles",
             "is_active",
         ]
@@ -360,24 +360,7 @@ class OperatorCapabilityForm(forms.ModelForm):
         fields = [
             "operator",
             "category",
-            "min_complexity",
-            "max_complexity",
-            "effective_from",
-            "effective_until",
-            "is_primary",
-            "notes",
-        ]
-
-
-class OperatorFarmPreferenceForm(forms.ModelForm):
-    class Meta:
-        model = OperatorFarmPreference
-        fields = [
-            "operator",
-            "farm",
-            "preference_weight",
-            "is_primary",
-            "notes",
+            "skill_score",
         ]
 
 

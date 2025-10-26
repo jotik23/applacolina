@@ -28,34 +28,29 @@ Representa un rol operativo disponible en un rango de fechas determinado.
 
 ## OperatorCapability (Capacidad del operario)
 
-Define qué posiciones puede cubrir un operario y los niveles de complejidad que maneja.
+Registra la fortaleza de un operario por categoría de posición.
 
 | Campo | Tipo | Obligatorio | Descripción |
 | --- | --- | --- | --- |
 | `operator` | Relación | Sí | Usuario (colaborador) habilitado. |
 | `category` | Enumeración | Sí | Debe coincidir con la categoría de la posición. |
-| `min_complexity` / `max_complexity` | Enumeración | Sí | Rango de complejidad soportado. |
-| `effective_from` / `effective_until` | Fecha | Sí / No | Vigencia de la capacidad. |
-| `is_primary` | Booleano | No | Marca si es su función principal. |
-| `notes` | Texto | No | Detalles (ej. en entrenamiento, necesita acompañamiento). |
+| `skill_score` | Entero (1-10) | Sí | Nivel de habilidad (1 = en aprendizaje, 10 = experto). |
 
-**Impacto:** si no existe una capacidad activa que coincida con la posición, el motor marcará hueco crítico.
+**Impacto:** el generador de turnos evalúa si el `skill_score` supera el umbral de la posición (`basic` ≥ 1, `intermediate` ≥ 3, `advanced` ≥ 8). Si el puntaje no alcanza el mínimo y la posición no permite coberturas inferiores, se marca un hueco crítico; de lo contrario se asigna con alerta (`warn` a un punto, `critical` a dos o más puntos de diferencia).
 
 ---
 
-## OperatorFarmPreference (Preferencia de granja)
+## UserProfile (Colaborador) — campos relevantes
 
-Permite ponderar las asignaciones según preferencias de los operarios.
+Aunque el modelo `UserProfile` vive en la app `users`, el calendario depende de algunos atributos:
 
 | Campo | Tipo | Obligatorio | Descripción |
 | --- | --- | --- | --- |
-| `operator` | Relación | Sí | Operario. |
-| `farm` | Relación | Sí | Granja preferida. |
-| `preference_weight` | Entero > 0 | No | Peso; cuanto menor el número, mayor preferencia. |
-| `is_primary` | Booleano | No | Marca la preferencia principal. |
-| `notes` | Texto | No | Contexto (ej. vive cerca). |
+| `cedula`, `nombres`, `apellidos`, `telefono`, `email` | Texto | Sí / No | Información base del colaborador. |
+| `roles` | Relación múltiple | No | Se usan para filtrar en UI y validar reglas. |
+| `preferred_farm` | Relación | No | Granja sugerida al motor de asignación (prioridad blanda). |
 
-**Impacto:** el motor prioriza asignaciones según el peso configurado, ayudando a cumplir preferencias cuando sea posible.
+**Impacto:** si `preferred_farm` está definido, el generador intentará asignar primero en esa granja siempre que existan capacidades disponibles. Si no hay preferencia, la selección se realiza únicamente por habilidades y reglas de descanso.
 
 ---
 

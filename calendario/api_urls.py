@@ -17,8 +17,6 @@ from .views import (
     OverloadDetailView,
     PositionCollectionView,
     PositionDetailView,
-    PreferenceCollectionView,
-    PreferenceDetailView,
     RestRuleCollectionView,
     RestRuleDetailView,
 )
@@ -68,12 +66,6 @@ urlpatterns = [
         "calendars/capabilities/<int:capability_id>/",
         CapabilityDetailView.as_view(),
         name="calendar-capability-detail",
-    ),
-    path("calendars/preferences/", PreferenceCollectionView.as_view(), name="calendar-preferences"),
-    path(
-        "calendars/preferences/<int:preference_id>/",
-        PreferenceDetailView.as_view(),
-        name="calendar-preference-detail",
     ),
     path("calendars/rest-rules/", RestRuleCollectionView.as_view(), name="calendar-rest-rules"),
     path(

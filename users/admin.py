@@ -59,6 +59,7 @@ class UserProfileAdmin(UserAdmin):
         "cedula",
         "nombre_completo",
         "telefono",
+        "preferred_farm",
         "listar_roles",
         "is_active",
         "is_staff",
@@ -77,6 +78,7 @@ class UserProfileAdmin(UserAdmin):
                     "apellidos",
                     "telefono",
                     "email",
+                    "preferred_farm",
                     "direccion",
                 )
             },
@@ -104,6 +106,7 @@ class UserProfileAdmin(UserAdmin):
                     "telefono",
                     "email",
                     "direccion",
+                    "preferred_farm",
                     "contacto_nombre",
                     "contacto_telefono",
                     "roles",

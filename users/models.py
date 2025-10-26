@@ -65,6 +65,14 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
     direccion = models.CharField(max_length=255, blank=True)
     contacto_nombre = models.CharField(max_length=150, blank=True)
     contacto_telefono = models.CharField(max_length=32, blank=True)
+    preferred_farm = models.ForeignKey(
+        "granjas.Farm",
+        on_delete=models.SET_NULL,
+        related_name="preferred_operators",
+        verbose_name="Granja preferida",
+        null=True,
+        blank=True,
+    )
     roles = models.ManyToManyField(Role, blank=True, related_name="usuarios")
 
     is_active = models.BooleanField(default=True)
@@ -93,4 +101,3 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self) -> str:
         return self.nombres.split(" ")[0] if self.nombres else ""
-

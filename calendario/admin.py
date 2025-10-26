@@ -42,44 +42,15 @@ class OperatorCapabilityAdmin(admin.ModelAdmin):
     list_display = (
         "operator",
         "category",
-        "min_complexity",
-        "max_complexity",
-        "effective_from",
-        "effective_until",
-        "is_primary",
+        "skill_score",
     )
-    list_filter = (
-        "category",
-        "min_complexity",
-        "max_complexity",
-        "is_primary",
-    )
+    list_filter = ("category",)
     search_fields = (
         "operator__nombres",
         "operator__apellidos",
         "operator__cedula",
-        "notes",
     )
     autocomplete_fields = ("operator",)
-    date_hierarchy = "effective_from"
-
-
-@admin.register(models.OperatorFarmPreference)
-class OperatorFarmPreferenceAdmin(admin.ModelAdmin):
-    list_display = (
-        "operator",
-        "farm",
-        "preference_weight",
-        "is_primary",
-    )
-    list_filter = ("farm", "is_primary")
-    search_fields = (
-        "operator__nombres",
-        "operator__apellidos",
-        "operator__cedula",
-        "notes",
-    )
-    autocomplete_fields = ("operator", "farm")
 
 
 class RestPreferenceInline(admin.TabularInline):

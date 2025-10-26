@@ -72,9 +72,7 @@ class CalendarSchedulerTests(TestCase):
         OperatorCapability.objects.create(
             operator=self.operator,
             category=PositionCategory.GALPONERO_PRODUCCION_DIA,
-            min_complexity=ComplexityLevel.BASIC,
-            max_complexity=ComplexityLevel.ADVANCED,
-            effective_from=date(2024, 12, 1),
+            skill_score=9,
         )
 
         scheduler = CalendarScheduler(self.calendar)
@@ -95,3 +93,22 @@ class CalendarSchedulerTests(TestCase):
         self.assertEqual(len(decisions), 3)
         self.assertTrue(all(decision.operator is None for decision in decisions))
         self.assertTrue(all(decision.alert_level == AssignmentAlertLevel.CRITICAL for decision in decisions))
+
+    def test_scheduler_warns_when_skill_is_below_threshold_but_allowed(self) -> None:
+        from calendario.models import OperatorCapability
+
+        self.position.allow_lower_complexity = True
+        self.position.save(update_fields=["allow_lower_complexity"])
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            skill_score=2,
+        )
+
+        scheduler = CalendarScheduler(self.calendar)
+        decisions = scheduler.generate(commit=True)
+
+        alerts = {decision.alert_level for decision in decisions}
+        self.assertIn(AssignmentAlertLevel.WARN, alerts)
+        self.assertNotIn(AssignmentAlertLevel.CRITICAL, alerts)

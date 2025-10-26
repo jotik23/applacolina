@@ -19,8 +19,6 @@
       data-position-detail-url-template="{% url 'calendario-api:calendar-position-detail' 0 %}"
       data-capabilities-url="{% url 'calendario-api:calendar-capabilities' %}"
       data-capability-detail-url-template="{% url 'calendario-api:calendar-capability-detail' 0 %}"
-      data-preferences-url="{% url 'calendario-api:calendar-preferences' %}"
-      data-preference-detail-url-template="{% url 'calendario-api:calendar-preference-detail' 0 %}"
       data-operators-url="{% url 'calendario-api:calendar-operators' %}"
       data-operator-detail-url-template="{% url 'calendario-api:calendar-operator-detail' 0 %}"
       data-rest-rules-url="{% url 'calendario-api:calendar-rest-rules' %}"
@@ -31,21 +29,176 @@
       <div class="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs font-medium">
         <button type="button" data-step-trigger="1" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">1. Posiciones</button>
         <button type="button" data-step-trigger="2" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">2. Colaboradores</button>
-        <button type="button" data-step-trigger="3" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">3. Periodo y generación</button>
+        <button type="button" data-step-trigger="3" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">3. Reglas operativas</button>
+        <button type="button" data-step-trigger="4" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">4. Generar borrador</button>
       </div>
+
+      <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
 
       <div class="space-y-10">
         <section data-step-index="3" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
           <header class="flex flex-col gap-1">
-            <h2 class="text-xl font-semibold text-slate-900">3. Define el periodo y genera el borrador</h2>
-            <p class="text-sm text-slate-600">Con la información validada, genera el calendario sugerido. Podrás editar cada asignación antes de aprobar.</p>
+            <h2 class="text-xl font-semibold text-slate-900">3. Configura reglas operativas</h2>
+            <p class="text-sm text-slate-600">Gestiona descansos obligatorios y límites de sobrecarga por rol para asegurar planes sostenibles.</p>
+          </header>
+
+          <div class="mt-4 space-y-6">
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="rest-rule-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva regla de descanso</button>
+              <button type="button" id="overload-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nueva regla de sobrecarga</button>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-slate-800">Reglas de descanso</h3>
+                  <span id="rest-rule-count" class="text-xs text-slate-500">0 reglas</span>
+                </div>
+                <div id="rest-rules-list" class="space-y-3 text-sm text-slate-600">
+                  <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Sin información disponible.</p>
+                </div>
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-slate-800">Reglas de sobrecarga</h3>
+                  <span id="overload-count" class="text-xs text-slate-500">0 reglas</span>
+                </div>
+                <div id="overload-list" class="space-y-3 text-sm text-slate-600">
+                  <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Sin información disponible.</p>
+                </div>
+              </div>
+            </div>
+
+            <div id="rest-rule-form-wrapper" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+              <form id="rest-rule-form" class="grid gap-4 md:grid-cols-2">
+                <input type="hidden" id="rest-rule-id" />
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Rol
+                  <select id="rest-rule-role" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Turno
+                  <select id="rest-rule-shift" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Frecuencia mínima de descanso (días)
+                  <input id="rest-rule-min-frequency" type="number" min="1" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Días de descanso consecutivos mínimos
+                  <input id="rest-rule-min-consecutive" type="number" min="1" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Días de descanso consecutivos máximos
+                  <input id="rest-rule-max-consecutive" type="number" min="1" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Descanso posterior al turno (horas)
+                  <input id="rest-rule-post-shift" type="number" min="0" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Descanso mensual requerido
+                  <input id="rest-rule-monthly-rest" type="number" min="0" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="rest-rule-enforce" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                  Aplicar estrictamente
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente desde
+                  <input id="rest-rule-active-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente hasta
+                  <input id="rest-rule-active-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
+                  Preferencias o notas adicionales
+                  <textarea id="rest-rule-preferences" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
+                </label>
+
+                <div id="rest-rule-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
+
+                <div class="flex items-center justify-end gap-2 md:col-span-2">
+                  <button type="button" id="rest-rule-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar regla de descanso</button>
+                </div>
+              </form>
+            </div>
+
+            <div id="overload-form-wrapper" class="hidden rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">
+              <form id="overload-form" class="grid gap-4 md:grid-cols-2">
+                <input type="hidden" id="overload-id" />
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Rol
+                  <select id="overload-role" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Máximo días extra consecutivos
+                  <input id="overload-max-extra" type="number" min="1" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Nivel de alerta
+                  <select id="overload-highlight" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente desde
+                  <input id="overload-active-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente hasta
+                  <input id="overload-active-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <div id="overload-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
+
+                <div class="flex items-center justify-end gap-2 md:col-span-2">
+                  <button type="button" id="overload-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar regla de sobrecarga</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="grid gap-3 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+              <p class="font-semibold">Recomendación</p>
+              <p>Valida cambios con el equipo legal o de seguridad laboral antes de aplicar nuevas reglas. Puedes ajustar vigencias cuando lo necesites.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <button type="button" data-action="prev" data-prev-step="2" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
+              <button type="button" data-action="next" data-next-step="4" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar</button>
+            </div>
+          </div>
+        </section>
+
+        <section data-step-index="4" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
+          <header class="flex flex-col gap-1">
+            <h2 class="text-xl font-semibold text-slate-900">4. Genera calendario en borrador</h2>
+            <p class="text-sm text-slate-600">Ingresa rangos completos (al menos una semana) para que el motor respete descansos y rotaciones.</p>
           </header>
 
           <div class="mt-6 space-y-6">
             <form id="calendar-basics-form" class="space-y-4">
               <div class="grid gap-4 md:grid-cols-3">
                 <label class="flex flex-col text-sm text-slate-600">
-                  Nombre del calendario
+                  Nombre
                   <input id="calendar-name" type="text" required placeholder="Semana 42 - Colina" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
                 </label>
                 <label class="flex flex-col text-sm text-slate-600">
@@ -62,11 +215,6 @@
                 Notas internas (se guardan junto con el calendario)
                 <textarea id="calendar-notes" rows="3" placeholder="Observaciones relevantes, feriados, eventos especiales…" class="mt-1 resize-y rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
               </label>
-
-              <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                <p class="font-semibold">Tip operativo</p>
-                <p>Ingresa rangos completos (al menos una semana) para que el motor respete descansos y rotaciones. Si necesitas ajustes, puedes volver a este paso antes de aprobar.</p>
-              </div>
             </form>
 
             <div class="grid gap-6 lg:grid-cols-2">
@@ -102,17 +250,8 @@
               </div>
             </div>
 
-            <div class="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <p class="font-semibold text-slate-900">Pasos finales recomendados</p>
-              <ol class="list-decimal pl-4">
-                <li>Revisa alertas amarillas o rojas y reasigna desde el detalle si es necesario.</li>
-                <li>Comparte el enlace con el supervisor responsable para una segunda validación.</li>
-                <li>Aprueba el calendario cuando todas las incidencias estén resueltas.</li>
-              </ol>
-            </div>
-
             <div class="mt-6 flex items-center justify-start">
-            <button type="button" data-action="prev" data-prev-step="1" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
+              <button type="button" data-action="prev" data-prev-step="3" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
             </div>
           </div>
         </section>
@@ -123,7 +262,6 @@
           </header>
 
           <div class="mt-4 flex flex-col gap-4">
-            <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex flex-wrap gap-2">
                 <button type="button" id="position-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva posición</button>
@@ -263,7 +401,7 @@
                     <th class="px-3 py-2 text-left">Colaborador</th>
                     <th class="px-3 py-2 text-left">Roles</th>
                     <th class="px-3 py-2 text-left">Fortalezas</th>
-                    <th class="px-3 py-2 text-left">Preferencias</th>
+                    <th class="px-3 py-2 text-left">Granja preferida</th>
                     <th class="px-3 py-2 text-left">Estado</th>
                     <th class="px-3 py-2 text-left">Acciones</th>
                   </tr>
@@ -306,6 +444,14 @@
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
+                  Granja preferida
+                  <select id="operator-preferred-farm" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
+                    <option value="">(sin preferencia)</option>
+                  </select>
+                  <span class="mt-1 text-xs text-slate-500">Opcional. Se usa como sugerencia principal al asignar turnos.</span>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
                   Roles
                   <select id="operator-roles" multiple class="mt-1 h-32 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                   <span class="mt-1 text-xs text-slate-500">Usa Ctrl/⌘ + clic para seleccionar varios roles.</span>
@@ -316,6 +462,19 @@
                   Colaborador activo
                 </label>
 
+                <div class="md:col-span-2 space-y-3">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 class="text-sm font-semibold text-slate-800">Fortalezas</h3>
+                      <p class="text-xs text-slate-500">Define el nivel de habilidad del colaborador para cada categoría (1 = en aprendizaje, 10 = experto).</p>
+                    </div>
+                    <button type="button" id="operator-capability-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Agregar fortaleza</button>
+                  </div>
+                  <div id="operator-capabilities-editor" class="space-y-3">
+                    <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>
+                  </div>
+                </div>
+
                 <div id="operator-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
 
                 <div class="flex items-center justify-end gap-2 md:col-span-2">
@@ -325,127 +484,9 @@
               </form>
             </div>
 
-            <div class="flex flex-wrap gap-2">
-              <button type="button" id="capability-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva fortaleza</button>
-              <button type="button" id="preference-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nueva preferencia</button>
-            </div>
-
-            <div class="grid gap-6 lg:grid-cols-2">
-              <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-sm font-semibold text-slate-800">Fortalezas registradas</h3>
-                  <span id="capability-list-count" class="text-xs text-slate-500">0 registros</span>
-                </div>
-                <div id="capability-list" class="space-y-3 text-sm text-slate-600">
-                  <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>
-                </div>
-              </div>
-
-              <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-sm font-semibold text-slate-800">Preferencias de granja</h3>
-                  <span id="preference-list-count" class="text-xs text-slate-500">0 registros</span>
-                </div>
-                <div id="preference-list" class="space-y-3 text-sm text-slate-600">
-                  <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay preferencias registradas.</p>
-                </div>
-              </div>
-            </div>
-
-            <div id="capability-form-wrapper" class="hidden rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
-              <form id="capability-form" class="grid gap-4 md:grid-cols-2">
-                <input type="hidden" id="capability-id" />
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Colaborador
-                  <select id="capability-operator" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Categoría
-                  <select id="capability-category" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Criticidad mínima
-                  <select id="capability-min-complexity" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Criticidad máxima
-                  <select id="capability-max-complexity" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Vigente desde
-                  <input id="capability-effective-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Vigente hasta
-                  <input id="capability-effective-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input id="capability-is-primary" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
-                  Función principal
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
-                  Notas
-                  <textarea id="capability-notes" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
-                </label>
-
-                <div id="capability-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
-
-                <div class="flex items-center justify-end gap-2 md:col-span-2">
-                  <button type="button" id="capability-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
-                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar fortaleza</button>
-                </div>
-              </form>
-            </div>
-
-            <div id="preference-form-wrapper" class="hidden rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">
-              <form id="preference-form" class="grid gap-4 md:grid-cols-2">
-                <input type="hidden" id="preference-id" />
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Colaborador
-                  <select id="preference-operator" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Granja
-                  <select id="preference-farm" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Peso de preferencia
-                  <input id="preference-weight" type="number" min="1" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input id="preference-is-primary" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
-                  Marcar como preferencia principal
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
-                  Notas
-                  <textarea id="preference-notes" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
-                </label>
-
-                <div id="preference-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
-
-                <div class="flex items-center justify-end gap-2 md:col-span-2">
-                  <button type="button" id="preference-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
-                  <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Guardar preferencia</button>
-                </div>
-              </form>
-            </div>
-
             <div class="flex items-center justify-between">
-              <button type="button" data-action="prev" data-prev-step="2" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
-            <button type="button" data-action="next" data-next-step="3" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar con periodo y generación</button>
+              <button type="button" data-action="prev" data-prev-step="1" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
+            <button type="button" data-action="next" data-next-step="3" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar</button>
             </div>
           </div>
         </section>

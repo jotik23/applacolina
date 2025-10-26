@@ -28,19 +28,7 @@
           <a href="{% url 'calendario:dashboard' %}" class="text-lg font-semibold text-slate-900">Panel de Calendarios</a>
           <nav class="hidden items-center gap-4 text-slate-600 md:flex">
             <a href="{% url 'calendario:dashboard' %}" class="rounded px-3 py-1 hover:bg-slate-100">Inicio</a>
-            <div class="relative group">
-              <button type="button" class="inline-flex items-center gap-1 rounded px-3 py-1 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-                <span>Calendario</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 0 1 1.08 1.04l-4.25 4.25a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd" />
-                </svg>
-              </button>
-              <div class="absolute left-0 top-full z-20 mt-2 hidden min-w-[220px] rounded-lg border border-slate-200 bg-white py-2 text-sm shadow-lg group-hover:block group-focus-within:block">
-                <a href="{% url 'calendario:configurator' %}" class="block px-4 py-2 text-left hover:bg-slate-100">Generación de calendario</a>
-                <a href="{% url 'calendario:dashboard' %}#listado" class="block px-4 py-2 text-left hover:bg-slate-100">Listado de calendarios</a>
-                <a href="{% url 'calendario:rules' %}" class="block px-4 py-2 text-left hover:bg-slate-100">Configuración de reglas</a>
-              </div>
-            </div>
+            <a href="{% url 'calendario:dashboard' %}#listado" class="rounded px-3 py-1 hover:bg-slate-100">Calendario</a>
           </nav>
         </div>
         <div class="hidden items-center space-x-4 text-sm text-slate-500 md:flex">

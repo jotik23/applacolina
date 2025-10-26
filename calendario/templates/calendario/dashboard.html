@@ -55,7 +55,7 @@
       </form>
     </div>
 
-    <div id="listado" class="rounded-xl bg-white shadow-sm">
+    <div id="listado" class="relative rounded-xl bg-white shadow-sm">
       <header class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
         <div>
           <h2 class="text-lg font-semibold text-slate-900">Calendarios recientes</h2>
@@ -100,6 +100,12 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+
+      <div class="absolute bottom-6 right-6 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-lg">
+        <a href="{% url 'calendario:configurator' %}?step=positions" class="inline-flex items-center justify-center rounded border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand hover:text-brand">Configurar posiciones</a>
+        <a href="{% url 'calendario:configurator' %}?step=collaborators" class="inline-flex items-center justify-center rounded border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand hover:text-brand">Configurar colaboradores</a>
+        <a href="{% url 'calendario:configurator' %}?step=rules" class="inline-flex items-center justify-center rounded border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand hover:text-brand">Configurar reglas</a>
       </div>
     </div>
   </section>

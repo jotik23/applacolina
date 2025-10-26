@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -190,6 +190,22 @@ class PositionDefinition(models.Model):
         return True
 
 
+COMPLEXITY_SKILL_THRESHOLDS: dict[str, tuple[int, int]] = {
+    ComplexityLevel.BASIC: (1, 3),
+    ComplexityLevel.INTERMEDIATE: (3, 7),
+    ComplexityLevel.ADVANCED: (8, 10),
+}
+
+
+def required_skill_for_complexity(level: str) -> int:
+    try:
+        enumeration = ComplexityLevel(level)
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise ValidationError(f"Nivel de criticidad inválido: {level}") from exc
+    minimum, _maximum = COMPLEXITY_SKILL_THRESHOLDS[enumeration]
+    return minimum
+
+
 class OperatorCapability(models.Model):
     operator = models.ForeignKey(
         UserProfile,
@@ -202,31 +218,16 @@ class OperatorCapability(models.Model):
         max_length=64,
         choices=PositionCategory.choices,
     )
-    max_complexity = models.CharField(
-        "Criticidad máxima manejada",
-        max_length=16,
-        choices=ComplexityLevel.choices,
-        default=ComplexityLevel.BASIC,
+    skill_score = models.PositiveSmallIntegerField(
+        "Nivel de habilidad",
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        default=5,
     )
-    min_complexity = models.CharField(
-        "Criticidad mínima",
-        max_length=16,
-        choices=ComplexityLevel.choices,
-        default=ComplexityLevel.BASIC,
-    )
-    effective_from = models.DateField("Válido desde", default=timezone.localdate)
-    effective_until = models.DateField("Válido hasta", null=True, blank=True)
-    is_primary = models.BooleanField("Principal", default=True)
-    notes = models.TextField("Notas", blank=True)
 
     class Meta:
         verbose_name = "Capacidad de operario"
         verbose_name_plural = "Capacidades de operarios"
-        unique_together = (
-            "operator",
-            "category",
-            "effective_from",
-        )
+        unique_together = ("operator", "category")
         ordering = (
             "operator__apellidos",
             "operator__nombres",
@@ -234,55 +235,7 @@ class OperatorCapability(models.Model):
         )
 
     def __str__(self) -> str:
-        return f"{self.operator} - {self.category}"
-
-    def clean(self) -> None:
-        super().clean()
-        if self.effective_until and self.effective_until < self.effective_from:
-            raise ValidationError("La fecha de fin debe ser igual o posterior a la de inicio.")
-
-        if complexity_score(self.min_complexity) > complexity_score(self.max_complexity):
-            raise ValidationError("La criticidad mínima no puede ser mayor que la máxima.")
-
-    def is_active_on(self, target_date: date) -> bool:
-        if target_date < self.effective_from:
-            return False
-        if self.effective_until and target_date > self.effective_until:
-            return False
-        return True
-
-
-class OperatorFarmPreference(models.Model):
-    operator = models.ForeignKey(
-        UserProfile,
-        on_delete=models.CASCADE,
-        related_name="farm_preferences",
-        verbose_name="Operario",
-    )
-    farm = models.ForeignKey(
-        Farm,
-        on_delete=models.CASCADE,
-        related_name="operator_preferences",
-        verbose_name="Granja",
-    )
-    preference_weight = models.PositiveSmallIntegerField(
-        "Nivel de preferencia", validators=[MinValueValidator(1)], default=1
-    )
-    is_primary = models.BooleanField("Preferencia principal", default=False)
-    notes = models.TextField("Notas", blank=True)
-
-    class Meta:
-        verbose_name = "Preferencia de granja"
-        verbose_name_plural = "Preferencias de granja"
-        unique_together = ("operator", "farm")
-        ordering = (
-            "operator__apellidos",
-            "operator__nombres",
-            "preference_weight",
-        )
-
-    def __str__(self) -> str:
-        return f"{self.operator} → {self.farm}"
+        return f"{self.operator} - {self.category} ({self.skill_score}/10)"
 
 
 class RestRule(models.Model):
@@ -632,10 +585,5 @@ class AssignmentDecision:
 def filter_capabilities_for_category(
     capabilities: Iterable[OperatorCapability],
     category: str,
-    target_date: date,
 ) -> list[OperatorCapability]:
-    return [
-        capability
-        for capability in capabilities
-        if capability.category == category and capability.is_active_on(target_date)
-    ]
+    return [capability for capability in capabilities if capability.category == category]

@@ -19,10 +19,10 @@ from ..models import (
     ShiftCalendar,
     ShiftType,
     WorkloadSnapshot,
-    complexity_score,
     filter_capabilities_for_category,
+    required_skill_for_complexity,
 )
-from ..models import OperatorCapability, OperatorFarmPreference
+from ..models import OperatorCapability
 from users.models import Role, UserProfile
 
 
@@ -82,7 +82,7 @@ class CalendarScheduler:
         self._operator_states: Dict[int, OperatorState] = {}
         self._operator_capabilities: Dict[int, List[OperatorCapability]] = {}
         self._capabilities_by_category: Dict[str, List[OperatorCapability]] = defaultdict(list)
-        self._farm_preferences: Dict[int, Dict[int, OperatorFarmPreference]] = defaultdict(dict)
+        self._preferred_farms: Dict[int, Optional[int]] = {}
         self._rest_rules: Dict[Tuple[int, str], List[RestRule]] = defaultdict(list)
         self._overload_rules: Dict[int, List[OverloadAllowance]] = defaultdict(list)
         self._prefetched_roles: Dict[int, List[Role]] = {}
@@ -123,10 +123,8 @@ class CalendarScheduler:
         )
 
         capabilities = list(
-            OperatorCapability.objects.select_related("operator")
+            OperatorCapability.objects.select_related("operator", "operator__preferred_farm")
             .prefetch_related("operator__roles")
-            .filter(effective_from__lte=self.calendar.end_date)
-            .filter(Q(effective_until__isnull=True) | Q(effective_until__gte=self.calendar.start_date))
         )
 
         for capability in capabilities:
@@ -136,10 +134,9 @@ class CalendarScheduler:
             if operator_id not in self._operator_states:
                 self._operator_states[operator_id] = OperatorState(operator=capability.operator)
                 self._prefetched_roles[operator_id] = list(capability.operator.roles.all())
-
-        preferences = OperatorFarmPreference.objects.select_related("operator")
-        for preference in preferences:
-            self._farm_preferences[preference.operator_id][preference.farm_id] = preference
+                self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
+            else:
+                self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
 
         rest_rules = list(
             RestRule.objects.select_related("role")
@@ -168,13 +165,13 @@ class CalendarScheduler:
         candidates = filter_capabilities_for_category(
             self._capabilities_by_category.get(position.category, []),
             position.category,
-            current_date,
         )
 
         ranked_candidates = sorted(
             candidates,
             key=lambda capability: (
                 self._preference_sort_key(capability.operator_id, position.farm_id),
+                -capability.skill_score,
                 self._operator_states[capability.operator_id].total_assignments,
             ),
         )
@@ -211,15 +208,17 @@ class CalendarScheduler:
         )
 
     def _preference_sort_key(self, operator_id: int, farm_id: int) -> Tuple[int, int]:
-        preferences = self._farm_preferences.get(operator_id, {})
-        if not preferences:
-            return (999, operator_id)
+        if not self.options.honor_preferences:
+            return (1, operator_id)
 
-        preference = preferences.get(farm_id)
-        if not preference:
-            return (500, operator_id)
+        preferred_farm_id = self._preferred_farms.get(operator_id)
+        if not preferred_farm_id:
+            return (1, operator_id)
 
-        return (preference.preference_weight, operator_id)
+        if preferred_farm_id == farm_id:
+            return (0, operator_id)
+
+        return (2, operator_id)
 
     def _is_operator_available(
         self,
@@ -234,10 +233,12 @@ class CalendarScheduler:
         if state.blocked_until and current_date <= state.blocked_until:
             return False
 
-        required = complexity_score(position.complexity)
-        maximum = complexity_score(capability.max_complexity)
+        required_skill = required_skill_for_complexity(position.complexity)
+        operator_skill = capability.skill_score
 
-        if maximum < required and not (self.options.allow_lower_complexity and position.allow_lower_complexity):
+        if operator_skill < required_skill and not (
+            self.options.allow_lower_complexity and position.allow_lower_complexity
+        ):
             return False
 
         if not self.options.honor_rest_rules:
@@ -270,12 +271,12 @@ class CalendarScheduler:
         is_overtime = False
         notes = ""
 
-        required = complexity_score(position.complexity)
-        max_cap = complexity_score(capability.max_complexity)
-        if max_cap < required:
-            difference = required - max_cap
+        required_skill = required_skill_for_complexity(position.complexity)
+        operator_skill = capability.skill_score
+        if operator_skill < required_skill:
+            difference = required_skill - operator_skill
             alert_level = AssignmentAlertLevel.WARN if difference == 1 else AssignmentAlertLevel.CRITICAL
-            notes = "Cobertura con operario de menor criticidad"
+            notes = "Cobertura con operario de menor habilidad"
 
         rest_rule = self._get_rest_rule_for_operator(capability.operator_id, position.shift_type, current_date)
         if rest_rule:

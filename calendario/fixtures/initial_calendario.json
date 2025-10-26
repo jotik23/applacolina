@@ -225,12 +225,7 @@
     "fields": {
       "operator": 1,
       "category": "GALPONERO_PRODUCCION_DIA",
-      "max_complexity": "advanced",
-      "min_complexity": "intermediate",
-      "effective_from": "2025-01-01",
-      "effective_until": null,
-      "is_primary": true,
-      "notes": "Encargado principal del día"
+      "skill_score": 9
     }
   },
   {
@@ -239,12 +234,7 @@
     "fields": {
       "operator": 2,
       "category": "GALPONERO_PRODUCCION_DIA",
-      "max_complexity": "intermediate",
-      "min_complexity": "basic",
-      "effective_from": "2025-01-01",
-      "effective_until": null,
-      "is_primary": true,
-      "notes": "Apoyo diurno"
+      "skill_score": 6
     }
   },
   {
@@ -253,12 +243,7 @@
     "fields": {
       "operator": 3,
       "category": "GALPONERO_PRODUCCION_NOCHE",
-      "max_complexity": "advanced",
-      "min_complexity": "intermediate",
-      "effective_from": "2025-01-01",
-      "effective_until": null,
-      "is_primary": true,
-      "notes": "Cobertura nocturna"
+      "skill_score": 9
     }
   },
   {
@@ -267,12 +252,7 @@
     "fields": {
       "operator": 1,
       "category": "GALPONERO_PRODUCCION_NOCHE",
-      "max_complexity": "intermediate",
-      "min_complexity": "basic",
-      "effective_from": "2025-01-01",
-      "effective_until": null,
-      "is_primary": false,
-      "notes": "Puede cubrir noche en emergencias"
+      "skill_score": 5
     }
   },
   {
@@ -281,12 +261,7 @@
     "fields": {
       "operator": 4,
       "category": "CLASIFICADOR_DIA",
-      "max_complexity": "intermediate",
-      "min_complexity": "basic",
-      "effective_from": "2025-01-01",
-      "effective_until": null,
-      "is_primary": true,
-      "notes": "Clasificadora principal"
+      "skill_score": 7
     }
   },
   {
