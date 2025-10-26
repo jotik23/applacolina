@@ -40,10 +40,26 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             defaults={
                 "name": "Galponero producción día",
                 "shift_type": ShiftType.DAY,
-                "default_extra_day_limit": 3,
-                "default_overtime_points": 1,
+                "extra_day_limit": 3,
+                "overtime_points": 1,
+                "overload_alert_level": AssignmentAlertLevel.WARN,
+                "rest_min_frequency": 6,
+                "rest_min_consecutive_days": 5,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
             },
         )
+
+        self.category.rest_min_frequency = 6
+        self.category.rest_min_consecutive_days = 5
+        self.category.rest_max_consecutive_days = 8
+        self.category.rest_post_shift_days = 0
+        self.category.rest_monthly_days = 5
+        self.category.extra_day_limit = 3
+        self.category.overtime_points = 1
+        self.category.overload_alert_level = AssignmentAlertLevel.WARN
+        self.category.save()
 
         self.calendar = ShiftCalendar.objects.create(
             name="Semana 27",

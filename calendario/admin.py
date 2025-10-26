@@ -43,8 +43,10 @@ class PositionCategoryAdmin(admin.ModelAdmin):
         "name",
         "code",
         "shift_type",
-        "default_extra_day_limit",
-        "default_overtime_points",
+        "extra_day_limit",
+        "overtime_points",
+        "overload_alert_level",
+        "rest_max_consecutive_days",
         "is_active",
     )
     list_filter = ("shift_type", "is_active")
@@ -65,56 +67,6 @@ class OperatorCapabilityAdmin(admin.ModelAdmin):
         "operator__cedula",
     )
     autocomplete_fields = ("operator",)
-
-
-class RestPreferenceInline(admin.TabularInline):
-    model = models.RestPreference
-    extra = 0
-
-
-@admin.register(models.RestRule)
-class RestRuleAdmin(admin.ModelAdmin):
-    list_display = (
-        "role",
-        "shift_type",
-        "min_rest_frequency",
-        "min_consecutive_days",
-        "max_consecutive_days",
-        "post_shift_rest_days",
-        "monthly_rest_days",
-        "enforce_additional_rest",
-        "active_from",
-        "active_until",
-    )
-    list_filter = (
-        "shift_type",
-        "enforce_additional_rest",
-        "role__name",
-    )
-    search_fields = (
-        "role__name",
-    )
-    autocomplete_fields = ("role",)
-    inlines = (RestPreferenceInline,)
-
-
-@admin.register(models.OverloadAllowance)
-class OverloadAllowanceAdmin(admin.ModelAdmin):
-    list_display = (
-        "category",
-        "category_shift",
-        "extra_day_limit",
-        "overtime_points",
-        "alert_level",
-    )
-    list_filter = ("category__shift_type", "alert_level", "category__name")
-    autocomplete_fields = ("category",)
-
-    @staticmethod
-    def category_shift(obj: models.OverloadAllowance) -> str:
-        if not obj.category_id:
-            return "-"
-        return obj.category.get_shift_type_display()
 
 
 class AssignmentChangeLogInline(admin.TabularInline):

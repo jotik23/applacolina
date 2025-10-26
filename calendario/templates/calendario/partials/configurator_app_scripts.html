@@ -21,10 +21,6 @@
         capabilityDetailTemplate: app.dataset.capabilityDetailUrlTemplate,
         operators: app.dataset.operatorsUrl,
         operatorDetailTemplate: app.dataset.operatorDetailUrlTemplate,
-        restRules: app.dataset.restRulesUrl,
-        restRuleDetailTemplate: app.dataset.restRuleDetailUrlTemplate,
-        overloadRules: app.dataset.overloadRulesUrl,
-        overloadRuleDetailTemplate: app.dataset.overloadRuleDetailUrlTemplate,
       };
 
       const state = {
@@ -112,40 +108,6 @@
         positionIsActive: app.querySelector('#position-is-active'),
         positionNotes: app.querySelector('#position-notes'),
         positionCancelBtn: app.querySelector('#position-cancel-btn'),
-        restRuleAddBtn: app.querySelector('#rest-rule-add-btn'),
-        restRuleFormWrapper: app.querySelector('#rest-rule-form-wrapper'),
-        restRuleForm: app.querySelector('#rest-rule-form'),
-        restRuleMessage: app.querySelector('#rest-rule-form-message'),
-        restRuleId: app.querySelector('#rest-rule-id'),
-        restRuleRole: app.querySelector('#rest-rule-role'),
-        restRuleShift: app.querySelector('#rest-rule-shift'),
-        restRuleMinFrequency: app.querySelector('#rest-rule-min-frequency'),
-        restRuleMinConsecutive: app.querySelector('#rest-rule-min-consecutive'),
-        restRuleMaxConsecutive: app.querySelector('#rest-rule-max-consecutive'),
-        restRulePostShift: app.querySelector('#rest-rule-post-shift'),
-        restRuleMonthlyRest: app.querySelector('#rest-rule-monthly-rest'),
-        restRuleEnforce: app.querySelector('#rest-rule-enforce'),
-        restRuleActiveFrom: app.querySelector('#rest-rule-active-from'),
-        restRuleActiveUntil: app.querySelector('#rest-rule-active-until'),
-        restRulePreferences: app.querySelector('#rest-rule-preferences'),
-        restRuleCancelBtn: app.querySelector('#rest-rule-cancel-btn'),
-        restRuleCount: app.querySelector('#rest-rule-count'),
-        restRuleList: app.querySelector('#rest-rules-list'),
-        overloadAddBtn: app.querySelector('#overload-add-btn'),
-        overloadFormWrapper: app.querySelector('#overload-form-wrapper'),
-        overloadForm: app.querySelector('#overload-form'),
-        overloadMessage: app.querySelector('#overload-form-message'),
-        overloadId: app.querySelector('#overload-id'),
-        overloadCategory: app.querySelector('#overload-category'),
-        overloadCategoryHint: app.querySelector('#overload-category-hint'),
-        overloadShiftLabel: app.querySelector('#overload-shift-label'),
-        overloadMaxExtra: app.querySelector('#overload-max-extra'),
-        overloadMaxExtraHint: app.querySelector('#overload-max-extra-hint'),
-        overloadPoints: app.querySelector('#overload-points'),
-        overloadAlert: app.querySelector('#overload-alert'),
-        overloadCancelBtn: app.querySelector('#overload-cancel-btn'),
-        overloadCount: app.querySelector('#overload-count'),
-        overloadList: app.querySelector('#overload-list'),
         operatorCount: app.querySelector('#operator-count'),
         capabilityCount: app.querySelector('#capability-count'),
         operatorBody: app.querySelector('#operator-body'),
@@ -673,80 +635,6 @@
         return state.lookups.categoriesById.get(target) || null;
       };
 
-      const applyOverloadShiftLimits = () => {
-        if (!refs.overloadMaxExtra) {
-          return;
-        }
-        const category = findCategory(refs.overloadCategory?.value || '');
-        const currentShift = category ? category.shift_type : 'day';
-        const shiftLabel = state.lookups.shiftLabels.get(currentShift) || currentShift;
-        const shiftLabelLower = typeof shiftLabel === 'string' ? shiftLabel.toLowerCase() : String(shiftLabel).toLowerCase();
-        if (refs.overloadShiftLabel) {
-          refs.overloadShiftLabel.textContent = category ? shiftLabel : 'Selecciona una categoría';
-        }
-        const maxExtra = currentShift === 'night' ? 2 : 3;
-        refs.overloadMaxExtra.setAttribute('max', maxExtra);
-        if (category) {
-          const currentValue = Number(refs.overloadMaxExtra.value || 0);
-          if (!currentValue || currentValue > maxExtra) {
-            refs.overloadMaxExtra.value = String(maxExtra);
-          }
-        }
-        if (refs.overloadMaxExtraHint) {
-          if (category) {
-            refs.overloadMaxExtraHint.textContent = `Máximo permitido por turno ${shiftLabelLower}: ${maxExtra} días.`;
-          } else {
-            refs.overloadMaxExtraHint.textContent = 'Selecciona una categoría para conocer el límite por turno.';
-          }
-        }
-      };
-
-      const updateOverloadDefaults = (categoryId, preset = {}) => {
-        if (!refs.overloadMaxExtra || !refs.overloadPoints || !refs.overloadAlert) {
-          return;
-        }
-
-        const category = findCategory(categoryId);
-
-        if (preset.extra_day_limit) {
-          refs.overloadMaxExtra.value = preset.extra_day_limit;
-        } else if (category) {
-          refs.overloadMaxExtra.value = category.default_extra_day_limit;
-        } else {
-          refs.overloadMaxExtra.value = '';
-        }
-
-        if (preset.overtime_points) {
-          refs.overloadPoints.value = preset.overtime_points;
-        } else if (category) {
-          refs.overloadPoints.value = category.default_overtime_points;
-        } else {
-          refs.overloadPoints.value = state.metadata?.categories?.[0]?.default_overtime_points || 1;
-        }
-
-        if (preset.alert_level) {
-          refs.overloadAlert.value = preset.alert_level;
-        } else if (!refs.overloadAlert.value) {
-          const warnOption = Array.from(refs.overloadAlert.options).find((option) => option.value === 'warn');
-          if (warnOption) {
-            refs.overloadAlert.value = 'warn';
-          } else if (refs.overloadAlert.options.length) {
-            refs.overloadAlert.value = refs.overloadAlert.options[0].value;
-          }
-        }
-
-        if (refs.overloadCategoryHint) {
-          if (!category) {
-            refs.overloadCategoryHint.textContent = 'Selecciona una categoría para ver el límite base.';
-          } else {
-            const baseShiftLabel = state.lookups.shiftLabels.get(category.shift_type) || category.shift_type;
-            refs.overloadCategoryHint.textContent = `Límite base ${category.default_extra_day_limit} días en turno ${baseShiftLabel.toLowerCase()}; puntos base ${category.default_overtime_points}.`;
-          }
-        }
-
-        applyOverloadShiftLimits();
-      };
-
       const populateStaticOptions = () => {
         if (!state.metadata || state.orderLocked) {
           return;
@@ -756,12 +644,6 @@
         populateSelect(refs.positionFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
         populateSelect(refs.positionComplexity, state.metadata.choice_sets.complexity_levels, { blankLabel: 'Selecciona nivel de criticidad' });
 
-        populateSelect(refs.restRuleRole, state.metadata.roles, { valueKey: 'id', labelKey: 'label', blankLabel: 'Selecciona rol' });
-        populateSelect(refs.restRuleShift, state.metadata.choice_sets.shift_types, { blankLabel: 'Selecciona turno' });
-
-        populateSelect(refs.overloadCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
-        populateSelect(refs.overloadAlert, state.metadata.choice_sets.alert_levels, { blankLabel: 'Nivel de alerta' });
-
         populateSelect(refs.operatorRoles, state.metadata.roles, { valueKey: 'id', labelKey: 'label', includeBlank: false, keepValue: false });
         populateSelect(refs.operatorPreferredFarm, state.metadata.farms, {
           valueKey: 'id',
@@ -770,54 +652,7 @@
           keepValue: true,
         });
 
-        if (refs.restRulePreferences) {
-          refs.restRulePreferences.innerHTML = state.metadata.choice_sets.days_of_week
-            .map(
-              (day) => `
-                <label class="flex flex-col gap-1 rounded border border-slate-200 bg-white px-3 py-2">
-                  <span class="text-sm font-semibold text-slate-700">${escapeHtml(day.label)}</span>
-                  <select data-day="${day.value}" class="rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
-                    <option value="">No usar</option>
-                    <option value="recommended">Recomendado</option>
-                    <option value="required">Obligatorio</option>
-                  </select>
-                </label>
-              `
-            )
-            .join('');
-        }
-
         updateHouseOptions(refs.positionFarm?.value || '');
-        updateOverloadDefaults(refs.overloadCategory?.value || '', {});
-      };
-
-      const readRestPreferences = () => {
-        if (!refs.restRulePreferences) {
-          return [];
-        }
-        const result = [];
-        refs.restRulePreferences.querySelectorAll('select[data-day]').forEach((select) => {
-          if (!select.value) {
-            return;
-          }
-          result.push({
-            day_of_week: Number(select.dataset.day),
-            is_required: select.value === 'required',
-          });
-        });
-        return result;
-      };
-
-      const setRestPreferences = (preferences = []) => {
-        if (!refs.restRulePreferences) {
-          return;
-        }
-        const preferenceMap = new Map(
-          preferences.map((pref) => [String(pref.day_of_week), pref.is_required ? 'required' : 'recommended'])
-        );
-        refs.restRulePreferences.querySelectorAll('select[data-day]').forEach((select) => {
-          select.value = preferenceMap.get(select.dataset.day) || '';
-        });
       };
 
       const getPositionPayload = () => ({
@@ -996,80 +831,6 @@
         resetForm(refs.operatorForm, refs.operatorMessage);
         toggleWrapper(refs.operatorFormWrapper, false);
         resetOperatorCapabilitiesDraft();
-      };
-
-      const getRestRulePayload = () => ({
-        role: refs.restRuleRole?.value || '',
-        shift_type: refs.restRuleShift?.value || '',
-        min_rest_frequency: refs.restRuleMinFrequency?.value || '',
-        min_consecutive_days: refs.restRuleMinConsecutive?.value || '',
-        max_consecutive_days: refs.restRuleMaxConsecutive?.value || '',
-        post_shift_rest_days: refs.restRulePostShift?.value || '',
-        monthly_rest_days: refs.restRuleMonthlyRest?.value || '',
-        enforce_additional_rest: Boolean(refs.restRuleEnforce?.checked),
-        active_from: refs.restRuleActiveFrom?.value || '',
-        active_until: refs.restRuleActiveUntil?.value || '',
-        preferences: readRestPreferences(),
-      });
-
-      const openRestRuleForm = (rule = null) => {
-        resetForm(refs.restRuleForm, refs.restRuleMessage);
-        toggleWrapper(refs.restRuleFormWrapper, true);
-        if (!rule) {
-          refs.restRuleId.value = '';
-          refs.restRuleEnforce.checked = false;
-          setRestPreferences([]);
-          return;
-        }
-        refs.restRuleId.value = rule.id;
-        refs.restRuleRole.value = rule.role?.id ? String(rule.role.id) : '';
-        refs.restRuleShift.value = rule.shift_type || '';
-        refs.restRuleMinFrequency.value = rule.min_rest_frequency;
-        refs.restRuleMinConsecutive.value = rule.min_consecutive_days;
-        refs.restRuleMaxConsecutive.value = rule.max_consecutive_days;
-        refs.restRulePostShift.value = rule.post_shift_rest_days;
-        refs.restRuleMonthlyRest.value = rule.monthly_rest_days;
-        refs.restRuleEnforce.checked = Boolean(rule.enforce_additional_rest);
-        refs.restRuleActiveFrom.value = rule.active_from || '';
-        refs.restRuleActiveUntil.value = rule.active_until || '';
-        setRestPreferences(rule.preferences || []);
-      };
-
-      const closeRestRuleForm = () => {
-        resetForm(refs.restRuleForm, refs.restRuleMessage);
-        setRestPreferences([]);
-        toggleWrapper(refs.restRuleFormWrapper, false);
-      };
-
-      const getOverloadPayload = () => ({
-        category: refs.overloadCategory?.value ? Number(refs.overloadCategory.value) : '',
-        extra_day_limit: refs.overloadMaxExtra?.value ? Number(refs.overloadMaxExtra.value) : '',
-        overtime_points: refs.overloadPoints?.value ? Number(refs.overloadPoints.value) : '',
-        alert_level: refs.overloadAlert?.value || '',
-      });
-
-      const openOverloadForm = (rule = null) => {
-        resetForm(refs.overloadForm, refs.overloadMessage);
-        toggleWrapper(refs.overloadFormWrapper, true);
-        if (!rule) {
-          refs.overloadId.value = '';
-          refs.overloadCategory.value = '';
-          updateOverloadDefaults('', {});
-          return;
-        }
-        refs.overloadId.value = rule.id;
-        const categoryId = rule.category?.id ? String(rule.category.id) : '';
-        refs.overloadCategory.value = categoryId;
-        updateOverloadDefaults(categoryId, {
-          extra_day_limit: rule.extra_day_limit,
-          overtime_points: rule.overtime_points,
-          alert_level: rule.alert_level,
-        });
-      };
-
-      const closeOverloadForm = () => {
-        resetForm(refs.overloadForm, refs.overloadMessage);
-        toggleWrapper(refs.overloadFormWrapper, false);
       };
 
       const submitEntity = async ({ url, method, payload, messageRef, successMessage, onSuccess }) => {
@@ -1386,115 +1147,6 @@
                   </div>
                 </td>
               </tr>
-            `;
-          })
-          .join('');
-      };
-
-      const renderRestRules = () => {
-        if (!state.metadata || !refs.restRuleList || !refs.restRuleCount) {
-          return;
-        }
-
-        const restRules = state.metadata.rest_rules || [];
-        refs.restRuleCount.textContent = `${restRules.length} reglas`;
-
-        if (!restRules.length) {
-          refs.restRuleList.innerHTML =
-            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Sin información disponible.</p>';
-          return;
-        }
-
-        refs.restRuleList.innerHTML = restRules
-          .map((rule) => {
-            const preferences = (rule.preferences || [])
-              .map((pref) => `${escapeHtml(state.lookups.dayLabels.get(pref.day_of_week) || pref.day_of_week)}${pref.is_required ? ' (obligatorio)' : ''}`)
-              .join(', ');
-            return `
-              <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p class="font-semibold text-slate-800">${escapeHtml(rule.role.label)}</p>
-                    <p class="text-xs text-slate-500">Turno: ${escapeHtml(state.lookups.shiftLabels.get(shiftValue) || shiftValue)}</p>
-                    <p class="text-xs text-slate-500">${escapeHtml(rule.active_from)} → ${escapeHtml(rule.active_until || 'vigente')}</p>
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <button type="button" data-action="rest-rule-edit" data-id="${rule.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
-                    <button type="button" data-action="rest-rule-delete" data-id="${rule.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
-                  </div>
-                </header>
-                <dl class="mt-3 grid grid-cols-2 gap-3 text-xs text-slate-600">
-                  <div>
-                    <dt class="font-medium text-slate-700">Descanso cada</dt>
-                    <dd>${rule.min_rest_frequency} días</dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-slate-700">Mín/Máx consecutivos</dt>
-                    <dd>${rule.min_consecutive_days} / ${rule.max_consecutive_days}</dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-slate-700">Descanso post turno</dt>
-                    <dd>${rule.post_shift_rest_days} días</dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-slate-700">Descansos mensuales</dt>
-                    <dd>${rule.monthly_rest_days}</dd>
-                  </div>
-                </dl>
-                ${preferences ? `<p class="mt-3 text-xs text-slate-500">Preferencias: ${escapeHtml(preferences)}</p>` : ''}
-              </article>
-            `;
-          })
-          .join('');
-      };
-
-      const renderOverloadRules = () => {
-        if (!state.metadata || !refs.overloadList || !refs.overloadCount) {
-          return;
-        }
-
-        const overloads = state.metadata.overload_rules || [];
-        refs.overloadCount.textContent = `${overloads.length} reglas`;
-
-        if (!overloads.length) {
-          refs.overloadList.innerHTML =
-            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Sin reglas de sobrecarga activas.</p>';
-          return;
-        }
-
-        refs.overloadList.innerHTML = overloads
-          .map((rule) => {
-            const categoryLabel = rule.category?.name || rule.category?.code || 'Categoría';
-            const shiftValue = rule.category?.shift_type || 'day';
-            const shiftLabel = state.lookups.shiftLabels.get(shiftValue) || shiftValue;
-            const alertLabel = state.lookups.alertLabels.get(rule.alert_level) || rule.alert_level;
-            return `
-              <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p class="font-semibold text-slate-800">${escapeHtml(categoryLabel)}</p>
-                    <p class="text-xs text-slate-500">Turno: ${escapeHtml(shiftLabel)}</p>
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <button type="button" data-action="overload-edit" data-id="${rule.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
-                    <button type="button" data-action="overload-delete" data-id="${rule.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
-                  </div>
-                </header>
-                <dl class="mt-2 grid grid-cols-2 gap-3 text-xs text-slate-600">
-                  <div>
-                    <dt class="font-medium text-slate-700">Días extra autorizados</dt>
-                    <dd>${rule.extra_day_limit}</dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-slate-700">Puntos por día</dt>
-                    <dd>${rule.overtime_points}</dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-slate-700">Alerta</dt>
-                    <dd>${escapeHtml(alertLabel)}</dd>
-                  </div>
-                </dl>
-              </article>
             `;
           })
           .join('');
@@ -1823,49 +1475,11 @@
         });
       });
 
-      refs.restRuleForm?.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const payload = getRestRulePayload();
-        const id = refs.restRuleId?.value;
-        submitEntity({
-          url: id ? replaceId(API.restRuleDetailTemplate, id) : API.restRules,
-          method: id ? 'PATCH' : 'POST',
-          payload,
-          messageRef: refs.restRuleMessage,
-          successMessage: id ? 'Regla de descanso actualizada.' : 'Regla de descanso creada.',
-          onSuccess: () => {
-            closeRestRuleForm();
-          },
-        });
-      });
-
-      refs.overloadForm?.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const payload = getOverloadPayload();
-        const id = refs.overloadId?.value;
-        submitEntity({
-          url: id ? replaceId(API.overloadRuleDetailTemplate, id) : API.overloadRules,
-          method: id ? 'PATCH' : 'POST',
-          payload,
-          messageRef: refs.overloadMessage,
-          successMessage: id ? 'Regla de sobrecarga actualizada.' : 'Regla de sobrecarga creada.',
-          onSuccess: () => {
-            closeOverloadForm();
-          },
-        });
-      });
-      refs.overloadCategory?.addEventListener('change', (event) => {
-        updateOverloadDefaults(event.target.value, {});
-      });
       refs.operatorAddBtn?.addEventListener('click', () => openOperatorForm());
       refs.operatorCancelBtn?.addEventListener('click', () => closeOperatorForm());
       refs.operatorRefreshBtn?.addEventListener('click', () => fetchMetadata());
       refs.positionAddBtn?.addEventListener('click', () => openPositionForm());
       refs.positionCancelBtn?.addEventListener('click', () => closePositionForm());
-      refs.restRuleAddBtn?.addEventListener('click', () => openRestRuleForm());
-      refs.restRuleCancelBtn?.addEventListener('click', () => closeRestRuleForm());
-      refs.overloadAddBtn?.addEventListener('click', () => openOverloadForm());
-      refs.overloadCancelBtn?.addEventListener('click', () => closeOverloadForm());
       refs.operatorCapabilityAddBtn?.addEventListener('click', () => addOperatorCapabilityRow());
       refs.positionsRefreshBtn?.addEventListener('click', () => fetchMetadata());
       refs.positionIncludeInactive?.addEventListener('change', (event) => {
@@ -1961,48 +1575,6 @@
         });
       };
 
-      const handleRestRuleEdit = (id) => {
-        const rule = state.metadata?.rest_rules?.find((item) => item.id === id);
-        if (!rule) {
-          return;
-        }
-        openRestRuleForm(rule);
-      };
-
-      const handleRestRuleDelete = (id) => {
-        if (!confirm('¿Eliminar esta regla de descanso?')) {
-          return;
-        }
-        deleteEntity(replaceId(API.restRuleDetailTemplate, id), {
-          afterSuccess: () => {
-            if (refs.restRuleId?.value === String(id)) {
-              closeRestRuleForm();
-            }
-          },
-        });
-      };
-
-      const handleOverloadEdit = (id) => {
-        const rule = state.metadata?.overload_rules?.find((item) => item.id === id);
-        if (!rule) {
-          return;
-        }
-        openOverloadForm(rule);
-      };
-
-      const handleOverloadDelete = (id) => {
-        if (!confirm('¿Eliminar esta regla de sobrecarga?')) {
-          return;
-        }
-        deleteEntity(replaceId(API.overloadRuleDetailTemplate, id), {
-          afterSuccess: () => {
-            if (refs.overloadId?.value === String(id)) {
-              closeOverloadForm();
-            }
-          },
-        });
-      };
-
       app.addEventListener('click', (event) => {
         const target = event.target.closest('[data-action]');
         if (!target) {
@@ -2025,18 +1597,6 @@
             break;
           case 'position-delete':
             handlePositionDelete(id);
-            break;
-          case 'rest-rule-edit':
-            handleRestRuleEdit(id);
-            break;
-          case 'rest-rule-delete':
-            handleRestRuleDelete(id);
-            break;
-          case 'overload-edit':
-            handleOverloadEdit(id);
-            break;
-          case 'overload-delete':
-            handleOverloadDelete(id);
             break;
           default:
             break;
@@ -2078,8 +1638,6 @@
           rebuildLookups();
           populateStaticOptions();
           renderPositions();
-          renderRestRules();
-          renderOverloadRules();
           populateCategoryFilter();
           renderOperators();
           renderOperatorCapabilitiesEditor();

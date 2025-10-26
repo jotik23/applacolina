@@ -23,20 +23,15 @@ from .forms import (
     CalendarGenerationForm,
     OperatorCapabilityForm,
     OperatorProfileForm,
-    OverloadAllowanceForm,
     PositionDefinitionForm,
-    RestRuleForm,
 )
 from .models import (
     AssignmentAlertLevel,
     DayOfWeek,
     CalendarStatus,
-    OverloadAllowance,
     OperatorCapability,
     PositionCategory,
     PositionDefinition,
-    RestPreference,
-    RestRule,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
@@ -270,31 +265,6 @@ def _load_json_body(request: HttpRequest) -> tuple[Optional[dict[str, Any]], Opt
     return payload, None
 
 
-def _sync_rest_preferences(rule: RestRule, preferences_payload: Iterable[dict[str, Any]]) -> None:
-    rule.preferred_days.all().delete()
-    days_seen: set[int] = set()
-    bulk_create: list[RestPreference] = []
-
-    for item in preferences_payload:
-        try:
-            day = int(item.get("day_of_week"))
-        except (TypeError, ValueError):
-            continue
-        if day in days_seen:
-            continue
-        days_seen.add(day)
-        bulk_create.append(
-            RestPreference(
-                rest_rule=rule,
-                day_of_week=day,
-                is_required=bool(item.get("is_required", False)),
-            )
-        )
-
-    if bulk_create:
-        RestPreference.objects.bulk_create(bulk_create)
-
-
 def _choice_payload(choices: Iterable[tuple[str, str]]) -> List[dict[str, str]]:
     return [
         {
@@ -484,50 +454,6 @@ def _apply_capabilities(operator: UserProfile, capabilities: Optional[dict[int, 
             capability.delete()
 
 
-def _rest_rule_payload(rule: RestRule) -> dict[str, Any]:
-    return {
-        "id": rule.id,
-        "role": {
-            "id": rule.role_id,
-            "label": rule.role.get_name_display(),
-            "code": rule.role.name,
-        },
-        "shift_type": rule.shift_type,
-        "min_rest_frequency": rule.min_rest_frequency,
-        "min_consecutive_days": rule.min_consecutive_days,
-        "max_consecutive_days": rule.max_consecutive_days,
-        "post_shift_rest_days": rule.post_shift_rest_days,
-        "monthly_rest_days": rule.monthly_rest_days,
-        "enforce_additional_rest": rule.enforce_additional_rest,
-        "active_from": rule.active_from.isoformat(),
-        "active_until": rule.active_until.isoformat() if rule.active_until else None,
-        "preferences": [
-            {
-                "id": preference.id,
-                "day_of_week": preference.day_of_week,
-                "label": preference.get_day_of_week_display(),
-                "is_required": preference.is_required,
-            }
-            for preference in rule.preferred_days.all()
-        ],
-    }
-
-
-def _overload_payload(allowance: OverloadAllowance) -> dict[str, Any]:
-    return {
-        "id": allowance.id,
-        "category": {
-            "id": allowance.category_id,
-            "code": allowance.category.code,
-            "name": allowance.category.name,
-            "shift_type": allowance.category.shift_type,
-        },
-        "extra_day_limit": allowance.extra_day_limit,
-        "overtime_points": allowance.overtime_points,
-        "alert_level": allowance.alert_level,
-    }
-
-
 def _assignment_payload(assignment: Optional[ShiftAssignment]) -> Optional[dict[str, Any]]:
     if assignment is None:
         return None
@@ -644,14 +570,6 @@ class CalendarDashboardView(LoginRequiredMixin, View):
             messages.success(request, "Calendario generado exitosamente.")
 
         return redirect(reverse("calendario:calendar-detail", args=[calendar.id]))
-
-
-class CalendarRulesView(LoginRequiredMixin, View):
-    template_name = "calendario/rules.html"
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-        return render(request, self.template_name)
-
 
 class CalendarDetailView(LoginRequiredMixin, View):
     template_name = "calendario/calendar_detail.html"
@@ -1112,96 +1030,6 @@ class CapabilityDetailView(LoginRequiredMixin, View):
         return JsonResponse({"status": "deleted"})
 
 
-class RestRuleCollectionView(LoginRequiredMixin, View):
-    http_method_names = ["post"]
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
-        payload, error = _load_json_body(request)
-        if error:
-            return error
-
-        preferences_data = payload.pop("preferences", [])
-
-        form = RestRuleForm(payload)
-        if not form.is_valid():
-            return _json_error("Datos inválidos para la regla.", errors=_form_errors(form))
-
-        rule = form.save()
-        _sync_rest_preferences(rule, preferences_data if isinstance(preferences_data, list) else [])
-
-        rule.refresh_from_db()
-        rule = RestRule.objects.select_related("role").prefetch_related("preferred_days").get(pk=rule.pk)
-        return JsonResponse({"rule": _rest_rule_payload(rule)}, status=201)
-
-
-class RestRuleDetailView(LoginRequiredMixin, View):
-    http_method_names = ["patch", "delete"]
-
-    def patch(self, request: HttpRequest, rule_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
-        rule = get_object_or_404(RestRule, pk=rule_id)
-        payload, error = _load_json_body(request)
-        if error:
-            return error
-
-        preferences_data = payload.pop("preferences", [])
-
-        form = RestRuleForm(payload, instance=rule)
-        if not form.is_valid():
-            return _json_error("Datos inválidos para la regla.", errors=_form_errors(form))
-
-        rule = form.save()
-        _sync_rest_preferences(rule, preferences_data if isinstance(preferences_data, list) else [])
-
-        rule.refresh_from_db()
-        rule = RestRule.objects.select_related("role").prefetch_related("preferred_days").get(pk=rule.pk)
-        return JsonResponse({"rule": _rest_rule_payload(rule)})
-
-    def delete(self, request: HttpRequest, rule_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
-        rule = get_object_or_404(RestRule, pk=rule_id)
-        rule.delete()
-        return JsonResponse({"status": "deleted"})
-
-
-class OverloadCollectionView(LoginRequiredMixin, View):
-    http_method_names = ["post"]
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
-        payload, error = _load_json_body(request)
-        if error:
-            return error
-
-        form = OverloadAllowanceForm(payload)
-        if not form.is_valid():
-            return _json_error("Datos inválidos para la regla de sobrecarga.", errors=_form_errors(form))
-
-        allowance = form.save()
-        allowance = OverloadAllowance.objects.select_related("category").get(pk=allowance.pk)
-        return JsonResponse({"overload": _overload_payload(allowance)}, status=201)
-
-
-class OverloadDetailView(LoginRequiredMixin, View):
-    http_method_names = ["patch", "delete"]
-
-    def patch(self, request: HttpRequest, overload_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
-        allowance = get_object_or_404(OverloadAllowance, pk=overload_id)
-        payload, error = _load_json_body(request)
-        if error:
-            return error
-
-        form = OverloadAllowanceForm(payload, instance=allowance)
-        if not form.is_valid():
-            return _json_error("Datos inválidos para la regla de sobrecarga.", errors=_form_errors(form))
-
-        allowance = form.save()
-        allowance = OverloadAllowance.objects.select_related("category").get(pk=allowance.pk)
-        return JsonResponse({"overload": _overload_payload(allowance)})
-
-    def delete(self, request: HttpRequest, overload_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
-        allowance = get_object_or_404(OverloadAllowance, pk=overload_id)
-        allowance.delete()
-        return JsonResponse({"status": "deleted"})
-
-
 class CalendarApproveView(LoginRequiredMixin, View):
     http_method_names = ["post"]
 
@@ -1275,19 +1103,6 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         )
         capabilities_payload = [_capability_payload(capability) for capability in capability_qs]
 
-        rest_rules_qs = (
-            RestRule.objects.select_related("role")
-            .prefetch_related("preferred_days")
-            .order_by("role__name", "-active_from")
-        )
-        rest_rules_payload = [_rest_rule_payload(rule) for rule in rest_rules_qs]
-
-        overload_qs = (
-            OverloadAllowance.objects.select_related("category")
-            .order_by("category__name")
-        )
-        overload_payload = [_overload_payload(allowance) for allowance in overload_qs]
-
         farms_payload = [
             {
                 "id": farm.id,
@@ -1331,8 +1146,14 @@ class CalendarMetadataView(LoginRequiredMixin, View):
                 "code": category.code,
                 "name": category.name,
                 "shift_type": category.shift_type,
-                "default_extra_day_limit": category.default_extra_day_limit,
-                "default_overtime_points": category.default_overtime_points,
+                "extra_day_limit": category.extra_day_limit,
+                "overtime_points": category.overtime_points,
+                "overload_alert_level": category.overload_alert_level,
+                "rest_min_frequency": category.rest_min_frequency,
+                "rest_min_consecutive_days": category.rest_min_consecutive_days,
+                "rest_max_consecutive_days": category.rest_max_consecutive_days,
+                "rest_post_shift_days": category.rest_post_shift_days,
+                "rest_monthly_days": category.rest_monthly_days,
                 "is_active": category.is_active,
             }
             for category in category_qs
@@ -1352,8 +1173,6 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             "positions": positions_payload,
             "operators": operators_payload,
             "capabilities": capabilities_payload,
-            "rest_rules": rest_rules_payload,
-            "overload_rules": overload_payload,
             "categories": categories_payload,
             "farms": farms_payload,
             "chicken_houses": chicken_houses_payload,
@@ -1366,8 +1185,14 @@ class CalendarMetadataView(LoginRequiredMixin, View):
                         "label": category["name"],
                         "code": category["code"],
                         "shift_type": category["shift_type"],
-                        "default_extra_day_limit": category["default_extra_day_limit"],
-                        "default_overtime_points": category["default_overtime_points"],
+                        "extra_day_limit": category["extra_day_limit"],
+                        "overtime_points": category["overtime_points"],
+                        "overload_alert_level": category["overload_alert_level"],
+                        "rest_min_frequency": category["rest_min_frequency"],
+                        "rest_min_consecutive_days": category["rest_min_consecutive_days"],
+                        "rest_max_consecutive_days": category["rest_max_consecutive_days"],
+                        "rest_post_shift_days": category["rest_post_shift_days"],
+                        "rest_monthly_days": category["rest_monthly_days"],
                     }
                     for category in categories_payload
                 ],

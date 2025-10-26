@@ -10,18 +10,15 @@ from django.db.models.functions import Cast
 from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
-    OverloadAllowance,
     OperatorCapability,
     PositionCategory,
     PositionDefinition,
-    RestRule,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
     required_skill_for_complexity,
     resolve_overload_policy,
 )
-from .models import RestPreference
 from users.models import Role, UserProfile
 from granjas.models import Farm, Room
 
@@ -409,55 +406,3 @@ class OperatorCapabilityForm(forms.ModelForm):
             "skill_score",
         ]
 
-
-class RestRuleForm(forms.ModelForm):
-    class Meta:
-        model = RestRule
-        fields = [
-            "role",
-            "shift_type",
-            "min_rest_frequency",
-            "min_consecutive_days",
-            "max_consecutive_days",
-            "post_shift_rest_days",
-            "monthly_rest_days",
-            "enforce_additional_rest",
-            "active_from",
-            "active_until",
-        ]
-
-
-class RestPreferenceForm(forms.ModelForm):
-    class Meta:
-        model = RestPreference
-        fields = [
-            "rest_rule",
-            "day_of_week",
-            "is_required",
-        ]
-
-
-class OverloadAllowanceForm(forms.ModelForm):
-    class Meta:
-        model = OverloadAllowance
-        fields = [
-            "category",
-            "extra_day_limit",
-            "overtime_points",
-            "alert_level",
-        ]
-
-    def clean(self) -> dict[str, Any]:
-        cleaned_data = super().clean()
-        category: PositionCategory | None = cleaned_data.get("category")
-        extra_limit = cleaned_data.get("extra_day_limit")
-
-        if category and extra_limit:
-            cap = 2 if category.shift_type == ShiftType.NIGHT else 3
-            if extra_limit > cap:
-                self.add_error(
-                    "extra_day_limit",
-                    f"El turno {category.get_shift_type_display().lower()} solo permite hasta {cap} días extra consecutivos.",
-                )
-
-        return cleaned_data

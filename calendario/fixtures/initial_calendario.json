@@ -34,9 +34,15 @@
       "code": "GALPONERO_PRODUCCION_DIA",
       "name": "Galponero producción día",
       "shift_type": "day",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -46,9 +52,15 @@
       "code": "GALPONERO_LEVANTE_DIA",
       "name": "Galponero levante día",
       "shift_type": "day",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -58,9 +70,15 @@
       "code": "GALPONERO_PRODUCCION_NOCHE",
       "name": "Galponero producción noche",
       "shift_type": "night",
-      "default_extra_day_limit": 2,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 2,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -70,9 +88,15 @@
       "code": "GALPONERO_LEVANTE_NOCHE",
       "name": "Galponero levante noche",
       "shift_type": "night",
-      "default_extra_day_limit": 2,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 2,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -82,9 +106,15 @@
       "code": "CLASIFICADOR_DIA",
       "name": "Clasificador día",
       "shift_type": "day",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -94,9 +124,15 @@
       "code": "CLASIFICADOR_NOCHE",
       "name": "Clasificador noche",
       "shift_type": "night",
-      "default_extra_day_limit": 2,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 2,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -106,9 +142,15 @@
       "code": "LIDER_GRANJA",
       "name": "Líder de granja",
       "shift_type": "mixed",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -118,9 +160,15 @@
       "code": "SUPERVISOR",
       "name": "Supervisor",
       "shift_type": "day",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -130,9 +178,15 @@
       "code": "LIDER_TECNICO",
       "name": "Líder técnico",
       "shift_type": "day",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {
@@ -142,9 +196,15 @@
       "code": "OFICIOS_VARIOS",
       "name": "Oficios varios",
       "shift_type": "day",
-      "default_extra_day_limit": 3,
-      "default_overtime_points": 1,
-      "is_active": true
+      "is_active": true,
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "overload_alert_level": "warn",
+      "rest_min_frequency": 6,
+      "rest_min_consecutive_days": 5,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
     }
   },
   {

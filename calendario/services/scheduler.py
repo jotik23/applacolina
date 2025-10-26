@@ -11,20 +11,19 @@ from django.db.models import Q
 from ..models import (
     AssignmentAlertLevel,
     AssignmentDecision,
-    OverloadAllowance,
     OverloadPolicyData,
     PositionCategory,
     PositionDefinition,
-    RestRule,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
     WorkloadSnapshot,
     filter_capabilities_for_category,
     required_skill_for_complexity,
+    resolve_overload_policy,
 )
 from ..models import OperatorCapability
-from users.models import Role, UserProfile
+from users.models import UserProfile
 
 
 @dataclass(slots=True)
@@ -84,10 +83,7 @@ class CalendarScheduler:
         self._operator_capabilities: Dict[int, List[OperatorCapability]] = {}
         self._capabilities_by_category: Dict[int, List[OperatorCapability]] = defaultdict(list)
         self._preferred_farms: Dict[int, Optional[int]] = {}
-        self._rest_rules: Dict[Tuple[int, str], List[RestRule]] = defaultdict(list)
         self._overload_policies: Dict[int, OverloadPolicyData] = {}
-        self._category_defaults: Dict[int, PositionCategory] = {}
-        self._prefetched_roles: Dict[int, List[Role]] = {}
         self._positions: List[PositionDefinition] = []
         self._calendar_dates = list(self._daterange(calendar.start_date, calendar.end_date))
         self._load_context()
@@ -124,14 +120,13 @@ class CalendarScheduler:
             .order_by("display_order", "id")
         )
 
-        relevant_categories = {position.category_id for position in self._positions}
+        relevant_categories: set[int] = set()
         for position in self._positions:
-            if position.category_id and position.category_id not in self._category_defaults:
-                self._category_defaults[position.category_id] = position.category
+            if position.category_id:
+                relevant_categories.add(position.category_id)
 
         capabilities = list(
             OperatorCapability.objects.select_related("operator", "operator__preferred_farm")
-            .prefetch_related("operator__roles")
         )
 
         if not capabilities and relevant_categories:
@@ -143,35 +138,9 @@ class CalendarScheduler:
             self._capabilities_by_category[capability.category_id].append(capability)
             if operator_id not in self._operator_states:
                 self._operator_states[operator_id] = OperatorState(operator=capability.operator)
-                self._prefetched_roles[operator_id] = list(capability.operator.roles.all())
                 self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
             else:
                 self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
-
-        rest_rules = list(
-            RestRule.objects.select_related("role")
-            .filter(active_from__lte=self.calendar.end_date)
-            .filter(Q(active_until__isnull=True) | Q(active_until__gte=self.calendar.start_date))
-        )
-        for rule in rest_rules:
-            self._rest_rules[(rule.role_id, rule.shift_type)].append(rule)
-        for rules in self._rest_rules.values():
-            rules.sort(key=lambda item: item.active_from, reverse=True)
-
-        overloads = list(OverloadAllowance.objects.select_related("category"))
-        for allowance in overloads:
-            self._category_defaults.setdefault(allowance.category_id, allowance.category)
-            self._overload_policies[allowance.category_id] = OverloadPolicyData(
-                extra_day_limit=allowance.extra_day_limit,
-                overtime_points=allowance.overtime_points,
-                alert_level=AssignmentAlertLevel(allowance.alert_level),
-            )
-
-        for category_id, category in self._category_defaults.items():
-            self._overload_policies.setdefault(
-                category_id,
-                self._build_default_policy_for_category(category),
-            )
 
     def _build_default_capabilities(self, categories: set[int]) -> List[OperatorCapability]:
         """Create in-memory capabilities for all active operators when no rules exist."""
@@ -199,23 +168,13 @@ class CalendarScheduler:
 
         return fallback_capabilities
 
-    def _build_default_policy_for_category(self, category: PositionCategory) -> OverloadPolicyData:
-        limit_cap = 2 if category.shift_type == ShiftType.NIGHT else 3
-        extra_limit = min(category.default_extra_day_limit, limit_cap)
-        extra_limit = max(extra_limit, 1)
-        return OverloadPolicyData(
-            extra_day_limit=extra_limit,
-            overtime_points=category.default_overtime_points,
-            alert_level=AssignmentAlertLevel.WARN,
-        )
-
     def _get_overload_policy(self, category: PositionCategory) -> OverloadPolicyData:
         policy = self._overload_policies.get(category.id)
         if policy:
             return policy
-        fallback = self._build_default_policy_for_category(category)
-        self._overload_policies[category.id] = fallback
-        return fallback
+        policy = resolve_overload_policy(category)
+        self._overload_policies[category.id] = policy
+        return policy
 
     # ------------------------------------------------------------------
     # Assignment core
@@ -304,16 +263,14 @@ class CalendarScheduler:
         if not self.options.honor_rest_rules:
             return True
 
-        rest_rule = self._get_rest_rule_for_operator(capability.operator_id, position.shift_type, current_date)
-        if rest_rule:
-            new_streak = self._calculate_new_streak(state, current_date)
-            allowed_max = rest_rule.max_consecutive_days
-
-            if new_streak > allowed_max:
-                policy = self._get_overload_policy(position.category)
-                extended_limit = allowed_max + policy.extra_day_limit
-                if new_streak > extended_limit:
-                    return False
+        rest_settings = position.category
+        new_streak = self._calculate_new_streak(state, current_date)
+        allowed_max = rest_settings.rest_max_consecutive_days
+        if new_streak > allowed_max:
+            policy = self._get_overload_policy(position.category)
+            extended_limit = allowed_max + policy.extra_day_limit
+            if new_streak > extended_limit:
+                return False
 
         return True
 
@@ -336,15 +293,14 @@ class CalendarScheduler:
             alert_level = AssignmentAlertLevel.WARN if difference == 1 else AssignmentAlertLevel.CRITICAL
             notes = "Cobertura con operario de menor habilidad"
 
-        rest_rule = self._get_rest_rule_for_operator(capability.operator_id, position.shift_type, current_date)
-        if rest_rule:
-            new_streak = self._calculate_new_streak(state, current_date)
-            if new_streak > rest_rule.max_consecutive_days:
-                policy = self._get_overload_policy(position.category)
-                is_overtime = True
-                alert_level = max(alert_level, policy.alert_level, key=self._alert_priority)
-                overtime_points = policy.overtime_points
-                notes = "Sobrecarga autorizada" if not notes else f"{notes}; sobrecarga"
+        rest_settings = position.category
+        new_streak = self._calculate_new_streak(state, current_date)
+        if new_streak > rest_settings.rest_max_consecutive_days:
+            policy = self._get_overload_policy(position.category)
+            is_overtime = True
+            alert_level = max(alert_level, policy.alert_level, key=self._alert_priority)
+            overtime_points = policy.overtime_points
+            notes = "Sobrecarga autorizada" if not notes else f"{notes}; sobrecarga"
 
         if state.last_shift_type == ShiftType.NIGHT and position.shift_type == ShiftType.NIGHT:
             # Incentivar rotación posterior a turnos nocturnos.
@@ -364,9 +320,9 @@ class CalendarScheduler:
         state.register_assignment(current_date, position.shift_type, is_overtime)
 
         if position.shift_type == ShiftType.NIGHT:
-            rest_rule = self._get_rest_rule_for_operator(capability.operator_id, position.shift_type, current_date)
-            if rest_rule and rest_rule.post_shift_rest_days:
-                state.blocked_until = current_date + timedelta(days=rest_rule.post_shift_rest_days)
+            post_shift_days = position.category.rest_post_shift_days
+            if post_shift_days:
+                state.blocked_until = current_date + timedelta(days=post_shift_days)
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -445,24 +401,6 @@ class CalendarScheduler:
 
         if snapshots:
             WorkloadSnapshot.objects.bulk_create(snapshots, batch_size=100)
-
-    # ------------------------------------------------------------------
-    # Rule helpers
-    # ------------------------------------------------------------------
-    def _get_rest_rule_for_operator(
-        self, operator_id: int, shift_type: str, target_date: date
-    ) -> Optional[RestRule]:
-        roles = self._prefetched_roles.get(operator_id, [])
-        applicable_rules: List[RestRule] = []
-        for role in roles:
-            for rule in self._rest_rules.get((role.id, shift_type), []):
-                if rule.active_from <= target_date and (
-                    not rule.active_until or rule.active_until >= target_date
-                ):
-                    applicable_rules.append(rule)
-        if not applicable_rules:
-            return None
-        return min(applicable_rules, key=lambda rule: rule.max_consecutive_days)
 
     @staticmethod
     def _calculate_new_streak(state: OperatorState, current_date: date) -> int:

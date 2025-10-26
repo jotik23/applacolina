@@ -8,11 +8,9 @@ from calendario.models import (
     AssignmentAlertLevel,
     CalendarStatus,
     ComplexityLevel,
-    OverloadAllowance,
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
-    RestRule,
     ShiftCalendar,
     ShiftType,
 )
@@ -40,10 +38,26 @@ class CalendarSchedulerTests(TestCase):
             defaults={
                 "name": "Galponero producción día",
                 "shift_type": ShiftType.DAY,
-                "default_extra_day_limit": 3,
-                "default_overtime_points": 1,
+                "extra_day_limit": 3,
+                "overtime_points": 1,
+                "overload_alert_level": AssignmentAlertLevel.WARN,
+                "rest_min_frequency": 6,
+                "rest_min_consecutive_days": 5,
+                "rest_max_consecutive_days": 6,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
             },
         )
+
+        self.category.extra_day_limit = 3
+        self.category.overtime_points = 1
+        self.category.overload_alert_level = AssignmentAlertLevel.WARN
+        self.category.rest_min_frequency = 6
+        self.category.rest_min_consecutive_days = 5
+        self.category.rest_max_consecutive_days = 6
+        self.category.rest_post_shift_days = 0
+        self.category.rest_monthly_days = 5
+        self.category.save()
 
         self.position = PositionDefinition.objects.create(
             name="Galponero Día",
@@ -62,21 +76,6 @@ class CalendarSchedulerTests(TestCase):
             status=CalendarStatus.DRAFT,
         )
 
-        RestRule.objects.create(
-            role=self.role,
-            shift_type=ShiftType.DAY,
-            min_rest_frequency=6,
-            min_consecutive_days=5,
-            max_consecutive_days=6,
-            post_shift_rest_days=0,
-            monthly_rest_days=5,
-        )
-
-        OverloadAllowance.objects.create(
-            category=self.category,
-            extra_day_limit=3,
-            overtime_points=1,
-        )
 
     def test_scheduler_assigns_operator_with_matching_capability(self) -> None:
         from calendario.models import OperatorCapability

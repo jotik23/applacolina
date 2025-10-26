@@ -161,11 +161,10 @@
 
     <div class="rounded-xl bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm ring-1 ring-inset ring-slate-100">
       <h3 class="text-base font-semibold text-slate-900">Configura tu calendario</h3>
-      <p class="mt-1 text-sm text-slate-600">Ajusta posiciones, colaboradores y reglas antes de generar un nuevo borrador.</p>
+      <p class="mt-1 text-sm text-slate-600">Ajusta posiciones, colaboradores antes de generar un nuevo borrador.</p>
       <div class="mt-4 flex flex-col gap-2">
-        <a href="{% url 'calendario:configurator' %}?step=positions" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-white">Configurar posiciones</a>
-        <a href="{% url 'calendario:configurator' %}?step=collaborators" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-white">Configurar colaboradores</a>
-        <a href="{% url 'calendario:configurator' %}?step=rules" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-white">Configurar reglas</a>
+        <a href="{% url 'calendario:configurator' %}?step=positions" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-white">Posiciones</a>
+        <a href="{% url 'calendario:configurator' %}?step=collaborators" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-white">Colaboradores</a>
       </div>
     </div>
   </aside>

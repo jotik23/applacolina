@@ -13,13 +13,19 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from granjas.models import ChickenHouse, Farm, Room
-from users.models import Role, UserProfile
+from users.models import UserProfile
 
 
 class ShiftType(models.TextChoices):
     DAY = "day", _("Día")
     NIGHT = "night", _("Noche")
     MIXED = "mixed", _("Mixto")
+
+
+class AssignmentAlertLevel(models.TextChoices):
+    NONE = "none", _("Sin alerta")
+    WARN = "warn", _("Desajuste moderado")
+    CRITICAL = "critical", _("Desajuste crítico")
 
 
 class ComplexityLevel(models.TextChoices):
@@ -70,15 +76,45 @@ class PositionCategory(models.Model):
         choices=ShiftType.choices,
         default=ShiftType.DAY,
     )
-    default_extra_day_limit = models.PositiveSmallIntegerField(
-        "Máximo extra por defecto",
+    extra_day_limit = models.PositiveSmallIntegerField(
+        "Máximo días extra consecutivos",
         validators=[MinValueValidator(1)],
         default=3,
     )
-    default_overtime_points = models.PositiveSmallIntegerField(
+    overtime_points = models.PositiveSmallIntegerField(
         "Puntos por día extra",
         validators=[MinValueValidator(1)],
         default=1,
+    )
+    overload_alert_level = models.CharField(
+        "Nivel de alerta de sobrecarga",
+        max_length=16,
+        choices=AssignmentAlertLevel.choices,
+        default=AssignmentAlertLevel.WARN,
+    )
+    rest_min_frequency = models.PositiveSmallIntegerField(
+        "Frecuencia mínima de descanso",
+        validators=[MinValueValidator(1)],
+        default=6,
+    )
+    rest_min_consecutive_days = models.PositiveSmallIntegerField(
+        "Días de descanso consecutivos mínimos",
+        validators=[MinValueValidator(1)],
+        default=5,
+    )
+    rest_max_consecutive_days = models.PositiveSmallIntegerField(
+        "Días de descanso consecutivos máximos",
+        validators=[MinValueValidator(1)],
+        default=8,
+    )
+    rest_post_shift_days = models.PositiveSmallIntegerField(
+        "Descanso posterior al turno",
+        default=0,
+    )
+    rest_monthly_days = models.PositiveSmallIntegerField(
+        "Descanso mensual requerido",
+        validators=[MinValueValidator(1)],
+        default=5,
     )
     is_active = models.BooleanField("Activo", default=True)
 
@@ -109,12 +145,6 @@ class CalendarStatus(models.TextChoices):
     DRAFT = "draft", _("Borrador")
     APPROVED = "approved", _("Aprobado")
     MODIFIED = "modified", _("Modificado")
-
-
-class AssignmentAlertLevel(models.TextChoices):
-    NONE = "none", _("Sin alerta")
-    WARN = "warn", _("Desajuste moderado")
-    CRITICAL = "critical", _("Desajuste crítico")
 
 
 class PositionDefinitionQuerySet(models.QuerySet):
@@ -272,133 +302,6 @@ class OperatorCapability(models.Model):
 
     def __str__(self) -> str:
         return f"{self.operator} - {self.category.name} ({self.skill_score}/10)"
-
-
-class RestRule(models.Model):
-    role = models.ForeignKey(
-        Role,
-        on_delete=models.CASCADE,
-        related_name="rest_rules",
-        verbose_name="Rol",
-    )
-    shift_type = models.CharField(
-        "Turno",
-        max_length=16,
-        choices=ShiftType.choices,
-        default=ShiftType.DAY,
-    )
-    min_rest_frequency = models.PositiveSmallIntegerField(
-        "Descanso mínimo cada X días", validators=[MinValueValidator(1)], default=6
-    )
-    min_consecutive_days = models.PositiveSmallIntegerField(
-        "Mínimo días consecutivos", validators=[MinValueValidator(1)], default=5
-    )
-    max_consecutive_days = models.PositiveSmallIntegerField(
-        "Máximo días consecutivos", validators=[MinValueValidator(1)], default=8
-    )
-    post_shift_rest_days = models.PositiveSmallIntegerField(
-        "Posturno (días)", default=0
-    )
-    monthly_rest_days = models.PositiveSmallIntegerField(
-        "Descansos mensuales", validators=[MinValueValidator(1)], default=5
-    )
-    enforce_additional_rest = models.BooleanField("Descanso adicional estricto", default=False)
-    active_from = models.DateField("Vigente desde", default=timezone.localdate)
-    active_until = models.DateField("Vigente hasta", null=True, blank=True)
-
-    class Meta:
-        verbose_name = "Regla de descanso"
-        verbose_name_plural = "Reglas de descanso"
-        unique_together = ("role", "shift_type", "active_from")
-        ordering = (
-            "role__name",
-            "shift_type",
-            "-active_from",
-        )
-
-    def __str__(self) -> str:
-        return f"{self.role} ({self.get_shift_type_display()})"
-
-    def clean(self) -> None:
-        super().clean()
-        if self.active_until and self.active_until < self.active_from:
-            raise ValidationError("La vigencia final debe ser posterior al inicio.")
-
-        if self.min_consecutive_days > self.max_consecutive_days:
-            raise ValidationError(
-                "El mínimo de días consecutivos no puede ser mayor al máximo permitido."
-            )
-
-
-class RestPreference(models.Model):
-    rest_rule = models.ForeignKey(
-        RestRule,
-        on_delete=models.CASCADE,
-        related_name="preferred_days",
-        verbose_name="Regla",
-    )
-    day_of_week = models.IntegerField(
-        "Día de la semana",
-        choices=DayOfWeek.choices,
-    )
-    is_required = models.BooleanField("Obligatorio", default=False)
-
-    class Meta:
-        verbose_name = "Preferencia de descanso"
-        verbose_name_plural = "Preferencias de descanso"
-        unique_together = ("rest_rule", "day_of_week")
-        ordering = ("rest_rule", "day_of_week")
-
-    def __str__(self) -> str:
-        return f"{self.rest_rule} - {self.get_day_of_week_display()}"
-
-
-class OverloadAllowance(models.Model):
-    category = models.ForeignKey(
-        PositionCategory,
-        on_delete=models.CASCADE,
-        related_name="overload_rules",
-        verbose_name="Categoría",
-    )
-    extra_day_limit = models.PositiveSmallIntegerField(
-        "Máximo días extra consecutivos",
-        validators=[MinValueValidator(1)],
-        default=3,
-    )
-    overtime_points = models.PositiveSmallIntegerField(
-        "Puntos por día extra",
-        validators=[MinValueValidator(1)],
-        default=1,
-    )
-    alert_level = models.CharField(
-        "Nivel de alerta",
-        max_length=16,
-        choices=AssignmentAlertLevel.choices,
-        default=AssignmentAlertLevel.WARN,
-    )
-
-    class Meta:
-        verbose_name = "Regla de sobrecarga"
-        verbose_name_plural = "Reglas de sobrecarga"
-        unique_together = ("category",)
-        ordering = ("category__name",)
-
-    def __str__(self) -> str:
-        return f"Sobrecarga {self.category.name}"
-
-    def clean(self) -> None:
-        super().clean()
-        if not self.category_id:
-            return
-
-        shift_type = self.category.shift_type
-        night_limit = 2
-        day_limit = 3
-
-        if shift_type == ShiftType.NIGHT and self.extra_day_limit > night_limit:
-            raise ValidationError("Las posiciones nocturnas solo permiten hasta 2 días extra consecutivos.")
-        if shift_type in (ShiftType.DAY, ShiftType.MIXED) and self.extra_day_limit > day_limit:
-            raise ValidationError("Las posiciones diurnas permiten hasta 3 días extra consecutivos.")
 
 
 class ShiftCalendar(models.Model):
@@ -654,20 +557,12 @@ def filter_capabilities_for_category(
 
 
 def resolve_overload_policy(category: PositionCategory) -> OverloadPolicyData:
-    allowance = category.overload_rules.first()
-    if allowance:
-        return OverloadPolicyData(
-            extra_day_limit=allowance.extra_day_limit,
-            overtime_points=allowance.overtime_points,
-            alert_level=AssignmentAlertLevel(allowance.alert_level),
-        )
-
     shift_type = category.shift_type
     limit_cap = 2 if shift_type == ShiftType.NIGHT else 3
-    extra_limit = min(category.default_extra_day_limit, limit_cap)
+    extra_limit = min(category.extra_day_limit, limit_cap)
     extra_limit = max(extra_limit, 1)
     return OverloadPolicyData(
         extra_day_limit=extra_limit,
-        overtime_points=category.default_overtime_points,
-        alert_level=AssignmentAlertLevel.WARN,
+        overtime_points=category.overtime_points,
+        alert_level=AssignmentAlertLevel(category.overload_alert_level),
     )

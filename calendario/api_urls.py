@@ -13,13 +13,9 @@ from .views import (
     CapabilityDetailView,
     OperatorCollectionView,
     OperatorDetailView,
-    OverloadCollectionView,
-    OverloadDetailView,
     PositionCollectionView,
     PositionDetailView,
     PositionReorderView,
-    RestRuleCollectionView,
-    RestRuleDetailView,
 )
 
 
@@ -72,17 +68,5 @@ urlpatterns = [
         "calendars/capabilities/<int:capability_id>/",
         CapabilityDetailView.as_view(),
         name="calendar-capability-detail",
-    ),
-    path("calendars/rest-rules/", RestRuleCollectionView.as_view(), name="calendar-rest-rules"),
-    path(
-        "calendars/rest-rules/<int:rule_id>/",
-        RestRuleDetailView.as_view(),
-        name="calendar-rest-rule-detail",
-    ),
-    path("calendars/overload-rules/", OverloadCollectionView.as_view(), name="calendar-overload-rules"),
-    path(
-        "calendars/overload-rules/<int:overload_id>/",
-        OverloadDetailView.as_view(),
-        name="calendar-overload-rule-detail",
     ),
 ]

@@ -54,56 +54,25 @@ Aunque el modelo `UserProfile` vive en la app `users`, el calendario depende de 
 
 ---
 
-## RestRule (Regla de descanso) y RestPreference (Preferencia de descanso)
-
-Configuran la política de descansos por rol y turno.
-
-| Campo | Tipo | Descripción |
-| --- | --- | --- |
-| `role` | Relación | Rol del operario (ej. Galponero). |
-| `shift_type` | Enumeración | Diferencia entre turnos diurnos y nocturnos. |
-| `min_rest_frequency` | Entero | Días máximos continuos antes de un descanso (por defecto 6). |
-| `min_consecutive_days` / `max_consecutive_days` | Entero | Rango aceptable de días consecutivos de trabajo. |
-| `post_shift_rest_days` | Entero | Días libres después de turnos nocturnos. |
-| `monthly_rest_days` | Entero | Descansos esperados al mes. |
-| `enforce_additional_rest` | Booleano | Obliga el descanso adicional mensual. |
-| `active_from` / `active_until` | Fecha | Vigencia de la regla. |
-
-Las preferencias asociadas (`RestPreference`) indican días de descanso recomendados u obligatorios.
-
-**Impacto:** el motor bloquea asignaciones que excedan el máximo consecutivo y marca sobrecargas cuando se usan reglas de emergencia.
-
----
-
 ## PositionCategory (Categoría de posición)
 
-Agrupa posiciones según su naturaleza operativa. Cada categoría define su turno natural y los límites base de sobrecarga.
+Agrupa posiciones según su naturaleza operativa y concentra los parámetros base de descanso y sobrecarga.
 
 | Campo | Tipo | Descripción |
 | --- | --- | --- |
 | `code` | Texto | Identificador interno (ej. `GALPONERO_PRODUCCION_DIA`). |
 | `name` | Texto | Nombre visible de la categoría. |
 | `shift_type` | Enumeración | Turno predominante (`day`, `night`, `mixed`). |
-| `default_extra_day_limit` | Entero | Días extra permitidos por defecto (día ≤ 3, noche ≤ 2). |
-| `default_overtime_points` | Entero | Puntos que suma cada día extra cuando no hay regla específica. |
+| `extra_day_limit` | Entero | Máximo de días extra consecutivos permitidos antes de bloquear asignaciones. |
+| `overtime_points` | Entero | Puntos creditados por cada día extra autorizado. |
+| `overload_alert_level` | Enumeración | Nivel de alerta (`none`, `warn`, `critical`) aplicado cuando se usa sobrecarga. |
+| `rest_min_frequency` | Entero | Máximo de días trabajados antes de exigir un descanso. |
+| `rest_min_consecutive_days` / `rest_max_consecutive_days` | Entero | Rango permitido de días consecutivos de trabajo. |
+| `rest_post_shift_days` | Entero | Descanso obligatorio luego de turnos especiales (ej. nocturnos). |
+| `rest_monthly_days` | Entero | Días de descanso esperados en el mes. |
 | `is_active` | Booleano | Permite ocultar categorías en desuso. |
 
-**Impacto:** todas las posiciones referencian una categoría. El motor usa los límites y puntos por defecto cuando no existe una regla de sobrecarga personalizada.
-
----
-
-## OverloadAllowance (Regla de sobrecarga)
-
-Especializa la sobrecarga de una categoría, tomando el turno que la propia categoría declara.
-
-| Campo | Tipo | Descripción |
-| --- | --- | --- |
-| `category` | Relación | Categoría afectada. |
-| `extra_day_limit` | Entero | Días extra consecutivos autorizados sobre el máximo de descanso. |
-| `overtime_points` | Entero | Puntos que suma cada día extra aplazando el descanso. |
-| `alert_level` | Enumeración | Nivel de alerta que se mostrará (`warn`, `critical`). |
-
-**Impacto:** cuando el motor extiende una secuencia de trabajo más allá del descanso permitido, verifica la regla asociada a la categoría. Si hay margen, marca la asignación como sobrecarga (`is_overtime`) y acredita los puntos definidos.
+**Impacto:** todas las posiciones referencian una categoría, por lo que el motor aplica directamente estos límites para validar descansos, bloqueos posteriores a turno y la generación de alertas de sobrecarga.
 
 ---
 
