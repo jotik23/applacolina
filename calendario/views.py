@@ -749,6 +749,13 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 messages.success(request, "Turno asignado manualmente.")
             else:
                 messages.error(request, form.errors.as_text())
+        elif action == "mark-modified":
+            if calendar.status != CalendarStatus.APPROVED:
+                messages.info(request, "Solo los calendarios aprobados pueden marcarse como modificados.")
+            else:
+                calendar.status = CalendarStatus.MODIFIED
+                calendar.save(update_fields=["status", "updated_at"])
+                messages.info(request, "El calendario ahora se encuentra en estado modificado y está listo para ajustes.")
         else:
             messages.error(request, "Acción no reconocida.")
 

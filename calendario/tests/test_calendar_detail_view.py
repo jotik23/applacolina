@@ -169,3 +169,63 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertTrue(
             any("Turno asignado manualmente." in message.message for message in messages)
         )
+
+
+class CalendarDetailViewModifyCalendarTests(TestCase):
+    def setUp(self) -> None:
+        self.user = UserProfile.objects.create_user(
+            cedula="3000",
+            password="test",  # noqa: S106 - test credential
+            nombres="Planificador",
+            apellidos="Operaciones",
+            telefono="3100000004",
+        )
+        self.client.force_login(self.user)
+
+        self.farm = Farm.objects.create(name="Pinares")
+        self.calendar = ShiftCalendar.objects.create(
+            name="Semana aprobada",
+            start_date=date(2025, 8, 4),
+            end_date=date(2025, 8, 10),
+            status=CalendarStatus.APPROVED,
+            created_by=self.user,
+            approved_by=self.user,
+        )
+
+    def test_mark_modified_changes_status(self) -> None:
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.post(
+            url,
+            data={
+                "action": "mark-modified",
+            },
+        )
+
+        self.assertRedirects(response, url)
+        self.calendar.refresh_from_db()
+        self.assertEqual(self.calendar.status, CalendarStatus.MODIFIED)
+
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(
+            any("estado modificado" in message.message for message in messages)
+        )
+
+    def test_calendar_can_be_reapproved_and_modified_again(self) -> None:
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+
+        # First modification
+        self.client.post(url, data={"action": "mark-modified"})
+        self.calendar.refresh_from_db()
+        self.assertEqual(self.calendar.status, CalendarStatus.MODIFIED)
+
+        # Re-approve
+        response = self.client.post(url, data={"action": "approve"})
+        self.assertRedirects(response, url)
+        self.calendar.refresh_from_db()
+        self.assertEqual(self.calendar.status, CalendarStatus.APPROVED)
+
+        # Modify again
+        response = self.client.post(url, data={"action": "mark-modified"})
+        self.assertRedirects(response, url)
+        self.calendar.refresh_from_db()
+        self.assertEqual(self.calendar.status, CalendarStatus.MODIFIED)

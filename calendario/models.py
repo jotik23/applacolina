@@ -420,7 +420,11 @@ class ShiftCalendar(models.Model):
         if self.base_calendar and self.base_calendar_id == self.pk:
             raise ValidationError("El calendario base no puede ser el mismo calendario.")
 
-        if self.status == CalendarStatus.MODIFIED and not self.base_calendar:
+        if (
+            self.status == CalendarStatus.MODIFIED
+            and not self.base_calendar
+            and self._state.adding
+        ):
             raise ValidationError("Un calendario modificado debe referenciar el calendario base.")
 
         if self.base_calendar and (
