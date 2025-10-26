@@ -86,13 +86,17 @@ class CalendarSchedulerTests(TestCase):
         self.assertTrue(all(assignment.operator == self.operator for assignment in assignments))
         self.assertTrue(all(assignment.alert_level == AssignmentAlertLevel.NONE for assignment in assignments))
 
-    def test_scheduler_marks_gap_when_no_capability(self) -> None:
+    def test_scheduler_assigns_when_no_capabilities_exist(self) -> None:
         scheduler = CalendarScheduler(self.calendar)
-        decisions = scheduler.generate(commit=False)
+        decisions = scheduler.generate(commit=True)
+
+        assignments = list(self.calendar.assignments.all())
 
         self.assertEqual(len(decisions), 3)
-        self.assertTrue(all(decision.operator is None for decision in decisions))
-        self.assertTrue(all(decision.alert_level == AssignmentAlertLevel.CRITICAL for decision in decisions))
+        self.assertEqual(len(assignments), 3)
+        self.assertTrue(all(decision.operator == self.operator for decision in decisions))
+        self.assertTrue(all(decision.alert_level == AssignmentAlertLevel.NONE for decision in decisions))
+        self.assertTrue(all(assignment.operator == self.operator for assignment in assignments))
 
     def test_scheduler_warns_when_skill_is_below_threshold_but_allowed(self) -> None:
         from calendario.models import OperatorCapability

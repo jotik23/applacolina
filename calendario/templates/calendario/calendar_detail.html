@@ -7,16 +7,18 @@
   <div class="rounded-xl bg-white p-6 shadow-sm">
     <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div>
-        <h1 class="text-xl font-semibold text-slate-900">{{ calendar.name|default:"Calendario sin título" }}</h1>
+        <h1 class="text-xl font-semibold text-slate-900">
+            {{ calendar.name|default:"Calendario sin título" }}
+            {% if calendar.status == 'draft' %}
+                <span class="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">Borrador</span>
+            {% elif calendar.status == 'approved' %}
+                <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Aprobado</span>
+            {% elif calendar.status == 'modified' %}
+                <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Modificado</span>
+            {% endif %}
+        </h1>
         <p class="mt-1 text-sm text-slate-500">{{ calendar.start_date }} → {{ calendar.end_date }}</p>
         <div class="mt-3 flex flex-wrap items-center gap-2">
-          {% if calendar.status == 'draft' %}
-            <span class="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">Borrador</span>
-          {% elif calendar.status == 'approved' %}
-            <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Aprobado</span>
-          {% elif calendar.status == 'modified' %}
-            <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Modificado</span>
-          {% endif %}
           {% if calendar.base_calendar %}
             <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600">Modifica: #{{ calendar.base_calendar_id }}</span>
           {% endif %}
@@ -94,89 +96,187 @@
 
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-100 text-xs sm:text-sm">
-        <thead class="bg-slate-50">
+        <thead class="sticky top-0 z-20 bg-slate-50 shadow">
           <tr>
-            <th class="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">Posición</th>
+            <th class="sticky left-0 top-0 z-30 bg-slate-50 px-6 py-2 text-left font-semibold text-slate-600 w-60 min-w-[15rem]">Posición</th>
             {% for day in date_columns %}
-              <th class="px-4 py-3 text-left font-semibold text-slate-600">{{ day|date:"D d" }}</th>
+              <th class="sticky top-0 z-20 bg-slate-50 px-4 py-2 text-left font-semibold text-slate-600">{{ day|date:"D d" }}</th>
             {% endfor %}
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for row in rows %}
             <tr class="bg-white">
-              <th class="sticky left-0 z-10 bg-white px-4 py-3 text-left font-medium text-slate-800">
+              <th class="sticky left-0 z-10 bg-white px-6 py-2 text-left font-medium text-slate-800 shadow-[1px_0_0_rgba(15,23,42,0.05)] w-60 min-w-[15rem]">
                 <span class="block text-xs uppercase tracking-wide text-slate-400">{{ row.position.farm.name }}</span>
-                {{ row.position.code }}
+                <p class="text-sm font-semibold text-slate-900">{{ row.position.name }}</p>
                 <span class="block text-xs text-slate-500">{{ row.position.get_category_display }}</span>
               </th>
               {% for cell in row.cells %}
-                <td class="px-4 py-3 align-top">
+                <td class="px-3 py-2 align-top">
                   {% if cell.assignment %}
-                    <div class="space-y-3">
-                      <div class="flex items-start justify-between">
-                        <div>
-                          <p class="text-sm font-semibold text-slate-900">{{ cell.assignment.operator.get_full_name }}</p>
-                          {% with role=cell.assignment.operator.roles.first %}
-                            {% if role %}
-                              <p class="text-xs text-slate-500">{{ role.get_name_display }}</p>
+                    <div class="rounded-lg border p-2 shadow-sm transition hover:shadow-md {% if cell.alert == 'critical' %}border-red-300 bg-red-50/80{% elif cell.alert == 'warn' %}border-amber-300 bg-amber-50/80{% else %}border-emerald-200 bg-emerald-50/70{% endif %} {% if cell.is_overtime %}ring-1 ring-slate-900/10{% endif %}">
+                      {% if can_override and manual_operator_choices %}
+                        <form method="post" class="flex items-center gap-2">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="update-assignment" />
+                          <input type="hidden" name="assignment_id" value="{{ cell.assignment.id }}" />
+                          <input type="hidden" name="force_override" value="1" />
+                          <label class="sr-only">Selecciona</label>
+                          <select name="operator_id" class="flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:ring-brand">
+                            {% for option in manual_operator_choices %}
+                              <option value="{{ option.id }}" {% if option.id == cell.assignment.operator_id %}selected{% endif %}>
+                                {{ option.label }}
+                              </option>
+                            {% endfor %}
+                          </select>
+                          <div class="flex items-center gap-1">
+                            {% if cell.alert == 'critical' %}
+                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Crítico" tabindex="0">
+                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.721-1.36 3.486 0l5.223 9.298c.75 1.334-.213 2.998-1.742 2.998H4.776c-1.53 0-2.492-1.664-1.743-2.998l5.224-9.298zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-.25-5.75a.75.75 0 10-1.5 0v3.5a.75.75 0 001.5 0v-3.5z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Cobertura fuera de perfil o conflicto. Reasigna cuanto antes.</span>
+                              </span>
+                            {% elif cell.alert == 'warn' %}
+                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-400 bg-amber-100/60 text-amber-700" role="img" aria-label="Seguimiento" tabindex="0">
+                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-4a1 1 0 100-2 1 1 0 000 2zm.75-7.5a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Cobertura con nivel inferior autorizado. Verifica desempeño.</span>
+                              </span>
                             {% endif %}
-                          {% endwith %}
-                        </div>
-                        <div class="flex flex-wrap gap-1">
-                          {% if cell.alert == 'warn' %}
-                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">Seguimiento</span>
-                          {% elif cell.alert == 'critical' %}
-                            <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">Crítico</span>
+                            {% if cell.is_overtime %}
+                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-500 bg-slate-900/10 text-slate-700" role="img" aria-label="Sobrecarga" tabindex="0">
+                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h1.586A2 2 0 019 2.586L10.414 4H14a2 2 0 012 2v2h-2V6H6v8h4v2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                                    <path fill-rule="evenodd" d="M12 12a1 1 0 011-1h5.5a.5.5 0 01.5.5V13a1 1 0 01-.293.707l-4.5 4.5A1 1 0 0112 17.5V13a1 1 0 011-1z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Operario ya tiene turno ese día. Ajusta compensaciones.</span>
+                              </span>
+                            {% endif %}
+                            <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
+                              <span class="sr-only">Actualizar turno</span>
+                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                              </svg>
+                            </button>
+                          </div>
+                        </form>
+                        {% with role=cell.assignment.operator.roles.first %}
+                          {% if role %}
+                            <p class="mt-1 text-[11px] text-slate-600">{{ role.get_name_display }}</p>
                           {% endif %}
-                          {% if cell.is_overtime %}
-                            <span class="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-white">Sobrecarga</span>
-                          {% endif %}
+                        {% endwith %}
+                      {% else %}
+                        <div class="flex items-center gap-2">
+                          <div class="min-w-0">
+                            <p class="truncate text-sm font-semibold text-slate-900">{{ cell.assignment.operator.get_full_name }}</p>
+                            {% with role=cell.assignment.operator.roles.first %}
+                              {% if role %}
+                                <p class="text-xs text-slate-500">{{ role.get_name_display }}</p>
+                              {% endif %}
+                            {% endwith %}
+                          </div>
+                          <div class="ml-auto flex items-center gap-1">
+                            {% if cell.alert == 'critical' %}
+                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Crítico" tabindex="0">
+                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.721-1.36 3.486 0l5.223 9.298c.75 1.334-.213 2.998-1.742 2.998H4.776c-1.53 0-2.492-1.664-1.743-2.998l5.224-9.298zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-.25-5.75a.75.75 0 10-1.5 0v3.5a.75.75 0 001.5 0v-3.5z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Cobertura fuera de perfil o conflicto. Reasigna cuanto antes.</span>
+                              </span>
+                            {% elif cell.alert == 'warn' %}
+                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-400 bg-amber-100/60 text-amber-700" role="img" aria-label="Seguimiento" tabindex="0">
+                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-4a1 1 0 100-2 1 1 0 000 2zm.75-7.5a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Cobertura con nivel inferior autorizado. Verifica desempeño.</span>
+                              </span>
+                            {% endif %}
+                            {% if cell.is_overtime %}
+                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-500 bg-slate-900/10 text-slate-700" role="img" aria-label="Sobrecarga" tabindex="0">
+                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h1.586A2 2 0 019 2.586L10.414 4H14a2 2 0 012 2v2h-2V6H6v8h4v2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                                    <path fill-rule="evenodd" d="M12 12a1 1 0 011-1h5.5a.5.5 0 01.5.5V13a1 1 0 01-.293.707l-4.5 4.5A1 1 0 0112 17.5V13a1 1 0 011-1z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Operario ya tiene turno ese día. Ajusta compensaciones.</span>
+                              </span>
+                            {% endif %}
+                          </div>
                         </div>
-                      </div>
-
-                      <form method="post" class="space-y-2">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="update-assignment" />
-                        <input type="hidden" name="assignment_id" value="{{ cell.assignment.id }}" />
-                        {% if cell.choices %}
-                          <label class="block text-xs font-medium text-slate-500">
-                            Cambiar operario
-                          <select name="operator_id" class="mt-1 block w-full rounded border border-slate-200 bg-white text-sm focus:border-brand focus:ring-brand">
-                              {% for choice in cell.choices %}
-                                <option value="{{ choice.id }}" {% if choice.id == cell.assignment.operator_id %}selected{% endif %} {% if choice.disabled %}disabled{% endif %}>
-                                  {{ choice.label }}{% if choice.disabled %} · Ocupado{% endif %}{% if choice.alert == 'warn' %} · Seguimiento{% elif choice.alert == 'critical' %} · Crítico{% endif %}
-                                </option>
-                              {% endfor %}
-                            </select>
-                          </label>
-                          <button type="submit" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-brand hover:text-brand">Actualizar</button>
-                        {% else %}
-                          <p class="text-xs text-slate-500">No hay alternativas disponibles para este turno.</p>
-                        {% endif %}
-                      </form>
+                      {% endif %}
                     </div>
                   {% else %}
-                    <div class="space-y-2">
-                      <div class="rounded border border-red-200 bg-red-50 px-2 py-2 text-xs font-semibold text-red-600">Sin cobertura</div>
-                      {% if cell.choices %}
-                        <form method="post" class="space-y-2">
+                    <div class="rounded-lg border border-red-300 bg-red-50/80 p-2 text-sm shadow-sm transition hover:shadow-md">
+                      {% if can_override and manual_operator_choices %}
+                        <form method="post" class="flex items-center gap-2">
                           {% csrf_token %}
                           <input type="hidden" name="action" value="create-assignment" />
                           <input type="hidden" name="position_id" value="{{ row.position.id }}" />
                           <input type="hidden" name="date" value="{{ cell.date|date:'Y-m-d' }}" />
-                          <select name="operator_id" class="block w-full rounded border border-slate-200 bg-white text-sm focus:border-brand focus:ring-brand">
-                            <option value="" selected disabled>Selecciona un operario…</option>
-                            {% for choice in cell.choices %}
-                              <option value="{{ choice.id }}" {% if choice.disabled %}disabled{% endif %}>
-                                {{ choice.label }}{% if choice.disabled %} · Ocupado{% endif %}{% if choice.alert == 'warn' %} · Seguimiento{% elif choice.alert == 'critical' %} · Crítico{% endif %}
+                          <input type="hidden" name="force_override" value="1" />
+                          <label class="sr-only">Selecciona</label>
+                          <select name="operator_id" class="flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:ring-brand">
+                            <option value="" selected disabled>Selecciona…</option>
+                            {% for option in manual_operator_choices %}
+                              <option value="{{ option.id }}">
+                                {{ option.label }}
                               </option>
                             {% endfor %}
                           </select>
-                          <button type="submit" class="inline-flex items-center rounded bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">Asignar</button>
+                          <div class="flex items-center gap-1">
+                            <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                              <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Sin cobertura" tabindex="0">
+                                <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L2.382 14.553A1 1 0 003.276 16h13.448a1 1 0 00.894-1.447L11.894 2.553A1 1 0 0011 2H9zm1 5a1 1 0 01.993.883L11 8v2a1 1 0 01-1.993.117L9 10V8a1 1 0 011-1zm0 6a1 1 0 110 2 1 1 0 010-2z" clip-rule="evenodd" />
+                                </svg>
+                              </span>
+                              <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">No hay cobertura. Asigna o reprograma el turno.</span>
+                            </span>
+                            <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
+                              <span class="sr-only">Actualizar turno</span>
+                              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                              </svg>
+                            </button>
+                          </div>
                         </form>
+                      {% elif can_override %}
+                        <div class="flex items-center justify-end gap-1">
+                          <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                            <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Sin cobertura" tabindex="0">
+                              <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L2.382 14.553A1 1 0 003.276 16h13.448a1 1 0 00.894-1.447L11.894 2.553A1 1 0 0011 2H9zm1 5a1 1 0 01.993.883L11 8v2a1 1 0 01-1.993.117L9 10V8a1 1 0 011-1zm0 6a1 1 0 110 2 1 1 0 010-2z" clip-rule="evenodd" />
+                              </svg>
+                            </span>
+                            <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">No hay cobertura. Asigna o reprograma el turno.</span>
+                          </span>
+                        </div>
+                        <p class="mt-2 text-xs text-slate-600">No hay colaboradores disponibles.</p>
                       {% else %}
-                        <p class="text-xs text-slate-500">No hay operarios habilitados para esta fecha.</p>
+                        <div class="flex items-center justify-end gap-1">
+                          <span class="group relative inline-flex h-7 w-7 items-center justify-center">
+                          <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Sin cobertura" tabindex="0">
+                              <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L2.382 14.553A1 1 0 003.276 16h13.448a1 1 0 00.894-1.447L11.894 2.553A1 1 0 0011 2H9zm1 5a1 1 0 01.993.883L11 8v2a1 1 0 01-1.993.117L9 10V8a1 1 0 011-1zm0 6a1 1 0 110 2 1 1 0 010-2z" clip-rule="evenodd" />
+                              </svg>
+                            </span>
+                          <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">No hay cobertura. Asigna o reprograma el turno.</span>
+                          </span>
+                        </div>
                       {% endif %}
                     </div>
                   {% endif %}

@@ -372,6 +372,14 @@ def _operator_payload(
     }
 
 
+def _format_operator_label(operator: UserProfile) -> str:
+    roles = list(operator.roles.all())
+    role_label = roles[0].get_name_display() if roles else ""
+    label = operator.get_full_name() or operator.nombres
+    if role_label:
+        label = f"{label} · {role_label}"
+    return label
+
 def _capability_payload(capability: OperatorCapability) -> dict[str, Any]:
     return {
         "id": capability.id,
@@ -630,6 +638,44 @@ class CalendarDetailView(LoginRequiredMixin, View):
         )
         date_columns, rows = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
+        can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
+
+        manual_operator_choices: list[dict[str, Any]] = []
+        if can_override:
+            operator_qs = (
+                UserProfile.objects.filter(is_active=True)
+                .prefetch_related("roles")
+                .order_by("apellidos", "nombres")
+            )
+            manual_operator_choices = [
+                {
+                    "id": operator.id,
+                    "label": _format_operator_label(operator),
+                }
+                for operator in operator_qs
+            ]
+
+            known_ids = {item["id"] for item in manual_operator_choices}
+            missing_ids: set[int] = set()
+            for row in rows:
+                for cell in row["cells"]:
+                    assignment = cell.get("assignment")
+                    if assignment and assignment.operator_id and assignment.operator_id not in known_ids:
+                        missing_ids.add(assignment.operator_id)
+
+            if missing_ids:
+                extra_qs = (
+                    UserProfile.objects.filter(id__in=missing_ids)
+                    .prefetch_related("roles")
+                    .order_by("apellidos", "nombres")
+                )
+                manual_operator_choices.extend(
+                    {
+                        "id": operator.id,
+                        "label": _format_operator_label(operator),
+                    }
+                    for operator in extra_qs
+                )
 
         return render(
             request,
@@ -639,6 +685,8 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 "date_columns": date_columns,
                 "rows": rows,
                 "stats": stats,
+                "can_override": can_override,
+                "manual_operator_choices": manual_operator_choices,
             },
         )
 
@@ -658,11 +706,21 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 assignment: ShiftAssignment = form.cleaned_data["assignment"]
                 operator: UserProfile = form.cleaned_data["operator"]
                 alert_level: AssignmentAlertLevel = form.cleaned_data["alert_level"]
+                is_overtime: bool = form.cleaned_data["is_overtime"]
 
                 assignment.operator = operator
                 assignment.alert_level = alert_level
+                assignment.is_overtime = is_overtime
                 assignment.is_auto_assigned = False
-                assignment.save(update_fields=["operator", "alert_level", "is_auto_assigned", "updated_at"])
+                assignment.save(
+                    update_fields=[
+                        "operator",
+                        "alert_level",
+                        "is_overtime",
+                        "is_auto_assigned",
+                        "updated_at",
+                    ]
+                )
 
                 _refresh_workload_snapshots(calendar)
                 messages.success(request, "Asignación actualizada correctamente.")
@@ -675,6 +733,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 operator: UserProfile = form.cleaned_data["operator"]
                 alert_level: AssignmentAlertLevel = form.cleaned_data["alert_level"]
                 target_date = form.cleaned_data["target_date"]
+                is_overtime: bool = form.cleaned_data["is_overtime"]
 
                 ShiftAssignment.objects.create(
                     calendar=calendar,
@@ -682,6 +741,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                     date=target_date,
                     operator=operator,
                     alert_level=alert_level,
+                    is_overtime=is_overtime,
                     is_auto_assigned=False,
                 )
 

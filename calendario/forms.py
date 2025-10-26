@@ -98,6 +98,7 @@ class CalendarGenerationForm(forms.Form):
 
 class BaseAssignmentForm(forms.Form):
     operator_id = forms.IntegerField(widget=forms.Select())
+    force_override = forms.BooleanField(required=False, widget=forms.HiddenInput)
 
     def __init__(self, *args, calendar: ShiftCalendar, **kwargs):
         self.calendar = calendar
@@ -109,29 +110,47 @@ class BaseAssignmentForm(forms.Form):
         except UserProfile.DoesNotExist as exc:  # pragma: no cover - defensive
             raise forms.ValidationError("El operario seleccionado no existe.") from exc
 
-    def _resolve_alert_level(
+    def _resolve_assignment_outcome(
         self,
         operator: UserProfile,
         position: PositionDefinition,
         target_date,
         *,
         exclude_assignment: ShiftAssignment | None = None,
-    ) -> AssignmentAlertLevel:
+        allow_override: bool = False,
+    ) -> tuple[AssignmentAlertLevel, bool]:
+        alert_level = AssignmentAlertLevel.NONE
+        is_overtime = False
+
+        required_score = required_skill_for_complexity(position.complexity)
         capability = OperatorCapability.objects.filter(
             operator=operator, category=position.category
         ).first()
+
         if not capability:
-            raise forms.ValidationError(
-                "El operario no está habilitado para esta posición en la fecha seleccionada."
-            )
+            if not allow_override:
+                raise forms.ValidationError(
+                    "El operario no está habilitado para esta posición en la fecha seleccionada."
+                )
+            alert_level = AssignmentAlertLevel.CRITICAL
+        else:
+            skill_score = capability.skill_score
 
-        required_score = required_skill_for_complexity(position.complexity)
-        skill_score = capability.skill_score
-
-        if skill_score < required_score and not position.allow_lower_complexity:
-            raise forms.ValidationError(
-                "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
-            )
+            if skill_score < required_score and not position.allow_lower_complexity:
+                if not allow_override:
+                    raise forms.ValidationError(
+                        "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
+                    )
+                alert_level = AssignmentAlertLevel.CRITICAL
+            elif skill_score < required_score:
+                diff = required_score - skill_score
+                alert_level = (
+                    AssignmentAlertLevel.WARN
+                    if diff == 1
+                    else AssignmentAlertLevel.CRITICAL
+                )
+            else:
+                alert_level = AssignmentAlertLevel.NONE
 
         conflict = (
             ShiftAssignment.objects.filter(
@@ -143,15 +162,14 @@ class BaseAssignmentForm(forms.Form):
             .exists()
         )
         if conflict:
-            raise forms.ValidationError(
-                "El operario ya tiene un turno asignado en esta fecha dentro del calendario."
-            )
+            if not allow_override:
+                raise forms.ValidationError(
+                    "El operario ya tiene un turno asignado en esta fecha dentro del calendario."
+                )
+            is_overtime = True
+            alert_level = AssignmentAlertLevel.CRITICAL
 
-        if skill_score >= required_score:
-            return AssignmentAlertLevel.NONE
-
-        diff = required_score - skill_score
-        return AssignmentAlertLevel.WARN if diff == 1 else AssignmentAlertLevel.CRITICAL
+        return alert_level, is_overtime
 
 
 class AssignmentUpdateForm(BaseAssignmentForm):
@@ -174,16 +192,19 @@ class AssignmentUpdateForm(BaseAssignmentForm):
             raise forms.ValidationError("La asignación indicada no existe en este calendario.") from exc
 
         operator = self._get_operator(operator_id)
-        alert_level = self._resolve_alert_level(
+        allow_override = bool(cleaned_data.get("force_override"))
+        alert_level, is_overtime = self._resolve_assignment_outcome(
             operator,
             assignment.position,
             assignment.date,
             exclude_assignment=assignment,
+            allow_override=allow_override,
         )
 
         cleaned_data["assignment"] = assignment
         cleaned_data["operator"] = operator
         cleaned_data["alert_level"] = alert_level
+        cleaned_data["is_overtime"] = is_overtime
         return cleaned_data
 
 
@@ -217,12 +238,19 @@ class AssignmentCreateForm(BaseAssignmentForm):
             raise forms.ValidationError("Ya existe una asignación para esta posición en la fecha indicada.")
 
         operator = self._get_operator(operator_id)
-        alert_level = self._resolve_alert_level(operator, position, target_date)
+        allow_override = bool(cleaned_data.get("force_override"))
+        alert_level, is_overtime = self._resolve_assignment_outcome(
+            operator,
+            position,
+            target_date,
+            allow_override=allow_override,
+        )
 
         cleaned_data["position"] = position
         cleaned_data["operator"] = operator
         cleaned_data["alert_level"] = alert_level
         cleaned_data["target_date"] = target_date
+        cleaned_data["is_overtime"] = is_overtime
         return cleaned_data
 
 

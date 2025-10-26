@@ -122,10 +122,15 @@ class CalendarScheduler:
             .order_by("display_order", "id")
         )
 
+        relevant_categories = {position.category for position in self._positions}
+
         capabilities = list(
             OperatorCapability.objects.select_related("operator", "operator__preferred_farm")
             .prefetch_related("operator__roles")
         )
+
+        if not capabilities and relevant_categories:
+            capabilities = self._build_default_capabilities(relevant_categories)
 
         for capability in capabilities:
             operator_id = capability.operator_id
@@ -157,6 +162,32 @@ class CalendarScheduler:
             self._overload_rules[allowance.role_id].append(allowance)
         for rules in self._overload_rules.values():
             rules.sort(key=lambda item: item.active_from, reverse=True)
+
+    def _build_default_capabilities(self, categories: set[str]) -> List[OperatorCapability]:
+        """Create in-memory capabilities for all active operators when no rules exist."""
+        if not categories:
+            return []
+
+        default_skill = OperatorCapability._meta.get_field("skill_score").get_default()
+
+        operators = (
+            UserProfile.objects.filter(is_active=True)
+            .select_related("preferred_farm")
+            .prefetch_related("roles")
+        )
+
+        fallback_capabilities: List[OperatorCapability] = []
+        for operator in operators:
+            for category in categories:
+                fallback_capabilities.append(
+                    OperatorCapability(
+                        operator=operator,
+                        category=category,
+                        skill_score=default_skill,
+                    )
+                )
+
+        return fallback_capabilities
 
     # ------------------------------------------------------------------
     # Assignment core
