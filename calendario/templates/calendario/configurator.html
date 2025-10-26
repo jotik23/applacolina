@@ -31,9 +31,8 @@
         <button type="button" data-step-trigger="2" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">2. Colaboradores</button>
         <button type="button" data-step-trigger="3" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">3. Reglas operativas</button>
         <button type="button" data-step-trigger="4" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">4. Generar borrador</button>
+          <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
       </div>
-
-      <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
 
       <div class="space-y-10">
         <section data-step-index="3" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
@@ -391,6 +390,10 @@
                 <select id="operator-category-filter" class="rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
                   <option value="">Todas las categorías</option>
                 </select>
+                <label class="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-600">
+                  <input type="checkbox" id="operator-include-inactive" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                  Mostrar colaboradores deshabilitados
+                </label>
               </div>
             </div>
 

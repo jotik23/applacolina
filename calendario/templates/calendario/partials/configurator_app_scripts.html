@@ -32,6 +32,7 @@
         lastSummary: null,
         filters: {
           includeInactivePositions: false,
+          includeInactiveOperators: false,
         },
         editing: {
           positionId: null,
@@ -144,6 +145,7 @@
         operatorBody: app.querySelector('#operator-body'),
         operatorSearch: app.querySelector('#operator-search'),
         operatorCategoryFilter: app.querySelector('#operator-category-filter'),
+        operatorIncludeInactive: app.querySelector('#operator-include-inactive'),
         operatorAddBtn: app.querySelector('#operator-add-btn'),
         operatorRefreshBtn: app.querySelector('#operator-refresh-btn'),
         operatorFormWrapper: app.querySelector('#operator-form-wrapper'),
@@ -191,6 +193,9 @@
       }
       if (refs.positionIncludeInactive) {
         state.filters.includeInactivePositions = refs.positionIncludeInactive.checked;
+      }
+      if (refs.operatorIncludeInactive) {
+        state.filters.includeInactiveOperators = refs.operatorIncludeInactive.checked;
       }
 
       const toneClassSets = {
@@ -1280,6 +1285,7 @@
 
         const searchTerm = (refs.operatorSearch?.value || '').toLowerCase();
         const categoryFilter = refs.operatorCategoryFilter?.value || '';
+        const includeInactiveOperators = state.filters.includeInactiveOperators;
 
         const { operators = [], capabilities = [] } = state.metadata;
         const capabilitiesByOperator = capabilities.reduce((acc, capability) => {
@@ -1290,6 +1296,9 @@
         }, new Map());
 
         const filtered = operators.filter((operator) => {
+          if (!includeInactiveOperators && !operator.is_active) {
+            return false;
+          }
           const name = (operator.name || '').toLowerCase();
           const document = (operator.document || '').toLowerCase();
           const matchesSearch = !searchTerm || name.includes(searchTerm) || document.includes(searchTerm);
@@ -1622,6 +1631,10 @@
         state.filters.includeInactivePositions = Boolean(event.target?.checked);
         fetchMetadata();
       });
+      refs.operatorIncludeInactive?.addEventListener('change', (event) => {
+        state.filters.includeInactiveOperators = Boolean(event.target?.checked);
+        renderOperators();
+      });
       refs.reloadSummaryBtn?.addEventListener('click', () => fetchSummary());
       refs.generateCalendarBtn?.addEventListener('click', () => generateCalendar());
 
@@ -1767,6 +1780,9 @@
           state.metadata = data;
           if (refs.positionIncludeInactive) {
             refs.positionIncludeInactive.checked = state.filters.includeInactivePositions;
+          }
+          if (refs.operatorIncludeInactive) {
+            refs.operatorIncludeInactive.checked = state.filters.includeInactiveOperators;
           }
           rebuildLookups();
           populateStaticOptions();
