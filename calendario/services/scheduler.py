@@ -115,7 +115,8 @@ class CalendarScheduler:
     # ------------------------------------------------------------------
     def _load_context(self) -> None:
         self._positions = list(
-            PositionDefinition.objects.select_related("farm", "chicken_house", "room")
+            PositionDefinition.objects.select_related("farm", "chicken_house")
+            .prefetch_related("rooms")
             .filter(valid_from__lte=self.calendar.end_date)
             .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=self.calendar.start_date))
             .order_by("farm__name", "code")

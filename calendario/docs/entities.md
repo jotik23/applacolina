@@ -15,7 +15,7 @@ Representa un rol operativo disponible en un rango de fechas determinado.
 | `category` | Enumeración | Sí | Tipo de posición (ej. `GALPONERO_PRODUCCION_DIA`). |
 | `farm` | Relación | Sí | Granja asociada. |
 | `chicken_house` | Relación | No | Galpón específico (si aplica). |
-| `room` | Relación | No | Salón dentro del galpón (si aplica). |
+| `rooms` | Relación (múltiple) | No | Salones dentro del galpón (si aplica). |
 | `shift_type` | Enumeración | Sí | Turno (`day` / `night`). |
 | `complexity` | Enumeración | Sí | Nivel requerido (`basic`, `intermediate`, `advanced`). |
 | `allow_lower_complexity` | Booleano | No | Permite cubrir con operarios de menor complejidad en emergencia. |

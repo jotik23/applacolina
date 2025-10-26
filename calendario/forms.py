@@ -23,6 +23,7 @@ from .models import (
 )
 from .models import RestPreference
 from users.models import Role, UserProfile
+from granjas.models import Room
 
 
 class CalendarGenerationForm(forms.Form):
@@ -234,6 +235,13 @@ class AssignmentCreateForm(BaseAssignmentForm):
 
 
 class PositionDefinitionForm(forms.ModelForm):
+    rooms = forms.ModelMultipleChoiceField(
+        queryset=Room.objects.select_related("chicken_house", "chicken_house__farm").order_by(
+            "chicken_house__farm__name", "chicken_house__name", "name"
+        ),
+        required=False,
+    )
+
     class Meta:
         model = PositionDefinition
         fields = [
@@ -241,7 +249,7 @@ class PositionDefinitionForm(forms.ModelForm):
             "category",
             "farm",
             "chicken_house",
-            "room",
+            "rooms",
             "complexity",
             "allow_lower_complexity",
             "valid_from",
@@ -253,8 +261,24 @@ class PositionDefinitionForm(forms.ModelForm):
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
         category = cleaned_data.get("category")
+        self.instance._manual_shift_type = False
         if category:
             self.instance.shift_type = CATEGORY_SHIFT_MAP.get(category, ShiftType.DAY)
+        chicken_house = cleaned_data.get("chicken_house")
+        rooms = cleaned_data.get("rooms")  # type: ignore[assignment]
+        if rooms:
+            if not chicken_house:
+                self.add_error(
+                    "rooms",
+                    "Debe seleccionar un galpón para asociar salones a la posición.",
+                )
+            else:
+                invalid_rooms = [room for room in rooms if room.chicken_house_id != chicken_house.id]
+                if invalid_rooms:
+                    self.add_error(
+                        "rooms",
+                        "Todos los salones deben pertenecer al galpón seleccionado.",
+                    )
         return cleaned_data
 
     @staticmethod

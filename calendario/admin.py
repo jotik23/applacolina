@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin
 from django.db.models import QuerySet
 
 from . import models
 
 
+class PositionDefinitionAdminForm(forms.ModelForm):
+    class Meta:
+        model = models.PositionDefinition
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        category = cleaned_data.get("category")
+        shift_type = cleaned_data.get("shift_type")
+        inferred = models.CATEGORY_SHIFT_MAP.get(category)
+        self.instance._manual_shift_type = bool(shift_type and shift_type != inferred)
+        return cleaned_data
+
+
 @admin.register(models.PositionDefinition)
 class PositionDefinitionAdmin(admin.ModelAdmin):
+    form = PositionDefinitionAdminForm
     list_display = (
         "code",
         "name",
@@ -31,7 +47,12 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
     date_hierarchy = "valid_from"
 
     def get_queryset(self, request) -> QuerySet:
-        return super().get_queryset(request).select_related("farm", "chicken_house", "room")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("farm", "chicken_house")
+            .prefetch_related("rooms")
+        )
 
 
 @admin.register(models.OperatorCapability)

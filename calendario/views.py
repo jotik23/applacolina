@@ -322,10 +322,13 @@ def _position_payload(position: PositionDefinition) -> dict[str, Any]:
             "id": position.chicken_house_id,
             "name": position.chicken_house.name if position.chicken_house_id else None,
         },
-        "room": {
-            "id": position.room_id,
-            "name": position.room.name if position.room_id else None,
-        },
+        "rooms": [
+            {
+                "id": room.id,
+                "name": room.name,
+            }
+            for room in position.rooms.all()
+        ],
         "shift_type": position.shift_type,
         "complexity": position.complexity,
         "allow_lower_complexity": position.allow_lower_complexity,
@@ -1010,7 +1013,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         include_inactive = request.GET.get("include_inactive") == "true"
         farm_filter = request.GET.get("farm")
 
-        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house", "room")
+        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house").prefetch_related("rooms")
         if farm_filter:
             try:
                 position_qs = position_qs.filter(farm_id=int(farm_filter))

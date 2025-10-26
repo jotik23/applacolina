@@ -120,12 +120,10 @@ class PositionDefinition(models.Model):
         null=True,
         blank=True,
     )
-    room = models.ForeignKey(
+    rooms = models.ManyToManyField(
         Room,
-        on_delete=models.PROTECT,
         related_name="position_definitions",
-        verbose_name="Salón",
-        null=True,
+        verbose_name="Salones",
         blank=True,
     )
     shift_type = models.CharField(
@@ -133,7 +131,6 @@ class PositionDefinition(models.Model):
         max_length=16,
         choices=ShiftType.choices,
         default=ShiftType.DAY,
-        editable=False,
     )
     complexity = models.CharField(
         "Nivel de criticidad",
@@ -164,18 +161,21 @@ class PositionDefinition(models.Model):
         if self.valid_until and self.valid_until < self.valid_from:
             raise ValidationError("La fecha de fin debe ser igual o posterior a la de inicio.")
 
-        if self.room and not self.chicken_house:
-            raise ValidationError("Debe seleccionar un galpón cuando se utilice un salón.")
-
         if self.chicken_house and self.chicken_house.farm_id != self.farm_id:
             raise ValidationError("El galpón seleccionado debe pertenecer a la granja indicada.")
 
-        if self.room and self.room.chicken_house_id != self.chicken_house_id:
-            raise ValidationError("El salón seleccionado debe pertenecer al galpón indicado.")
+        if self.pk:
+            room_house_ids = set(self.rooms.values_list("chicken_house_id", flat=True))
+            if room_house_ids:
+                if not self.chicken_house_id:
+                    raise ValidationError("Debe seleccionar un galpón cuando se utilicen salones.")
+                if room_house_ids != {self.chicken_house_id}:
+                    raise ValidationError("Todos los salones seleccionados deben pertenecer al galpón indicado.")
 
-        inferred_shift = CATEGORY_SHIFT_MAP.get(self.category)
-        if inferred_shift:
-            self.shift_type = inferred_shift
+        if not getattr(self, "_manual_shift_type", False):
+            inferred_shift = CATEGORY_SHIFT_MAP.get(self.category)
+            if inferred_shift:
+                self.shift_type = inferred_shift
 
     def is_active_on(self, target_date: date) -> bool:
         if not self.is_active:

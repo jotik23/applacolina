@@ -34,6 +34,10 @@
         filters: {
           includeInactivePositions: false,
         },
+        editing: {
+          positionId: null,
+          operatorId: null,
+        },
         lookups: {
           housesByFarm: new Map(),
           roomsByHouse: new Map(),
@@ -46,6 +50,34 @@
           alertLabels: new Map(),
           dayLabels: new Map(),
         },
+      };
+
+      const refreshPositionHighlight = () => {
+        if (state.metadata && refs.positionsBody) {
+          renderPositions();
+        }
+      };
+
+      const refreshOperatorHighlight = () => {
+        if (state.metadata && refs.operatorBody) {
+          renderOperators();
+        }
+      };
+
+      const setEditingPosition = (id) => {
+        if (state.editing.positionId === id) {
+          return;
+        }
+        state.editing.positionId = id;
+        refreshPositionHighlight();
+      };
+
+      const setEditingOperator = (id) => {
+        if (state.editing.operatorId === id) {
+          return;
+        }
+        state.editing.operatorId = id;
+        refreshOperatorHighlight();
       };
 
       const refs = {
@@ -66,7 +98,7 @@
         positionCategory: app.querySelector('#position-category'),
         positionFarm: app.querySelector('#position-farm'),
         positionHouse: app.querySelector('#position-house'),
-        positionRoom: app.querySelector('#position-room'),
+        positionRooms: app.querySelector('#position-rooms'),
         positionComplexity: app.querySelector('#position-complexity'),
         positionValidFrom: app.querySelector('#position-valid-from'),
         positionValidUntil: app.querySelector('#position-valid-until'),
@@ -285,27 +317,54 @@
       const populateSelect = (
         select,
         items,
-        { valueKey = 'value', labelKey = 'label', includeBlank = true, blankLabel = 'Seleccione…', keepValue = true } = {}
+        {
+          valueKey = 'value',
+          labelKey = 'label',
+          includeBlank = true,
+          blankLabel = 'Seleccione…',
+          keepValue = true,
+          selectedValues = null,
+        } = {}
       ) => {
         if (!select) {
           return;
         }
-        const previous = keepValue ? select.value : '';
+        const isMultiple = Boolean(select.multiple);
+        const previousValues = keepValue
+          ? Array.from(select.selectedOptions || []).map((option) => option.value)
+          : [];
         select.innerHTML = '';
-        if (includeBlank) {
+        if (includeBlank && !isMultiple) {
           const option = document.createElement('option');
           option.value = '';
           option.textContent = blankLabel;
           select.append(option);
         }
+        const selectedSet = new Set(
+          (selectedValues ?? (keepValue ? previousValues : [])).map((value) => String(value))
+        );
         (items || []).forEach((item) => {
+          const value = String(item[valueKey]);
           const option = document.createElement('option');
-          option.value = String(item[valueKey]);
+          option.value = value;
           option.textContent = item[labelKey];
+          if (selectedSet.has(value)) {
+            option.selected = true;
+          }
           select.append(option);
         });
-        if (keepValue && previous) {
-          select.value = previous;
+        if (!isMultiple) {
+          const targetValue =
+            selectedValues && selectedValues.length
+              ? String(selectedValues[0])
+              : keepValue && previousValues.length
+              ? String(previousValues[0])
+              : '';
+          if (targetValue) {
+            select.value = targetValue;
+          } else if (!includeBlank && select.options.length) {
+            select.selectedIndex = 0;
+          }
         }
       };
 
@@ -367,25 +426,48 @@
         };
       };
 
-      const updateRoomOptions = (houseId, keepValue = true) => {
-        if (!refs.positionRoom) {
+      const updateRoomOptions = (houseId, { selectedRooms = [], keepValue = true } = {}) => {
+        if (!refs.positionRooms) {
           return;
         }
         if (!houseId) {
-          populateSelect(refs.positionRoom, [], { includeBlank: true, blankLabel: 'Todos los salones', keepValue: false });
+          populateSelect(refs.positionRooms, [], { includeBlank: false, keepValue: false, selectedValues: [] });
           return;
         }
         const rooms = state.lookups.roomsByHouse.get(Number(houseId)) || [];
-        populateSelect(refs.positionRoom, rooms, { valueKey: 'id', labelKey: 'name', includeBlank: true, blankLabel: 'Todos los salones', keepValue });
+        populateSelect(refs.positionRooms, rooms, {
+          valueKey: 'id',
+          labelKey: 'name',
+          includeBlank: false,
+          keepValue,
+          selectedValues: selectedRooms,
+        });
       };
 
-      const updateHouseOptions = (farmId, keepValue = true) => {
+      const updateHouseOptions = (farmId, { selectedHouse = '', selectedRooms = [], keepValue = true } = {}) => {
         if (!refs.positionHouse) {
           return;
         }
         const houses = state.lookups.housesByFarm.get(Number(farmId)) || [];
-        populateSelect(refs.positionHouse, houses, { valueKey: 'id', labelKey: 'name', includeBlank: true, blankLabel: 'Todos los galpones', keepValue });
-        updateRoomOptions(refs.positionHouse.value, keepValue);
+        const selectedValues = selectedHouse ? [selectedHouse] : keepValue ? [refs.positionHouse.value] : [];
+        populateSelect(refs.positionHouse, houses, {
+          valueKey: 'id',
+          labelKey: 'name',
+          includeBlank: true,
+          blankLabel: 'Todos los galpones',
+          keepValue: false,
+          selectedValues,
+        });
+        const currentHouse = selectedValues[0] || '';
+        if (selectedHouse) {
+          refs.positionHouse.value = selectedHouse;
+        } else if (!keepValue) {
+          refs.positionHouse.value = '';
+        } else {
+          refs.positionHouse.value = currentHouse;
+        }
+        const effectiveHouse = refs.positionHouse.value || '';
+        updateRoomOptions(effectiveHouse, { selectedRooms, keepValue: false });
       };
 
       const populateStaticOptions = () => {
@@ -430,7 +512,7 @@
             .join('');
         }
 
-        updateHouseOptions(refs.positionFarm?.value || '', true);
+        updateHouseOptions(refs.positionFarm?.value || '');
       };
 
       const readRestPreferences = () => {
@@ -467,7 +549,7 @@
         category: refs.positionCategory?.value || '',
         farm: refs.positionFarm?.value || '',
         chicken_house: refs.positionHouse?.value || '',
-        room: refs.positionRoom?.value || '',
+        rooms: Array.from(refs.positionRooms?.selectedOptions || []).map((option) => option.value),
         complexity: refs.positionComplexity?.value || '',
         allow_lower_complexity: Boolean(refs.positionAllowLower?.checked),
         valid_from: refs.positionValidFrom?.value || '',
@@ -479,6 +561,7 @@
       const openPositionForm = (position = null) => {
         resetForm(refs.positionForm, refs.positionMessage);
         toggleWrapper(refs.positionFormWrapper, true);
+        setEditingPosition(position ? position.id : null);
         if (!position) {
           refs.positionId.value = '';
           refs.positionIsActive.checked = true;
@@ -489,14 +572,18 @@
           if (refs.positionCodeValue) {
             refs.positionCodeValue.textContent = '—';
           }
-          updateHouseOptions(refs.positionFarm?.value || '', true);
-          updateRoomOptions(refs.positionHouse?.value || '', true);
+          const currentFarm = refs.positionFarm?.value || '';
+          updateHouseOptions(currentFarm, { selectedHouse: '', selectedRooms: [], keepValue: false });
+          if (refs.positionRooms) {
+            Array.from(refs.positionRooms.options || []).forEach((option) => {
+              option.selected = false;
+            });
+          }
         } else {
           refs.positionId.value = position.id;
           refs.positionName.value = position.name || '';
           if (refs.positionCodeDisplay) {
-            const hasCode = Boolean(position.code);
-            refs.positionCodeDisplay.classList.toggle('hidden', !hasCode);
+            refs.positionCodeDisplay.classList.add('hidden');
           }
           if (refs.positionCodeValue) {
             refs.positionCodeValue.textContent = position.code || '—';
@@ -508,16 +595,19 @@
           refs.positionAllowLower.checked = Boolean(position.allow_lower_complexity);
           refs.positionIsActive.checked = Boolean(position.is_active);
           refs.positionNotes.value = position.notes || '';
-          refs.positionFarm.value = position.farm?.id ? String(position.farm.id) : '';
-          updateHouseOptions(refs.positionFarm.value || '', false);
-          refs.positionHouse.value = position.chicken_house?.id ? String(position.chicken_house.id) : '';
-          updateRoomOptions(refs.positionHouse.value || '', false);
-          refs.positionRoom.value = position.room?.id ? String(position.room.id) : '';
+          const farmId = position.farm?.id ? String(position.farm.id) : '';
+          const houseId = position.chicken_house?.id ? String(position.chicken_house.id) : '';
+          const roomIds = Array.isArray(position.rooms)
+            ? position.rooms.map((room) => String(room.id))
+            : [];
+          refs.positionFarm.value = farmId;
+          updateHouseOptions(farmId, { selectedHouse: houseId, selectedRooms: roomIds, keepValue: false });
         }
         focusWrapper(refs.positionFormWrapper, refs.positionName);
       };
 
       const closePositionForm = () => {
+        setEditingPosition(null);
         resetForm(refs.positionForm, refs.positionMessage);
         toggleWrapper(refs.positionFormWrapper, false);
         if (refs.positionCodeDisplay) {
@@ -541,6 +631,7 @@
       const openOperatorForm = (operator = null) => {
         resetForm(refs.operatorForm, refs.operatorMessage);
         toggleWrapper(refs.operatorFormWrapper, true);
+        setEditingOperator(operator ? operator.id : null);
         if (!operator) {
           if (refs.operatorId) {
             refs.operatorId.value = '';
@@ -601,6 +692,7 @@
       };
 
       const closeOperatorForm = () => {
+        setEditingOperator(null);
         resetForm(refs.operatorForm, refs.operatorMessage);
         toggleWrapper(refs.operatorFormWrapper, false);
       };
@@ -818,11 +910,11 @@
 
 
       refs.positionFarm?.addEventListener('change', (event) => {
-        updateHouseOptions(event.target.value, false);
+        updateHouseOptions(event.target.value, { selectedHouse: '', selectedRooms: [], keepValue: false });
       });
 
       refs.positionHouse?.addEventListener('change', (event) => {
-        updateRoomOptions(event.target.value, false);
+        updateRoomOptions(event.target.value, { selectedRooms: [], keepValue: false });
       });
 
       const showStep = (step) => {
@@ -889,12 +981,32 @@
             const validity = position.valid_until
               ? `${escapeHtml(position.valid_from)} → ${escapeHtml(position.valid_until)}`
               : `${escapeHtml(position.valid_from)} → vigencia abierta`;
-            const rowClasses = position.is_active ? '' : ' class="bg-slate-50 text-slate-500"';
+            const farmLabel = position.farm?.name ? escapeHtml(position.farm.name) : '';
+            const houseLabel = position.chicken_house?.name ? escapeHtml(position.chicken_house.name) : '';
+            const roomLabels = (position.rooms || []).map((room) => escapeHtml(room.name)).join(', ');
+            const isEditing = state.editing.positionId === position.id;
+            const rowClassList = [];
+            if (!position.is_active) {
+              rowClassList.push('bg-slate-50', 'text-slate-500');
+            }
+            if (isEditing) {
+              rowClassList.push('bg-amber-50', 'ring-2', 'ring-amber-300', 'ring-offset-1', 'ring-offset-white');
+            }
+            const rowAttr = rowClassList.length ? ` class="${rowClassList.join(' ')}"` : '';
             return `
-              <tr${rowClasses}>
+              <tr${rowAttr} data-position-id="${position.id}">
                 <td class="px-3 py-3 align-top">
                   <p class="font-semibold text-slate-800">${escapeHtml(position.name)}</p>
-                  <p class="text-xs text-slate-500">${escapeHtml(position.code)} · ${escapeHtml(position.farm?.name || '')}</p>
+                  <p class="text-xs text-slate-500">
+                    ${escapeHtml(position.code)}
+                    ${farmLabel ? ` · ${farmLabel}` : ''}
+                    ${houseLabel ? ` · ${houseLabel}` : ''}
+                  </p>
+                  ${
+                    roomLabels
+                      ? `<p class="mt-1 text-xs text-slate-500">Salones: ${roomLabels}</p>`
+                      : ''
+                  }
                 </td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(complexityLabel)}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(shiftLabel)}</td>
@@ -1082,7 +1194,17 @@
               ? 'border-red-200 text-red-700 hover:bg-red-50'
               : 'border-emerald-300 text-emerald-700 hover:bg-emerald-100';
             const desiredState = operator.is_active ? 'false' : 'true';
-            const rowClasses = operator.is_active ? 'bg-white' : 'bg-slate-50';
+            const isEditing = state.editing.operatorId === operator.id;
+            const rowClassList = [];
+            if (operator.is_active) {
+              rowClassList.push('bg-white');
+            } else {
+              rowClassList.push('bg-slate-50', 'text-slate-500');
+            }
+            if (isEditing) {
+              rowClassList.push('bg-amber-50', 'ring-2', 'ring-amber-300', 'ring-offset-1', 'ring-offset-white');
+            }
+            const rowClasses = rowClassList.join(' ');
             const contactLine = operator.telefono
               ? `${escapeHtml(operator.document)} · ${escapeHtml(operator.telefono)}`
               : escapeHtml(operator.document);
@@ -1091,7 +1213,7 @@
               : '';
 
             return `
-              <tr class="${rowClasses}">
+              <tr class="${rowClasses}" data-operator-id="${operator.id}">
                 <td class="px-3 py-3 align-top">
                   <p class="font-semibold text-slate-800">${escapeHtml(operator.name)}</p>
                   <p class="text-xs text-slate-500">${contactLine}</p>
