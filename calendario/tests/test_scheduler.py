@@ -10,6 +10,7 @@ from calendario.models import (
     ComplexityLevel,
     OverloadAllowance,
     PositionCategory,
+    PositionCategoryCode,
     PositionDefinition,
     RestRule,
     ShiftCalendar,
@@ -34,10 +35,20 @@ class CalendarSchedulerTests(TestCase):
         )
         self.operator.roles.add(self.role)
 
+        self.category, _created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
+            defaults={
+                "name": "Galponero producción día",
+                "shift_type": ShiftType.DAY,
+                "default_extra_day_limit": 3,
+                "default_overtime_points": 1,
+            },
+        )
+
         self.position = PositionDefinition.objects.create(
             name="Galponero Día",
             code="G1-DIA",
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             farm=self.farm,
             complexity=ComplexityLevel.INTERMEDIATE,
             allow_lower_complexity=False,
@@ -62,8 +73,9 @@ class CalendarSchedulerTests(TestCase):
         )
 
         OverloadAllowance.objects.create(
-            role=self.role,
-            max_consecutive_extra_days=3,
+            category=self.category,
+            extra_day_limit=3,
+            overtime_points=1,
         )
 
     def test_scheduler_assigns_operator_with_matching_capability(self) -> None:
@@ -71,7 +83,7 @@ class CalendarSchedulerTests(TestCase):
 
         OperatorCapability.objects.create(
             operator=self.operator,
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             skill_score=9,
         )
 
@@ -106,7 +118,7 @@ class CalendarSchedulerTests(TestCase):
 
         OperatorCapability.objects.create(
             operator=self.operator,
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             skill_score=2,
         )
 

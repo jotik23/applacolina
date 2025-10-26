@@ -6,7 +6,13 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
-from calendario.models import ComplexityLevel, PositionCategory, PositionDefinition
+from calendario.models import (
+    ComplexityLevel,
+    PositionCategory,
+    PositionCategoryCode,
+    PositionDefinition,
+    ShiftType,
+)
 from granjas.models import Farm
 from users.models import UserProfile
 
@@ -23,10 +29,20 @@ class PositionOrderingApiTests(TestCase):
         self.client.force_login(self.user)
         self.farm = Farm.objects.create(name="Colina Test")
 
+        self.category, _created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
+            defaults={
+                "name": "Galponero producción día",
+                "shift_type": ShiftType.DAY,
+                "default_extra_day_limit": 3,
+                "default_overtime_points": 1,
+            },
+        )
+
         self.position_a = PositionDefinition.objects.create(
             name="Posición A",
             code="POS-A",
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             farm=self.farm,
             complexity=ComplexityLevel.BASIC,
             valid_from=date(2025, 1, 1),
@@ -34,7 +50,7 @@ class PositionOrderingApiTests(TestCase):
         self.position_b = PositionDefinition.objects.create(
             name="Posición B",
             code="POS-B",
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             farm=self.farm,
             complexity=ComplexityLevel.BASIC,
             valid_from=date(2025, 1, 1),
@@ -42,7 +58,7 @@ class PositionOrderingApiTests(TestCase):
         self.position_c = PositionDefinition.objects.create(
             name="Posición C",
             code="POS-C",
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             farm=self.farm,
             complexity=ComplexityLevel.BASIC,
             valid_from=date(2025, 1, 1),

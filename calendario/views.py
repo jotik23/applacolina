@@ -40,6 +40,7 @@ from .models import (
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
+    resolve_overload_policy,
     required_skill_for_complexity,
 )
 from .services import CalendarScheduler, SchedulerOptions
@@ -126,8 +127,8 @@ def _eligible_operator_map(
     if not positions or not date_columns:
         return {}
 
-    categories = {position.category for position in positions}
-    if not categories:
+    category_ids = {position.category_id for position in positions}
+    if not category_ids:
         return {}
 
     assignment_by_operator_day: dict[tuple[int, date], List[Any]] = defaultdict(list)
@@ -141,25 +142,25 @@ def _eligible_operator_map(
     end = max(date_columns)
 
     capabilities_qs = (
-        OperatorCapability.objects.select_related("operator")
+        OperatorCapability.objects.select_related("operator", "category")
         .prefetch_related("operator__roles")
-        .filter(category__in=categories)
+        .filter(category_id__in=category_ids)
     )
 
-    capability_index: dict[tuple[str, int], OperatorCapability] = {}
-    operators_by_category: dict[str, set[int]] = defaultdict(set)
+    capability_index: dict[tuple[int, int], OperatorCapability] = {}
+    operators_by_category: dict[int, set[int]] = defaultdict(set)
     operator_cache: dict[int, Any] = {}
 
     for capability in capabilities_qs:
         operator = capability.operator
         operator_cache[operator.id] = operator
-        capability_index[(capability.category, operator.id)] = capability
-        operators_by_category[capability.category].add(operator.id)
+        capability_index[(capability.category_id, operator.id)] = capability
+        operators_by_category[capability.category_id].add(operator.id)
 
     result: dict[int, dict[date, List[dict[str, Any]]]] = defaultdict(dict)
 
     for position in positions:
-        operator_ids = operators_by_category.get(position.category, set())
+        operator_ids = operators_by_category.get(position.category_id, set())
         if not operator_ids:
             for day in date_columns:
                 result[position.id][day] = []
@@ -169,7 +170,7 @@ def _eligible_operator_map(
         for day in date_columns:
             choices: List[dict[str, Any]] = []
             for operator_id in operator_ids:
-                capability = capability_index.get((position.category, operator_id))
+                capability = capability_index.get((position.category_id, operator_id))
                 if not capability:
                     continue
 
@@ -310,7 +311,13 @@ def _position_payload(position: PositionDefinition) -> dict[str, Any]:
         "name": position.name,
         "code": position.code,
         "display_order": position.display_order,
-        "category": position.category,
+        "category": {
+            "id": position.category_id,
+            "code": position.category.code,
+            "name": position.category.name,
+            "shift_type": position.category.shift_type,
+        },
+        "category_id": str(position.category_id) if position.category_id else "",
         "farm": {
             "id": position.farm_id,
             "name": position.farm.name if position.farm_id else None,
@@ -384,19 +391,25 @@ def _capability_payload(capability: OperatorCapability) -> dict[str, Any]:
     return {
         "id": capability.id,
         "operator_id": capability.operator_id,
-        "category": capability.category,
+        "category": {
+            "id": capability.category_id,
+            "code": capability.category.code,
+            "name": capability.category.name,
+            "shift_type": capability.category.shift_type,
+        },
+        "category_id": str(capability.category_id) if capability.category_id else "",
         "skill_score": capability.skill_score,
     }
 
 
-def _normalize_capability_entries(data: Any) -> Tuple[Optional[dict[str, int]], dict[str, List[str]]]:
+def _normalize_capability_entries(data: Any) -> Tuple[Optional[dict[int, int]], dict[str, List[str]]]:
     if data is None:
         return None, {}
 
     if not isinstance(data, list):
         return None, {"capabilities": ["Formato inválido para las fortalezas."]}
 
-    normalized: dict[str, int] = {}
+    normalized: dict[int, int] = {}
     errors: dict[str, List[str]] = {}
 
     for index, entry in enumerate(data):
@@ -405,19 +418,26 @@ def _normalize_capability_entries(data: Any) -> Tuple[Optional[dict[str, int]], 
             errors.setdefault(prefix, []).append("Formato inválido.")
             continue
 
-        category = entry.get("category")
+        category_value = entry.get("category")
         skill_value_raw = entry.get("skill_score")
         entry_errors = False
 
-        if not category:
+        if category_value in (None, ""):
             errors.setdefault(f"{prefix}.category", []).append("Selecciona la categoría.")
             entry_errors = True
-        elif category not in PositionCategory.values:
-            errors.setdefault(f"{prefix}.category", []).append("Categoría inválida.")
-            entry_errors = True
-        elif category in normalized:
-            errors.setdefault(f"{prefix}.category", []).append("La categoría ya fue registrada.")
-            entry_errors = True
+        else:
+            try:
+                category_id = int(category_value)
+            except (TypeError, ValueError):
+                errors.setdefault(f"{prefix}.category", []).append("Categoría inválida.")
+                entry_errors = True
+            else:
+                if category_id in normalized:
+                    errors.setdefault(f"{prefix}.category", []).append("La categoría ya fue registrada.")
+                    entry_errors = True
+                elif not PositionCategory.objects.filter(pk=category_id).exists():
+                    errors.setdefault(f"{prefix}.category", []).append("Categoría inválida.")
+                    entry_errors = True
 
         try:
             skill_value = int(skill_value_raw)
@@ -429,20 +449,24 @@ def _normalize_capability_entries(data: Any) -> Tuple[Optional[dict[str, int]], 
                 errors.setdefault(f"{prefix}.skill_score", []).append("El nivel debe estar entre 1 y 10.")
                 entry_errors = True
 
-        if not entry_errors and category is not None:
-            normalized[category] = skill_value
+        if not entry_errors:
+            normalized[category_id] = skill_value
 
     return normalized, errors
 
 
-def _apply_capabilities(operator: UserProfile, capabilities: Optional[dict[str, int]]) -> None:
+def _apply_capabilities(operator: UserProfile, capabilities: Optional[dict[int, int]]) -> None:
     if capabilities is None:
         return
 
-    existing = {cap.category: cap for cap in operator.capabilities.all()}
+    existing = {cap.category_id: cap for cap in operator.capabilities.select_related("category")}
     desired_categories = set(capabilities.keys())
+    category_map = PositionCategory.objects.in_bulk(desired_categories)
 
     for category, score in capabilities.items():
+        category_obj = category_map.get(category)
+        if not category_obj:
+            continue
         capability = existing.get(category)
         if capability:
             if capability.skill_score != score:
@@ -451,7 +475,7 @@ def _apply_capabilities(operator: UserProfile, capabilities: Optional[dict[str, 
         else:
             OperatorCapability.objects.create(
                 operator=operator,
-                category=category,
+                category=category_obj,
                 skill_score=score,
             )
 
@@ -492,15 +516,15 @@ def _rest_rule_payload(rule: RestRule) -> dict[str, Any]:
 def _overload_payload(allowance: OverloadAllowance) -> dict[str, Any]:
     return {
         "id": allowance.id,
-        "role": {
-            "id": allowance.role_id,
-            "label": allowance.role.get_name_display(),
-            "code": allowance.role.name,
+        "category": {
+            "id": allowance.category_id,
+            "code": allowance.category.code,
+            "name": allowance.category.name,
+            "shift_type": allowance.category.shift_type,
         },
-        "max_consecutive_extra_days": allowance.max_consecutive_extra_days,
-        "highlight_level": allowance.highlight_level,
-        "active_from": allowance.active_from.isoformat(),
-        "active_until": allowance.active_until.isoformat() if allowance.active_until else None,
+        "extra_day_limit": allowance.extra_day_limit,
+        "overtime_points": allowance.overtime_points,
+        "alert_level": allowance.alert_level,
     }
 
 
@@ -521,6 +545,7 @@ def _assignment_payload(assignment: Optional[ShiftAssignment]) -> Optional[dict[
         "operator": operator_payload,
         "alert_level": assignment.alert_level,
         "is_overtime": assignment.is_overtime,
+        "overtime_points": assignment.overtime_points,
         "is_auto_assigned": assignment.is_auto_assigned,
         "notes": assignment.notes,
     }
@@ -707,16 +732,19 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 operator: UserProfile = form.cleaned_data["operator"]
                 alert_level: AssignmentAlertLevel = form.cleaned_data["alert_level"]
                 is_overtime: bool = form.cleaned_data["is_overtime"]
+                overtime_points: int = form.cleaned_data["overtime_points"]
 
                 assignment.operator = operator
                 assignment.alert_level = alert_level
                 assignment.is_overtime = is_overtime
+                assignment.overtime_points = overtime_points if is_overtime else 0
                 assignment.is_auto_assigned = False
                 assignment.save(
                     update_fields=[
                         "operator",
                         "alert_level",
                         "is_overtime",
+                        "overtime_points",
                         "is_auto_assigned",
                         "updated_at",
                     ]
@@ -734,6 +762,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 alert_level: AssignmentAlertLevel = form.cleaned_data["alert_level"]
                 target_date = form.cleaned_data["target_date"]
                 is_overtime: bool = form.cleaned_data["is_overtime"]
+                overtime_points: int = form.cleaned_data["overtime_points"]
 
                 ShiftAssignment.objects.create(
                     calendar=calendar,
@@ -742,6 +771,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                     operator=operator,
                     alert_level=alert_level,
                     is_overtime=is_overtime,
+                    overtime_points=overtime_points if is_overtime else 0,
                     is_auto_assigned=False,
                 )
 
@@ -980,7 +1010,7 @@ class PositionReorderView(LoginRequiredMixin, View):
             return _json_error("La lista de posiciones contiene duplicados.")
 
         positions = list(
-            PositionDefinition.objects.select_related("farm", "chicken_house")
+            PositionDefinition.objects.select_related("farm", "chicken_house", "category")
             .prefetch_related("rooms")
             .order_by("display_order", "id")
         )
@@ -1009,7 +1039,7 @@ class PositionReorderView(LoginRequiredMixin, View):
 
         refreshed_positions = [
             _position_payload(position)
-            for position in PositionDefinition.objects.select_related("farm", "chicken_house")
+            for position in PositionDefinition.objects.select_related("farm", "chicken_house", "category")
             .prefetch_related("rooms")
             .order_by("display_order", "id")
         ]
@@ -1145,7 +1175,7 @@ class OverloadCollectionView(LoginRequiredMixin, View):
             return _json_error("Datos inválidos para la regla de sobrecarga.", errors=_form_errors(form))
 
         allowance = form.save()
-        allowance = OverloadAllowance.objects.select_related("role").get(pk=allowance.pk)
+        allowance = OverloadAllowance.objects.select_related("category").get(pk=allowance.pk)
         return JsonResponse({"overload": _overload_payload(allowance)}, status=201)
 
 
@@ -1163,7 +1193,7 @@ class OverloadDetailView(LoginRequiredMixin, View):
             return _json_error("Datos inválidos para la regla de sobrecarga.", errors=_form_errors(form))
 
         allowance = form.save()
-        allowance = OverloadAllowance.objects.select_related("role").get(pk=allowance.pk)
+        allowance = OverloadAllowance.objects.select_related("category").get(pk=allowance.pk)
         return JsonResponse({"overload": _overload_payload(allowance)})
 
     def delete(self, request: HttpRequest, overload_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -1224,7 +1254,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         include_inactive = request.GET.get("include_inactive") == "true"
         farm_filter = request.GET.get("farm")
 
-        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house").prefetch_related("rooms")
+        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house", "category").prefetch_related("rooms")
         if farm_filter:
             try:
                 position_qs = position_qs.filter(farm_id=int(farm_filter))
@@ -1239,9 +1269,9 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         ]
 
         capability_qs = (
-            OperatorCapability.objects.select_related("operator")
+            OperatorCapability.objects.select_related("operator", "category")
             .prefetch_related("operator__roles")
-            .order_by("operator__apellidos", "operator__nombres", "category")
+            .order_by("operator__apellidos", "operator__nombres", "category__name")
         )
         capabilities_payload = [_capability_payload(capability) for capability in capability_qs]
 
@@ -1253,8 +1283,8 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         rest_rules_payload = [_rest_rule_payload(rule) for rule in rest_rules_qs]
 
         overload_qs = (
-            OverloadAllowance.objects.select_related("role")
-            .order_by("role__name", "-active_from")
+            OverloadAllowance.objects.select_related("category")
+            .order_by("category__name")
         )
         overload_payload = [_overload_payload(allowance) for allowance in overload_qs]
 
@@ -1294,6 +1324,20 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             for role in Role.objects.order_by("name")
         ]
 
+        category_qs = PositionCategory.objects.order_by("name")
+        categories_payload = [
+            {
+                "id": category.id,
+                "code": category.code,
+                "name": category.name,
+                "shift_type": category.shift_type,
+                "default_extra_day_limit": category.default_extra_day_limit,
+                "default_overtime_points": category.default_overtime_points,
+                "is_active": category.is_active,
+            }
+            for category in category_qs
+        ]
+
         operator_qs = (
             UserProfile.objects.select_related("preferred_farm")
             .prefetch_related("roles")
@@ -1310,12 +1354,23 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             "capabilities": capabilities_payload,
             "rest_rules": rest_rules_payload,
             "overload_rules": overload_payload,
+            "categories": categories_payload,
             "farms": farms_payload,
             "chicken_houses": chicken_houses_payload,
             "rooms": rooms_payload,
             "roles": roles_payload,
             "choice_sets": {
-                "position_categories": _choice_payload(PositionCategory.choices),
+                "position_categories": [
+                    {
+                        "value": str(category["id"]),
+                        "label": category["name"],
+                        "code": category["code"],
+                        "shift_type": category["shift_type"],
+                        "default_extra_day_limit": category["default_extra_day_limit"],
+                        "default_overtime_points": category["default_overtime_points"],
+                    }
+                    for category in categories_payload
+                ],
                 "complexity_levels": _choice_payload(PositionDefinition._meta.get_field("complexity").choices),
                 "skill_levels": [
                     {"value": str(score), "label": f"{score}/10"}
@@ -1452,6 +1507,12 @@ class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
         if alert_level not in valid_alerts:
             return HttpResponseBadRequest("Nivel de alerta inválido.")
 
+        is_overtime = bool(payload.get("is_overtime", False))
+        overtime_points = 0
+        if is_overtime:
+            policy = resolve_overload_policy(position.category)
+            overtime_points = policy.overtime_points
+
         assignment, _created = ShiftAssignment.objects.update_or_create(
             calendar=calendar,
             position=position,
@@ -1460,7 +1521,8 @@ class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
                 "operator": operator,
                 "alert_level": alert_level,
                 "is_auto_assigned": False,
-                "is_overtime": bool(payload.get("is_overtime", False)),
+                "is_overtime": is_overtime,
+                "overtime_points": overtime_points if is_overtime else 0,
                 "notes": payload.get("notes", ""),
             },
         )

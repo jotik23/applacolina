@@ -43,7 +43,7 @@ def complexity_score(level: str) -> int:
     return COMPLEXITY_LEVEL_SCORE[enumeration]
 
 
-class PositionCategory(models.TextChoices):
+class PositionCategoryCode(models.TextChoices):
     GALPONERO_PRODUCCION_DIA = "GALPONERO_PRODUCCION_DIA", _("Galponero producción día")
     GALPONERO_LEVANTE_DIA = "GALPONERO_LEVANTE_DIA", _("Galponero levante día")
     GALPONERO_PRODUCCION_NOCHE = "GALPONERO_PRODUCCION_NOCHE", _("Galponero producción noche")
@@ -56,22 +56,43 @@ class PositionCategory(models.TextChoices):
     OFICIOS_VARIOS = "OFICIOS_VARIOS", _("Oficios varios")
 
 
-CATEGORY_SHIFT_MAP: dict[str, str] = {
-    PositionCategory.GALPONERO_PRODUCCION_DIA: ShiftType.DAY,
-    PositionCategory.GALPONERO_LEVANTE_DIA: ShiftType.DAY,
-    PositionCategory.GALPONERO_PRODUCCION_NOCHE: ShiftType.NIGHT,
-    PositionCategory.GALPONERO_LEVANTE_NOCHE: ShiftType.NIGHT,
-    PositionCategory.CLASIFICADOR_DIA: ShiftType.DAY,
-    PositionCategory.CLASIFICADOR_NOCHE: ShiftType.NIGHT,
-    PositionCategory.LIDER_GRANJA: ShiftType.MIXED,
-    PositionCategory.SUPERVISOR: ShiftType.DAY,
-    PositionCategory.LIDER_TECNICO: ShiftType.DAY,
-    PositionCategory.OFICIOS_VARIOS: ShiftType.DAY,
-}
+class PositionCategory(models.Model):
+    code = models.CharField(
+        "Código",
+        max_length=64,
+        choices=PositionCategoryCode.choices,
+        unique=True,
+    )
+    name = models.CharField("Nombre", max_length=150)
+    shift_type = models.CharField(
+        "Turno",
+        max_length=16,
+        choices=ShiftType.choices,
+        default=ShiftType.DAY,
+    )
+    default_extra_day_limit = models.PositiveSmallIntegerField(
+        "Máximo extra por defecto",
+        validators=[MinValueValidator(1)],
+        default=3,
+    )
+    default_overtime_points = models.PositiveSmallIntegerField(
+        "Puntos por día extra",
+        validators=[MinValueValidator(1)],
+        default=1,
+    )
+    is_active = models.BooleanField("Activo", default=True)
 
+    class Meta:
+        verbose_name = "Categoría de posición"
+        verbose_name_plural = "Categorías de posiciones"
+        ordering = ("name", "code")
 
-def shift_type_for_category(category: str) -> str:
-    return CATEGORY_SHIFT_MAP.get(category, ShiftType.DAY)
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def is_night_shift(self) -> bool:
+        return self.shift_type == ShiftType.NIGHT
 
 
 class DayOfWeek(models.IntegerChoices):
@@ -107,10 +128,11 @@ class PositionDefinition(models.Model):
     name = models.CharField("Nombre", max_length=150)
     code = models.CharField("Código", max_length=64, unique=True)
     display_order = models.PositiveIntegerField("Orden de visualización", default=0, db_index=True)
-    category = models.CharField(
-        "Categoría",
-        max_length=64,
-        choices=PositionCategory.choices,
+    category = models.ForeignKey(
+        PositionCategory,
+        on_delete=models.PROTECT,
+        related_name="positions",
+        verbose_name="Categoría",
     )
     farm = models.ForeignKey(
         Farm,
@@ -185,7 +207,7 @@ class PositionDefinition(models.Model):
 
     @property
     def shift_type(self) -> str:
-        return shift_type_for_category(self.category)
+        return self.category.shift_type
 
     def get_shift_type_display(self) -> str:
         try:
@@ -226,10 +248,11 @@ class OperatorCapability(models.Model):
         related_name="capabilities",
         verbose_name="Operario",
     )
-    category = models.CharField(
-        "Categoría",
-        max_length=64,
-        choices=PositionCategory.choices,
+    category = models.ForeignKey(
+        PositionCategory,
+        on_delete=models.CASCADE,
+        related_name="capabilities",
+        verbose_name="Categoría",
     )
     skill_score = models.PositiveSmallIntegerField(
         "Nivel de habilidad",
@@ -244,11 +267,11 @@ class OperatorCapability(models.Model):
         ordering = (
             "operator__apellidos",
             "operator__nombres",
-            "category",
+            "category__name",
         )
 
     def __str__(self) -> str:
-        return f"{self.operator} - {self.category} ({self.skill_score}/10)"
+        return f"{self.operator} - {self.category.name} ({self.skill_score}/10)"
 
 
 class RestRule(models.Model):
@@ -331,37 +354,51 @@ class RestPreference(models.Model):
 
 
 class OverloadAllowance(models.Model):
-    role = models.ForeignKey(
-        Role,
+    category = models.ForeignKey(
+        PositionCategory,
         on_delete=models.CASCADE,
         related_name="overload_rules",
-        verbose_name="Rol",
+        verbose_name="Categoría",
     )
-    max_consecutive_extra_days = models.PositiveSmallIntegerField(
-        "Máximo días extra", validators=[MinValueValidator(1)], default=3
+    extra_day_limit = models.PositiveSmallIntegerField(
+        "Máximo días extra consecutivos",
+        validators=[MinValueValidator(1)],
+        default=3,
     )
-    highlight_level = models.CharField(
-        "Nivel de resaltado",
+    overtime_points = models.PositiveSmallIntegerField(
+        "Puntos por día extra",
+        validators=[MinValueValidator(1)],
+        default=1,
+    )
+    alert_level = models.CharField(
+        "Nivel de alerta",
         max_length=16,
         choices=AssignmentAlertLevel.choices,
         default=AssignmentAlertLevel.WARN,
     )
-    active_from = models.DateField("Vigente desde", default=timezone.localdate)
-    active_until = models.DateField("Vigente hasta", null=True, blank=True)
 
     class Meta:
         verbose_name = "Regla de sobrecarga"
         verbose_name_plural = "Reglas de sobrecarga"
-        unique_together = ("role", "active_from")
-        ordering = ("role__name", "-active_from")
+        unique_together = ("category",)
+        ordering = ("category__name",)
 
     def __str__(self) -> str:
-        return f"Sobrecarga {self.role}"
+        return f"Sobrecarga {self.category.name}"
 
     def clean(self) -> None:
         super().clean()
-        if self.active_until and self.active_until < self.active_from:
-            raise ValidationError("La vigencia final debe ser posterior al inicio.")
+        if not self.category_id:
+            return
+
+        shift_type = self.category.shift_type
+        night_limit = 2
+        day_limit = 3
+
+        if shift_type == ShiftType.NIGHT and self.extra_day_limit > night_limit:
+            raise ValidationError("Las posiciones nocturnas solo permiten hasta 2 días extra consecutivos.")
+        if shift_type in (ShiftType.DAY, ShiftType.MIXED) and self.extra_day_limit > day_limit:
+            raise ValidationError("Las posiciones diurnas permiten hasta 3 días extra consecutivos.")
 
 
 class ShiftCalendar(models.Model):
@@ -483,6 +520,7 @@ class ShiftAssignment(models.Model):
         default=AssignmentAlertLevel.NONE,
     )
     is_overtime = models.BooleanField("Sobrecarga", default=False)
+    overtime_points = models.PositiveSmallIntegerField("Puntos por sobrecarga", default=0)
     notes = models.TextField("Notas", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -578,6 +616,7 @@ class WorkloadSnapshot(models.Model):
     night_shifts = models.PositiveIntegerField("Turnos nocturnos", default=0)
     rest_days = models.PositiveIntegerField("Descansos", default=0)
     overtime_days = models.PositiveIntegerField("Días extra", default=0)
+    overtime_points_total = models.PositiveIntegerField("Puntos por sobrecarga", default=0)
     month_reference = models.DateField("Mes de referencia")
 
     class Meta:
@@ -597,10 +636,38 @@ class AssignmentDecision:
     alert_level: AssignmentAlertLevel = AssignmentAlertLevel.NONE
     is_overtime: bool = False
     notes: str = ""
+    overtime_points: int = 0
+
+
+@dataclass(frozen=True)
+class OverloadPolicyData:
+    extra_day_limit: int
+    overtime_points: int
+    alert_level: AssignmentAlertLevel
 
 
 def filter_capabilities_for_category(
     capabilities: Iterable[OperatorCapability],
-    category: str,
+    category_id: int,
 ) -> list[OperatorCapability]:
-    return [capability for capability in capabilities if capability.category == category]
+    return [capability for capability in capabilities if capability.category_id == category_id]
+
+
+def resolve_overload_policy(category: PositionCategory) -> OverloadPolicyData:
+    allowance = category.overload_rules.first()
+    if allowance:
+        return OverloadPolicyData(
+            extra_day_limit=allowance.extra_day_limit,
+            overtime_points=allowance.overtime_points,
+            alert_level=AssignmentAlertLevel(allowance.alert_level),
+        )
+
+    shift_type = category.shift_type
+    limit_cap = 2 if shift_type == ShiftType.NIGHT else 3
+    extra_limit = min(category.default_extra_day_limit, limit_cap)
+    extra_limit = max(extra_limit, 1)
+    return OverloadPolicyData(
+        extra_day_limit=extra_limit,
+        overtime_points=category.default_overtime_points,
+        alert_level=AssignmentAlertLevel.WARN,
+    )

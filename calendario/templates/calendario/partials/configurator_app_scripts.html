@@ -47,6 +47,7 @@
           operatorsById: new Map(),
           farmsById: new Map(),
           rolesById: new Map(),
+          categoriesById: new Map(),
           categoryLabels: new Map(),
           complexityLabels: new Map(),
           skillLabels: new Map(),
@@ -135,11 +136,13 @@
         overloadForm: app.querySelector('#overload-form'),
         overloadMessage: app.querySelector('#overload-form-message'),
         overloadId: app.querySelector('#overload-id'),
-        overloadRole: app.querySelector('#overload-role'),
+        overloadCategory: app.querySelector('#overload-category'),
+        overloadCategoryHint: app.querySelector('#overload-category-hint'),
+        overloadShiftLabel: app.querySelector('#overload-shift-label'),
         overloadMaxExtra: app.querySelector('#overload-max-extra'),
-        overloadHighlight: app.querySelector('#overload-highlight'),
-        overloadActiveFrom: app.querySelector('#overload-active-from'),
-        overloadActiveUntil: app.querySelector('#overload-active-until'),
+        overloadMaxExtraHint: app.querySelector('#overload-max-extra-hint'),
+        overloadPoints: app.querySelector('#overload-points'),
+        overloadAlert: app.querySelector('#overload-alert'),
         overloadCancelBtn: app.querySelector('#overload-cancel-btn'),
         overloadCount: app.querySelector('#overload-count'),
         overloadList: app.querySelector('#overload-list'),
@@ -256,14 +259,16 @@
           return;
         }
 
-        const usedCategories = new Set(entries.map((entry) => entry.category).filter(Boolean));
+        const usedCategories = new Set(entries.map((entry) => String(entry.category || '')).filter(Boolean));
 
         refs.operatorCapabilitiesEditor.innerHTML = entries
           .map((entry) => {
             const options = choices
               .map((choice) => {
-                const selected = choice.value === entry.category ? 'selected' : '';
-                const disabled = !selected && usedCategories.has(choice.value) ? 'disabled' : '';
+                const choiceValue = String(choice.value);
+                const entryValue = String(entry.category || '');
+                const selected = choiceValue === entryValue ? 'selected' : '';
+                const disabled = !selected && usedCategories.has(choiceValue) ? 'disabled' : '';
                 return `<option value="${escapeHtml(choice.value)}" ${selected} ${disabled}>${escapeHtml(choice.label)}</option>`;
               })
               .join('');
@@ -328,7 +333,7 @@
       const setOperatorCapabilitiesDraft = (entries) => {
         state.editing.operatorCapabilities = entries.map((entry) => ({
           id: nextCapabilityRowId(),
-          category: entry.category,
+          category: String(entry.category_id ?? entry.category?.id ?? ''),
           skill_score: Number(entry.skill_score) || 5,
         }));
         renderOperatorCapabilitiesEditor();
@@ -345,7 +350,7 @@
           return;
         }
 
-        const used = new Set(activeCapabilityEntries().map((entry) => entry.category).filter(Boolean));
+        const used = new Set(activeCapabilityEntries().map((entry) => String(entry.category || '')).filter(Boolean));
         const nextChoice = choices.find((choice) => !used.has(choice.value));
         if (!nextChoice) {
           return;
@@ -370,7 +375,7 @@
           entry.id === entryId
             ? {
                 ...entry,
-                category: value,
+                category: value || '',
               }
             : entry,
         );
@@ -590,6 +595,11 @@
           rolesById.set(role.id, role);
         });
 
+        const categoriesById = new Map();
+        (state.metadata.categories || []).forEach((category) => {
+          categoriesById.set(String(category.id), category);
+        });
+
         const choiceMap = (choices) => {
           const map = new Map();
           choices.forEach((choice) => {
@@ -604,6 +614,7 @@
           operatorsById,
           farmsById,
           rolesById,
+          categoriesById,
           categoryLabels: choiceMap(state.metadata.choice_sets.position_categories),
           complexityLabels: choiceMap(state.metadata.choice_sets.complexity_levels),
           skillLabels: choiceMap(state.metadata.choice_sets.skill_levels),
@@ -657,6 +668,85 @@
         updateRoomOptions(effectiveHouse, { selectedRooms, keepValue: false });
       };
 
+      const findCategory = (categoryId) => {
+        const target = String(categoryId || '');
+        return state.lookups.categoriesById.get(target) || null;
+      };
+
+      const applyOverloadShiftLimits = () => {
+        if (!refs.overloadMaxExtra) {
+          return;
+        }
+        const category = findCategory(refs.overloadCategory?.value || '');
+        const currentShift = category ? category.shift_type : 'day';
+        const shiftLabel = state.lookups.shiftLabels.get(currentShift) || currentShift;
+        const shiftLabelLower = typeof shiftLabel === 'string' ? shiftLabel.toLowerCase() : String(shiftLabel).toLowerCase();
+        if (refs.overloadShiftLabel) {
+          refs.overloadShiftLabel.textContent = category ? shiftLabel : 'Selecciona una categoría';
+        }
+        const maxExtra = currentShift === 'night' ? 2 : 3;
+        refs.overloadMaxExtra.setAttribute('max', maxExtra);
+        if (category) {
+          const currentValue = Number(refs.overloadMaxExtra.value || 0);
+          if (!currentValue || currentValue > maxExtra) {
+            refs.overloadMaxExtra.value = String(maxExtra);
+          }
+        }
+        if (refs.overloadMaxExtraHint) {
+          if (category) {
+            refs.overloadMaxExtraHint.textContent = `Máximo permitido por turno ${shiftLabelLower}: ${maxExtra} días.`;
+          } else {
+            refs.overloadMaxExtraHint.textContent = 'Selecciona una categoría para conocer el límite por turno.';
+          }
+        }
+      };
+
+      const updateOverloadDefaults = (categoryId, preset = {}) => {
+        if (!refs.overloadMaxExtra || !refs.overloadPoints || !refs.overloadAlert) {
+          return;
+        }
+
+        const category = findCategory(categoryId);
+
+        if (preset.extra_day_limit) {
+          refs.overloadMaxExtra.value = preset.extra_day_limit;
+        } else if (category) {
+          refs.overloadMaxExtra.value = category.default_extra_day_limit;
+        } else {
+          refs.overloadMaxExtra.value = '';
+        }
+
+        if (preset.overtime_points) {
+          refs.overloadPoints.value = preset.overtime_points;
+        } else if (category) {
+          refs.overloadPoints.value = category.default_overtime_points;
+        } else {
+          refs.overloadPoints.value = state.metadata?.categories?.[0]?.default_overtime_points || 1;
+        }
+
+        if (preset.alert_level) {
+          refs.overloadAlert.value = preset.alert_level;
+        } else if (!refs.overloadAlert.value) {
+          const warnOption = Array.from(refs.overloadAlert.options).find((option) => option.value === 'warn');
+          if (warnOption) {
+            refs.overloadAlert.value = 'warn';
+          } else if (refs.overloadAlert.options.length) {
+            refs.overloadAlert.value = refs.overloadAlert.options[0].value;
+          }
+        }
+
+        if (refs.overloadCategoryHint) {
+          if (!category) {
+            refs.overloadCategoryHint.textContent = 'Selecciona una categoría para ver el límite base.';
+          } else {
+            const baseShiftLabel = state.lookups.shiftLabels.get(category.shift_type) || category.shift_type;
+            refs.overloadCategoryHint.textContent = `Límite base ${category.default_extra_day_limit} días en turno ${baseShiftLabel.toLowerCase()}; puntos base ${category.default_overtime_points}.`;
+          }
+        }
+
+        applyOverloadShiftLimits();
+      };
+
       const populateStaticOptions = () => {
         if (!state.metadata || state.orderLocked) {
           return;
@@ -669,8 +759,8 @@
         populateSelect(refs.restRuleRole, state.metadata.roles, { valueKey: 'id', labelKey: 'label', blankLabel: 'Selecciona rol' });
         populateSelect(refs.restRuleShift, state.metadata.choice_sets.shift_types, { blankLabel: 'Selecciona turno' });
 
-        populateSelect(refs.overloadRole, state.metadata.roles, { valueKey: 'id', labelKey: 'label', blankLabel: 'Selecciona rol' });
-        populateSelect(refs.overloadHighlight, state.metadata.choice_sets.alert_levels, { blankLabel: 'Nivel de alerta' });
+        populateSelect(refs.overloadCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
+        populateSelect(refs.overloadAlert, state.metadata.choice_sets.alert_levels, { blankLabel: 'Nivel de alerta' });
 
         populateSelect(refs.operatorRoles, state.metadata.roles, { valueKey: 'id', labelKey: 'label', includeBlank: false, keepValue: false });
         populateSelect(refs.operatorPreferredFarm, state.metadata.farms, {
@@ -698,6 +788,7 @@
         }
 
         updateHouseOptions(refs.positionFarm?.value || '');
+        updateOverloadDefaults(refs.overloadCategory?.value || '', {});
       };
 
       const readRestPreferences = () => {
@@ -773,7 +864,7 @@
           if (refs.positionCodeValue) {
             refs.positionCodeValue.textContent = position.code || '—';
           }
-          refs.positionCategory.value = position.category || '';
+          refs.positionCategory.value = position.category_id || '';
           refs.positionComplexity.value = position.complexity || '';
           refs.positionValidFrom.value = position.valid_from || '';
           refs.positionValidUntil.value = position.valid_until || '';
@@ -817,7 +908,7 @@
           capabilities: activeCapabilityEntries()
             .filter((entry) => entry.category)
             .map((entry) => ({
-              category: entry.category,
+              category: String(entry.category),
               skill_score: Number(entry.skill_score) || 1,
             })),
         };
@@ -951,11 +1042,10 @@
       };
 
       const getOverloadPayload = () => ({
-        role: refs.overloadRole?.value || '',
-        max_consecutive_extra_days: refs.overloadMaxExtra?.value || '',
-        highlight_level: refs.overloadHighlight?.value || '',
-        active_from: refs.overloadActiveFrom?.value || '',
-        active_until: refs.overloadActiveUntil?.value || '',
+        category: refs.overloadCategory?.value ? Number(refs.overloadCategory.value) : '',
+        extra_day_limit: refs.overloadMaxExtra?.value ? Number(refs.overloadMaxExtra.value) : '',
+        overtime_points: refs.overloadPoints?.value ? Number(refs.overloadPoints.value) : '',
+        alert_level: refs.overloadAlert?.value || '',
       });
 
       const openOverloadForm = (rule = null) => {
@@ -963,14 +1053,18 @@
         toggleWrapper(refs.overloadFormWrapper, true);
         if (!rule) {
           refs.overloadId.value = '';
+          refs.overloadCategory.value = '';
+          updateOverloadDefaults('', {});
           return;
         }
         refs.overloadId.value = rule.id;
-        refs.overloadRole.value = rule.role?.id ? String(rule.role.id) : '';
-        refs.overloadMaxExtra.value = rule.max_consecutive_extra_days;
-        refs.overloadHighlight.value = rule.highlight_level || '';
-        refs.overloadActiveFrom.value = rule.active_from || '';
-        refs.overloadActiveUntil.value = rule.active_until || '';
+        const categoryId = rule.category?.id ? String(rule.category.id) : '';
+        refs.overloadCategory.value = categoryId;
+        updateOverloadDefaults(categoryId, {
+          extra_day_limit: rule.extra_day_limit,
+          overtime_points: rule.overtime_points,
+          alert_level: rule.alert_level,
+        });
       };
 
       const closeOverloadForm = () => {
@@ -1321,7 +1415,7 @@
                 <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p class="font-semibold text-slate-800">${escapeHtml(rule.role.label)}</p>
-                    <p class="text-xs text-slate-500">Turno: ${escapeHtml(state.lookups.shiftLabels.get(rule.shift_type) || rule.shift_type)}</p>
+                    <p class="text-xs text-slate-500">Turno: ${escapeHtml(state.lookups.shiftLabels.get(shiftValue) || shiftValue)}</p>
                     <p class="text-xs text-slate-500">${escapeHtml(rule.active_from)} → ${escapeHtml(rule.active_until || 'vigente')}</p>
                   </div>
                   <div class="flex flex-wrap gap-2">
@@ -1369,24 +1463,40 @@
         }
 
         refs.overloadList.innerHTML = overloads
-          .map(
-            (rule) => `
+          .map((rule) => {
+            const categoryLabel = rule.category?.name || rule.category?.code || 'Categoría';
+            const shiftValue = rule.category?.shift_type || 'day';
+            const shiftLabel = state.lookups.shiftLabels.get(shiftValue) || shiftValue;
+            const alertLabel = state.lookups.alertLabels.get(rule.alert_level) || rule.alert_level;
+            return `
               <article class="rounded border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p class="font-semibold text-slate-800">${escapeHtml(rule.role.label)}</p>
-                    <p class="text-xs text-slate-500">${escapeHtml(rule.active_from)} → ${escapeHtml(rule.active_until || 'vigente')}</p>
+                    <p class="font-semibold text-slate-800">${escapeHtml(categoryLabel)}</p>
+                    <p class="text-xs text-slate-500">Turno: ${escapeHtml(shiftLabel)}</p>
                   </div>
                   <div class="flex flex-wrap gap-2">
                     <button type="button" data-action="overload-edit" data-id="${rule.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
                     <button type="button" data-action="overload-delete" data-id="${rule.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
                   </div>
                 </header>
-                <p class="mt-2 text-xs text-slate-600">Máximo de días extra consecutivos: <span class="font-semibold">${rule.max_consecutive_extra_days}</span></p>
-                <p class="mt-1 text-xs text-slate-500">Nivel de alerta: ${escapeHtml(state.lookups.alertLabels.get(rule.highlight_level) || rule.highlight_level)}</p>
+                <dl class="mt-2 grid grid-cols-2 gap-3 text-xs text-slate-600">
+                  <div>
+                    <dt class="font-medium text-slate-700">Días extra autorizados</dt>
+                    <dd>${rule.extra_day_limit}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-slate-700">Puntos por día</dt>
+                    <dd>${rule.overtime_points}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-slate-700">Alerta</dt>
+                    <dd>${escapeHtml(alertLabel)}</dd>
+                  </div>
+                </dl>
               </article>
-            `
-          )
+            `;
+          })
           .join('');
       };
 
@@ -1423,7 +1533,7 @@
           }
 
           const operatorCapabilities = capabilitiesByOperator.get(operator.id) || [];
-          return operatorCapabilities.some((item) => item.category === categoryFilter);
+          return operatorCapabilities.some((item) => String(item.category_id ?? item.category?.id ?? '') === categoryFilter);
         });
 
         if (refs.operatorCount) {
@@ -1443,7 +1553,8 @@
           .map((operator) => {
             const operatorCapabilities = (capabilitiesByOperator.get(operator.id) || [])
               .map((capability) => {
-                const categoryLabel = state.lookups.categoryLabels.get(capability.category) || capability.category;
+                const categoryValue = String(capability.category_id ?? capability.category?.id ?? '');
+                const categoryLabel = state.lookups.categoryLabels.get(categoryValue) || capability.category?.name || categoryValue;
                 const skillLabel = state.lookups.skillLabels.get(String(capability.skill_score)) || `${capability.skill_score}/10`;
                 return `${escapeHtml(categoryLabel)} (${escapeHtml(skillLabel)})`;
               })
@@ -1742,6 +1853,9 @@
             closeOverloadForm();
           },
         });
+      });
+      refs.overloadCategory?.addEventListener('change', (event) => {
+        updateOverloadDefaults(event.target.value, {});
       });
       refs.operatorAddBtn?.addEventListener('click', () => openOperatorForm());
       refs.operatorCancelBtn?.addEventListener('click', () => closeOperatorForm());

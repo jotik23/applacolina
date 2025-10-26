@@ -12,11 +12,14 @@ from .models import (
     CalendarStatus,
     OverloadAllowance,
     OperatorCapability,
+    PositionCategory,
     PositionDefinition,
     RestRule,
     ShiftAssignment,
     ShiftCalendar,
+    ShiftType,
     required_skill_for_complexity,
+    resolve_overload_policy,
 )
 from .models import RestPreference
 from users.models import Role, UserProfile
@@ -118,9 +121,10 @@ class BaseAssignmentForm(forms.Form):
         *,
         exclude_assignment: ShiftAssignment | None = None,
         allow_override: bool = False,
-    ) -> tuple[AssignmentAlertLevel, bool]:
+    ) -> tuple[AssignmentAlertLevel, bool, int]:
         alert_level = AssignmentAlertLevel.NONE
         is_overtime = False
+        overtime_points = 0
 
         required_score = required_skill_for_complexity(position.complexity)
         capability = OperatorCapability.objects.filter(
@@ -169,7 +173,11 @@ class BaseAssignmentForm(forms.Form):
             is_overtime = True
             alert_level = AssignmentAlertLevel.CRITICAL
 
-        return alert_level, is_overtime
+        if is_overtime:
+            policy = resolve_overload_policy(position.category)
+            overtime_points = policy.overtime_points
+
+        return alert_level, is_overtime, overtime_points
 
 
 class AssignmentUpdateForm(BaseAssignmentForm):
@@ -193,7 +201,7 @@ class AssignmentUpdateForm(BaseAssignmentForm):
 
         operator = self._get_operator(operator_id)
         allow_override = bool(cleaned_data.get("force_override"))
-        alert_level, is_overtime = self._resolve_assignment_outcome(
+        alert_level, is_overtime, overtime_points = self._resolve_assignment_outcome(
             operator,
             assignment.position,
             assignment.date,
@@ -205,6 +213,7 @@ class AssignmentUpdateForm(BaseAssignmentForm):
         cleaned_data["operator"] = operator
         cleaned_data["alert_level"] = alert_level
         cleaned_data["is_overtime"] = is_overtime
+        cleaned_data["overtime_points"] = overtime_points
         return cleaned_data
 
 
@@ -239,7 +248,7 @@ class AssignmentCreateForm(BaseAssignmentForm):
 
         operator = self._get_operator(operator_id)
         allow_override = bool(cleaned_data.get("force_override"))
-        alert_level, is_overtime = self._resolve_assignment_outcome(
+        alert_level, is_overtime, overtime_points = self._resolve_assignment_outcome(
             operator,
             position,
             target_date,
@@ -251,6 +260,7 @@ class AssignmentCreateForm(BaseAssignmentForm):
         cleaned_data["alert_level"] = alert_level
         cleaned_data["target_date"] = target_date
         cleaned_data["is_overtime"] = is_overtime
+        cleaned_data["overtime_points"] = overtime_points
         return cleaned_data
 
 
@@ -431,9 +441,23 @@ class OverloadAllowanceForm(forms.ModelForm):
     class Meta:
         model = OverloadAllowance
         fields = [
-            "role",
-            "max_consecutive_extra_days",
-            "highlight_level",
-            "active_from",
-            "active_until",
+            "category",
+            "extra_day_limit",
+            "overtime_points",
+            "alert_level",
         ]
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        category: PositionCategory | None = cleaned_data.get("category")
+        extra_limit = cleaned_data.get("extra_day_limit")
+
+        if category and extra_limit:
+            cap = 2 if category.shift_type == ShiftType.NIGHT else 3
+            if extra_limit > cap:
+                self.add_error(
+                    "extra_day_limit",
+                    f"El turno {category.get_shift_type_display().lower()} solo permite hasta {cap} días extra consecutivos.",
+                )
+
+        return cleaned_data

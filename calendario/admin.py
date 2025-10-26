@@ -32,9 +32,23 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
         return (
             super()
             .get_queryset(request)
-            .select_related("farm", "chicken_house")
+            .select_related("farm", "chicken_house", "category")
             .prefetch_related("rooms")
         )
+
+
+@admin.register(models.PositionCategory)
+class PositionCategoryAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "code",
+        "shift_type",
+        "default_extra_day_limit",
+        "default_overtime_points",
+        "is_active",
+    )
+    list_filter = ("shift_type", "is_active")
+    search_fields = ("name", "code")
 
 
 @admin.register(models.OperatorCapability)
@@ -87,14 +101,20 @@ class RestRuleAdmin(admin.ModelAdmin):
 @admin.register(models.OverloadAllowance)
 class OverloadAllowanceAdmin(admin.ModelAdmin):
     list_display = (
-        "role",
-        "max_consecutive_extra_days",
-        "highlight_level",
-        "active_from",
-        "active_until",
+        "category",
+        "category_shift",
+        "extra_day_limit",
+        "overtime_points",
+        "alert_level",
     )
-    list_filter = ("highlight_level", "role__name")
-    autocomplete_fields = ("role",)
+    list_filter = ("category__shift_type", "alert_level", "category__name")
+    autocomplete_fields = ("category",)
+
+    @staticmethod
+    def category_shift(obj: models.OverloadAllowance) -> str:
+        if not obj.category_id:
+            return "-"
+        return obj.category.get_shift_type_display()
 
 
 class AssignmentChangeLogInline(admin.TabularInline):
@@ -120,6 +140,7 @@ class ShiftAssignmentAdmin(admin.ModelAdmin):
         "is_auto_assigned",
         "alert_level",
         "is_overtime",
+        "overtime_points",
     )
     list_filter = (
         "calendar",
@@ -201,6 +222,7 @@ class WorkloadSnapshotAdmin(admin.ModelAdmin):
         "total_shifts",
         "rest_days",
         "overtime_days",
+        "overtime_points_total",
     )
     list_filter = ("month_reference",)
     autocomplete_fields = ("calendar", "operator")

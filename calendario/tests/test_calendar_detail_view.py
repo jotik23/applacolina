@@ -12,9 +12,11 @@ from calendario.models import (
     ComplexityLevel,
     OperatorCapability,
     PositionCategory,
+    PositionCategoryCode,
     PositionDefinition,
     ShiftAssignment,
     ShiftCalendar,
+    ShiftType,
 )
 from granjas.models import Farm
 from users.models import UserProfile
@@ -33,6 +35,16 @@ class CalendarDetailViewManualOverrideTests(TestCase):
 
         self.farm = Farm.objects.create(name="Colina")
 
+        self.category, _created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
+            defaults={
+                "name": "Galponero producción día",
+                "shift_type": ShiftType.DAY,
+                "default_extra_day_limit": 3,
+                "default_overtime_points": 1,
+            },
+        )
+
         self.calendar = ShiftCalendar.objects.create(
             name="Semana 27",
             start_date=date(2025, 7, 7),
@@ -44,7 +56,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.position_primary = PositionDefinition.objects.create(
             name="Galponero día A",
             code="POS-A",
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             farm=self.farm,
             complexity=ComplexityLevel.BASIC,
             allow_lower_complexity=False,
@@ -54,7 +66,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.position_secondary = PositionDefinition.objects.create(
             name="Galponero día B",
             code="POS-B",
-            category=PositionCategory.GALPONERO_PRODUCCION_DIA,
+            category=self.category,
             farm=self.farm,
             complexity=ComplexityLevel.BASIC,
             allow_lower_complexity=False,
@@ -130,6 +142,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertEqual(self.assignment_primary.operator, self.operator_conflict)
         self.assertEqual(self.assignment_primary.alert_level, AssignmentAlertLevel.CRITICAL)
         self.assertTrue(self.assignment_primary.is_overtime)
+        self.assertEqual(self.assignment_primary.overtime_points, 1)
         self.assertFalse(self.assignment_primary.is_auto_assigned)
 
         messages = list(get_messages(response.wsgi_request))
@@ -163,6 +176,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertEqual(created_assignment.operator, self.operator_manual)
         self.assertEqual(created_assignment.alert_level, AssignmentAlertLevel.CRITICAL)
         self.assertFalse(created_assignment.is_overtime)
+        self.assertEqual(created_assignment.overtime_points, 0)
         self.assertFalse(created_assignment.is_auto_assigned)
 
         messages = list(get_messages(response.wsgi_request))

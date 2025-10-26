@@ -28,6 +28,126 @@
     }
   },
   {
+    "model": "calendario.positioncategory",
+    "pk": 1,
+    "fields": {
+      "code": "GALPONERO_PRODUCCION_DIA",
+      "name": "Galponero producción día",
+      "shift_type": "day",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 2,
+    "fields": {
+      "code": "GALPONERO_LEVANTE_DIA",
+      "name": "Galponero levante día",
+      "shift_type": "day",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 3,
+    "fields": {
+      "code": "GALPONERO_PRODUCCION_NOCHE",
+      "name": "Galponero producción noche",
+      "shift_type": "night",
+      "default_extra_day_limit": 2,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 4,
+    "fields": {
+      "code": "GALPONERO_LEVANTE_NOCHE",
+      "name": "Galponero levante noche",
+      "shift_type": "night",
+      "default_extra_day_limit": 2,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 5,
+    "fields": {
+      "code": "CLASIFICADOR_DIA",
+      "name": "Clasificador día",
+      "shift_type": "day",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 6,
+    "fields": {
+      "code": "CLASIFICADOR_NOCHE",
+      "name": "Clasificador noche",
+      "shift_type": "night",
+      "default_extra_day_limit": 2,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 7,
+    "fields": {
+      "code": "LIDER_GRANJA",
+      "name": "Líder de granja",
+      "shift_type": "mixed",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 8,
+    "fields": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "shift_type": "day",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 9,
+    "fields": {
+      "code": "LIDER_TECNICO",
+      "name": "Líder técnico",
+      "shift_type": "day",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
+    "model": "calendario.positioncategory",
+    "pk": 10,
+    "fields": {
+      "code": "OFICIOS_VARIOS",
+      "name": "Oficios varios",
+      "shift_type": "day",
+      "default_extra_day_limit": 3,
+      "default_overtime_points": 1,
+      "is_active": true
+    }
+  },
+  {
     "model": "granjas.farm",
     "pk": 1,
     "fields": {
@@ -171,7 +291,7 @@
     "fields": {
       "name": "Galponero Producción Día",
       "code": "COL1-GAL-D1",
-      "category": "GALPONERO_PRODUCCION_DIA",
+      "category": 1,
       "farm": 1,
       "chicken_house": 1,
       "rooms": [],
@@ -189,7 +309,7 @@
     "fields": {
       "name": "Galponero Producción Noche",
       "code": "COL1-GAL-N1",
-      "category": "GALPONERO_PRODUCCION_NOCHE",
+      "category": 3,
       "farm": 1,
       "chicken_house": 1,
       "rooms": [],
@@ -207,7 +327,7 @@
     "fields": {
       "name": "Clasificador Día",
       "code": "COL1-CLAS-D1",
-      "category": "CLASIFICADOR_DIA",
+      "category": 5,
       "farm": 1,
       "chicken_house": null,
       "rooms": [],
@@ -224,7 +344,7 @@
     "pk": 1,
     "fields": {
       "operator": 1,
-      "category": "GALPONERO_PRODUCCION_DIA",
+      "category": 1,
       "skill_score": 9
     }
   },
@@ -233,7 +353,7 @@
     "pk": 2,
     "fields": {
       "operator": 2,
-      "category": "GALPONERO_PRODUCCION_DIA",
+      "category": 1,
       "skill_score": 6
     }
   },
@@ -242,7 +362,7 @@
     "pk": 3,
     "fields": {
       "operator": 3,
-      "category": "GALPONERO_PRODUCCION_NOCHE",
+      "category": 3,
       "skill_score": 9
     }
   },
@@ -251,7 +371,7 @@
     "pk": 4,
     "fields": {
       "operator": 1,
-      "category": "GALPONERO_PRODUCCION_NOCHE",
+      "category": 3,
       "skill_score": 5
     }
   },
@@ -260,7 +380,7 @@
     "pk": 5,
     "fields": {
       "operator": 4,
-      "category": "CLASIFICADOR_DIA",
+      "category": 5,
       "skill_score": 7
     }
   },
@@ -338,11 +458,11 @@
     "model": "calendario.overloadallowance",
     "pk": 1,
     "fields": {
-      "role": 1,
-      "max_consecutive_extra_days": 3,
-      "highlight_level": "warn",
-      "active_from": "2025-01-01",
-      "active_until": null
+      "category": 1,
+      "shift_type": "day",
+      "extra_day_limit": 3,
+      "overtime_points": 1,
+      "alert_level": "warn"
     }
   },
   {
@@ -375,7 +495,8 @@
       "is_overtime": false,
       "notes": "",
       "created_at": "2025-01-02T09:00:00Z",
-      "updated_at": "2025-01-02T09:00:00Z"
+      "updated_at": "2025-01-02T09:00:00Z",
+      "overtime_points": 0
     }
   },
   {
@@ -391,7 +512,8 @@
       "is_overtime": false,
       "notes": "Cobertura con complejidad menor",
       "created_at": "2025-01-02T09:00:00Z",
-      "updated_at": "2025-01-02T09:00:00Z"
+      "updated_at": "2025-01-02T09:00:00Z",
+      "overtime_points": 0
     }
   },
   {
@@ -407,7 +529,8 @@
       "is_overtime": false,
       "notes": "Turno nocturno base",
       "created_at": "2025-01-02T09:00:00Z",
-      "updated_at": "2025-01-02T09:00:00Z"
+      "updated_at": "2025-01-02T09:00:00Z",
+      "overtime_points": 0
     }
   },
   {
@@ -423,7 +546,8 @@
       "is_overtime": false,
       "notes": "Clasificación matutina",
       "created_at": "2025-01-02T09:00:00Z",
-      "updated_at": "2025-01-02T09:00:00Z"
+      "updated_at": "2025-01-02T09:00:00Z",
+      "overtime_points": 0
     }
   }
 ]

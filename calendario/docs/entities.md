@@ -75,18 +75,35 @@ Las preferencias asociadas (`RestPreference`) indican días de descanso recomend
 
 ---
 
-## OverloadAllowance (Regla de sobrecarga)
+## PositionCategory (Categoría de posición)
 
-Limita los días extra consecutivos que un rol puede trabajar.
+Agrupa posiciones según su naturaleza operativa. Cada categoría define su turno natural y los límites base de sobrecarga.
 
 | Campo | Tipo | Descripción |
 | --- | --- | --- |
-| `role` | Relación | Rol evaluado. |
-| `max_consecutive_extra_days` | Entero | Días extra permitidos (máximo 3 según negocio). |
-| `highlight_level` | Enumeración | Nivel de alerta (warn / critical). |
-| `active_from` / `active_until` | Fecha | Vigencia. |
+| `code` | Texto | Identificador interno (ej. `GALPONERO_PRODUCCION_DIA`). |
+| `name` | Texto | Nombre visible de la categoría. |
+| `shift_type` | Enumeración | Turno predominante (`day`, `night`, `mixed`). |
+| `default_extra_day_limit` | Entero | Días extra permitidos por defecto (día ≤ 3, noche ≤ 2). |
+| `default_overtime_points` | Entero | Puntos que suma cada día extra cuando no hay regla específica. |
+| `is_active` | Booleano | Permite ocultar categorías en desuso. |
 
-**Impacto:** cuando se usa una sobrecarga, la asignación queda marcada (`is_overtime`) y se genera anotación para bono compensatorio.
+**Impacto:** todas las posiciones referencian una categoría. El motor usa los límites y puntos por defecto cuando no existe una regla de sobrecarga personalizada.
+
+---
+
+## OverloadAllowance (Regla de sobrecarga)
+
+Especializa la sobrecarga de una categoría, tomando el turno que la propia categoría declara.
+
+| Campo | Tipo | Descripción |
+| --- | --- | --- |
+| `category` | Relación | Categoría afectada. |
+| `extra_day_limit` | Entero | Días extra consecutivos autorizados sobre el máximo de descanso. |
+| `overtime_points` | Entero | Puntos que suma cada día extra aplazando el descanso. |
+| `alert_level` | Enumeración | Nivel de alerta que se mostrará (`warn`, `critical`). |
+
+**Impacto:** cuando el motor extiende una secuencia de trabajo más allá del descanso permitido, verifica la regla asociada a la categoría. Si hay margen, marca la asignación como sobrecarga (`is_overtime`) y acredita los puntos definidos.
 
 ---
 
@@ -119,6 +136,7 @@ Encapsula una generación de turnos para un rango de fechas.
 | `is_auto_assigned` | Booleano | Marca si proviene del motor. |
 | `alert_level` | Enumeración | `none`, `warn`, `critical`. |
 | `is_overtime` | Booleano | Indica sobrecarga. |
+| `overtime_points` | Entero | Puntos acreditados por la sobrecarga (0 si no aplica). |
 | `notes` | Texto | Observaciones (ej. motivo de sobrecarga). |
 
 **Impacto:** cualquier cambio crea un registro en `AssignmentChangeLog` para trazabilidad.
@@ -128,7 +146,7 @@ Encapsula una generación de turnos para un rango de fechas.
 ## AssignmentChangeLog y WorkloadSnapshot
 
 - `AssignmentChangeLog` registra la historia (creación, actualización, eliminación) con operadores anterior y nuevo.
-- `WorkloadSnapshot` guarda métricas mensuales por operario (turnos diurnos, nocturnos, descansos, sobrecargas) para análisis de equidad.
+- `WorkloadSnapshot` guarda métricas mensuales por operario (turnos diurnos, nocturnos, descansos, sobrecargas y puntos acumulados) para análisis de equidad.
 
 ---
 
