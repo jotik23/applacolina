@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Max
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -105,6 +106,7 @@ class PositionDefinitionQuerySet(models.QuerySet):
 class PositionDefinition(models.Model):
     name = models.CharField("Nombre", max_length=150)
     code = models.CharField("Código", max_length=64, unique=True)
+    display_order = models.PositiveIntegerField("Orden de visualización", default=0, db_index=True)
     category = models.CharField(
         "Categoría",
         max_length=64,
@@ -149,7 +151,7 @@ class PositionDefinition(models.Model):
     class Meta:
         verbose_name = "Definición de posición"
         verbose_name_plural = "Definiciones de posiciones"
-        ordering = ("farm__name", "code")
+        ordering = ("display_order", "id")
 
     def __str__(self) -> str:
         return f"{self.name} ({self.code})"
@@ -169,6 +171,17 @@ class PositionDefinition(models.Model):
                     raise ValidationError("Debe seleccionar un galpón cuando se utilicen salones.")
                 if room_house_ids != {self.chicken_house_id}:
                     raise ValidationError("Todos los salones seleccionados deben pertenecer al galpón indicado.")
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.display_order:
+            max_order = (
+                PositionDefinition.objects.exclude(pk=self.pk)
+                .aggregate(max_order=Max("display_order"))
+                .get("max_order")
+                or 0
+            )
+            self.display_order = max_order + 1
+        super().save(*args, **kwargs)
 
     @property
     def shift_type(self) -> str:
@@ -474,7 +487,7 @@ class ShiftAssignment(models.Model):
         verbose_name = "Asignación"
         verbose_name_plural = "Asignaciones"
         unique_together = ("calendar", "position", "date")
-        ordering = ("date", "position__code")
+        ordering = ("date", "position__display_order", "position__code")
 
     def __str__(self) -> str:
         return f"{self.date} - {self.position} -> {self.operator}"

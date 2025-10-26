@@ -16,6 +16,7 @@
         dashboard: app.dataset.dashboardUrl,
         positions: app.dataset.positionsUrl,
         positionDetailTemplate: app.dataset.positionDetailUrlTemplate,
+        positionReorder: app.dataset.positionReorderUrl,
         capabilities: app.dataset.capabilitiesUrl,
         capabilityDetailTemplate: app.dataset.capabilityDetailUrlTemplate,
         operators: app.dataset.operatorsUrl,
@@ -30,6 +31,7 @@
         metadata: null,
         calendarId: null,
         lastSummary: null,
+        orderLocked: false,
         filters: {
           includeInactivePositions: false,
           includeInactiveOperators: false,
@@ -90,6 +92,7 @@
         positionAddBtn: app.querySelector('#position-add-btn'),
         positionsRefreshBtn: app.querySelector('#refresh-metadata-btn'),
         positionIncludeInactive: app.querySelector('#position-include-inactive'),
+        positionOrderStatus: app.querySelector('#position-order-status'),
         positionFormWrapper: app.querySelector('#position-form-wrapper'),
         positionForm: app.querySelector('#position-form'),
         positionMessage: app.querySelector('#position-form-message'),
@@ -552,7 +555,7 @@
       };
 
       const rebuildLookups = () => {
-        if (!state.metadata) {
+        if (!state.metadata || state.orderLocked) {
           return;
         }
 
@@ -655,7 +658,7 @@
       };
 
       const populateStaticOptions = () => {
-        if (!state.metadata) {
+        if (!state.metadata || state.orderLocked) {
           return;
         }
 
@@ -1051,6 +1054,40 @@
         }
       };
 
+      const persistPositionOrder = async (orderedIds, optimisticPositions = null) => {
+        if (!Array.isArray(orderedIds) || !orderedIds.length || !API.positionReorder) {
+          return;
+        }
+        if (!state.metadata || state.orderLocked) {
+          return;
+        }
+
+        if (optimisticPositions) {
+          state.metadata.positions = optimisticPositions.map((position, index) => ({
+            ...position,
+            display_order: index + 1,
+          }));
+          renderPositions();
+        }
+
+        updateMetadataStatus('Guardando nuevo orden de posiciones…', 'info');
+        try {
+          const response = await apiRequest(API.positionReorder, {
+            method: 'POST',
+            body: { order: orderedIds },
+          });
+          if (!response.ok) {
+            throw new Error('No fue posible reordenar las posiciones.');
+          }
+          await fetchMetadata();
+          updateMetadataStatus('Orden de posiciones actualizado.', 'success');
+        } catch (error) {
+          console.error(error);
+          updateMetadataStatus('No fue posible reordenar las posiciones.', 'error');
+          await fetchMetadata();
+        }
+      };
+
 
       refs.positionFarm?.addEventListener('change', (event) => {
         updateHouseOptions(event.target.value, { selectedHouse: '', selectedRooms: [], keepValue: false });
@@ -1122,18 +1159,52 @@
           return;
         }
 
-        const { positions } = state.metadata;
-        if (!positions.length) {
-          const emptyMessage = state.filters.includeInactivePositions
+        const includeInactive = state.filters.includeInactivePositions;
+        const rawPositions = Array.isArray(state.metadata.positions)
+          ? [...state.metadata.positions]
+          : [];
+        const getOrderValue = (item) => {
+          const raw = Number(item?.display_order);
+          return Number.isFinite(raw) ? raw : 0;
+        };
+
+        rawPositions.sort((a, b) => {
+          const diff = getOrderValue(a) - getOrderValue(b);
+          if (diff !== 0) {
+            return diff;
+          }
+          return (a.id || 0) - (b.id || 0);
+        });
+
+        const visiblePositions = includeInactive
+          ? rawPositions
+          : rawPositions.filter((position) => position.is_active);
+
+        if (!visiblePositions.length) {
+          const emptyMessage = includeInactive
             ? 'No hay posiciones registradas en este momento.'
             : 'No hay posiciones activas en este momento.';
           refs.positionsBody.innerHTML = `<tr><td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">${emptyMessage}</td></tr>`;
           return;
         }
 
-        refs.positionsBody.innerHTML = positions
-          .map((position) => {
-            const complexityLabel = state.lookups.complexityLabels.get(position.complexity) || position.complexity;
+        const allowReorder =
+          !state.orderLocked && Boolean(API.positionReorder) && visiblePositions.length > 1;
+
+        if (refs.positionOrderStatus) {
+          if (state.orderLocked) {
+            refs.positionOrderStatus.classList.remove('hidden');
+          } else {
+            refs.positionOrderStatus.classList.add('hidden');
+          }
+        }
+
+        refs.positionsBody.innerHTML = visiblePositions
+          .map((position, index) => {
+            const orderValue = getOrderValue(position);
+            const orderLabel = orderValue > 0 ? orderValue : index + 1;
+            const complexityLabel =
+              state.lookups.complexityLabels.get(position.complexity) || position.complexity;
             const validity = position.valid_until
               ? `${escapeHtml(position.valid_from)} → ${escapeHtml(position.valid_until)}`
               : `${escapeHtml(position.valid_from)} → vigencia abierta`;
@@ -1141,28 +1212,45 @@
             const houseLabel = position.chicken_house?.name ? escapeHtml(position.chicken_house.name) : '';
             const roomLabels = (position.rooms || []).map((room) => escapeHtml(room.name)).join(', ');
             const isEditing = state.editing.positionId === position.id;
-            const rowClassList = [];
+            const rowClassList = ['transition-colors', 'hover:bg-slate-50'];
             if (!position.is_active) {
               rowClassList.push('bg-slate-50', 'text-slate-500');
             }
             if (isEditing) {
-              rowClassList.push('bg-amber-50', 'ring-2', 'ring-amber-300', 'ring-offset-1', 'ring-offset-white');
+              rowClassList.push(
+                'bg-amber-50',
+                'ring-2',
+                'ring-amber-300',
+                'ring-offset-1',
+                'ring-offset-white'
+              );
             }
             const rowAttr = rowClassList.length ? ` class="${rowClassList.join(' ')}"` : '';
+            const disableUp = index === 0;
+            const disableDown = index === visiblePositions.length - 1;
+            const moveButtonBase = 'inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-600 shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1';
+            const disabledClasses = 'cursor-not-allowed opacity-40 hover:bg-slate-200';
+            const moveUpClasses = `${moveButtonBase} ${disableUp ? disabledClasses : ''}`;
+            const moveDownClasses = `${moveButtonBase} ${disableDown ? disabledClasses : ''}`;
             return `
               <tr${rowAttr} data-position-id="${position.id}">
                 <td class="px-3 py-3 align-top">
-                  <p class="font-semibold text-slate-800">${escapeHtml(position.name)}</p>
-                  <p class="text-xs text-slate-500">
-                    ${escapeHtml(position.code)}
-                    ${farmLabel ? ` · ${farmLabel}` : ''}
-                    ${houseLabel ? ` · ${houseLabel}` : ''}
-                  </p>
-                  ${
-                    roomLabels
-                      ? `<p class="mt-1 text-xs text-slate-500">Salones: ${roomLabels}</p>`
-                      : ''
-                  }
+                  <div class="flex items-start gap-3">
+                    <span class="inline-flex items-center justify-center rounded-full bg-slate-200 px-2 text-xs font-semibold text-slate-700">#${orderLabel}</span>
+                    <div>
+                      <p class="font-semibold text-slate-800">${escapeHtml(position.name)}</p>
+                      <p class="text-xs text-slate-500">
+                        ${escapeHtml(position.code)}
+                        ${farmLabel ? ` · ${farmLabel}` : ''}
+                        ${houseLabel ? ` · ${houseLabel}` : ''}
+                      </p>
+                      ${
+                        roomLabels
+                          ? `<p class="mt-1 text-xs text-slate-500">Salones: ${roomLabels}</p>`
+                          : ''
+                      }
+                    </div>
+                  </div>
                 </td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(complexityLabel)}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${validity}</td>
@@ -1175,6 +1263,30 @@
                 </td>
                 <td class="px-3 py-3 align-top">
                   <div class="flex flex-wrap gap-2">
+                    ${
+                      allowReorder
+                        ? `
+                      <div class="flex gap-1">
+                        <button type="button" data-action="position-move" data-direction="up" data-id="${position.id}" class="${moveUpClasses}" ${
+                            disableUp ? 'disabled' : ''
+                          } aria-label="Mover arriba" title="Mover arriba">
+                          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M10 5.25a.75.75 0 0 1 .53.22l4.25 4.25a.75.75 0 1 1-1.06 1.06L10 7.06 6.28 10.78a.75.75 0 1 1-1.06-1.06l4.25-4.25A.75.75 0 0 1 10 5.25Z"/>
+                          </svg>
+                          <span class="sr-only">Mover arriba</span>
+                        </button>
+                        <button type="button" data-action="position-move" data-direction="down" data-id="${position.id}" class="${moveDownClasses}" ${
+                            disableDown ? 'disabled' : ''
+                          } aria-label="Mover abajo" title="Mover abajo">
+                          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M9.47 14.53a.75.75 0 0 0 1.06 0l4.25-4.25a.75.75 0 1 0-1.06-1.06L10 12.44 6.28 9.22a.75.75 0 1 0-1.06 1.06l4.25 4.25Z"/>
+                          </svg>
+                          <span class="sr-only">Mover abajo</span>
+                        </button>
+                      </div>
+                    `
+                        : ''
+                    }
                     <button type="button" data-action="position-edit" data-id="${position.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
                     <button type="button" data-action="position-delete" data-id="${position.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
                   </div>
@@ -1352,11 +1464,23 @@
               : 'border-emerald-300 text-emerald-700 hover:bg-emerald-100';
             const desiredState = operator.is_active ? 'false' : 'true';
             const isEditing = state.editing.operatorId === operator.id;
-            const rowClassList = [];
-            if (operator.is_active) {
-              rowClassList.push('bg-white');
+            const rowClassList = ['transition-colors'];
+            if (isEditing) {
+              rowClassList.push(
+                'bg-amber-50',
+                'ring-2',
+                'ring-amber-300',
+                'ring-offset-1',
+                'ring-offset-white',
+                'hover:bg-amber-50'
+              );
             } else {
-              rowClassList.push('bg-slate-50', 'text-slate-500');
+              rowClassList.push('hover:bg-slate-50');
+              if (operator.is_active) {
+                rowClassList.push('bg-white');
+              } else {
+                rowClassList.push('bg-slate-50', 'text-slate-500');
+              }
             }
             if (isEditing) {
               rowClassList.push('bg-amber-50', 'ring-2', 'ring-amber-300', 'ring-offset-1', 'ring-offset-white');
@@ -1540,6 +1664,9 @@
           })
           .then((data) => {
             state.calendarId = data.calendar_id;
+            state.orderLocked = true;
+            renderPositions();
+            updateMetadataStatus('El orden de las posiciones ha sido bloqueado para este borrador.', 'info');
             setFeedback('Calendario generado con éxito. Revisa el resumen y ajusta las asignaciones antes de aprobar.', 'success');
             if (refs.calendarDetailLink && API.calendarDetailTemplate) {
               refs.calendarDetailLink.href = replaceId(API.calendarDetailTemplate, state.calendarId);
@@ -1637,6 +1764,41 @@
       });
       refs.reloadSummaryBtn?.addEventListener('click', () => fetchSummary());
       refs.generateCalendarBtn?.addEventListener('click', () => generateCalendar());
+
+      const handlePositionMove = (id, direction) => {
+        if (!state.metadata) {
+          return;
+        }
+        if (state.orderLocked) {
+          updateMetadataStatus('No es posible reordenar las posiciones después de generar el calendario.', 'warning');
+          return;
+        }
+        const delta = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
+        if (!delta) {
+          return;
+        }
+
+        const positions = Array.isArray(state.metadata.positions)
+          ? [...state.metadata.positions]
+          : [];
+        if (positions.length < 2) {
+          return;
+        }
+
+        const currentIndex = positions.findIndex((position) => position.id === id);
+        if (currentIndex < 0) {
+          return;
+        }
+        const targetIndex = currentIndex + delta;
+        if (targetIndex < 0 || targetIndex >= positions.length) {
+          return;
+        }
+
+        const swapped = [...positions];
+        [swapped[currentIndex], swapped[targetIndex]] = [swapped[targetIndex], swapped[currentIndex]];
+        const orderedIds = swapped.map((position) => position.id);
+        persistPositionOrder(orderedIds, swapped);
+      };
 
       const handleOperatorEdit = (id) => {
         const operator = state.metadata?.operators?.find((item) => item.id === id);
@@ -1741,6 +1903,9 @@
           case 'operator-toggle':
             handleOperatorToggle(id, target.dataset.active === 'true');
             break;
+          case 'position-move':
+            handlePositionMove(id, target.dataset.direction);
+            break;
           case 'position-edit':
             handlePositionEdit(id);
             break;
@@ -1778,6 +1943,18 @@
           }
           const data = await response.json();
           state.metadata = data;
+          if (Array.isArray(state.metadata?.positions)) {
+            state.metadata.positions.sort((a, b) => {
+              const orderA = Number(a?.display_order);
+              const orderB = Number(b?.display_order);
+              const safeA = Number.isFinite(orderA) ? orderA : 0;
+              const safeB = Number.isFinite(orderB) ? orderB : 0;
+              if (safeA !== safeB) {
+                return safeA - safeB;
+              }
+              return (a.id || 0) - (b.id || 0);
+            });
+          }
           if (refs.positionIncludeInactive) {
             refs.positionIncludeInactive.checked = state.filters.includeInactivePositions;
           }

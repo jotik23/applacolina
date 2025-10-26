@@ -297,6 +297,14 @@ class PositionDefinitionForm(forms.ModelForm):
             while True:
                 try:
                     with transaction.atomic():
+                        if not instance.display_order:
+                            max_order = (
+                                PositionDefinition.objects.aggregate(
+                                    max_order=Max("display_order")
+                                ).get("max_order")
+                                or 0
+                            )
+                            instance.display_order = max_order + 1
                         if not instance.code:
                             instance.code = self._generate_code()
                         instance.save()

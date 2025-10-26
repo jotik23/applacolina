@@ -119,7 +119,7 @@ class CalendarScheduler:
             .prefetch_related("rooms")
             .filter(valid_from__lte=self.calendar.end_date)
             .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=self.calendar.start_date))
-            .order_by("farm__name", "code")
+            .order_by("display_order", "id")
         )
 
         capabilities = list(

@@ -81,16 +81,16 @@ def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[
     position_query = PositionDefinition.objects.filter(position_filters)
     if farm_ids:
         position_query = position_query.filter(farm_id__in=farm_ids)
-    positions = list(position_query.order_by("farm__name", "code"))
+    positions = list(position_query.order_by("display_order", "id"))
 
     if not positions and assigned_position_ids:
         positions = list(
             PositionDefinition.objects.filter(id__in=assigned_position_ids).order_by(
-                "farm__name", "code"
+                "display_order", "id"
             )
         )
     elif not positions:
-        positions = list(position_query.order_by("code"))
+        positions = list(position_query.order_by("display_order", "id"))
 
     eligible_map = _eligible_operator_map(calendar, positions, date_columns, assignment_list)
 
@@ -309,6 +309,7 @@ def _position_payload(position: PositionDefinition) -> dict[str, Any]:
         "id": position.id,
         "name": position.name,
         "code": position.code,
+        "display_order": position.display_order,
         "category": position.category,
         "farm": {
             "id": position.farm_id,
@@ -869,6 +870,63 @@ class PositionCollectionView(LoginRequiredMixin, View):
         return JsonResponse({"position": _position_payload(position)}, status=201)
 
 
+class PositionReorderView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        order_values = payload.get("order")
+        if not isinstance(order_values, list) or not order_values:
+            return _json_error("El payload debe incluir la lista de posiciones en 'order'.")
+
+        try:
+            desired_order = [int(value) for value in order_values]
+        except (TypeError, ValueError):
+            return _json_error("Los identificadores de posiciones deben ser numéricos.")
+
+        if len(desired_order) != len(set(desired_order)):
+            return _json_error("La lista de posiciones contiene duplicados.")
+
+        positions = list(
+            PositionDefinition.objects.select_related("farm", "chicken_house")
+            .prefetch_related("rooms")
+            .order_by("display_order", "id")
+        )
+        positions_by_id = {position.id: position for position in positions}
+        missing = [position_id for position_id in desired_order if position_id not in positions_by_id]
+        if missing:
+            return _json_error(
+                "Algunas posiciones indicadas no existen.",
+                errors={"missing": missing},
+            )
+
+        ordered_positions: List[PositionDefinition] = []
+        seen: set[int] = set()
+        for position_id in desired_order:
+            ordered_positions.append(positions_by_id[position_id])
+            seen.add(position_id)
+        for position in positions:
+            if position.id not in seen:
+                ordered_positions.append(position)
+
+        for index, position in enumerate(ordered_positions, start=1):
+            position.display_order = index
+
+        with transaction.atomic():
+            PositionDefinition.objects.bulk_update(ordered_positions, ["display_order"])
+
+        refreshed_positions = [
+            _position_payload(position)
+            for position in PositionDefinition.objects.select_related("farm", "chicken_house")
+            .prefetch_related("rooms")
+            .order_by("display_order", "id")
+        ]
+        return JsonResponse({"positions": refreshed_positions})
+
+
 class PositionDetailView(LoginRequiredMixin, View):
     http_method_names = ["patch", "delete"]
 
@@ -1086,7 +1144,10 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         if not include_inactive:
             position_qs = position_qs.filter(is_active=True)
 
-        positions_payload = [_position_payload(position) for position in position_qs.order_by("farm__name", "code")]
+        positions_payload = [
+            _position_payload(position)
+            for position in position_qs.order_by("display_order", "id")
+        ]
 
         capability_qs = (
             OperatorCapability.objects.select_related("operator")
@@ -1243,7 +1304,7 @@ class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
         assignments = (
             calendar.assignments.select_related("position", "position__farm", "operator")
             .prefetch_related("operator__roles")
-            .order_by("date", "position__code")
+            .order_by("date", "position__display_order", "position__code")
         )
 
         payload = [_assignment_payload(assignment) for assignment in assignments]
