@@ -4,30 +4,6 @@
 
 {% block content %}
   <div class="flex flex-col gap-8">
-    <div class="grid gap-4 rounded-lg border border-slate-200 bg-white/90 p-4 text-sm text-slate-600">
-      <div class="flex items-start gap-3">
-        <span class="mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-700">1</span>
-        <div>
-          <p class="font-semibold text-slate-900">Gestiona las posiciones clave</p>
-          <p>Crea, actualiza y valida las posiciones activas antes de lanzar la generación.</p>
-        </div>
-      </div>
-      <div class="flex items-start gap-3">
-        <span class="mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700">2</span>
-        <div>
-          <p class="font-semibold text-slate-900">Confirma el equipo disponible</p>
-          <p>Consulta fortalezas, preferencias y descansos antes de asignar para evitar sorpresas al generar.</p>
-        </div>
-      </div>
-      <div class="flex items-start gap-3">
-        <span class="mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sm font-semibold text-sky-700">3</span>
-        <div>
-          <p class="font-semibold text-slate-900">Define el periodo y genera</p>
-          <p>Configura el rango, notas y revisa las indicaciones finales antes de crear el borrador sugerido.</p>
-        </div>
-      </div>
-    </div>
-
     <div
       id="configurator-app"
       class="space-y-10"
@@ -58,7 +34,7 @@
         <button type="button" data-step-trigger="3" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">3. Periodo y generación</button>
       </div>
 
-      <div class="space-y-12">
+      <div class="space-y-10">
         <section data-step-index="3" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
           <header class="flex flex-col gap-1">
             <h2 class="text-xl font-semibold text-slate-900">3. Define el periodo y genera el borrador</h2>
@@ -143,16 +119,20 @@
 
         <section data-step-index="1" class="rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
           <header class="flex flex-col gap-1">
-            <h2 class="text-xl font-semibold text-slate-900">1. Gestiona las posiciones vigentes</h2>
-            <p class="text-sm text-slate-600">Confirma que las posiciones tienen fechas activas y la criticidad esperada. Usa los accesos rápidos para revisar en administración solo cuando sea necesario.</p>
+            <h2 class="text-xl font-semibold text-slate-900">1. Posiciones vigentes</h2>
           </header>
 
           <div class="mt-4 flex flex-col gap-4">
             <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" id="position-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva posición</button>
-              <button type="button" id="refresh-metadata-btn" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Refrescar datos</button>
-              <a href="{% url 'calendario:dashboard' %}#calendarios" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Ir al panel</a>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-wrap gap-2">
+                <button type="button" id="position-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Nueva posición</button>
+                <button type="button" id="refresh-metadata-btn" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Actualizar listado</button>
+              </div>
+              <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" id="position-include-inactive" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+                Mostrar posiciones inactivas
+              </label>
             </div>
 
             <div class="overflow-hidden rounded-lg border border-slate-200">
@@ -248,15 +228,8 @@
               </form>
             </div>
 
-            <div class="grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <p class="font-semibold">¿Necesitas editar desde administración?</p>
-              <p>
-                Si requieres campos avanzados, abre la posición en el panel de administración, aplica los cambios y vuelve a presionar «Refrescar datos» para sincronizar la información.
-              </p>
-            </div>
-
             <div class="flex items-center justify-end">
-              <button type="button" data-action="next" data-next-step="2" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar con colaboradores</button>
+              <button type="button" data-action="next" data-next-step="2" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar</button>
             </div>
           </div>
         </section>
@@ -285,7 +258,6 @@
 
             <div class="flex flex-wrap gap-2 text-xs">
               <button type="button" id="operator-add-btn" class="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100">Nuevo colaborador</button>
-              <button type="button" id="operator-refresh-btn" class="rounded border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100">Actualizar colaboradores</button>
             </div>
 
             <div class="overflow-hidden rounded-lg border border-slate-200">

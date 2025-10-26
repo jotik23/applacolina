@@ -31,6 +31,9 @@
         metadata: null,
         calendarId: null,
         lastSummary: null,
+        filters: {
+          includeInactivePositions: false,
+        },
         lookups: {
           housesByFarm: new Map(),
           roomsByHouse: new Map(),
@@ -52,6 +55,7 @@
         positionsBody: app.querySelector('#positions-body'),
         positionAddBtn: app.querySelector('#position-add-btn'),
         positionsRefreshBtn: app.querySelector('#refresh-metadata-btn'),
+        positionIncludeInactive: app.querySelector('#position-include-inactive'),
         positionFormWrapper: app.querySelector('#position-form-wrapper'),
         positionForm: app.querySelector('#position-form'),
         positionMessage: app.querySelector('#position-form-message'),
@@ -158,6 +162,10 @@
         generateCalendarBtn: document.getElementById('generate-calendar-btn'),
       };
 
+      if (refs.positionIncludeInactive) {
+        state.filters.includeInactivePositions = refs.positionIncludeInactive.checked;
+      }
+
       const toneClassSets = {
         info: ['border-slate-200', 'bg-slate-50', 'text-slate-600'],
         success: ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700'],
@@ -207,6 +215,26 @@
         wrapper.classList.toggle('hidden', !visible);
       };
 
+      const focusableSelector =
+        'input:not([type="hidden"]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])';
+
+      const focusWrapper = (wrapper, preferred = null) => {
+        if (!wrapper) {
+          return;
+        }
+        requestAnimationFrame(() => {
+          wrapper.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+          const target = preferred || wrapper.querySelector(focusableSelector);
+          if (target && typeof target.focus === 'function') {
+            try {
+              target.focus({ preventScroll: true });
+            } catch (error) {
+              target.focus();
+            }
+          }
+        });
+      };
+
       const resetForm = (form, messageEl) => {
         if (form) {
           form.reset();
@@ -216,11 +244,37 @@
         }
       };
 
+      const csrfSafeMethods = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+
+      const getCookie = (name) => {
+        if (typeof document === 'undefined') {
+          return '';
+        }
+        const cookies = document.cookie ? document.cookie.split('; ') : [];
+        for (const cookie of cookies) {
+          if (cookie.startsWith(`${name}=`)) {
+            return decodeURIComponent(cookie.slice(name.length + 1));
+          }
+        }
+        return '';
+      };
+
+      const getCsrfToken = () => getCookie('csrftoken');
+
       const apiRequest = (url, { method = 'GET', body } = {}) => {
+        const upperMethod = (method || 'GET').toUpperCase();
+        const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+        if (!csrfSafeMethods.has(upperMethod)) {
+          const token = getCsrfToken();
+          if (token) {
+            headers['X-CSRFToken'] = token;
+          }
+        }
         const options = {
-          method,
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          method: upperMethod,
+          headers,
         };
+        options.credentials = 'same-origin';
         if (body !== undefined) {
           options.body = JSON.stringify(body);
           options.headers['Content-Type'] = 'application/json';
@@ -437,29 +491,30 @@
           }
           updateHouseOptions(refs.positionFarm?.value || '', true);
           updateRoomOptions(refs.positionHouse?.value || '', true);
-          return;
+        } else {
+          refs.positionId.value = position.id;
+          refs.positionName.value = position.name || '';
+          if (refs.positionCodeDisplay) {
+            const hasCode = Boolean(position.code);
+            refs.positionCodeDisplay.classList.toggle('hidden', !hasCode);
+          }
+          if (refs.positionCodeValue) {
+            refs.positionCodeValue.textContent = position.code || '—';
+          }
+          refs.positionCategory.value = position.category || '';
+          refs.positionComplexity.value = position.complexity || '';
+          refs.positionValidFrom.value = position.valid_from || '';
+          refs.positionValidUntil.value = position.valid_until || '';
+          refs.positionAllowLower.checked = Boolean(position.allow_lower_complexity);
+          refs.positionIsActive.checked = Boolean(position.is_active);
+          refs.positionNotes.value = position.notes || '';
+          refs.positionFarm.value = position.farm?.id ? String(position.farm.id) : '';
+          updateHouseOptions(refs.positionFarm.value || '', false);
+          refs.positionHouse.value = position.chicken_house?.id ? String(position.chicken_house.id) : '';
+          updateRoomOptions(refs.positionHouse.value || '', false);
+          refs.positionRoom.value = position.room?.id ? String(position.room.id) : '';
         }
-        refs.positionId.value = position.id;
-        refs.positionName.value = position.name || '';
-        if (refs.positionCodeDisplay) {
-          const hasCode = Boolean(position.code);
-          refs.positionCodeDisplay.classList.toggle('hidden', !hasCode);
-        }
-        if (refs.positionCodeValue) {
-          refs.positionCodeValue.textContent = position.code || '—';
-        }
-        refs.positionCategory.value = position.category || '';
-        refs.positionComplexity.value = position.complexity || '';
-        refs.positionValidFrom.value = position.valid_from || '';
-        refs.positionValidUntil.value = position.valid_until || '';
-        refs.positionAllowLower.checked = Boolean(position.allow_lower_complexity);
-        refs.positionIsActive.checked = Boolean(position.is_active);
-        refs.positionNotes.value = position.notes || '';
-        refs.positionFarm.value = position.farm?.id ? String(position.farm.id) : '';
-        updateHouseOptions(refs.positionFarm.value || '', false);
-        refs.positionHouse.value = position.chicken_house?.id ? String(position.chicken_house.id) : '';
-        updateRoomOptions(refs.positionHouse.value || '', false);
-        refs.positionRoom.value = position.room?.id ? String(position.room.id) : '';
+        focusWrapper(refs.positionFormWrapper, refs.positionName);
       };
 
       const closePositionForm = () => {
@@ -513,36 +568,36 @@
           if (refs.operatorIsActive) {
             refs.operatorIsActive.checked = true;
           }
-          return;
+        } else {
+          if (refs.operatorId) {
+            refs.operatorId.value = operator.id ?? '';
+          }
+          if (refs.operatorDocument) {
+            refs.operatorDocument.value = operator.document || '';
+          }
+          if (refs.operatorPhone) {
+            refs.operatorPhone.value = operator.telefono || '';
+          }
+          if (refs.operatorFirstName) {
+            refs.operatorFirstName.value = operator.nombres || '';
+          }
+          if (refs.operatorLastName) {
+            refs.operatorLastName.value = operator.apellidos || '';
+          }
+          if (refs.operatorEmail) {
+            refs.operatorEmail.value = operator.email || '';
+          }
+          if (refs.operatorRoles) {
+            const operatorRoles = new Set((operator.roles || []).map((role) => String(role.id)));
+            Array.from(refs.operatorRoles.options).forEach((option) => {
+              option.selected = operatorRoles.has(option.value);
+            });
+          }
+          if (refs.operatorIsActive) {
+            refs.operatorIsActive.checked = Boolean(operator.is_active);
+          }
         }
-
-        if (refs.operatorId) {
-          refs.operatorId.value = operator.id ?? '';
-        }
-        if (refs.operatorDocument) {
-          refs.operatorDocument.value = operator.document || '';
-        }
-        if (refs.operatorPhone) {
-          refs.operatorPhone.value = operator.telefono || '';
-        }
-        if (refs.operatorFirstName) {
-          refs.operatorFirstName.value = operator.nombres || '';
-        }
-        if (refs.operatorLastName) {
-          refs.operatorLastName.value = operator.apellidos || '';
-        }
-        if (refs.operatorEmail) {
-          refs.operatorEmail.value = operator.email || '';
-        }
-        if (refs.operatorRoles) {
-          const selectedRoles = (operator.roles || []).map((role) => String(role.id));
-          Array.from(refs.operatorRoles.options).forEach((option) => {
-            option.selected = selectedRoles.includes(option.value);
-          });
-        }
-        if (refs.operatorIsActive) {
-          refs.operatorIsActive.checked = Boolean(operator.is_active);
-        }
+        focusWrapper(refs.operatorFormWrapper, refs.operatorDocument);
       };
 
       const closeOperatorForm = () => {
@@ -820,8 +875,10 @@
 
         const { positions } = state.metadata;
         if (!positions.length) {
-          refs.positionsBody.innerHTML =
-            '<tr><td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">No hay posiciones activas en este momento.</td></tr>';
+          const emptyMessage = state.filters.includeInactivePositions
+            ? 'No hay posiciones registradas en este momento.'
+            : 'No hay posiciones activas en este momento.';
+          refs.positionsBody.innerHTML = `<tr><td colspan="6" class="px-3 py-4 text-center text-sm text-slate-500">${emptyMessage}</td></tr>`;
           return;
         }
 
@@ -832,8 +889,9 @@
             const validity = position.valid_until
               ? `${escapeHtml(position.valid_from)} → ${escapeHtml(position.valid_until)}`
               : `${escapeHtml(position.valid_from)} → vigencia abierta`;
+            const rowClasses = position.is_active ? '' : ' class="bg-slate-50 text-slate-500"';
             return `
-              <tr>
+              <tr${rowClasses}>
                 <td class="px-3 py-3 align-top">
                   <p class="font-semibold text-slate-800">${escapeHtml(position.name)}</p>
                   <p class="text-xs text-slate-500">${escapeHtml(position.code)} · ${escapeHtml(position.farm?.name || '')}</p>
@@ -1410,6 +1468,10 @@
       refs.preferenceAddBtn?.addEventListener('click', () => openPreferenceForm());
       refs.preferenceCancelBtn?.addEventListener('click', () => closePreferenceForm());
       refs.positionsRefreshBtn?.addEventListener('click', () => fetchMetadata());
+      refs.positionIncludeInactive?.addEventListener('change', (event) => {
+        state.filters.includeInactivePositions = Boolean(event.target?.checked);
+        fetchMetadata();
+      });
       refs.reloadSummaryBtn?.addEventListener('click', () => fetchSummary());
       refs.generateCalendarBtn?.addEventListener('click', () => generateCalendar());
 
@@ -1596,12 +1658,20 @@
       const fetchMetadata = async () => {
         updateMetadataStatus('Cargando información…', 'info');
         try {
-          const response = await apiRequest(API.metadata);
+          const params = new URLSearchParams();
+          if (state.filters.includeInactivePositions) {
+            params.set('include_inactive', 'true');
+          }
+          const url = params.toString() ? `${API.metadata}?${params.toString()}` : API.metadata;
+          const response = await apiRequest(url);
           if (!response.ok) {
             throw new Error('No fue posible obtener los datos.');
           }
           const data = await response.json();
           state.metadata = data;
+          if (refs.positionIncludeInactive) {
+            refs.positionIncludeInactive.checked = state.filters.includeInactivePositions;
+          }
           rebuildLookups();
           populateStaticOptions();
           renderPositions();

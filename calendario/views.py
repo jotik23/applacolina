@@ -697,7 +697,20 @@ class OperatorDetailView(LoginRequiredMixin, View):
         if error:
             return error
 
-        form = OperatorProfileForm(payload, instance=operator, partial=True)
+        # Merge current operator values with incoming payload so the form receives a complete dataset.
+        form_fields = list(OperatorProfileForm._meta.fields)  # type: ignore[attr-defined]
+        form_data: dict[str, Any] = {}
+        for field_name in form_fields:
+            if field_name == "roles":
+                form_data[field_name] = list(operator.roles.values_list("pk", flat=True))
+            else:
+                form_data[field_name] = getattr(operator, field_name)
+
+        for key, value in payload.items():
+            if key in form_data:
+                form_data[key] = value
+
+        form = OperatorProfileForm(form_data, instance=operator)
         if not form.is_valid():
             return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
 

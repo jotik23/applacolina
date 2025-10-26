@@ -18,12 +18,13 @@ from users.models import Role, UserProfile
 class ShiftType(models.TextChoices):
     DAY = "day", _("Día")
     NIGHT = "night", _("Noche")
+    MIXED = "mixed", _("Mixto")
 
 
 class ComplexityLevel(models.TextChoices):
-    BASIC = "basic", _("Criticidad baja")
-    INTERMEDIATE = "intermediate", _("Criticidad media")
-    ADVANCED = "advanced", _("Criticidad alta")
+    BASIC = "basic", _("Manejable")
+    INTERMEDIATE = "intermediate", _("Importante")
+    ADVANCED = "advanced", _("Crítico")
 
 
 COMPLEXITY_LEVEL_SCORE = {
