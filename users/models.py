@@ -73,6 +73,12 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
         null=True,
         blank=True,
     )
+    employment_start_date = models.DateField(
+        "Fecha de ingreso",
+        null=True,
+        blank=True,
+        help_text="Fecha desde la cual el colaborador se considera activo para turnos y descansos.",
+    )
     roles = models.ManyToManyField(Role, blank=True, related_name="usuarios")
 
     is_active = models.BooleanField(default=True)

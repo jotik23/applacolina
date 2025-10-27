@@ -147,6 +147,19 @@ class CalendarStatus(models.TextChoices):
     MODIFIED = "modified", _("Modificado")
 
 
+class RestPeriodStatus(models.TextChoices):
+    PLANNED = "planned", _("Planificado")
+    APPROVED = "approved", _("Aprobado")
+    CONFIRMED = "confirmed", _("Confirmado")
+    EXPIRED = "expired", _("Expirado")
+    CANCELLED = "cancelled", _("Cancelado")
+
+
+class RestPeriodSource(models.TextChoices):
+    MANUAL = "manual", _("Manual")
+    CALENDAR = "calendar", _("Calendario")
+
+
 class PositionDefinitionQuerySet(models.QuerySet):
     def active_on(self, target_date: date) -> "PositionDefinitionQuerySet":
         return self.filter(valid_from__lte=target_date).filter(
@@ -529,6 +542,69 @@ class WorkloadSnapshot(models.Model):
 
     def __str__(self) -> str:
         return f"Carga {self.operator} ({self.month_reference})"
+
+
+class OperatorRestPeriod(models.Model):
+    operator = models.ForeignKey(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name="rest_periods",
+        verbose_name="Operario",
+    )
+    start_date = models.DateField("Inicio")
+    end_date = models.DateField("Fin")
+    status = models.CharField(
+        "Estado",
+        max_length=16,
+        choices=RestPeriodStatus.choices,
+        default=RestPeriodStatus.PLANNED,
+    )
+    source = models.CharField(
+        "Origen",
+        max_length=16,
+        choices=RestPeriodSource.choices,
+        default=RestPeriodSource.MANUAL,
+    )
+    calendar = models.ForeignKey(
+        "ShiftCalendar",
+        on_delete=models.SET_NULL,
+        related_name="rest_periods",
+        verbose_name="Calendario origen",
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_rest_periods",
+        verbose_name="Creado por",
+        null=True,
+        blank=True,
+    )
+    notes = models.TextField("Notas", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Periodo de descanso"
+        verbose_name_plural = "Periodos de descanso"
+        ordering = ("-start_date", "-created_at")
+        indexes = [
+            models.Index(fields=("operator", "start_date")),
+            models.Index(fields=("operator", "end_date")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.operator} · {self.start_date} → {self.end_date} ({self.get_status_display()})"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.end_date < self.start_date:
+            raise ValidationError("La fecha final del descanso debe ser posterior o igual al inicio.")
+
+    def save(self, *args, **kwargs) -> None:
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 @dataclass

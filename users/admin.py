@@ -4,6 +4,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
 
+from calendario.models import OperatorRestPeriod
 from .forms import UserChangeForm, UserCreationForm
 from .models import Role, RolePermission, UserProfile
 
@@ -49,6 +50,14 @@ def resetear_clave(modeladmin, request, queryset):
         )
 
 
+class OperatorRestPeriodInline(admin.TabularInline):
+    model = OperatorRestPeriod
+    extra = 0
+    autocomplete_fields = ("calendar",)
+    fields = ("start_date", "end_date", "status", "source", "calendar")
+    fk_name = "operator"
+
+
 @admin.register(UserProfile)
 class UserProfileAdmin(UserAdmin):
     add_form = UserCreationForm
@@ -79,6 +88,7 @@ class UserProfileAdmin(UserAdmin):
                     "telefono",
                     "email",
                     "preferred_farm",
+                    "employment_start_date",
                     "direccion",
                 )
             },
@@ -107,6 +117,7 @@ class UserProfileAdmin(UserAdmin):
                     "email",
                     "direccion",
                     "preferred_farm",
+                    "employment_start_date",
                     "contacto_nombre",
                     "contacto_telefono",
                     "roles",
@@ -124,6 +135,7 @@ class UserProfileAdmin(UserAdmin):
     readonly_fields = ("last_login", "date_joined")
 
     actions = (activar_usuarios, desactivar_usuarios, resetear_clave)
+    inlines = (OperatorRestPeriodInline,)
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = super().get_fieldsets(request, obj)

@@ -28,6 +28,7 @@ class UserCreationForm(forms.ModelForm):
             "email",
             "direccion",
             "preferred_farm",
+            "employment_start_date",
             "contacto_nombre",
             "contacto_telefono",
             "roles",
@@ -45,6 +46,13 @@ class UserCreationForm(forms.ModelForm):
         if UserProfile.objects.filter(cedula=cedula).exists():
             raise forms.ValidationError("Esta cedula ya se encuentra registrada.")
         return cedula
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        employment_field = self.fields.get("employment_start_date")
+        if employment_field:
+            employment_field.widget = forms.DateInput(attrs={"type": "date"})
+            employment_field.required = False
 
     def clean_password2(self):
         password1 = self.cleaned_data.get("password1")
@@ -81,6 +89,7 @@ class UserChangeForm(forms.ModelForm):
             "email",
             "direccion",
             "preferred_farm",
+            "employment_start_date",
             "contacto_nombre",
             "contacto_telefono",
             "roles",
@@ -105,3 +114,10 @@ class UserChangeForm(forms.ModelForm):
         if qs.exists():
             raise forms.ValidationError("Esta cedula ya se encuentra registrada.")
         return cedula
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        employment_field = self.fields.get("employment_start_date")
+        if employment_field:
+            employment_field.widget = forms.DateInput(attrs={"type": "date"})
+            employment_field.required = False

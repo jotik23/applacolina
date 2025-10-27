@@ -11,9 +11,12 @@ from calendario.models import (
     CalendarStatus,
     ComplexityLevel,
     OperatorCapability,
+    OperatorRestPeriod,
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
+    RestPeriodSource,
+    RestPeriodStatus,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
@@ -139,6 +142,47 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             alert_level=AssignmentAlertLevel.NONE,
             is_auto_assigned=True,
         )
+
+    def test_get_includes_rest_summary_information(self) -> None:
+        last_rest_start = self.calendar.start_date - timedelta(days=3)
+        last_rest_end = self.calendar.start_date - timedelta(days=1)
+        next_rest_start = self.calendar.end_date + timedelta(days=1)
+        next_rest_end = self.calendar.end_date + timedelta(days=3)
+
+        self.operator_initial.employment_start_date = self.calendar.start_date - timedelta(days=60)
+        self.operator_initial.save(update_fields=["employment_start_date"])
+
+        OperatorRestPeriod.objects.create(
+            operator=self.operator_initial,
+            start_date=last_rest_start,
+            end_date=last_rest_end,
+            status=RestPeriodStatus.CONFIRMED,
+            source=RestPeriodSource.MANUAL,
+        )
+        OperatorRestPeriod.objects.create(
+            operator=self.operator_initial,
+            start_date=next_rest_start,
+            end_date=next_rest_end,
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+        )
+
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("rest_rows", response.context)
+        self.assertIn("rest_summary", response.context)
+
+        summary = response.context["rest_summary"]
+        key = str(self.operator_initial.pk)
+        self.assertIn(key, summary)
+        operator_summary = summary[key]
+        self.assertEqual(operator_summary["employment_start"], (self.calendar.start_date - timedelta(days=60)).isoformat())
+        self.assertIsNotNone(operator_summary["recent"])
+        self.assertEqual(operator_summary["recent"]["start"], last_rest_start.isoformat())
+        self.assertIsNotNone(operator_summary["upcoming"])
+        self.assertEqual(operator_summary["upcoming"]["start"], next_rest_start.isoformat())
 
     def test_update_assignment_accepts_manual_override_with_conflict(self) -> None:
         url = reverse("calendario:calendar-detail", args=[self.calendar.pk])

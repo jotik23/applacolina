@@ -375,10 +375,18 @@ class OperatorProfileForm(forms.ModelForm):
             "apellidos",
             "telefono",
             "email",
+            "employment_start_date",
             "preferred_farm",
             "roles",
             "is_active",
         ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        employment_field = self.fields.get("employment_start_date")
+        if employment_field:
+            employment_field.widget.input_type = "date"
+            employment_field.required = False
 
     def clean_cedula(self) -> str:
         cedula = self.cleaned_data.get("cedula", "")

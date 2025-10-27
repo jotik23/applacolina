@@ -178,3 +178,29 @@ class WorkloadSnapshotAdmin(admin.ModelAdmin):
     )
     list_filter = ("month_reference",)
     autocomplete_fields = ("calendar", "operator")
+
+
+@admin.register(models.OperatorRestPeriod)
+class OperatorRestPeriodAdmin(admin.ModelAdmin):
+    list_display = (
+        "operator",
+        "start_date",
+        "end_date",
+        "status",
+        "source",
+        "calendar",
+    )
+    list_filter = ("status", "source", "calendar")
+    search_fields = (
+        "operator__nombres",
+        "operator__apellidos",
+        "operator__cedula",
+        "notes",
+    )
+    autocomplete_fields = ("operator", "calendar", "created_by")
+    readonly_fields = ("created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        if not obj.created_by_id:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

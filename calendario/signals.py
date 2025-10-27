@@ -5,7 +5,15 @@ from typing import Any, Optional
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from .models import AssignmentChangeLog, ShiftAssignment
+from .models import (
+    AssignmentChangeLog,
+    OperatorRestPeriod,
+    RestPeriodSource,
+    RestPeriodStatus,
+    ShiftAssignment,
+    ShiftCalendar,
+)
+from .services import sync_calendar_rest_periods
 
 
 @receiver(pre_save, sender=ShiftAssignment)
@@ -31,6 +39,7 @@ def log_assignment_update(sender: type[ShiftAssignment], instance: ShiftAssignme
             new_operator=instance.operator,
             details={"auto": instance.is_auto_assigned, "alert": instance.alert_level},
         )
+        sync_calendar_rest_periods(instance.calendar)
         return
 
     # Updated assignment
@@ -43,6 +52,7 @@ def log_assignment_update(sender: type[ShiftAssignment], instance: ShiftAssignme
             new_operator=instance.operator,
             details={"auto": instance.is_auto_assigned, "alert": instance.alert_level},
         )
+    sync_calendar_rest_periods(instance.calendar)
 
 
 @receiver(post_delete, sender=ShiftAssignment)
@@ -59,3 +69,16 @@ def log_assignment_deletion(sender: type[ShiftAssignment], instance: ShiftAssign
             "assignment_id": instance.pk,
         },
     )
+    sync_calendar_rest_periods(instance.calendar)
+
+
+@receiver(post_delete, sender=ShiftCalendar)
+def cleanup_rest_periods(sender: type[ShiftCalendar], instance: ShiftCalendar, **kwargs: Any) -> None:
+    OperatorRestPeriod.objects.filter(
+        calendar=instance,
+        source=RestPeriodSource.CALENDAR,
+    ).delete()
+
+    OperatorRestPeriod.objects.filter(calendar=instance).exclude(
+        source=RestPeriodSource.CALENDAR
+    ).update(status=RestPeriodStatus.APPROVED, calendar=None)

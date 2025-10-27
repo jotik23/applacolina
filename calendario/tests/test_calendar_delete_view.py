@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
 
-from calendario.models import CalendarStatus, ShiftCalendar
+from calendario.models import (
+    CalendarStatus,
+    OperatorRestPeriod,
+    RestPeriodSource,
+    RestPeriodStatus,
+    ShiftCalendar,
+)
 from users.models import UserProfile
 
 
@@ -66,3 +72,47 @@ class CalendarDeleteViewTests(TestCase):
 
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any("No es posible eliminar este calendario" in message.message for message in messages))
+
+    def test_delete_calendar_cleans_related_rest_periods(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana Descansos",
+            start_date=date(2025, 8, 4),
+            end_date=date(2025, 8, 10),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        operator = UserProfile.objects.create_user(
+            cedula="9150",
+            password="test",  # noqa: S106 - test credential
+            nombres="Operario",
+            apellidos="Descansos",
+            telefono="3000000090",
+        )
+
+        period_calendar = OperatorRestPeriod.objects.create(
+            operator=operator,
+            start_date=calendar.start_date,
+            end_date=calendar.start_date,
+            status=RestPeriodStatus.CONFIRMED,
+            source=RestPeriodSource.CALENDAR,
+            calendar=calendar,
+        )
+        period_manual = OperatorRestPeriod.objects.create(
+            operator=operator,
+            start_date=calendar.start_date + timedelta(days=1),
+            end_date=calendar.start_date + timedelta(days=2),
+            status=RestPeriodStatus.CONFIRMED,
+            source=RestPeriodSource.MANUAL,
+            calendar=calendar,
+        )
+
+        response = self.client.post(reverse("calendario:calendar-delete", args=[calendar.pk]))
+
+        self.assertRedirects(response, reverse("calendario:dashboard"))
+        self.assertFalse(ShiftCalendar.objects.filter(pk=calendar.pk).exists())
+        self.assertFalse(OperatorRestPeriod.objects.filter(pk=period_calendar.pk).exists())
+
+        period_manual.refresh_from_db()
+        self.assertEqual(period_manual.status, RestPeriodStatus.APPROVED)
+        self.assertIsNone(period_manual.calendar)

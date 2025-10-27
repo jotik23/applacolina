@@ -11,9 +11,12 @@ from django.db.models import Q
 from ..models import (
     AssignmentAlertLevel,
     AssignmentDecision,
+    OperatorRestPeriod,
     OverloadPolicyData,
     PositionCategory,
     PositionDefinition,
+    RestPeriodSource,
+    RestPeriodStatus,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
@@ -46,6 +49,9 @@ class OperatorState:
     last_shift_type: Optional[str] = None
     blocked_until: Optional[date] = None
     overtime_streak: int = 0
+    rest_dates: set[date] = field(default_factory=set)
+    last_rest_end: Optional[date] = None
+    employment_start_date: Optional[date] = None
 
     def register_assignment(self, target_date: date, shift_type: str, is_overtime: bool) -> None:
         if self.last_assignment_date and target_date == self.last_assignment_date + timedelta(days=1):
@@ -72,6 +78,12 @@ class OperatorState:
         self.total_assignments += 1
         self.overtime_streak = self.overtime_streak + 1 if is_overtime else 0
 
+        if target_date in self.rest_dates:
+            self.rest_dates.discard(target_date)
+
+    def is_rest_day(self, target_date: date) -> bool:
+        return target_date in self.rest_dates
+
 
 class CalendarScheduler:
     def __init__(self, calendar: ShiftCalendar, *, options: Optional[SchedulerOptions] = None) -> None:
@@ -84,6 +96,7 @@ class CalendarScheduler:
         self._capabilities_by_category: Dict[int, List[OperatorCapability]] = defaultdict(list)
         self._preferred_farms: Dict[int, Optional[int]] = {}
         self._overload_policies: Dict[int, OverloadPolicyData] = {}
+        self._rest_periods: Dict[int, List[OperatorRestPeriod]] = defaultdict(list)
         self._positions: List[PositionDefinition] = []
         self._calendar_dates = list(self._daterange(calendar.start_date, calendar.end_date))
         self._load_context()
@@ -138,10 +151,13 @@ class CalendarScheduler:
             self._operator_capabilities.setdefault(operator_id, []).append(capability)
             self._capabilities_by_category[capability.category_id].append(capability)
             if operator_id not in self._operator_states:
-                self._operator_states[operator_id] = OperatorState(operator=capability.operator)
-                self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
-            else:
-                self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
+                self._operator_states[operator_id] = OperatorState(
+                    operator=capability.operator,
+                    employment_start_date=capability.operator.employment_start_date,
+                )
+            self._preferred_farms[operator_id] = capability.operator.preferred_farm_id
+
+        self._apply_rest_context()
 
     def _build_default_capabilities(self, categories: set[int]) -> List[OperatorCapability]:
         """Create in-memory capabilities for all active operators when no rules exist."""
@@ -250,6 +266,9 @@ class CalendarScheduler:
         if current_date in state.assigned_dates:
             return False
 
+        if state.is_rest_day(current_date):
+            return False
+
         if state.blocked_until and current_date <= state.blocked_until:
             return False
 
@@ -356,6 +375,7 @@ class CalendarScheduler:
                 ShiftAssignment.objects.bulk_create(assignments_to_create, batch_size=100)
 
             self._rebuild_workload_snapshots()
+            self.sync_rest_periods()
 
     def _rebuild_workload_snapshots(self) -> None:
         self.calendar.workload_snapshots.all().delete()
@@ -424,3 +444,163 @@ class CalendarScheduler:
         while current <= end:
             yield current
             current += timedelta(days=1)
+
+    # ------------------------------------------------------------------
+    # Rest context helpers
+    # ------------------------------------------------------------------
+    def _apply_rest_context(self) -> None:
+        if not self._operator_states:
+            return
+
+        operator_ids = list(self._operator_states.keys())
+
+        rest_periods = (
+            OperatorRestPeriod.objects.filter(operator_id__in=operator_ids)
+            .exclude(status=RestPeriodStatus.CANCELLED)
+            .order_by("start_date", "end_date")
+        )
+
+        for period in rest_periods:
+            self._rest_periods[period.operator_id].append(period)
+
+        for operator_id, state in self._operator_states.items():
+            periods = self._rest_periods.get(operator_id, [])
+            self._initialize_rest_state(state, periods)
+
+    def _initialize_rest_state(self, state: OperatorState, periods: List[OperatorRestPeriod]) -> None:
+        last_completed_rest: Optional[date] = None
+        for period in periods:
+            if period.end_date < self.calendar.start_date and period.status in {
+                RestPeriodStatus.CONFIRMED,
+                RestPeriodStatus.APPROVED,
+                RestPeriodStatus.PLANNED,
+                RestPeriodStatus.EXPIRED,
+            }:
+                if not last_completed_rest or period.end_date > last_completed_rest:
+                    last_completed_rest = period.end_date
+
+            if period.start_date > self.calendar.end_date:
+                continue
+
+            overlap_start = max(period.start_date, self.calendar.start_date)
+            overlap_end = min(period.end_date, self.calendar.end_date)
+            if overlap_start > overlap_end:
+                continue
+
+            if period.status == RestPeriodStatus.CANCELLED:
+                continue
+
+            for day in self._daterange(overlap_start, overlap_end):
+                state.rest_dates.add(day)
+
+        if last_completed_rest:
+            state.last_rest_end = last_completed_rest
+        elif state.employment_start_date:
+            state.last_rest_end = state.employment_start_date - timedelta(days=1)
+
+        if state.last_rest_end and state.last_rest_end < self.calendar.start_date:
+            days_since_rest = (self.calendar.start_date - state.last_rest_end).days - 1
+            if days_since_rest > 0:
+                state.consecutive_streak = days_since_rest
+                state.consecutive_day_streak = days_since_rest
+                state.last_assignment_date = self.calendar.start_date - timedelta(days=1)
+
+    def sync_rest_periods(self) -> None:
+        sync_calendar_rest_periods(
+            self.calendar,
+            operator_ids=self._operator_states.keys(),
+            calendar_dates=self._calendar_dates,
+        )
+
+
+def sync_calendar_rest_periods(
+    calendar: ShiftCalendar,
+    *,
+    operator_ids: Optional[Iterable[int]] = None,
+    calendar_dates: Optional[Iterable[date]] = None,
+) -> None:
+    dates = list(calendar_dates or CalendarScheduler._daterange(calendar.start_date, calendar.end_date))
+    if not dates:
+        calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).delete()
+        return
+
+    operator_id_set = set(operator_ids or [])
+
+    assignments_by_day: Dict[date, set[int]] = defaultdict(set)
+    assignments = calendar.assignments.select_related("operator").values_list("operator_id", "date")
+    for operator_id, assignment_date in assignments:
+        if operator_id is None:
+            continue
+        assignments_by_day[assignment_date].add(operator_id)
+        operator_id_set.add(operator_id)
+
+    manual_operator_ids = (
+        calendar.rest_periods.exclude(source=RestPeriodSource.CALENDAR).values_list("operator_id", flat=True)
+    )
+    operator_id_set.update(manual_operator_ids)
+
+    existing_manual_periods = OperatorRestPeriod.objects.filter(operator_id__in=operator_id_set).exclude(
+        status=RestPeriodStatus.CANCELLED
+    )
+    manual_periods_map: Dict[int, List[OperatorRestPeriod]] = defaultdict(list)
+    for period in existing_manual_periods:
+        manual_periods_map[period.operator_id].append(period)
+
+    calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).delete()
+
+    new_periods: List[OperatorRestPeriod] = []
+
+    for operator_id in operator_id_set:
+        manual_periods = manual_periods_map.get(operator_id, [])
+        manual_periods.sort(key=lambda p: (p.start_date, p.end_date))
+
+        sequences: List[Tuple[date, date]] = []
+        current_start: Optional[date] = None
+
+        for day in dates:
+            working = operator_id in assignments_by_day.get(day, set())
+            if working:
+                if current_start:
+                    sequences.append((current_start, day - timedelta(days=1)))
+                    current_start = None
+            else:
+                if current_start is None:
+                    current_start = day
+
+        if current_start is not None:
+            sequences.append((current_start, dates[-1]))
+
+        for start, end in sequences:
+            if start > end:
+                continue
+
+            covering_manual = next(
+                (
+                    period
+                    for period in manual_periods
+                    if period.start_date <= start and period.end_date >= end and period.source != RestPeriodSource.CALENDAR
+                ),
+                None,
+            )
+
+            if covering_manual:
+                if covering_manual.status in {RestPeriodStatus.PLANNED, RestPeriodStatus.APPROVED}:
+                    covering_manual.status = RestPeriodStatus.CONFIRMED
+                    if covering_manual.calendar_id != calendar.id:
+                        covering_manual.calendar = calendar
+                    covering_manual.save(update_fields=["status", "calendar", "updated_at"])
+                continue
+
+            new_periods.append(
+                OperatorRestPeriod(
+                    operator_id=operator_id,
+                    start_date=start,
+                    end_date=end,
+                    status=RestPeriodStatus.CONFIRMED,
+                    source=RestPeriodSource.CALENDAR,
+                    calendar=calendar,
+                )
+            )
+
+    if new_periods:
+        OperatorRestPeriod.objects.bulk_create(new_periods, batch_size=100)

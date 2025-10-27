@@ -32,6 +32,9 @@ from .models import (
     OperatorCapability,
     PositionCategory,
     PositionDefinition,
+    OperatorRestPeriod,
+    RestPeriodSource,
+    RestPeriodStatus,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
@@ -55,7 +58,9 @@ def _date_range(start: date, end: date) -> List[date]:
     return [start + timedelta(days=offset) for offset in range(days + 1)]
 
 
-def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[dict[str, Any]]]:
+def _build_assignment_matrix(
+    calendar: ShiftCalendar,
+) -> tuple[List[date], List[dict[str, Any]], List[dict[str, Any]]]:
     date_columns = _date_range(calendar.start_date, calendar.end_date)
     assignment_list = list(
         calendar.assignments.select_related("position", "position__farm", "operator")
@@ -116,7 +121,142 @@ def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[
             )
         rows.append({"position": position, "cells": cells})
 
-    return date_columns, rows
+    rest_rows = _build_rest_rows(date_columns, assignment_list)
+
+    return date_columns, rows, rest_rows
+
+
+def _build_rest_rows(
+    date_columns: Iterable[date],
+    assignment_list: Iterable[ShiftAssignment],
+) -> List[dict[str, Any]]:
+    day_assignments: dict[date, set[int]] = defaultdict(set)
+    operators: dict[int, UserProfile] = {}
+
+    for assignment in assignment_list:
+        if not assignment.operator_id:
+            continue
+        day_assignments[assignment.date].add(assignment.operator_id)
+        operators[assignment.operator_id] = assignment.operator
+
+    if not operators:
+        return []
+
+    sorted_operators = sorted(
+        operators.values(),
+        key=lambda operator: (
+            (operator.apellidos or "").lower(),
+            (operator.nombres or "").lower(),
+            operator.id,
+        ),
+    )
+
+    rest_matrix: dict[date, list[UserProfile]] = {}
+    for day in date_columns:
+        working_ids = day_assignments.get(day, set())
+        resters = [op for op in sorted_operators if op.id not in working_ids]
+        rest_matrix[day] = resters
+
+    max_slots = max((len(resters) for resters in rest_matrix.values()), default=0)
+    if max_slots == 0:
+        return []
+
+    rest_rows: List[dict[str, Any]] = []
+    for slot_index in range(max_slots):
+        cells: List[dict[str, Any]] = []
+        for day in date_columns:
+            resters = rest_matrix.get(day, [])
+            if slot_index < len(resters):
+                operator = resters[slot_index]
+                roles = list(operator.roles.all())
+                role_label = roles[0].get_name_display() if roles else ""
+                display_name = (
+                    operator.get_full_name()
+                    or operator.nombres
+                    or operator.apellidos
+                    or operator.cedula
+                )
+                cells.append(
+                    {
+                        "operator_id": operator.id,
+                        "name": display_name,
+                        "role": role_label,
+                    }
+                )
+            else:
+                cells.append({"operator_id": None, "name": "", "role": ""})
+
+        rest_rows.append(
+            {
+                "label": "Descansos",
+                "slot": slot_index + 1,
+                "cells": cells,
+            }
+        )
+
+    return rest_rows
+
+
+def _serialize_rest_period(period: OperatorRestPeriod) -> dict[str, Any]:
+    return {
+        "start": period.start_date.isoformat(),
+        "end": period.end_date.isoformat(),
+        "status": period.status,
+        "status_label": RestPeriodStatus(period.status).label,
+        "source": period.source,
+        "source_label": RestPeriodSource(period.source).label,
+    }
+
+
+def _build_rest_summary(
+    calendar: ShiftCalendar,
+    operator_map: dict[int, UserProfile],
+) -> dict[str, Any]:
+    if not operator_map:
+        return {}
+
+    operator_ids = list(operator_map.keys())
+    periods = (
+        OperatorRestPeriod.objects.filter(operator_id__in=operator_ids)
+        .exclude(status=RestPeriodStatus.CANCELLED)
+        .order_by("start_date", "end_date")
+    )
+
+    periods_by_operator: dict[int, list[OperatorRestPeriod]] = defaultdict(list)
+    for period in periods:
+        periods_by_operator[period.operator_id].append(period)
+
+    summary: dict[str, Any] = {}
+    for operator_id, operator in operator_map.items():
+        operator_periods = periods_by_operator.get(operator_id, [])
+        latest_completed: Optional[OperatorRestPeriod] = None
+        upcoming: Optional[OperatorRestPeriod] = None
+        current: Optional[OperatorRestPeriod] = None
+
+        for period in operator_periods:
+            if period.start_date <= calendar.start_date <= period.end_date:
+                if current is None or period.end_date > current.end_date:
+                    current = period
+            if period.end_date < calendar.start_date:
+                if latest_completed is None or period.end_date > latest_completed.end_date:
+                    latest_completed = period
+            elif period.start_date >= calendar.start_date:
+                if upcoming is None or period.start_date < upcoming.start_date:
+                    upcoming = period
+
+        display_name = operator.get_full_name() or operator.nombres or operator.apellidos or ""
+
+        summary[str(operator_id)] = {
+            "name": display_name,
+            "employment_start": operator.employment_start_date.isoformat()
+            if operator.employment_start_date
+            else None,
+            "current": _serialize_rest_period(current) if current else None,
+            "recent": _serialize_rest_period(latest_completed) if latest_completed else None,
+            "upcoming": _serialize_rest_period(upcoming) if upcoming else None,
+        }
+
+    return summary
 
 
 def _eligible_operator_map(
@@ -248,6 +388,7 @@ def _calculate_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
 def _refresh_workload_snapshots(calendar: ShiftCalendar) -> None:
     scheduler = CalendarScheduler(calendar, options=SchedulerOptions())
     scheduler._rebuild_workload_snapshots()
+    scheduler.sync_rest_periods()
 
 
 def _json_error(message: str, *, status: int = 400, errors: Optional[dict[str, Any]] = None) -> JsonResponse:
@@ -349,6 +490,9 @@ def _operator_payload(
             if operator.preferred_farm_id and preferred_farm
             else None
         ),
+        "employment_start": operator.employment_start_date.isoformat()
+        if operator.employment_start_date
+        else None,
         "roles": [
             {
                 "id": role.id,
@@ -591,9 +735,18 @@ class CalendarDetailView(LoginRequiredMixin, View):
             ShiftCalendar.objects.select_related("created_by", "approved_by", "base_calendar"),
             pk=pk,
         )
-        date_columns, rows = _build_assignment_matrix(calendar)
+        date_columns, rows, rest_rows = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
         can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
+
+        operator_map: dict[int, UserProfile] = {}
+        for row in rows:
+            for cell in row["cells"]:
+                assignment = cell.get("assignment")
+                if assignment and assignment.operator_id:
+                    operator_map[assignment.operator_id] = assignment.operator
+
+        rest_summary = _build_rest_summary(calendar, operator_map)
 
         manual_operator_choices: list[dict[str, Any]] = []
         if can_override:
@@ -640,6 +793,8 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 "date_columns": date_columns,
                 "rows": rows,
                 "stats": stats,
+                "rest_rows": rest_rows,
+                "rest_summary": rest_summary,
                 "can_override": can_override,
                 "manual_operator_choices": manual_operator_choices,
             },
@@ -1232,7 +1387,7 @@ class CalendarSummaryView(LoginRequiredMixin, View):
             pk=calendar_id,
         )
 
-        date_columns, rows = _build_assignment_matrix(calendar)
+        date_columns, rows, _rest_rows = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
 
         row_payload = []

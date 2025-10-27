@@ -119,6 +119,33 @@
       <h2 class="text-lg font-semibold text-slate-900">Asignaciones</h2>
     </header>
 
+    {{ rest_summary|json_script:"rest-summary-data" }}
+    <div class="hidden rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 text-sm text-slate-700 shadow-sm" data-rest-panel>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span class="text-xs uppercase tracking-wide text-indigo-600">Descansos del colaborador</span>
+          <p class="text-sm font-semibold text-slate-900" data-rest-operator-title>Selecciona un colaborador para ver sus descansos.</p>
+          <p class="text-xs text-slate-500" data-rest-employment></p>
+        </div>
+        <button type="button" class="inline-flex items-center rounded border border-indigo-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700 hover:border-indigo-300 hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2" data-rest-clear>
+          Limpiar selección
+        </button>
+      </div>
+      <dl class="mt-3 grid gap-3 text-sm md:grid-cols-3">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Descanso vigente</dt>
+          <dd class="mt-1 font-medium text-slate-900" data-rest-current>Sin descanso vigente</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Último descanso</dt>
+          <dd class="mt-1 font-medium text-slate-900" data-rest-recent>Sin registro</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-500">Próximo descanso</dt>
+          <dd class="mt-1 font-medium text-slate-900" data-rest-upcoming>Sin programación futura</dd>
+        </div>
+      </dl>
+    </div>
     <div class="overflow-x-auto">
       <table class="w-max min-w-full divide-y divide-slate-100 text-xs sm:text-sm">
         <thead class="sticky top-0 z-20 bg-slate-50 shadow">
@@ -141,7 +168,7 @@
                 <td class="px-3 py-2 align-top">
                   {% if cell.assignment %}
                     {% if cell.is_position_active %}
-                      <div class="rounded-lg border p-2 shadow-sm transition hover:shadow-md {% if cell.alert == 'critical' %}border-red-300 bg-red-50/80{% elif cell.alert == 'warn' %}border-amber-300 bg-amber-50/80{% else %}border-emerald-200 bg-emerald-50/70{% endif %} {% if cell.is_overtime %}ring-1 ring-slate-900/10{% endif %}" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}">
+                      <div class="rounded-lg border p-2 shadow-sm transition hover:shadow-md {% if cell.alert == 'critical' %}border-red-300 bg-red-50/80{% elif cell.alert == 'warn' %}border-amber-300 bg-amber-50/80{% else %}border-emerald-200 bg-emerald-50/70{% endif %} {% if cell.is_overtime %}ring-1 ring-slate-900/10{% endif %}" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}" data-operator-name="{{ cell.assignment.operator.get_full_name|default:cell.assignment.operator.nombres|default:cell.assignment.operator.apellidos|escape }}">
                         {% if can_override and manual_operator_choices %}
                           <form method="post" class="flex items-center gap-2">
                             {% csrf_token %}
@@ -246,7 +273,7 @@
                         {% endif %}
                       </div>
                     {% else %}
-                      <div class="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-500 shadow-sm" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}">
+                      <div class="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-500 shadow-sm" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}" data-operator-name="{{ cell.assignment.operator.get_full_name|default:cell.assignment.operator.nombres|default:cell.assignment.operator.apellidos|escape }}">
                         <div class="flex items-start justify-between gap-2">
                           <div>
                             <p class="font-semibold text-slate-600">{{ cell.assignment.operator.get_full_name }}</p>
@@ -348,7 +375,7 @@
                 {% for cell in rest_row.cells %}
                   <td class="px-3 py-2 align-top">
                     {% if cell.operator_id %}
-                      <div class="rounded-lg border border-slate-200 bg-white p-2 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}">
+                      <div class="rounded-lg border border-slate-200 bg-white p-2 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}">
                         <p class="text-sm font-semibold text-slate-900">{{ cell.name }}</p>
                         {% if cell.role %}
                           <span class="block text-xs text-slate-500">{{ cell.role }}</span>
@@ -369,21 +396,141 @@
       document.addEventListener('DOMContentLoaded', function () {
         var highlightClasses = ['outline', 'outline-2', 'outline-offset-2', 'outline-indigo-500', 'bg-indigo-50', 'shadow-lg'];
         var cards = Array.prototype.slice.call(document.querySelectorAll('[data-operator-id]'));
+        var restSummaryDataEl = document.getElementById('rest-summary-data');
+        var restSummary = {};
+        if (restSummaryDataEl) {
+          try {
+            restSummary = JSON.parse(restSummaryDataEl.textContent);
+          } catch (error) {
+            restSummary = {};
+          }
+        }
+        var restPanel = document.querySelector('[data-rest-panel]');
+        var restOperatorTitle = restPanel ? restPanel.querySelector('[data-rest-operator-title]') : null;
+        var restEmployment = restPanel ? restPanel.querySelector('[data-rest-employment]') : null;
+        var restCurrent = restPanel ? restPanel.querySelector('[data-rest-current]') : null;
+        var restRecent = restPanel ? restPanel.querySelector('[data-rest-recent]') : null;
+        var restUpcoming = restPanel ? restPanel.querySelector('[data-rest-upcoming]') : null;
+        var restClear = restPanel ? restPanel.querySelector('[data-rest-clear]') : null;
 
         if (!cards.length) {
+          if (restPanel) {
+            restPanel.classList.add('hidden');
+          }
           return;
         }
 
         var activeOperator = null;
 
+        function formatDate(isoString) {
+          if (!isoString) {
+            return '';
+          }
+          var parts = isoString.split('-');
+          if (parts.length !== 3) {
+            return isoString;
+          }
+          return parts[2] + '/' + parts[1] + '/' + parts[0];
+        }
+
+        function describePeriod(period) {
+          if (!period) {
+            return null;
+          }
+          var startLabel = formatDate(period.start);
+          var endLabel = formatDate(period.end);
+          var rangeLabel = startLabel === endLabel || !endLabel ? startLabel : startLabel + ' → ' + endLabel;
+          var qualifiers = [];
+          if (period.status_label) {
+            qualifiers.push(period.status_label);
+          }
+          if (period.source_label) {
+            qualifiers.push(period.source_label);
+          }
+          if (qualifiers.length) {
+            rangeLabel += ' · ' + qualifiers.join(' · ');
+          }
+          return rangeLabel;
+        }
+
+        function clearRestPanel() {
+          if (!restPanel) {
+            return;
+          }
+          restPanel.classList.add('hidden');
+          if (restOperatorTitle) {
+            restOperatorTitle.textContent = 'Selecciona un colaborador para ver sus descansos.';
+          }
+          if (restEmployment) {
+            restEmployment.textContent = '';
+          }
+          if (restCurrent) {
+            restCurrent.textContent = 'Sin descanso vigente';
+          }
+          if (restRecent) {
+            restRecent.textContent = 'Sin registro';
+          }
+          if (restUpcoming) {
+            restUpcoming.textContent = 'Sin programación futura';
+          }
+        }
+
+        function updateRestPanel(operatorId, sourceCard) {
+          if (!restPanel || !restOperatorTitle || !restCurrent || !restRecent || !restUpcoming) {
+            return;
+          }
+
+          var summary = restSummary[operatorId];
+          if (!summary) {
+            restOperatorTitle.textContent = 'Sin información de descansos para este colaborador.';
+            if (restEmployment) {
+              restEmployment.textContent = '';
+            }
+            restCurrent.textContent = 'Sin datos';
+            restRecent.textContent = 'Sin datos';
+            restUpcoming.textContent = 'Sin datos';
+            restPanel.classList.remove('hidden');
+            return;
+          }
+
+          var operatorName = sourceCard ? (sourceCard.dataset.operatorName || '') : '';
+          if (!operatorName && summary.name) {
+            operatorName = summary.name;
+          }
+          if (!operatorName) {
+            operatorName = 'Colaborador seleccionado';
+          }
+          restOperatorTitle.textContent = operatorName;
+
+          if (restEmployment) {
+            restEmployment.textContent = summary.employment_start
+              ? 'Ingreso: ' + formatDate(summary.employment_start)
+              : 'Ingreso no registrado';
+          }
+
+          var currentLabel = describePeriod(summary.current);
+          restCurrent.textContent = currentLabel || 'Sin descanso vigente';
+          var recentLabel = describePeriod(summary.recent);
+          restRecent.textContent = recentLabel || 'Sin registro';
+          var upcomingLabel = describePeriod(summary.upcoming);
+          restUpcoming.textContent = upcomingLabel || 'Sin programación futura';
+
+          restPanel.classList.remove('hidden');
+        }
+
         function applyHighlight(operatorId) {
           activeOperator = operatorId;
+          var referenceCard = null;
           cards.forEach(function (card) {
             var matches = card.dataset.operatorId === operatorId;
+            if (matches && !referenceCard) {
+              referenceCard = card;
+            }
             highlightClasses.forEach(function (className) {
               card.classList.toggle(className, matches);
             });
           });
+          updateRestPanel(operatorId, referenceCard);
         }
 
         function clearHighlight() {
@@ -396,7 +543,16 @@
             });
           });
           activeOperator = null;
+          clearRestPanel();
         }
+
+        if (restClear) {
+          restClear.addEventListener('click', function () {
+            clearHighlight();
+          });
+        }
+
+        clearRestPanel();
 
         cards.forEach(function (card) {
           var operatorId = card.dataset.operatorId;

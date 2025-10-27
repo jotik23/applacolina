@@ -8,9 +8,12 @@ from calendario.models import (
     AssignmentAlertLevel,
     CalendarStatus,
     ComplexityLevel,
+    OperatorRestPeriod,
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
+    RestPeriodSource,
+    RestPeriodStatus,
     ShiftCalendar,
     ShiftType,
 )
@@ -75,6 +78,9 @@ class CalendarSchedulerTests(TestCase):
             end_date=date(2025, 1, 3),
             status=CalendarStatus.DRAFT,
         )
+
+        self.operator.employment_start_date = date(2024, 12, 25)
+        self.operator.save(update_fields=["employment_start_date"])
 
 
     def test_scheduler_assigns_operator_with_matching_capability(self) -> None:
@@ -154,3 +160,51 @@ class CalendarSchedulerTests(TestCase):
                 self.calendar.start_date + timedelta(days=1),
             },
         )
+
+    def test_scheduler_respects_planned_rest_period(self) -> None:
+        from calendario.models import OperatorCapability
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=7,
+        )
+
+        OperatorRestPeriod.objects.create(
+            operator=self.operator,
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date,
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+        )
+
+        scheduler = CalendarScheduler(self.calendar)
+        decisions = scheduler.generate()
+
+        self.assertIsNone(decisions[0].operator)
+
+    def test_sync_rest_periods_creates_calendar_period(self) -> None:
+        from calendario.models import OperatorCapability
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        self.position.valid_until = self.calendar.start_date + timedelta(days=1)
+        self.position.save(update_fields=["valid_until"])
+
+        scheduler = CalendarScheduler(self.calendar)
+        scheduler.generate(commit=True)
+
+        rest_periods = OperatorRestPeriod.objects.filter(
+            calendar=self.calendar,
+            source=RestPeriodSource.CALENDAR,
+        )
+        self.assertEqual(rest_periods.count(), 1)
+        rest_period = rest_periods.first()
+        self.assertIsNotNone(rest_period)
+        assert rest_period is not None
+        self.assertEqual(rest_period.start_date, self.calendar.start_date + timedelta(days=2))
+        self.assertEqual(rest_period.end_date, self.calendar.start_date + timedelta(days=2))

@@ -125,6 +125,7 @@
         operatorLastName: app.querySelector('#operator-last-name'),
         operatorPhone: app.querySelector('#operator-phone'),
         operatorEmail: app.querySelector('#operator-email'),
+        operatorEmploymentStart: app.querySelector('#operator-employment-start'),
         operatorPreferredFarm: app.querySelector('#operator-preferred-farm'),
         operatorRoles: app.querySelector('#operator-roles'),
         operatorIsActive: app.querySelector('#operator-is-active'),
@@ -184,6 +185,21 @@
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
+      };
+
+      const formatDateLabel = (isoDate) => {
+        if (!isoDate) {
+          return '';
+        }
+        const parts = String(isoDate).split('-');
+        if (parts.length !== 3) {
+          return isoDate;
+        }
+        const [year, month, day] = parts;
+        if (!year || !month || !day) {
+          return isoDate;
+        }
+        return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
       };
 
       let capabilityRowCounter = 0;
@@ -731,12 +747,14 @@
 
       const getOperatorPayload = () => {
         const preferredFarmValue = refs.operatorPreferredFarm?.value || '';
+        const employmentStartValue = refs.operatorEmploymentStart?.value || '';
         return {
           cedula: refs.operatorDocument?.value.trim() || '',
           telefono: refs.operatorPhone?.value.trim() || '',
           nombres: refs.operatorFirstName?.value.trim() || '',
           apellidos: refs.operatorLastName?.value.trim() || '',
           email: refs.operatorEmail?.value.trim() || '',
+          employment_start_date: employmentStartValue,
           preferred_farm: preferredFarmValue ? Number(preferredFarmValue) : null,
           roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
           is_active: Boolean(refs.operatorIsActive?.checked),
@@ -772,6 +790,9 @@
           if (refs.operatorEmail) {
             refs.operatorEmail.value = '';
           }
+          if (refs.operatorEmploymentStart) {
+            refs.operatorEmploymentStart.value = '';
+          }
           if (refs.operatorPreferredFarm) {
             refs.operatorPreferredFarm.value = '';
           }
@@ -802,6 +823,9 @@
           }
           if (refs.operatorEmail) {
             refs.operatorEmail.value = operator.email || '';
+          }
+          if (refs.operatorEmploymentStart) {
+            refs.operatorEmploymentStart.value = operator.employment_start || '';
           }
           if (refs.operatorPreferredFarm) {
             refs.operatorPreferredFarm.value = operator.preferred_farm?.id
@@ -1255,6 +1279,9 @@
             const emailLine = operator.email
               ? `<p class="text-xs text-slate-500">${escapeHtml(operator.email)}</p>`
               : '';
+            const employmentLine = operator.employment_start
+              ? `<p class="text-xs text-slate-500">Ingreso: ${escapeHtml(formatDateLabel(operator.employment_start))}</p>`
+              : '';
 
             return `
               <tr class="${rowClasses}" data-operator-id="${operator.id}">
@@ -1262,6 +1289,7 @@
                   <p class="font-semibold text-slate-800">${escapeHtml(operator.name)}</p>
                   <p class="text-xs text-slate-500">${contactLine}</p>
                   ${emailLine}
+                  ${employmentLine}
                 </td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${roles || 'Sin rol asignado'}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${operatorCapabilities || 'Sin fortalezas activas'}</td>
