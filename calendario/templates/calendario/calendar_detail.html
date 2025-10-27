@@ -120,7 +120,7 @@
     </header>
 
     {{ rest_summary|json_script:"rest-summary-data" }}
-    <div class="hidden rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 text-sm text-slate-700 shadow-sm" data-rest-panel>
+    <div class="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 text-sm text-slate-700 shadow-sm" data-rest-panel>
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <span class="text-xs uppercase tracking-wide text-indigo-600">Descansos del colaborador</span>
@@ -413,15 +413,6 @@
         var restUpcoming = restPanel ? restPanel.querySelector('[data-rest-upcoming]') : null;
         var restClear = restPanel ? restPanel.querySelector('[data-rest-clear]') : null;
 
-        if (!cards.length) {
-          if (restPanel) {
-            restPanel.classList.add('hidden');
-          }
-          return;
-        }
-
-        var activeOperator = null;
-
         function formatDate(isoString) {
           if (!isoString) {
             return '';
@@ -457,7 +448,6 @@
           if (!restPanel) {
             return;
           }
-          restPanel.classList.add('hidden');
           if (restOperatorTitle) {
             restOperatorTitle.textContent = 'Selecciona un colaborador para ver sus descansos.';
           }
@@ -489,7 +479,6 @@
             restCurrent.textContent = 'Sin datos';
             restRecent.textContent = 'Sin datos';
             restUpcoming.textContent = 'Sin datos';
-            restPanel.classList.remove('hidden');
             return;
           }
 
@@ -518,8 +507,10 @@
           restPanel.classList.remove('hidden');
         }
 
-        function applyHighlight(operatorId) {
-          activeOperator = operatorId;
+        var highlightedOperator = null;
+
+        function setHighlight(operatorId, sourceCard) {
+          highlightedOperator = operatorId;
           var referenceCard = null;
           cards.forEach(function (card) {
             var matches = card.dataset.operatorId === operatorId;
@@ -530,25 +521,29 @@
               card.classList.toggle(className, matches);
             });
           });
-          updateRestPanel(operatorId, referenceCard);
+          updateRestPanel(operatorId, referenceCard || sourceCard || null);
         }
 
         function clearHighlight() {
-          if (!activeOperator) {
-            return;
-          }
           cards.forEach(function (card) {
             highlightClasses.forEach(function (className) {
               card.classList.remove(className);
             });
           });
-          activeOperator = null;
+          highlightedOperator = null;
           clearRestPanel();
+        }
+
+        function clearHighlightIfUnlocked(operatorId) {
+          if (!operatorId || highlightedOperator === operatorId) {
+            clearHighlight();
+          }
         }
 
         if (restClear) {
           restClear.addEventListener('click', function () {
             clearHighlight();
+            clearRestPanel();
           });
         }
 
@@ -560,23 +555,25 @@
             return;
           }
 
-          card.addEventListener('mouseenter', function () {
-            applyHighlight(operatorId);
-          });
-
-          card.addEventListener('mouseleave', function () {
-            if (activeOperator === operatorId) {
+          card.addEventListener('click', function (event) {
+            if (event.detail > 1) {
+              return;
+            }
+            if (highlightedOperator === operatorId) {
               clearHighlight();
+              clearRestPanel();
+            } else {
+              setHighlight(operatorId, card);
             }
           });
 
           card.addEventListener('focusin', function () {
-            applyHighlight(operatorId);
+            setHighlight(operatorId, card);
           });
 
           card.addEventListener('focusout', function (event) {
-            if (activeOperator === operatorId && !card.contains(event.relatedTarget)) {
-              clearHighlight();
+            if (highlightedOperator === operatorId && !card.contains(event.relatedTarget)) {
+              clearHighlightIfUnlocked(operatorId);
             }
           });
         });
