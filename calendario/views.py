@@ -22,6 +22,7 @@ from .forms import (
     AssignmentUpdateForm,
     CalendarGenerationForm,
     OperatorCapabilityForm,
+    OperatorRestPeriodForm,
     OperatorProfileForm,
     PositionDefinitionForm,
 )
@@ -526,6 +527,63 @@ def _capability_payload(capability: OperatorCapability) -> dict[str, Any]:
         "category_id": str(capability.category_id) if capability.category_id else "",
         "skill_score": capability.skill_score,
     }
+
+
+def _rest_period_payload(period: OperatorRestPeriod) -> dict[str, Any]:
+    calendar = period.calendar
+    created_by = period.created_by
+    return {
+        "id": period.id,
+        "operator_id": period.operator_id,
+        "start": period.start_date.isoformat(),
+        "end": period.end_date.isoformat(),
+        "status": period.status,
+        "status_label": RestPeriodStatus(period.status).label,
+        "source": period.source,
+        "source_label": RestPeriodSource(period.source).label,
+        "notes": period.notes,
+        "calendar_id": calendar.id if calendar else None,
+        "calendar": (
+            {
+                "id": calendar.id,
+                "name": calendar.name,
+                "start_date": calendar.start_date.isoformat(),
+                "end_date": calendar.end_date.isoformat(),
+                "status": calendar.status,
+            }
+            if calendar
+            else None
+        ),
+        "created_by": (
+            {
+                "id": created_by.id,
+                "name": created_by.get_full_name() or created_by.get_username(),
+            }
+            if created_by
+            else None
+        ),
+        "created_at": period.created_at.isoformat(),
+        "updated_at": period.updated_at.isoformat(),
+        "is_system_generated": period.source == RestPeriodSource.CALENDAR,
+        "duration_days": (period.end_date - period.start_date).days + 1,
+    }
+
+
+def _rest_period_requires_calendar_refresh(
+    operator_id: int,
+    start_date: date,
+    end_date: date,
+    source: str,
+) -> bool:
+    if not operator_id:
+        return False
+    if source == RestPeriodSource.CALENDAR:
+        return True
+
+    return ShiftAssignment.objects.filter(
+        operator_id=operator_id,
+        date__range=(start_date, end_date),
+    ).exists()
 
 
 def _normalize_capability_entries(data: Any) -> Tuple[Optional[dict[int, int]], dict[str, List[str]]]:
@@ -1197,6 +1255,106 @@ class CapabilityDetailView(LoginRequiredMixin, View):
         return JsonResponse({"status": "deleted"})
 
 
+class RestPeriodCollectionView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form = OperatorRestPeriodForm(payload)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para el descanso.", errors=_form_errors(form))
+
+        rest_period: OperatorRestPeriod = form.save(commit=False)
+        if not rest_period.created_by_id:
+            rest_period.created_by = request.user
+        rest_period.save()
+
+        rest_period = (
+            OperatorRestPeriod.objects.select_related("calendar", "created_by", "operator")
+            .get(pk=rest_period.pk)
+        )
+
+        requires_refresh = _rest_period_requires_calendar_refresh(
+            rest_period.operator_id,
+            rest_period.start_date,
+            rest_period.end_date,
+            rest_period.source,
+        )
+
+        return JsonResponse(
+            {
+                "rest_period": _rest_period_payload(rest_period),
+                "requires_calendar_refresh": requires_refresh,
+            },
+            status=201,
+        )
+
+
+class RestPeriodDetailView(LoginRequiredMixin, View):
+    http_method_names = ["patch", "delete"]
+
+    def patch(self, request: HttpRequest, rest_period_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        rest_period = get_object_or_404(OperatorRestPeriod, pk=rest_period_id)
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        form_data = {
+            "operator": rest_period.operator_id,
+            "start_date": rest_period.start_date,
+            "end_date": rest_period.end_date,
+            "status": rest_period.status,
+            "source": rest_period.source,
+            "calendar": rest_period.calendar_id,
+            "notes": rest_period.notes,
+        }
+        for key, value in payload.items():
+            form_data[key] = value
+
+        form = OperatorRestPeriodForm(form_data, instance=rest_period)
+        if not form.is_valid():
+            return _json_error("Datos inválidos para el descanso.", errors=_form_errors(form))
+
+        rest_period = form.save()
+        rest_period = (
+            OperatorRestPeriod.objects.select_related("calendar", "created_by", "operator")
+            .get(pk=rest_period.pk)
+        )
+
+        requires_refresh = _rest_period_requires_calendar_refresh(
+            rest_period.operator_id,
+            rest_period.start_date,
+            rest_period.end_date,
+            rest_period.source,
+        )
+
+        return JsonResponse(
+            {
+                "rest_period": _rest_period_payload(rest_period),
+                "requires_calendar_refresh": requires_refresh,
+            }
+        )
+
+    def delete(self, request: HttpRequest, rest_period_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        rest_period = get_object_or_404(OperatorRestPeriod, pk=rest_period_id)
+        requires_refresh = _rest_period_requires_calendar_refresh(
+            rest_period.operator_id,
+            rest_period.start_date,
+            rest_period.end_date,
+            rest_period.source,
+        )
+        rest_period.delete()
+        return JsonResponse(
+            {
+                "status": "deleted",
+                "requires_calendar_refresh": requires_refresh,
+            }
+        )
+
+
 class CalendarApproveView(LoginRequiredMixin, View):
     http_method_names = ["post"]
 
@@ -1270,6 +1428,12 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         )
         capabilities_payload = [_capability_payload(capability) for capability in capability_qs]
 
+        rest_period_qs = (
+            OperatorRestPeriod.objects.select_related("operator", "calendar", "created_by")
+            .order_by("-start_date", "-created_at")
+        )
+        rest_periods_payload = [_rest_period_payload(period) for period in rest_period_qs]
+
         farms_payload = [
             {
                 "id": farm.id,
@@ -1340,6 +1504,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             "positions": positions_payload,
             "operators": operators_payload,
             "capabilities": capabilities_payload,
+            "rest_periods": rest_periods_payload,
             "categories": categories_payload,
             "farms": farms_payload,
             "chicken_houses": chicken_houses_payload,
@@ -1372,6 +1537,8 @@ class CalendarMetadataView(LoginRequiredMixin, View):
                 "alert_levels": _choice_payload(AssignmentAlertLevel.choices),
                 "calendar_status": _choice_payload(CalendarStatus.choices),
                 "days_of_week": _choice_payload(DayOfWeek.choices),
+                "rest_statuses": _choice_payload(RestPeriodStatus.choices),
+                "rest_sources": _choice_payload(RestPeriodSource.choices),
             },
         }
 

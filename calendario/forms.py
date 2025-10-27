@@ -11,6 +11,7 @@ from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
     OperatorCapability,
+    OperatorRestPeriod,
     PositionCategory,
     PositionDefinition,
     ShiftAssignment,
@@ -416,3 +417,25 @@ class OperatorCapabilityForm(forms.ModelForm):
             "category",
             "skill_score",
         ]
+
+
+class OperatorRestPeriodForm(forms.ModelForm):
+    class Meta:
+        model = OperatorRestPeriod
+        fields = [
+            "operator",
+            "start_date",
+            "end_date",
+            "status",
+            "source",
+            "calendar",
+            "notes",
+        ]
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        start = cleaned_data.get("start_date")
+        end = cleaned_data.get("end_date")
+        if start and end and end < start:
+            self.add_error("end_date", "La fecha final debe ser posterior o igual al inicio.")
+        return cleaned_data

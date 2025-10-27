@@ -11,6 +11,8 @@ from .views import (
     CalendarSummaryView,
     CapabilityCollectionView,
     CapabilityDetailView,
+    RestPeriodCollectionView,
+    RestPeriodDetailView,
     OperatorCollectionView,
     OperatorDetailView,
     PositionCollectionView,
@@ -68,5 +70,15 @@ urlpatterns = [
         "calendars/capabilities/<int:capability_id>/",
         CapabilityDetailView.as_view(),
         name="calendar-capability-detail",
+    ),
+    path(
+        "calendars/rest-periods/",
+        RestPeriodCollectionView.as_view(),
+        name="calendar-rest-periods",
+    ),
+    path(
+        "calendars/rest-periods/<int:rest_period_id>/",
+        RestPeriodDetailView.as_view(),
+        name="calendar-rest-period-detail",
     ),
 ]

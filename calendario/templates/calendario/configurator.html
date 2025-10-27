@@ -22,6 +22,8 @@
       data-capability-detail-url-template="{% url 'calendario-api:calendar-capability-detail' 0 %}"
       data-operators-url="{% url 'calendario-api:calendar-operators' %}"
       data-operator-detail-url-template="{% url 'calendario-api:calendar-operator-detail' 0 %}"
+      data-rest-periods-url="{% url 'calendario-api:calendar-rest-periods' %}"
+      data-rest-period-detail-url-template="{% url 'calendario-api:calendar-rest-period-detail' 0 %}"
     >
       <div class="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs font-medium">
         <button type="button" data-step-trigger="1" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">1. Posiciones</button>
@@ -288,7 +290,7 @@
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
-                  Fecha de ingreso (opcional)
+                  Fecha de ingreso
                   <input id="operator-employment-start" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
                   <span class="mt-1 text-xs text-slate-500">Permite controlar descansos y rachas iniciales del colaborador.</span>
                 </label>
@@ -322,6 +324,70 @@
                   </div>
                   <div id="operator-capabilities-editor" class="space-y-3">
                     <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>
+                  </div>
+                </div>
+
+                <div class="md:col-span-2 space-y-3">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 class="text-sm font-semibold text-slate-800">Descansos</h3>
+                      <p class="text-xs text-slate-500">Gestiona descansos manuales y generados automáticamente para coordinar asignaciones.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div id="operator-rest-filters" class="flex flex-wrap gap-2 text-xs">
+                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="past">Pasados</button>
+                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="current">Vigentes</button>
+                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="future">Futuros</button>
+                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="last15">Últimos 15 días</button>
+                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="next15">Próximos 15 días</button>
+                      </div>
+                      <button type="button" id="operator-rest-add-btn" class="rounded border border-amber-300 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100">Registrar descanso</button>
+                    </div>
+                  </div>
+                  <p id="operator-rest-empty-hint" class="hidden rounded border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">Guarda el colaborador para gestionar descansos.</p>
+                  <div id="operator-rest-list" class="space-y-3">
+                    <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay descansos registrados.</p>
+                  </div>
+                  <div id="operator-rest-message" class="hidden rounded border px-3 py-2 text-xs"></div>
+                </div>
+
+                <div id="operator-rest-form-wrapper" class="hidden md:col-span-2 rounded border border-amber-200 bg-amber-50 p-4 text-sm">
+                  <div id="operator-rest-form" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <input type="hidden" id="operator-rest-id" />
+                    <input type="hidden" id="operator-rest-operator" />
+                    <input type="hidden" id="operator-rest-calendar" />
+
+                    <label class="flex flex-col text-sm text-slate-700">
+                      Fecha de inicio
+                      <input id="operator-rest-start" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                    </label>
+
+                    <label class="flex flex-col text-sm text-slate-700">
+                      Fecha de cierre
+                      <input id="operator-rest-end" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                    </label>
+
+                    <label class="flex flex-col text-sm text-slate-700">
+                      Estado
+                      <select id="operator-rest-status" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                    </label>
+
+                    <label class="flex flex-col text-sm text-slate-700">
+                      Origen
+                      <select id="operator-rest-source" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                    </label>
+
+                    <label class="sm:col-span-2 lg:col-span-4 flex flex-col text-sm text-slate-700">
+                      Notas internas
+                      <textarea id="operator-rest-notes" rows="2" class="mt-1 resize-y rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" placeholder="Motivo del descanso, referencias a turnos, etc."></textarea>
+                    </label>
+
+                    <div id="operator-rest-calendar-info" class="hidden sm:col-span-2 lg:col-span-4 rounded border border-amber-300 bg-white/70 px-3 py-2 text-xs text-slate-600"></div>
+                    <p id="operator-rest-edit-hint" class="sm:col-span-2 lg:col-span-4 text-xs text-amber-700"></p>
+                  </div>
+                  <div class="mt-4 flex items-center justify-end gap-2">
+                    <button type="button" id="operator-rest-cancel-btn" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                    <button type="button" id="operator-rest-save-btn" class="inline-flex items-center rounded bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-amber-600">Guardar descanso</button>
                   </div>
                 </div>
 

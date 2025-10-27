@@ -21,6 +21,8 @@
         capabilityDetailTemplate: app.dataset.capabilityDetailUrlTemplate,
         operators: app.dataset.operatorsUrl,
         operatorDetailTemplate: app.dataset.operatorDetailUrlTemplate,
+        restPeriods: app.dataset.restPeriodsUrl,
+        restPeriodDetailTemplate: app.dataset.restPeriodDetailUrlTemplate,
       };
 
       const state = {
@@ -32,10 +34,19 @@
           includeInactivePositions: false,
           includeInactiveOperators: false,
         },
+        restFilters: {
+          past: false,
+          current: true,
+          future: true,
+          last15: false,
+          next15: false,
+        },
         editing: {
           positionId: null,
           operatorId: null,
           operatorCapabilities: [],
+          restOperatorId: null,
+          restPeriodId: null,
         },
         lookups: {
           housesByFarm: new Map(),
@@ -50,6 +61,8 @@
           shiftLabels: new Map(),
           alertLabels: new Map(),
           dayLabels: new Map(),
+          restStatusLabels: new Map(),
+          restSourceLabels: new Map(),
         },
       };
 
@@ -132,6 +145,25 @@
         operatorCancelBtn: app.querySelector('#operator-cancel-btn'),
         operatorCapabilityAddBtn: app.querySelector('#operator-capability-add-btn'),
         operatorCapabilitiesEditor: app.querySelector('#operator-capabilities-editor'),
+        operatorRestAddBtn: app.querySelector('#operator-rest-add-btn'),
+        operatorRestFilters: app.querySelector('#operator-rest-filters'),
+        operatorRestList: app.querySelector('#operator-rest-list'),
+        operatorRestEmptyHint: app.querySelector('#operator-rest-empty-hint'),
+        operatorRestMessage: app.querySelector('#operator-rest-message'),
+        operatorRestFormWrapper: app.querySelector('#operator-rest-form-wrapper'),
+        operatorRestForm: app.querySelector('#operator-rest-form'),
+        operatorRestId: app.querySelector('#operator-rest-id'),
+        operatorRestOperator: app.querySelector('#operator-rest-operator'),
+        operatorRestCalendar: app.querySelector('#operator-rest-calendar'),
+        operatorRestStart: app.querySelector('#operator-rest-start'),
+        operatorRestEnd: app.querySelector('#operator-rest-end'),
+        operatorRestStatus: app.querySelector('#operator-rest-status'),
+        operatorRestSource: app.querySelector('#operator-rest-source'),
+        operatorRestNotes: app.querySelector('#operator-rest-notes'),
+        operatorRestCalendarInfo: app.querySelector('#operator-rest-calendar-info'),
+        operatorRestEditHint: app.querySelector('#operator-rest-edit-hint'),
+        operatorRestCancelBtn: app.querySelector('#operator-rest-cancel-btn'),
+        operatorRestSaveBtn: app.querySelector('#operator-rest-save-btn'),
         summaryPreview: app.querySelector('#summary-preview'),
         calendarFeedback: app.querySelector('#calendar-feedback'),
         reloadSummaryBtn: app.querySelector('#reload-summary-btn'),
@@ -387,6 +419,480 @@
         renderOperatorCapabilitiesEditor();
       };
 
+      const restFilterActiveClasses = ['border-amber-400', 'bg-amber-50', 'text-amber-700', 'hover:bg-amber-100'];
+      const restFilterInactiveClasses = ['border-slate-300', 'text-slate-600', 'hover:bg-slate-100'];
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+      const syncRestFiltersUI = () => {
+        if (!refs.operatorRestFilters) {
+          return;
+        }
+        refs.operatorRestFilters.querySelectorAll('.rest-filter-btn').forEach((button) => {
+          const key = button.dataset.filter;
+          if (!key) {
+            return;
+          }
+          const active = Boolean(state.restFilters[key]);
+          button.dataset.active = active ? 'true' : 'false';
+          button.classList.remove(...restFilterActiveClasses, ...restFilterInactiveClasses);
+          if (active) {
+            button.classList.add(...restFilterActiveClasses);
+          } else {
+            button.classList.add(...restFilterInactiveClasses);
+          }
+        });
+      };
+
+      const normalizeIsoDate = (isoDate) => {
+        if (!isoDate) {
+          return null;
+        }
+        const parts = String(isoDate).split('-').map((value) => Number.parseInt(value, 10));
+        if (parts.length !== 3 || parts.some((value) => Number.isNaN(value))) {
+          return null;
+        }
+        const [year, month, day] = parts;
+        return new Date(year, month - 1, day);
+      };
+
+      const getToday = () => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      };
+
+      const classifyRestPeriod = (period) => {
+        const startDate = normalizeIsoDate(period.start);
+        const endDate = normalizeIsoDate(period.end);
+        const today = getToday();
+        if (!startDate || !endDate) {
+          return {
+            isPast: false,
+            isCurrent: false,
+            isFuture: false,
+            pastWithin15: false,
+            futureWithin15: false,
+          };
+        }
+        const isPast = endDate < today;
+        const isFuture = startDate > today;
+        const isCurrent = !isPast && !isFuture;
+        const pastWithin15 = isPast && Math.floor((today.getTime() - endDate.getTime()) / MS_PER_DAY) <= 15;
+        const futureWithin15 = isFuture && Math.floor((startDate.getTime() - today.getTime()) / MS_PER_DAY) <= 15;
+        return {
+          isPast,
+          isCurrent,
+          isFuture,
+          pastWithin15,
+          futureWithin15,
+        };
+      };
+
+      const matchesRestFilters = (period) => {
+        const filters = state.restFilters;
+        const classification = classifyRestPeriod(period);
+        const typeFiltersActive = filters.past || filters.current || filters.future;
+        const typeMatch =
+          (filters.past && classification.isPast) ||
+          (filters.current && classification.isCurrent) ||
+          (filters.future && classification.isFuture);
+        if (typeFiltersActive && !typeMatch) {
+          return false;
+        }
+        if (filters.last15 && !classification.pastWithin15) {
+          return false;
+        }
+        if (filters.next15 && !classification.futureWithin15) {
+          return false;
+        }
+        return true;
+      };
+
+      const getRestPeriodsForOperator = (operatorId) => {
+        if (!state.metadata || !operatorId) {
+          return [];
+        }
+        return (state.metadata.rest_periods || []).filter((period) => period.operator_id === operatorId);
+      };
+
+      const getRestPeriodById = (restId) => {
+        if (!state.metadata || !restId) {
+          return null;
+        }
+        return (state.metadata.rest_periods || []).find((period) => period.id === restId) || null;
+      };
+
+      const formatRestRange = (period) => {
+        const startLabel = formatDateLabel(period.start);
+        const endLabel = formatDateLabel(period.end);
+        if (startLabel === endLabel) {
+          return startLabel;
+        }
+        return `${startLabel} → ${endLabel}`;
+      };
+
+      const formatDateTimeLabel = (isoDateTime) => {
+        if (!isoDateTime) {
+          return '';
+        }
+        const [datePart] = String(isoDateTime).split('T');
+        return formatDateLabel(datePart);
+      };
+
+      const describeRestClassification = (period) => {
+        const classification = classifyRestPeriod(period);
+        if (classification.isCurrent) {
+          return 'En curso';
+        }
+        if (classification.isFuture) {
+          return 'Próximo';
+        }
+        if (classification.isPast) {
+          return 'Histórico';
+        }
+        return '';
+      };
+
+      const sortRestPeriods = (periods) =>
+        [...periods].sort((a, b) => {
+          const aStart = normalizeIsoDate(a.start);
+          const bStart = normalizeIsoDate(b.start);
+          if (aStart && bStart && aStart.getTime() !== bStart.getTime()) {
+            return bStart.getTime() - aStart.getTime();
+          }
+          const aEnd = normalizeIsoDate(a.end);
+          const bEnd = normalizeIsoDate(b.end);
+          if (aEnd && bEnd && aEnd.getTime() !== bEnd.getTime()) {
+            return bEnd.getTime() - aEnd.getTime();
+          }
+          return (b.id || 0) - (a.id || 0);
+        });
+
+      const getDefaultRestStatus = () => {
+        const statuses = state.metadata?.choice_sets?.rest_statuses || [];
+        const planned = statuses.find((choice) => choice.value === 'planned');
+        return planned?.value || (statuses[0]?.value || '');
+      };
+
+      const getDefaultRestSource = () => {
+        const sources = state.metadata?.choice_sets?.rest_sources || [];
+        const manual = sources.find((choice) => choice.value === 'manual');
+        return manual?.value || (sources[0]?.value || '');
+      };
+
+      const renderOperatorRestList = (operatorId) => {
+        if (!refs.operatorRestList) {
+          return;
+        }
+        if (!operatorId) {
+          refs.operatorRestList.innerHTML =
+            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">Selecciona un colaborador guardado para revisar sus descansos.</p>';
+          return;
+        }
+        const periods = getRestPeriodsForOperator(operatorId);
+        if (!periods.length) {
+          refs.operatorRestList.innerHTML =
+            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay descansos registrados para este colaborador.</p>';
+          return;
+        }
+        const filtered = periods.filter(matchesRestFilters);
+        if (!filtered.length) {
+          refs.operatorRestList.innerHTML =
+            '<p class="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-amber-700">No hay descansos que coincidan con los filtros seleccionados.</p>';
+          return;
+        }
+
+        const badgeBase = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold';
+
+        refs.operatorRestList.innerHTML = sortRestPeriods(filtered)
+          .map((period) => {
+            const statusLabel =
+              state.lookups.restStatusLabels.get(period.status) || period.status_label || period.status || '';
+            const sourceLabel =
+              state.lookups.restSourceLabels.get(period.source) || period.source_label || period.source || '';
+            const classificationLabel = describeRestClassification(period);
+            const durationDays = Number.parseInt(period.duration_days, 10);
+            const durationLabel =
+              Number.isFinite(durationDays) && durationDays > 0
+                ? `${durationDays} día${durationDays === 1 ? '' : 's'}`
+                : '';
+            const isSystem = Boolean(period.is_system_generated);
+            const containerClasses = [
+              'rounded',
+              'border',
+              'px-4',
+              'py-3',
+              'text-sm',
+              'bg-white',
+              'shadow-sm',
+              'space-y-2',
+            ];
+            if (isSystem) {
+              containerClasses.push('border-amber-300', 'bg-amber-50/70');
+            } else {
+              containerClasses.push('border-slate-200');
+            }
+            const statusBadge = statusLabel
+              ? `<span class="${badgeBase} bg-emerald-100 text-emerald-700">${escapeHtml(statusLabel)}</span>`
+              : '';
+            const sourceBadge = sourceLabel
+              ? `<span class="${badgeBase} ${
+                  isSystem ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-600'
+                }">${escapeHtml(sourceLabel)}</span>`
+              : '';
+            const classificationBadge = classificationLabel
+              ? `<span class="${badgeBase} bg-indigo-100 text-indigo-700">${escapeHtml(classificationLabel)}</span>`
+              : '';
+            const durationBadge = durationLabel
+              ? `<span class="${badgeBase} bg-slate-100 text-slate-600">${escapeHtml(durationLabel)}</span>`
+              : '';
+            const notesLine = period.notes
+              ? `<p class="text-xs text-slate-600">Notas: ${escapeHtml(period.notes)}</p>`
+              : '';
+            const calendarLine = period.calendar
+              ? `<p class="text-xs text-slate-600">Calendario origen: <span class="font-medium text-slate-700">${escapeHtml(
+                  period.calendar.name || `#${period.calendar.id}`,
+                )}</span> (${formatDateLabel(period.calendar.start_date)} → ${formatDateLabel(
+                  period.calendar.end_date,
+                )})</p>`
+              : '';
+            const createdLine = period.created_by
+              ? `<p class="text-[11px] text-slate-400">Registrado por ${escapeHtml(
+                  period.created_by.name || '',
+                )} el ${escapeHtml(formatDateTimeLabel(period.created_at) || '')}</p>`
+              : '';
+
+            return `
+              <div class="${containerClasses.join(' ')}" data-rest-id="${period.id}">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="font-semibold text-slate-800">${escapeHtml(formatRestRange(period))}</p>
+                    <div class="mt-1 flex flex-wrap gap-2">
+                      ${statusBadge}
+                      ${sourceBadge}
+                      ${classificationBadge}
+                      ${durationBadge}
+                    </div>
+                    ${notesLine}
+                    ${calendarLine}
+                    ${createdLine}
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="rest-edit" data-id="${period.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
+                    <button type="button" data-action="rest-delete" data-id="${period.id}" class="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">Eliminar</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+      };
+
+      const setOperatorRestContext = (operatorId) => {
+        state.editing.restOperatorId = operatorId || null;
+        state.editing.restPeriodId = null;
+        if (refs.operatorRestAddBtn) {
+          const hasOperator = Boolean(operatorId);
+          refs.operatorRestAddBtn.disabled = !hasOperator;
+          refs.operatorRestAddBtn.classList.toggle('opacity-50', !hasOperator);
+          refs.operatorRestAddBtn.classList.toggle('cursor-not-allowed', !hasOperator);
+        }
+        if (refs.operatorRestEmptyHint) {
+          refs.operatorRestEmptyHint.classList.toggle('hidden', Boolean(operatorId));
+        }
+        toggleWrapper(refs.operatorRestFormWrapper, false);
+        setFormMessage(refs.operatorRestMessage, '');
+        renderOperatorRestList(operatorId);
+      };
+
+      const closeRestForm = () => {
+        resetForm(refs.operatorRestForm, refs.operatorRestMessage);
+        state.editing.restPeriodId = null;
+        if (refs.operatorRestId) {
+          refs.operatorRestId.value = '';
+        }
+        if (refs.operatorRestCalendarInfo) {
+          refs.operatorRestCalendarInfo.classList.add('hidden');
+          refs.operatorRestCalendarInfo.textContent = '';
+        }
+        if (refs.operatorRestEditHint) {
+          refs.operatorRestEditHint.textContent = '';
+        }
+        toggleWrapper(refs.operatorRestFormWrapper, false);
+      };
+
+      const populateRestForm = (period = null) => {
+        if (!refs.operatorRestForm) {
+          return;
+        }
+        setFormMessage(refs.operatorRestMessage, '');
+        if (refs.operatorRestId) {
+          refs.operatorRestId.value = period?.id ? String(period.id) : '';
+        }
+        if (refs.operatorRestOperator) {
+          const operatorId = period?.operator_id || state.editing.restOperatorId;
+          refs.operatorRestOperator.value = operatorId ? String(operatorId) : '';
+        }
+        if (refs.operatorRestCalendar) {
+          refs.operatorRestCalendar.value = period?.calendar_id ? String(period.calendar_id) : '';
+        }
+        if (refs.operatorRestStart) {
+          refs.operatorRestStart.value = period?.start || '';
+        }
+        if (refs.operatorRestEnd) {
+          refs.operatorRestEnd.value = period?.end || '';
+        }
+        if (refs.operatorRestStatus) {
+          refs.operatorRestStatus.value = period?.status || getDefaultRestStatus() || '';
+        }
+        if (refs.operatorRestSource) {
+          refs.operatorRestSource.value = period?.source || getDefaultRestSource() || '';
+        }
+        if (refs.operatorRestNotes) {
+          refs.operatorRestNotes.value = period?.notes || '';
+        }
+        if (refs.operatorRestCalendarInfo) {
+          if (period?.calendar) {
+            const calendarText = `Calendario origen: ${period.calendar.name || `#${period.calendar.id}`} (${formatDateLabel(
+              period.calendar.start_date,
+            )} → ${formatDateLabel(period.calendar.end_date)})`;
+            refs.operatorRestCalendarInfo.textContent = calendarText;
+            refs.operatorRestCalendarInfo.classList.remove('hidden');
+          } else {
+            refs.operatorRestCalendarInfo.textContent = '';
+            refs.operatorRestCalendarInfo.classList.add('hidden');
+          }
+        }
+        if (refs.operatorRestEditHint) {
+          const hintParts = [
+            'Los descansos impactan la planificación de turnos.',
+            'Confirma la operación dos veces antes de guardar.',
+          ];
+          if (period?.is_system_generated) {
+            hintParts.push('Este descanso proviene de un calendario generado automáticamente.');
+          }
+          refs.operatorRestEditHint.textContent = hintParts.join(' ');
+        }
+      };
+
+      const openRestForm = (period = null) => {
+        const operatorId = period?.operator_id || state.editing.restOperatorId;
+        if (!operatorId) {
+          updateMetadataStatus('Primero debes guardar al colaborador para gestionar descansos.', 'warning');
+          return;
+        }
+        state.editing.restPeriodId = period?.id || null;
+        populateRestForm(period);
+        toggleWrapper(refs.operatorRestFormWrapper, true);
+        focusWrapper(refs.operatorRestFormWrapper, refs.operatorRestStart);
+      };
+
+      const buildRestPayload = () => {
+        const operatorValue = refs.operatorRestOperator?.value || '';
+        const payload = {
+          operator: operatorValue ? Number(operatorValue) : null,
+          start_date: refs.operatorRestStart?.value || '',
+          end_date: refs.operatorRestEnd?.value || '',
+          status: refs.operatorRestStatus?.value || '',
+          source: refs.operatorRestSource?.value || '',
+          notes: refs.operatorRestNotes?.value?.trim() || '',
+        };
+        const calendarValue = refs.operatorRestCalendar?.value || '';
+        if (calendarValue) {
+          payload.calendar = Number(calendarValue);
+        } else {
+          payload.calendar = null;
+        }
+        return payload;
+      };
+
+      const confirmRestAction = (message) => {
+        const firstMessage =
+          message ||
+          'Vas a modificar un descanso. Esta acción puede impactar las asignaciones existentes y las reglas configuradas.';
+        const first = window.confirm(`${firstMessage}\n\n¿Deseas continuar?`);
+        if (!first) {
+          return false;
+        }
+        const second = window.confirm('Confirma nuevamente para aplicar el cambio en los descansos.');
+        return second;
+      };
+
+      const persistRestPeriod = async (payload, { id = null, successMessage } = {}) => {
+        if (!API.restPeriods) {
+          return;
+        }
+        const url = id && API.restPeriodDetailTemplate ? replaceId(API.restPeriodDetailTemplate, id) : API.restPeriods;
+        const method = id ? 'PATCH' : 'POST';
+        setFormMessage(refs.operatorRestMessage, 'Guardando descanso…', 'info');
+        try {
+          const response = await apiRequest(url, { method, body: payload });
+          if (!response.ok) {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const data = await response.json();
+              const errorMessage = data?.error || 'No fue posible guardar el descanso.';
+              setFormMessage(refs.operatorRestMessage, errorMessage, 'error');
+            } else {
+              const text = await response.text();
+              setFormMessage(refs.operatorRestMessage, text || 'No fue posible guardar el descanso.', 'error');
+            }
+            return;
+          }
+          const data = await response.json();
+          setFormMessage(refs.operatorRestMessage, successMessage || 'Descanso guardado correctamente.', 'success');
+          if (data?.requires_calendar_refresh) {
+            updateMetadataStatus(
+              'Los cambios en descansos pueden requerir actualizar o recrear el calendario.',
+              'warning',
+            );
+          } else {
+            updateMetadataStatus('Información actualizada.', 'success');
+          }
+          closeRestForm();
+          await fetchMetadata();
+        } catch (error) {
+          console.error(error);
+          setFormMessage(refs.operatorRestMessage, 'Error al guardar el descanso. Intenta nuevamente.', 'error');
+        }
+      };
+
+      const deleteRestPeriod = async (period) => {
+        if (!API.restPeriodDetailTemplate) {
+          return;
+        }
+        const url = replaceId(API.restPeriodDetailTemplate, period.id);
+        try {
+          const response = await apiRequest(url, { method: 'DELETE' });
+          if (!response.ok) {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const data = await response.json();
+              updateMetadataStatus(data?.error || 'No fue posible eliminar el descanso.', 'error');
+            } else {
+              const text = await response.text();
+              updateMetadataStatus(text || 'No fue posible eliminar el descanso.', 'error');
+            }
+            return;
+          }
+          const data = await response.json();
+          if (data?.requires_calendar_refresh) {
+            updateMetadataStatus(
+              'Se eliminó el descanso. Recuerda actualizar o recrear el calendario para reflejar los cambios.',
+              'warning',
+            );
+          } else {
+            updateMetadataStatus('Descanso eliminado correctamente.', 'success');
+          }
+          if (state.editing.restPeriodId === period.id) {
+            closeRestForm();
+          }
+          await fetchMetadata();
+        } catch (error) {
+          console.error(error);
+          updateMetadataStatus('Error eliminando el descanso. Intenta nuevamente.', 'error');
+        }
+      };
+
       const replaceId = (template, id) => template.replace('/0/', `/${id}/`);
 
       const setFormMessage = (element, message = '', tone = 'info') => {
@@ -438,7 +944,29 @@
 
       const resetForm = (form, messageEl) => {
         if (form) {
-          form.reset();
+          if (typeof form.reset === 'function') {
+            form.reset();
+          } else {
+            form.querySelectorAll('input, select, textarea').forEach((field) => {
+              const tag = field.tagName.toLowerCase();
+              if (tag === 'input') {
+                const input = field;
+                if (input.type === 'checkbox' || input.type === 'radio') {
+                  input.checked = false;
+                } else {
+                  input.value = '';
+                }
+              } else if (tag === 'select') {
+                const select = field;
+                if ('options' in select && 'selectedIndex' in select) {
+                  select.selectedIndex = select.options.length ? 0 : -1;
+                }
+              } else if (tag === 'textarea') {
+                const textarea = field;
+                textarea.value = '';
+              }
+            });
+          }
         }
         if (messageEl) {
           setFormMessage(messageEl, '');
@@ -599,6 +1127,8 @@
           shiftLabels: choiceMap(state.metadata.choice_sets.shift_types),
           alertLabels: choiceMap(state.metadata.choice_sets.alert_levels),
           dayLabels: choiceMap(state.metadata.choice_sets.days_of_week),
+          restStatusLabels: choiceMap(state.metadata.choice_sets.rest_statuses || []),
+          restSourceLabels: choiceMap(state.metadata.choice_sets.rest_sources || []),
         };
       };
 
@@ -665,6 +1195,14 @@
           valueKey: 'id',
           labelKey: 'name',
           blankLabel: '(sin preferencia)',
+          keepValue: true,
+        });
+        populateSelect(refs.operatorRestStatus, state.metadata.choice_sets.rest_statuses || [], {
+          blankLabel: 'Selecciona estado',
+          keepValue: true,
+        });
+        populateSelect(refs.operatorRestSource, state.metadata.choice_sets.rest_sources || [], {
+          blankLabel: 'Selecciona origen',
           keepValue: true,
         });
 
@@ -805,6 +1343,7 @@
             refs.operatorIsActive.checked = true;
           }
           resetOperatorCapabilitiesDraft();
+          setOperatorRestContext(null);
         } else {
           if (refs.operatorId) {
             refs.operatorId.value = operator.id ?? '';
@@ -845,6 +1384,7 @@
             (capability) => capability.operator_id === operator.id,
           );
           setOperatorCapabilitiesDraft(operatorCapabilities);
+          setOperatorRestContext(operator.id);
         }
         updateAddCapabilityState();
         focusWrapper(refs.operatorFormWrapper, refs.operatorDocument);
@@ -855,6 +1395,7 @@
         resetForm(refs.operatorForm, refs.operatorMessage);
         toggleWrapper(refs.operatorFormWrapper, false);
         resetOperatorCapabilitiesDraft();
+        setOperatorRestContext(null);
       };
 
       const submitEntity = async ({ url, method, payload, messageRef, successMessage, onSuccess }) => {
@@ -1509,6 +2050,53 @@
       refs.positionAddBtn?.addEventListener('click', () => openPositionForm());
       refs.positionCancelBtn?.addEventListener('click', () => closePositionForm());
       refs.operatorCapabilityAddBtn?.addEventListener('click', () => addOperatorCapabilityRow());
+      refs.operatorRestAddBtn?.addEventListener('click', () => openRestForm());
+      refs.operatorRestCancelBtn?.addEventListener('click', () => closeRestForm());
+      refs.operatorRestFilters?.addEventListener('click', (event) => {
+        const button = event.target.closest('.rest-filter-btn');
+        if (!button) {
+          return;
+        }
+        const key = button.dataset.filter;
+        if (!key) {
+          return;
+        }
+        if (key === 'last15' || key === 'next15') {
+          state.restFilters[key] = !state.restFilters[key];
+        } else {
+          state.restFilters[key] = !state.restFilters[key];
+          if (!state.restFilters.past && !state.restFilters.current && !state.restFilters.future) {
+            state.restFilters[key] = true;
+          }
+        }
+        syncRestFiltersUI();
+        renderOperatorRestList(state.editing.restOperatorId);
+      });
+      refs.operatorRestSaveBtn?.addEventListener('click', () => {
+        const payload = buildRestPayload();
+        if (!payload.operator) {
+          setFormMessage(refs.operatorRestMessage, 'Debes seleccionar un colaborador válido.', 'error');
+          return;
+        }
+        if (!Number.isFinite(payload.operator)) {
+          setFormMessage(refs.operatorRestMessage, 'El identificador del colaborador no es válido.', 'error');
+          return;
+        }
+        if (!payload.start_date || !payload.end_date) {
+          setFormMessage(refs.operatorRestMessage, 'Debes ingresar fechas de inicio y fin.', 'error');
+          return;
+        }
+        const restIdRaw = refs.operatorRestId?.value || '';
+        const restId = restIdRaw ? Number.parseInt(restIdRaw, 10) : null;
+        const rangeLabel = `${formatDateLabel(payload.start_date)} → ${formatDateLabel(payload.end_date)}`;
+        if (!confirmRestAction(`¿Confirmas guardar el descanso ${rangeLabel}?`)) {
+          return;
+        }
+        persistRestPeriod(payload, {
+          id: restId,
+          successMessage: restId ? 'Descanso actualizado correctamente.' : 'Descanso registrado correctamente.',
+        });
+      });
       refs.positionsRefreshBtn?.addEventListener('click', () => fetchMetadata());
       refs.positionIncludeInactive?.addEventListener('change', (event) => {
         state.filters.includeInactivePositions = Boolean(event.target?.checked);
@@ -1520,6 +2108,7 @@
       });
       refs.reloadSummaryBtn?.addEventListener('click', () => fetchSummary());
       refs.generateCalendarBtn?.addEventListener('click', () => generateCalendar());
+      syncRestFiltersUI();
 
       const handlePositionMove = (id, direction) => {
         if (!state.metadata) {
@@ -1609,7 +2198,8 @@
           return;
         }
         const action = target.dataset.action;
-        const id = Number(target.dataset.id);
+        const idRaw = target.dataset.id;
+        const id = idRaw !== undefined ? Number.parseInt(idRaw, 10) : NaN;
         switch (action) {
           case 'operator-edit':
             handleOperatorEdit(id);
@@ -1626,6 +2216,34 @@
           case 'position-delete':
             handlePositionDelete(id);
             break;
+          case 'rest-edit': {
+            if (!Number.isFinite(id) || id <= 0) {
+              return;
+            }
+            const period = getRestPeriodById(id);
+            if (!period) {
+              updateMetadataStatus('No encontramos el descanso seleccionado.', 'warning');
+              return;
+            }
+            openRestForm(period);
+            break;
+          }
+          case 'rest-delete': {
+            if (!Number.isFinite(id) || id <= 0) {
+              return;
+            }
+            const period = getRestPeriodById(id);
+            if (!period) {
+              updateMetadataStatus('No encontramos el descanso seleccionado.', 'warning');
+              return;
+            }
+            const label = formatRestRange(period);
+            if (!confirmRestAction(`¿Eliminar el descanso ${label}?`)) {
+              return;
+            }
+            deleteRestPeriod(period);
+            break;
+          }
           default:
             break;
         }
@@ -1669,6 +2287,8 @@
           populateCategoryFilter();
           renderOperators();
           renderOperatorCapabilitiesEditor();
+          renderOperatorRestList(state.editing.restOperatorId);
+          syncRestFiltersUI();
           updateMetadataStatus('Información actualizada.', 'success');
         } catch (error) {
           console.error(error);
