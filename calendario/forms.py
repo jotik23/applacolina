@@ -123,6 +123,9 @@ class BaseAssignmentForm(forms.Form):
         is_overtime = False
         overtime_points = 0
 
+        if not position.is_active_on(target_date):
+            raise forms.ValidationError("La posición no está vigente para la fecha seleccionada.")
+
         required_score = required_skill_for_complexity(position.complexity)
         capability = OperatorCapability.objects.filter(
             operator=operator, category=position.category
@@ -405,4 +408,3 @@ class OperatorCapabilityForm(forms.ModelForm):
             "category",
             "skill_score",
         ]
-

@@ -74,19 +74,22 @@ def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[
     position_filters = Q(valid_from__lte=calendar.end_date) & (
         Q(valid_until__isnull=True) | Q(valid_until__gte=calendar.start_date)
     )
-    position_query = PositionDefinition.objects.filter(position_filters)
+    active_query = PositionDefinition.objects.filter(position_filters & Q(is_active=True))
     if farm_ids:
-        position_query = position_query.filter(farm_id__in=farm_ids)
-    positions = list(position_query.order_by("display_order", "id"))
+        active_query = active_query.filter(farm_id__in=farm_ids)
+    positions = list(active_query.order_by("display_order", "id"))
 
-    if not positions and assigned_position_ids:
-        positions = list(
+    if assigned_position_ids:
+        assigned_positions = list(
             PositionDefinition.objects.filter(id__in=assigned_position_ids).order_by(
                 "display_order", "id"
             )
         )
-    elif not positions:
-        positions = list(position_query.order_by("display_order", "id"))
+        known_ids = {position.id for position in positions}
+        for position in assigned_positions:
+            if position.id not in known_ids:
+                positions.append(position)
+    positions.sort(key=lambda item: (item.display_order, item.id))
 
     eligible_map = _eligible_operator_map(calendar, positions, date_columns, assignment_list)
 
@@ -94,8 +97,13 @@ def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[
     for position in positions:
         cells: List[dict[str, Any]] = []
         for day in date_columns:
+            is_position_active = position.is_active_on(day)
             assignment = assignments.get((position.id, day))
-            choices = eligible_map.get(position.id, {}).get(day, [])
+            choices = (
+                eligible_map.get(position.id, {}).get(day, [])
+                if is_position_active
+                else []
+            )
             cells.append(
                 {
                     "assignment": assignment,
@@ -103,6 +111,7 @@ def _build_assignment_matrix(calendar: ShiftCalendar) -> tuple[List[date], List[
                     "is_overtime": assignment.is_overtime if assignment else False,
                     "choices": choices,
                     "date": day,
+                    "is_position_active": is_position_active,
                 }
             )
         rows.append({"position": position, "cells": cells})
@@ -156,13 +165,16 @@ def _eligible_operator_map(
 
     for position in positions:
         operator_ids = operators_by_category.get(position.category_id, set())
-        if not operator_ids:
-            for day in date_columns:
-                result[position.id][day] = []
-            continue
-
         required_score = required_skill_for_complexity(position.complexity)
         for day in date_columns:
+            if not position.is_active_on(day):
+                result[position.id][day] = []
+                continue
+
+            if not operator_ids:
+                result[position.id][day] = []
+                continue
+
             choices: List[dict[str, Any]] = []
             for operator_id in operator_ids:
                 capability = capability_index.get((position.category_id, operator_id))
@@ -1235,6 +1247,7 @@ class CalendarSummaryView(LoginRequiredMixin, View):
                         "alert": cell["alert"],
                         "is_overtime": cell["is_overtime"],
                         "choices": cell.get("choices", []),
+                        "is_position_active": cell.get("is_position_active", True),
                     }
                 )
 

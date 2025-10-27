@@ -200,6 +200,36 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             any("Turno asignado manualmente." in message.message for message in messages)
         )
 
+    def test_create_assignment_rejects_out_of_range_position(self) -> None:
+        self.position_secondary.valid_from = self.calendar.start_date + timedelta(days=2)
+        self.position_secondary.save(update_fields=["valid_from"])
+
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        target_date = self.calendar.start_date + timedelta(days=1)
+
+        response = self.client.post(
+            url,
+            data={
+                "action": "create-assignment",
+                "position_id": self.position_secondary.pk,
+                "date": target_date.isoformat(),
+                "operator_id": self.operator_manual.pk,
+            },
+        )
+
+        self.assertRedirects(response, url)
+        exists = ShiftAssignment.objects.filter(
+            calendar=self.calendar,
+            position=self.position_secondary,
+            date=target_date,
+        ).exists()
+        self.assertFalse(exists)
+
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(
+            any("La posición no está vigente para la fecha seleccionada." in message.message for message in messages)
+        )
+
 
 class CalendarDetailViewModifyCalendarTests(TestCase):
     def setUp(self) -> None:
@@ -259,3 +289,212 @@ class CalendarDetailViewModifyCalendarTests(TestCase):
         self.assertRedirects(response, url)
         self.calendar.refresh_from_db()
         self.assertEqual(self.calendar.status, CalendarStatus.MODIFIED)
+
+
+class CalendarActivePositionVisibilityTests(TestCase):
+    def setUp(self) -> None:
+        self.user = UserProfile.objects.create_user(
+            cedula="4000",
+            password="test",  # noqa: S106 - test credential
+            nombres="Analista",
+            apellidos="Coberturas",
+            telefono="3100000005",
+        )
+        self.client.force_login(self.user)
+
+        self.farm = Farm.objects.create(name="Mirador")
+
+        self.category, _created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
+            defaults={
+                "name": "Galponero producción día",
+                "shift_type": ShiftType.DAY,
+                "extra_day_limit": 3,
+                "overtime_points": 1,
+                "overload_alert_level": AssignmentAlertLevel.WARN,
+                "rest_min_frequency": 6,
+                "rest_min_consecutive_days": 5,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+
+        self.category.rest_min_frequency = 6
+        self.category.rest_min_consecutive_days = 5
+        self.category.rest_max_consecutive_days = 8
+        self.category.rest_post_shift_days = 0
+        self.category.rest_monthly_days = 5
+        self.category.extra_day_limit = 3
+        self.category.overtime_points = 1
+        self.category.overload_alert_level = AssignmentAlertLevel.WARN
+        self.category.save()
+
+    def test_summary_excludes_inactive_positions_without_assignments(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana operativa",
+            start_date=date(2025, 9, 1),
+            end_date=date(2025, 9, 3),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        active_position = PositionDefinition.objects.create(
+            name="Posición activa",
+            code="ACTIVE-1",
+            category=self.category,
+            farm=self.farm,
+            complexity=ComplexityLevel.BASIC,
+            allow_lower_complexity=False,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+            is_active=True,
+        )
+        inactive_position = PositionDefinition.objects.create(
+            name="Posición inactiva",
+            code="INACTIVE-1",
+            category=self.category,
+            farm=self.farm,
+            complexity=ComplexityLevel.BASIC,
+            allow_lower_complexity=False,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+            is_active=False,
+        )
+
+        url = reverse("calendario-api:calendar-summary", args=[calendar.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        position_codes = [row["position"]["code"] for row in payload["rows"]]
+        self.assertIn(active_position.code, position_codes)
+        self.assertNotIn(inactive_position.code, position_codes)
+
+    def test_detail_marks_slots_outside_validity(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana parcial",
+            start_date=date(2025, 10, 6),
+            end_date=date(2025, 10, 8),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        position = PositionDefinition.objects.create(
+            name="Posición parcial",
+            code="PARTIAL-CTX",
+            category=self.category,
+            farm=self.farm,
+            complexity=ComplexityLevel.BASIC,
+            allow_lower_complexity=False,
+            valid_from=calendar.start_date + timedelta(days=1),
+            valid_until=calendar.end_date,
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("calendario:calendar-detail", args=[calendar.pk]))
+        self.assertEqual(response.status_code, 200)
+
+        rows = response.context["rows"]
+        target_row = next(row for row in rows if row["position"].id == position.id)
+        slot_map = {cell["date"]: cell["is_position_active"] for cell in target_row["cells"]}
+
+        self.assertFalse(slot_map[calendar.start_date])
+        self.assertTrue(slot_map[calendar.start_date + timedelta(days=1)])
+
+        inactive_cell = next(cell for cell in target_row["cells"] if cell["date"] == calendar.start_date)
+        self.assertEqual(inactive_cell["choices"], [])
+
+    def test_eligible_operators_empty_outside_position_range(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana parcial",
+            start_date=date(2025, 10, 6),
+            end_date=date(2025, 10, 8),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        position = PositionDefinition.objects.create(
+            name="Posición parcial",
+            code="PARTIAL-1",
+            category=self.category,
+            farm=self.farm,
+            complexity=ComplexityLevel.BASIC,
+            allow_lower_complexity=False,
+            valid_from=calendar.start_date + timedelta(days=1),
+            valid_until=calendar.end_date,
+            is_active=True,
+        )
+
+        operator = UserProfile.objects.create_user(
+            cedula="4001",
+            password="test",  # noqa: S106 - test credential
+            nombres="Operario",
+            apellidos="Disponible",
+            telefono="3100000006",
+        )
+
+        OperatorCapability.objects.create(
+            operator=operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        url = reverse(
+            "calendario-api:calendar-eligible-operators",
+            args=[calendar.pk],
+        )
+
+        response_outside = self.client.get(
+            url,
+            {
+                "position": str(position.pk),
+                "date": calendar.start_date.isoformat(),
+            },
+        )
+        self.assertEqual(response_outside.status_code, 200)
+        self.assertEqual(response_outside.json().get("results"), [])
+
+        valid_date = calendar.start_date + timedelta(days=1)
+        response_inside = self.client.get(
+            url,
+            {
+                "position": str(position.pk),
+                "date": valid_date.isoformat(),
+            },
+        )
+        self.assertEqual(response_inside.status_code, 200)
+        self.assertEqual(len(response_inside.json().get("results", [])), 1)
+
+    def test_summary_marks_slots_outside_validity(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana parcial resumen",
+            start_date=date(2025, 11, 4),
+            end_date=date(2025, 11, 6),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        position = PositionDefinition.objects.create(
+            name="Posición resumen",
+            code="PARTIAL-SUMMARY",
+            category=self.category,
+            farm=self.farm,
+            complexity=ComplexityLevel.BASIC,
+            allow_lower_complexity=False,
+            valid_from=calendar.start_date + timedelta(days=1),
+            valid_until=calendar.end_date,
+            is_active=True,
+        )
+
+        url = reverse("calendario-api:calendar-summary", args=[calendar.pk])
+        payload = self.client.get(url).json()
+
+        row = next(item for item in payload["rows"] if item["position"]["id"] == position.id)
+        slot_map = {
+            cell["date"]: cell["is_position_active"]
+            for cell in row["cells"]
+        }
+
+        self.assertFalse(slot_map[calendar.start_date.isoformat()])
+        self.assertTrue(slot_map[(calendar.start_date + timedelta(days=1)).isoformat()])

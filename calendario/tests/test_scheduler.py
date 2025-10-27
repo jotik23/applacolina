@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.test import TestCase
 
@@ -127,3 +127,30 @@ class CalendarSchedulerTests(TestCase):
         alerts = {decision.alert_level for decision in decisions}
         self.assertIn(AssignmentAlertLevel.WARN, alerts)
         self.assertNotIn(AssignmentAlertLevel.CRITICAL, alerts)
+
+    def test_scheduler_skips_inactive_positions(self) -> None:
+        self.position.is_active = False
+        self.position.save(update_fields=["is_active"])
+
+        scheduler = CalendarScheduler(self.calendar)
+        decisions = scheduler.generate(commit=True)
+
+        self.assertEqual(decisions, [])
+        self.assertFalse(self.calendar.assignments.exists())
+
+    def test_scheduler_respects_position_validity_range(self) -> None:
+        self.position.valid_until = self.calendar.start_date + timedelta(days=1)
+        self.position.save(update_fields=["valid_until"])
+
+        scheduler = CalendarScheduler(self.calendar)
+        decisions = scheduler.generate(commit=True)
+
+        self.assertEqual(len(decisions), 2)
+        assigned_dates = {assignment.date for assignment in self.calendar.assignments.all()}
+        self.assertSetEqual(
+            assigned_dates,
+            {
+                self.calendar.start_date,
+                self.calendar.start_date + timedelta(days=1),
+            },
+        )
