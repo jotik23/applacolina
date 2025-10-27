@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
+
+import dj_database_url
 
 """
 Django settings for applacolina project.
@@ -18,28 +20,59 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_bool(var_name: str, default: bool = False) -> bool:
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _env_csv(var_name: str, default: str = "") -> list[str]:
+    raw_value = os.getenv(var_name, default)
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key")
+SECRET_KEY = (
+    os.getenv("DJANGO_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "django-insecure-dev-key"
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in {"1", "true", "yes", "on"}
+DEBUG = _env_bool("DJANGO_DEBUG", True)
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
-    if host.strip()
-]
+ALLOWED_HOSTS = _env_csv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = _env_csv("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+for railway_env_var in ("RAILWAY_PUBLIC_DOMAIN", "RAILWAY_STATIC_URL"):
+    raw_value = os.getenv(railway_env_var)
+    if not raw_value:
+        continue
+    parsed_url = urlparse(raw_value if "://" in raw_value else f"https://{raw_value}")
+    host = parsed_url.netloc or parsed_url.path
+    if host and host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
+    if parsed_url.scheme and parsed_url.netloc:
+        origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        if origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
+
+ALLOWED_HOSTS = list(dict.fromkeys(ALLOWED_HOSTS))
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CSRF_TRUSTED_ORIGINS))
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SESSION_COOKIE_SECURE = _env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
+CSRF_COOKIE_SECURE = _env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0" if DEBUG else "60"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+SECURE_HSTS_PRELOAD = _env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
 
 
 # Application definition
@@ -51,6 +84,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'whitenoise.runserver_nostatic',
     'calendario.apps.CalendarioConfig',
     'users',
     'granjas.apps.GranjasConfig',
@@ -58,6 +92,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -87,42 +122,45 @@ TEMPLATES = [
 WSGI_APPLICATION = 'applacolina.wsgi.application'
 
 
-def _build_database_from_url(database_url: str) -> dict[str, object]:
-    parsed = urlparse(database_url)
-    if parsed.scheme not in {"postgres", "postgresql", "postgis"}:
+def _build_database_from_url(
+    database_url: str,
+    conn_max_age: int,
+    ssl_required: bool,
+) -> dict[str, object]:
+    config = dj_database_url.parse(
+        database_url,
+        conn_max_age=conn_max_age,
+        conn_health_checks=True,
+        ssl_require=ssl_required,
+    )
+    engine = config.get("ENGINE")
+    if engine != "django.db.backends.postgresql":
         msg = "DATABASE_URL must be a Postgres connection string."
         raise ValueError(msg)
+    return config
 
-    query_params = parse_qs(parsed.query)
-    options = {}
-    if "sslmode" in query_params:
-        options["sslmode"] = query_params["sslmode"][-1]
 
-    return {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": parsed.path.lstrip("/") or os.getenv("POSTGRES_DB", ""),
-        "USER": parsed.username or os.getenv("POSTGRES_USER", ""),
-        "PASSWORD": parsed.password or os.getenv("POSTGRES_PASSWORD", ""),
-        "HOST": parsed.hostname or os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": str(parsed.port or os.getenv("POSTGRES_PORT", "5432")),
-        "OPTIONS": options,
-    }
-
+CONN_MAX_AGE = int(os.getenv("DJANGO_DB_CONN_MAX_AGE", "0" if DEBUG else "60"))
+DATABASE_SSL_REQUIRED = _env_bool("DJANGO_DB_SSL_REQUIRED", not DEBUG)
 
 DATABASES = {
-    "default": (
-        _build_database_from_url(database_url)
-        if (database_url := os.getenv("DATABASE_URL"))
-        else {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_DB", "applacolina"),
-            "USER": os.getenv("POSTGRES_USER", "applacolina"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "applacolina"),
-            "HOST": os.getenv("POSTGRES_HOST", "db"),
-            "PORT": os.getenv("POSTGRES_PORT", "5432"),
-        }
-    )
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("POSTGRES_DB", "applacolina"),
+        "USER": os.getenv("POSTGRES_USER", "applacolina"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "applacolina"),
+        "HOST": os.getenv("POSTGRES_HOST", "db"),
+        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "CONN_MAX_AGE": CONN_MAX_AGE,
+    }
 }
+
+if database_url := os.getenv("DATABASE_URL"):
+    DATABASES["default"] = _build_database_from_url(
+        database_url,
+        conn_max_age=CONN_MAX_AGE,
+        ssl_required=DATABASE_SSL_REQUIRED,
+    )
 
 
 # Password validation
@@ -158,6 +196,15 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"

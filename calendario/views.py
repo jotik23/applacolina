@@ -61,7 +61,12 @@ def _date_range(start: date, end: date) -> List[date]:
 
 def _build_assignment_matrix(
     calendar: ShiftCalendar,
-) -> tuple[List[date], List[dict[str, Any]], List[dict[str, Any]]]:
+) -> tuple[
+    List[date],
+    List[dict[str, Any]],
+    List[dict[str, Any]],
+    dict[int, UserProfile],
+]:
     date_columns = _date_range(calendar.start_date, calendar.end_date)
     assignment_list = list(
         calendar.assignments.select_related("position", "position__farm", "operator")
@@ -122,15 +127,16 @@ def _build_assignment_matrix(
             )
         rows.append({"position": position, "cells": cells})
 
-    rest_rows = _build_rest_rows(date_columns, assignment_list)
+    rest_rows, rest_operator_map = _build_rest_rows(calendar, date_columns, assignment_list)
 
-    return date_columns, rows, rest_rows
+    return date_columns, rows, rest_rows, rest_operator_map
 
 
 def _build_rest_rows(
+    calendar: ShiftCalendar,
     date_columns: Iterable[date],
     assignment_list: Iterable[ShiftAssignment],
-) -> List[dict[str, Any]]:
+) -> tuple[List[dict[str, Any]], dict[int, UserProfile]]:
     day_assignments: dict[date, set[int]] = defaultdict(set)
     operators: dict[int, UserProfile] = {}
 
@@ -140,8 +146,46 @@ def _build_rest_rows(
         day_assignments[assignment.date].add(assignment.operator_id)
         operators[assignment.operator_id] = assignment.operator
 
+    rest_periods_by_day: dict[date, set[int]] = defaultdict(set)
+
+    rest_period_qs = (
+        calendar.rest_periods.filter(
+            start_date__lte=calendar.end_date,
+            end_date__gte=calendar.start_date,
+        )
+        .exclude(status=RestPeriodStatus.CANCELLED)
+        .select_related("operator")
+        .prefetch_related("operator__roles")
+    )
+    manual_rest_qs = (
+        OperatorRestPeriod.objects.filter(
+            calendar__isnull=True,
+            start_date__lte=calendar.end_date,
+            end_date__gte=calendar.start_date,
+        )
+        .exclude(status=RestPeriodStatus.CANCELLED)
+        .select_related("operator")
+        .prefetch_related("operator__roles")
+    )
+
+    def _register_rest_period(periods: Iterable[OperatorRestPeriod]) -> None:
+        for period in periods:
+            if not period.operator_id or not period.operator:
+                continue
+            operators.setdefault(period.operator_id, period.operator)
+
+            overlap_start = max(period.start_date, calendar.start_date)
+            overlap_end = min(period.end_date, calendar.end_date)
+            current = overlap_start
+            while current <= overlap_end:
+                rest_periods_by_day[current].add(period.operator_id)
+                current += timedelta(days=1)
+
+    _register_rest_period(rest_period_qs)
+    _register_rest_period(manual_rest_qs)
+
     if not operators:
-        return []
+        return [], {}
 
     sorted_operators = sorted(
         operators.values(),
@@ -155,12 +199,16 @@ def _build_rest_rows(
     rest_matrix: dict[date, list[UserProfile]] = {}
     for day in date_columns:
         working_ids = day_assignments.get(day, set())
-        resters = [op for op in sorted_operators if op.id not in working_ids]
+        period_rest_ids = rest_periods_by_day.get(day, set())
+        if period_rest_ids:
+            resters = [op for op in sorted_operators if op.id in period_rest_ids]
+        else:
+            resters = [op for op in sorted_operators if op.id not in working_ids]
         rest_matrix[day] = resters
 
     max_slots = max((len(resters) for resters in rest_matrix.values()), default=0)
     if max_slots == 0:
-        return []
+        return [], operators
 
     rest_rows: List[dict[str, Any]] = []
     for slot_index in range(max_slots):
@@ -195,7 +243,7 @@ def _build_rest_rows(
             }
         )
 
-    return rest_rows
+    return rest_rows, operators
 
 
 def _serialize_rest_period(period: OperatorRestPeriod) -> dict[str, Any]:
@@ -793,7 +841,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
             ShiftCalendar.objects.select_related("created_by", "approved_by", "base_calendar"),
             pk=pk,
         )
-        date_columns, rows, rest_rows = _build_assignment_matrix(calendar)
+        date_columns, rows, rest_rows, rest_operator_map = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
         can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
 
@@ -803,6 +851,9 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 assignment = cell.get("assignment")
                 if assignment and assignment.operator_id:
                     operator_map[assignment.operator_id] = assignment.operator
+
+        for operator_id, operator in rest_operator_map.items():
+            operator_map.setdefault(operator_id, operator)
 
         rest_summary = _build_rest_summary(calendar, operator_map)
 
@@ -1554,7 +1605,7 @@ class CalendarSummaryView(LoginRequiredMixin, View):
             pk=calendar_id,
         )
 
-        date_columns, rows, _rest_rows = _build_assignment_matrix(calendar)
+        date_columns, rows, _rest_rows, _rest_operator_map = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
 
         row_payload = []

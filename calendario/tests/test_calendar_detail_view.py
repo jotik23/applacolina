@@ -244,6 +244,35 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             any("Turno asignado manualmente." in message.message for message in messages)
         )
 
+    def test_rest_rows_include_manual_rest_operator(self) -> None:
+        rest_start = self.calendar.start_date + timedelta(days=1)
+        rest_end = rest_start + timedelta(days=1)
+
+        OperatorRestPeriod.objects.create(
+            operator=self.operator_manual,
+            start_date=rest_start,
+            end_date=rest_end,
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+        )
+
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        rest_rows = response.context["rest_rows"]
+        self.assertTrue(rest_rows)
+
+        day_index = (rest_start - self.calendar.start_date).days
+        manual_present = any(
+            row["cells"][day_index]["operator_id"] == self.operator_manual.id
+            for row in rest_rows
+        )
+        self.assertTrue(manual_present)
+
+        rest_summary = response.context["rest_summary"]
+        self.assertIn(str(self.operator_manual.id), rest_summary)
+
     def test_create_assignment_rejects_out_of_range_position(self) -> None:
         self.position_secondary.valid_from = self.calendar.start_date + timedelta(days=2)
         self.position_secondary.save(update_fields=["valid_from"])
