@@ -1,8 +1,10 @@
 Posiciones vigentes:
 
-- Agregar filas de descansos
+Construye una funcionalidad que 
 
-Ahora hablemos de las reglas de descanso (restrule), estas deben estar asociadas a las categorías tal como overloadallowance. Considerando que ambas tablas son una relación 1 a 1 con la categoria (positioncategory). Se deben eliminar ambas entidades (restrule y overloadallowance). Moviendo los campos relevantes a la tabla positioncategory, a saber: overloadallowance (Máximo días extra consecutivos, Puntos por día extra, Nivel de alerta (si aplica)) y restrule: ('Frecuencia mínima de descanso, Días de descanso consecutivos mínimos, Días de descanso consecutivos máximos, Descanso posterior al turno y Descanso mensual requerido'). Por tal razón, es necesario actualizar los modelos, paneles admin y UI, así como la lógica asociada de generación de calendarios. No es necesario que las categorías de posiciones se gestionen desde la UI publica, lo que significa que la vista de reglas operativas puede eliminarse así como el boton de configurar reglas.
+ 
 
+- Modulo calendario: Los descansos son parte vital del calendario, indican cuando los colaboradores tienen programado su descanso, es decir, que personas descansan diariamente acorde a las reglas establecidas. Esto actualmente no se muestra en la vista de detalle de un calendario creado (independiente de su estado). Corrigelo. Asegurate que conserven el mismo principio estético de la UI y que se muestren al final de la lista de posiciones activas. 
 - 
 - Refactorizar, usar librería practica javascript en vez de vanilla. 
+- Desplegar
