@@ -1,9 +1,32 @@
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin
 from django.db.models import QuerySet
 
 from . import models
+
+
+class PositionCategoryAdminForm(forms.ModelForm):
+    class Meta:
+        model = models.PositionCategory
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs) -> None:
+        # Clarify how scheduling uses each numeric field.
+        super().__init__(*args, **kwargs)
+        labels = {
+            "extra_day_limit": "Días de trabajo extra permitidos sobre el máximo",
+            "overtime_points": "Puntos por cada día extra laborado",
+            "rest_min_frequency": "Máximo de días laborados antes de sugerir descanso (UI)",
+            "rest_min_consecutive_days": "Días de trabajo mínimo (UI)",
+            "rest_max_consecutive_days": "Días de trabajo antes de descanso",
+            "rest_post_shift_days": "Días post-turno",
+            "rest_monthly_days": "Meta de días de descanso al mes (UI)",
+        }
+        for field_name, label in labels.items():
+            if field_name in self.fields:
+                self.fields[field_name].label = label
 
 
 @admin.register(models.PositionDefinition)
@@ -39,6 +62,21 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
 
 @admin.register(models.PositionCategory)
 class PositionCategoryAdmin(admin.ModelAdmin):
+    form = PositionCategoryAdminForm
+    fields = (
+        "name",
+        "code",
+        "shift_type",
+        "rest_max_consecutive_days",
+        "extra_day_limit",
+        "rest_post_shift_days",
+        "overtime_points",
+        "rest_min_frequency",
+        "rest_min_consecutive_days",
+        "rest_monthly_days",
+        "overload_alert_level",
+        "is_active",
+    )
     list_display = (
         "name",
         "code",

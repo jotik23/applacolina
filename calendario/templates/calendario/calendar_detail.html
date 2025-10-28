@@ -152,7 +152,10 @@
           <tr>
             <th class="sticky left-0 top-0 z-30 bg-slate-50 px-6 py-2 text-left font-semibold text-slate-600 w-60 min-w-[15rem]">Posición</th>
             {% for day in date_columns %}
-              <th class="sticky top-0 z-20 bg-slate-50 px-4 py-2 text-left font-semibold text-slate-600">{{ day|date:"D d" }}</th>
+              <th class="sticky top-0 z-20 bg-slate-50 px-4 py-2 text-left font-semibold text-slate-600">
+                <span class="block text-xs font-medium uppercase tracking-wide text-slate-400">{{ day|date:"d/M" }}</span>
+                <span class="block text-sm font-semibold text-slate-600">{{ day|date:"l"|capfirst }}</span>
+              </th>
             {% endfor %}
           </tr>
         </thead>

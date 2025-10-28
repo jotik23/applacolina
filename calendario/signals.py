@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
 from .models import (
@@ -72,7 +72,7 @@ def log_assignment_deletion(sender: type[ShiftAssignment], instance: ShiftAssign
     sync_calendar_rest_periods(instance.calendar)
 
 
-@receiver(post_delete, sender=ShiftCalendar)
+@receiver(pre_delete, sender=ShiftCalendar)
 def cleanup_rest_periods(sender: type[ShiftCalendar], instance: ShiftCalendar, **kwargs: Any) -> None:
     OperatorRestPeriod.objects.filter(
         calendar=instance,
