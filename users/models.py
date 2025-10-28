@@ -73,6 +73,13 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
         null=True,
         blank=True,
     )
+    suggested_positions = models.ManyToManyField(
+        "calendario.PositionDefinition",
+        blank=True,
+        related_name="preferred_operators",
+        verbose_name="Posiciones sugeridas",
+        help_text="Posiciones recomendadas para priorizar asignaciones automáticas.",
+    )
     employment_start_date = models.DateField(
         "Fecha de ingreso",
         null=True,

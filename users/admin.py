@@ -88,6 +88,7 @@ class UserProfileAdmin(UserAdmin):
                     "telefono",
                     "email",
                     "preferred_farm",
+                    "suggested_positions",
                     "employment_start_date",
                     "employment_end_date",
                     "direccion",
@@ -118,6 +119,7 @@ class UserProfileAdmin(UserAdmin):
                     "email",
                     "direccion",
                     "preferred_farm",
+                    "suggested_positions",
                     "employment_start_date",
                     "employment_end_date",
                     "contacto_nombre",
@@ -133,7 +135,7 @@ class UserProfileAdmin(UserAdmin):
         ),
     )
 
-    filter_horizontal = ("roles", "groups", "user_permissions")
+    filter_horizontal = ("roles", "groups", "user_permissions", "suggested_positions")
     readonly_fields = ("last_login", "date_joined")
 
     actions = (activar_usuarios, desactivar_usuarios, resetear_clave)

@@ -9,6 +9,7 @@ from calendario.models import (
     CalendarStatus,
     ComplexityLevel,
     DayOfWeek,
+    OperatorCapability,
     OperatorRestPeriod,
     PositionCategory,
     PositionCategoryCode,
@@ -16,6 +17,7 @@ from calendario.models import (
     RestPeriodSource,
     RestPeriodStatus,
     ShiftCalendar,
+    ShiftAssignment,
     ShiftType,
 )
 from calendario.services import CalendarScheduler
@@ -114,6 +116,88 @@ class CalendarSchedulerTests(TestCase):
         self.assertTrue(all(decision.operator == self.operator for decision in decisions))
         self.assertTrue(all(decision.alert_level == AssignmentAlertLevel.NONE for decision in decisions))
         self.assertTrue(all(assignment.operator == self.operator for assignment in assignments))
+
+    def test_scheduler_prefers_operator_suggested_for_position(self) -> None:
+        secondary = UserProfile.objects.create_user(
+            cedula="456",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Sonia",
+            apellidos="Prieto",
+            telefono="654321",
+        )
+        secondary.roles.add(self.role)
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+        OperatorCapability.objects.create(
+            operator=secondary,
+            category=self.category,
+            skill_score=8,
+        )
+
+        secondary.suggested_positions.add(self.position)
+
+        single_day_calendar = ShiftCalendar.objects.create(
+            name="Preferencias",
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date,
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(single_day_calendar)
+        decisions = scheduler.generate(commit=True)
+
+        self.assertEqual(len(decisions), 1)
+        assignment = single_day_calendar.assignments.get(date=single_day_calendar.start_date)
+        self.assertEqual(assignment.operator, secondary)
+
+    def test_scheduler_falls_back_when_suggested_operator_unavailable(self) -> None:
+        secondary = UserProfile.objects.create_user(
+            cedula="457",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Jimena",
+            apellidos="Quintero",
+            telefono="987654",
+        )
+        secondary.roles.add(self.role)
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+        OperatorCapability.objects.create(
+            operator=secondary,
+            category=self.category,
+            skill_score=8,
+        )
+
+        secondary.suggested_positions.add(self.position)
+
+        OperatorRestPeriod.objects.create(
+            operator=secondary,
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date,
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+        )
+
+        single_day_calendar = ShiftCalendar.objects.create(
+            name="Preferencias bloqueadas",
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date,
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(single_day_calendar)
+        decisions = scheduler.generate(commit=True)
+
+        self.assertEqual(len(decisions), 1)
+        assignment = single_day_calendar.assignments.get(date=single_day_calendar.start_date)
+        self.assertEqual(assignment.operator, self.operator)
 
     def test_scheduler_warns_when_skill_is_below_threshold_but_allowed(self) -> None:
         from calendario.models import OperatorCapability
@@ -395,6 +479,107 @@ class CalendarSchedulerTests(TestCase):
             all(period.end_date <= employment_end for period in rest_periods),
             "Rest periods should not extend beyond employment end date.",
         )
+
+    def test_scheduler_respects_recent_history_for_rest_frequency(self) -> None:
+        rest_start = self.calendar.start_date - timedelta(days=3)
+
+        self.category.rest_min_frequency = 3
+        self.category.rest_min_consecutive_days = 2
+        self.category.rest_max_consecutive_days = 5
+        self.category.save(
+            update_fields=[
+                "rest_min_frequency",
+                "rest_min_consecutive_days",
+                "rest_max_consecutive_days",
+            ]
+        )
+
+        self.position.valid_from = rest_start
+        self.position.save(update_fields=["valid_from"])
+
+        relief_operator = UserProfile.objects.create_user(
+            cedula="999",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Eriberto",
+            apellidos="Suplente",
+            telefono="3000000000",
+        )
+        relief_operator.roles.add(self.role)
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=9,
+        )
+        OperatorCapability.objects.create(
+            operator=relief_operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        history_calendar = ShiftCalendar.objects.create(
+            name="Histórico",
+            start_date=rest_start,
+            end_date=self.calendar.start_date - timedelta(days=1),
+            status=CalendarStatus.APPROVED,
+        )
+
+        for offset in range(3):
+            ShiftAssignment.objects.create(
+                calendar=history_calendar,
+                position=self.position,
+                date=history_calendar.start_date + timedelta(days=offset),
+                operator=self.operator,
+            )
+
+        scheduler = CalendarScheduler(self.calendar)
+        scheduler.generate(commit=True)
+
+        assignments = list(
+            self.calendar.assignments.filter(position=self.position).order_by("date")
+        )
+        self.assertEqual(len(assignments), 3)
+        # Primeros dos días cubiertos por el suplente debido al bloqueo por descanso.
+        self.assertEqual(assignments[0].operator, relief_operator)
+        self.assertEqual(assignments[1].operator, relief_operator)
+        # Una vez cumplido el descanso mínimo, el titular puede retomar el turno.
+        self.assertEqual(assignments[2].operator, self.operator)
+
+    def test_scheduler_skips_operators_before_employment_start(self) -> None:
+        backup_operator = UserProfile.objects.create_user(
+            cedula="998",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Cesar",
+            apellidos="Apoyo",
+            telefono="3000000001",
+        )
+        backup_operator.roles.add(self.role)
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+        OperatorCapability.objects.create(
+            operator=backup_operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        self.operator.employment_start_date = self.calendar.start_date
+        self.operator.save(update_fields=["employment_start_date"])
+
+        backup_operator.employment_start_date = self.calendar.start_date + timedelta(days=5)
+        backup_operator.save(update_fields=["employment_start_date"])
+
+        scheduler = CalendarScheduler(self.calendar)
+        scheduler.generate(commit=True)
+
+        assignments = list(
+            self.calendar.assignments.filter(position=self.position).order_by("date")
+        )
+        self.assertEqual(len(assignments), 3)
+        self.assertTrue(all(assignment.operator == self.operator for assignment in assignments))
 
     def test_consecutive_night_assignments_followed_by_rest_block(self) -> None:
         from calendario.models import OperatorCapability

@@ -200,3 +200,19 @@ class RestPeriodApiTests(TestCase):
         self.assertIn("rest_sources", choice_sets)
         self.assertTrue(choice_sets["rest_statuses"])
         self.assertTrue(choice_sets["rest_sources"])
+
+    def test_metadata_includes_operator_suggested_positions(self) -> None:
+        self.operator.suggested_positions.add(self.position)
+
+        metadata_url = reverse("calendario-api:calendar-metadata")
+        response = self.client.get(metadata_url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        operators = data.get("operators", [])
+        operator_entry = next((item for item in operators if item.get("id") == self.operator.id), None)
+        self.assertIsNotNone(operator_entry)
+
+        suggestions = operator_entry.get("suggested_positions")
+        self.assertIsInstance(suggestions, list)
+        self.assertTrue(any(item.get("id") == self.position.id for item in suggestions))

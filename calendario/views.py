@@ -76,7 +76,7 @@ def _build_assignment_matrix(
             "position__category",
             "operator",
         )
-        .prefetch_related("operator__roles")
+        .prefetch_related("operator__roles", "operator__suggested_positions")
     )
     assignments = {
         (assignment.position_id, assignment.date): assignment for assignment in assignment_list
@@ -744,6 +744,7 @@ def _operator_payload(
 ) -> dict[str, Any]:
     role_items = roles if roles is not None else list(operator.roles.all())
     preferred_farm = getattr(operator, "preferred_farm", None)
+    suggested_positions = list(operator.suggested_positions.all())
     return {
         "id": operator.id,
         "name": operator.get_full_name() or operator.nombres,
@@ -767,6 +768,14 @@ def _operator_payload(
         "employment_end": operator.employment_end_date.isoformat()
         if operator.employment_end_date
         else None,
+        "suggested_positions": [
+            {
+                "id": position.id,
+                "code": position.code,
+                "name": position.name,
+            }
+            for position in suggested_positions
+        ],
         "roles": [
             {
                 "id": role.id,
@@ -1341,7 +1350,7 @@ class OperatorCollectionView(LoginRequiredMixin, View):
 
         operator = (
             UserProfile.objects.select_related("preferred_farm")
-            .prefetch_related("roles")
+            .prefetch_related("roles", "suggested_positions")
             .get(pk=operator.pk)
         )
         return JsonResponse({"operator": _operator_payload(operator)}, status=201)
@@ -1364,6 +1373,8 @@ class OperatorDetailView(LoginRequiredMixin, View):
                 form_data[field_name] = list(operator.roles.values_list("pk", flat=True))
             elif field_name == "preferred_farm":
                 form_data[field_name] = operator.preferred_farm_id
+            elif field_name == "suggested_positions":
+                form_data[field_name] = list(operator.suggested_positions.values_list("pk", flat=True))
             else:
                 form_data[field_name] = getattr(operator, field_name)
 
@@ -1386,7 +1397,7 @@ class OperatorDetailView(LoginRequiredMixin, View):
 
         operator = (
             UserProfile.objects.select_related("preferred_farm")
-            .prefetch_related("roles")
+            .prefetch_related("roles", "suggested_positions")
             .get(pk=operator.pk)
         )
         return JsonResponse({"operator": _operator_payload(operator)})
@@ -1768,7 +1779,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
 
         operator_qs = (
             UserProfile.objects.select_related("preferred_farm")
-            .prefetch_related("roles")
+            .prefetch_related("roles", "suggested_positions")
             .order_by("apellidos", "nombres")
         )
         operators_payload = [
@@ -1883,7 +1894,7 @@ class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
         )
         assignments = (
             calendar.assignments.select_related("position", "position__farm", "operator")
-            .prefetch_related("operator__roles")
+            .prefetch_related("operator__roles", "operator__suggested_positions")
             .order_by("date", "position__display_order", "position__code")
         )
 
@@ -1967,7 +1978,7 @@ class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
 
         assignment = (
             ShiftAssignment.objects.select_related("position", "position__farm", "operator")
-            .prefetch_related("operator__roles")
+            .prefetch_related("operator__roles", "operator__suggested_positions")
             .get(pk=assignment.pk)
         )
 
@@ -2019,7 +2030,7 @@ class CalendarEligibleOperatorsView(LoginRequiredMixin, View):
 
         assignments = list(
             calendar.assignments.select_related("position", "operator")
-            .prefetch_related("operator__roles")
+            .prefetch_related("operator__roles", "operator__suggested_positions")
         )
 
         choices_map = _eligible_operator_map(calendar, [position], [target_date], assignments)

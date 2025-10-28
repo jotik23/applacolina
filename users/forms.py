@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
+from django.apps import apps
 
 from .models import Role, UserProfile
 
@@ -28,6 +29,7 @@ class UserCreationForm(forms.ModelForm):
             "email",
             "direccion",
             "preferred_farm",
+            "suggested_positions",
             "employment_start_date",
             "employment_end_date",
             "contacto_nombre",
@@ -40,6 +42,7 @@ class UserCreationForm(forms.ModelForm):
         widgets = {
             "roles": forms.CheckboxSelectMultiple,
             "groups": forms.CheckboxSelectMultiple,
+            "suggested_positions": forms.CheckboxSelectMultiple,
         }
 
     def clean_cedula(self):
@@ -58,6 +61,10 @@ class UserCreationForm(forms.ModelForm):
         if employment_end_field:
             employment_end_field.widget = forms.DateInput(attrs={"type": "date"})
             employment_end_field.required = False
+        suggested_field = self.fields.get("suggested_positions")
+        if suggested_field:
+            position_model = apps.get_model("calendario", "PositionDefinition")
+            suggested_field.queryset = position_model.objects.order_by("name")
 
     def clean_password2(self):
         password1 = self.cleaned_data.get("password1")
@@ -94,6 +101,7 @@ class UserChangeForm(forms.ModelForm):
             "email",
             "direccion",
             "preferred_farm",
+            "suggested_positions",
             "employment_start_date",
             "employment_end_date",
             "contacto_nombre",
@@ -107,6 +115,7 @@ class UserChangeForm(forms.ModelForm):
         widgets = {
             "roles": forms.CheckboxSelectMultiple,
             "groups": forms.CheckboxSelectMultiple,
+            "suggested_positions": forms.CheckboxSelectMultiple,
         }
 
     def clean_password(self):
@@ -131,3 +140,7 @@ class UserChangeForm(forms.ModelForm):
         if employment_end_field:
             employment_end_field.widget = forms.DateInput(attrs={"type": "date"})
             employment_end_field.required = False
+        suggested_field = self.fields.get("suggested_positions")
+        if suggested_field:
+            position_model = apps.get_model("calendario", "PositionDefinition")
+            suggested_field.queryset = position_model.objects.order_by("name")

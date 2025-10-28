@@ -368,6 +368,10 @@ class OperatorProfileForm(forms.ModelForm):
         required=False,
         empty_label="(sin preferencia)",
     )
+    suggested_positions = forms.ModelMultipleChoiceField(
+        queryset=PositionDefinition.objects.none(),
+        required=False,
+    )
 
     class Meta:
         model = UserProfile
@@ -380,6 +384,7 @@ class OperatorProfileForm(forms.ModelForm):
             "employment_start_date",
             "employment_end_date",
             "preferred_farm",
+            "suggested_positions",
             "roles",
             "is_active",
         ]
@@ -394,6 +399,12 @@ class OperatorProfileForm(forms.ModelForm):
         if employment_end_field:
             employment_end_field.widget.input_type = "date"
             employment_end_field.required = False
+        suggested_field = self.fields.get("suggested_positions")
+        if suggested_field:
+            suggested_field.queryset = PositionDefinition.objects.filter(is_active=True).order_by(
+                "display_order",
+                "name",
+            )
 
     def clean_cedula(self) -> str:
         cedula = self.cleaned_data.get("cedula", "")

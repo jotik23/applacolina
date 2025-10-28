@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from django.db import transaction
 from django.db.models import Q
@@ -103,6 +103,7 @@ class CalendarScheduler:
         self._operator_states: Dict[int, OperatorState] = {}
         self._operator_capabilities: Dict[int, List[OperatorCapability]] = {}
         self._capabilities_by_category: Dict[int, List[OperatorCapability]] = defaultdict(list)
+        self._operator_suggestions: Dict[int, Set[int]] = {}
         self._preferred_farms: Dict[int, Optional[int]] = {}
         self._overload_policies: Dict[int, OverloadPolicyData] = {}
         self._rest_periods: Dict[int, List[OperatorRestPeriod]] = defaultdict(list)
@@ -139,6 +140,7 @@ class CalendarScheduler:
             .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=self.calendar.start_date))
             .order_by("display_order", "id")
         )
+        available_position_ids: Set[int] = {position.id for position in self._positions}
 
         relevant_categories: set[int] = set()
         for position in self._positions:
@@ -155,17 +157,25 @@ class CalendarScheduler:
         if not capabilities and relevant_categories:
             capabilities = self._build_default_capabilities(relevant_categories)
 
+        operator_ids: Set[int] = set()
         for capability in capabilities:
             operator = capability.operator
             if not operator:
                 continue
+            if not operator.is_active:
+                continue
             if operator.employment_end_date and operator.employment_end_date < self.calendar.start_date:
+                continue
+            if operator.employment_start_date and operator.employment_start_date > self.calendar.end_date:
                 continue
 
             operator_id = capability.operator_id or operator.id
+            if operator_id is None:
+                continue
             capability.operator_id = operator_id
             self._operator_capabilities.setdefault(operator_id, []).append(capability)
             self._capabilities_by_category[capability.category_id].append(capability)
+            operator_ids.add(operator_id)
             if operator_id not in self._operator_states:
                 self._operator_states[operator_id] = OperatorState(
                     operator=operator,
@@ -174,7 +184,33 @@ class CalendarScheduler:
                 )
             self._preferred_farms[operator_id] = operator.preferred_farm_id
 
+        self._operator_suggestions = self._load_operator_suggestions(operator_ids, available_position_ids)
+
         self._apply_rest_context()
+        self._load_recent_history()
+
+    def _load_operator_suggestions(
+        self,
+        operator_ids: Iterable[int],
+        available_positions: Set[int],
+    ) -> Dict[int, Set[int]]:
+        normalized_ids = {int(operator_id) for operator_id in operator_ids if operator_id}
+        if not normalized_ids:
+            return {}
+
+        through_model = UserProfile.suggested_positions.through
+        suggestion_rows = through_model.objects.filter(userprofile_id__in=normalized_ids).values_list(
+            "userprofile_id",
+            "positiondefinition_id",
+        )
+
+        suggestions: Dict[int, Set[int]] = defaultdict(set)
+        for operator_id, position_id in suggestion_rows:
+            if available_positions and position_id not in available_positions:
+                continue
+            suggestions[int(operator_id)].add(int(position_id))
+
+        return {operator_id: positions for operator_id, positions in suggestions.items()}
 
     def _build_default_capabilities(self, categories: set[int]) -> List[OperatorCapability]:
         """Create in-memory capabilities for all active operators when no rules exist."""
@@ -283,10 +319,11 @@ class CalendarScheduler:
             position.category_id,
         )
 
-        ranked_candidates = sorted(
-            raw_candidates,
-            key=lambda capability: self._candidate_sort_key(capability, position, current_date),
-        )
+        def _ranking_key(capability: OperatorCapability) -> Tuple[int, Tuple[int, ...]]:
+            suggestion_flag = 0 if self._is_suggested_position(capability.operator_id, position.id) else 1
+            return (suggestion_flag, self._candidate_sort_key(capability, position, current_date))
+
+        ranked_candidates = sorted(raw_candidates, key=_ranking_key)
 
         eligible: List[OperatorCapability] = []
         for capability in ranked_candidates:
@@ -347,6 +384,12 @@ class CalendarScheduler:
 
         return (2, operator_id)
 
+    def _is_suggested_position(self, operator_id: int, position_id: int) -> bool:
+        suggested = self._operator_suggestions.get(operator_id)
+        if not suggested:
+            return False
+        return position_id in suggested
+
     def _candidate_sort_key(
         self,
         capability: OperatorCapability,
@@ -385,13 +428,32 @@ class CalendarScheduler:
                     rest_value = -base_rest_value
 
         return (
+            rest_flag,
             preference_rank,
+            overtime_risk,
             continuity_priority,
             continuity_score,
-            overtime_risk,
             weekend_priority,
             weekend_value,
+            rest_value,
+            skill_gap,
+            state.total_assignments,
+            state.consecutive_streak,
+            -capability.skill_score,
+            preference_id,
+        )
+        if suggestion_rank == 0 and continuity_priority > 0:
+            continuity_priority = min(continuity_priority, 1)
+
+        return (
             rest_flag,
+            preference_rank,
+            overtime_risk,
+            continuity_priority,
+            continuity_score,
+            suggestion_rank,
+            weekend_priority,
+            weekend_value,
             rest_value,
             skill_gap,
             state.total_assignments,
@@ -427,10 +489,24 @@ class CalendarScheduler:
 
         rest_settings = position.category
         new_streak = self._calculate_new_streak(state, current_date)
-        allowed_max = rest_settings.rest_max_consecutive_days or 0
-        if allowed_max <= 0:
+        rest_min_frequency = rest_settings.rest_min_frequency or 0
+        rest_max_limit = rest_settings.rest_max_consecutive_days or 0
+        if rest_max_limit <= 0 and rest_min_frequency <= 0:
             return (0, new_streak)
-        return (1 if new_streak > allowed_max else 0, new_streak)
+
+        allowed_max = rest_max_limit
+        if rest_max_limit > 0:
+            allowed_max += self._get_overload_policy(rest_settings).extra_day_limit
+
+        rest_flag = 0
+        if rest_max_limit > 0 and new_streak > rest_max_limit:
+            rest_flag = 2
+            if allowed_max > rest_max_limit and new_streak > allowed_max:
+                rest_flag = 3
+        elif rest_min_frequency > 0 and new_streak >= rest_min_frequency:
+            rest_flag = 1
+
+        return (rest_flag, new_streak)
 
     def _would_trigger_overtime(
         self,
@@ -442,8 +518,11 @@ class CalendarScheduler:
             return False
 
         rest_settings = position.category
+        rest_max = rest_settings.rest_max_consecutive_days or 0
+        if rest_max <= 0:
+            return False
         new_streak = self._calculate_new_streak(state, current_date)
-        return new_streak > rest_settings.rest_max_consecutive_days
+        return new_streak > rest_max
 
     def _is_operator_available(
         self,
@@ -453,6 +532,10 @@ class CalendarScheduler:
         current_date: date,
     ) -> bool:
         if state.employment_end_date and current_date > state.employment_end_date:
+            return False
+        if state.employment_start_date and current_date < state.employment_start_date:
+            return False
+        if not state.operator.is_active:
             return False
 
         if current_date in state.assigned_dates:
@@ -477,8 +560,11 @@ class CalendarScheduler:
 
         rest_settings = position.category
         new_streak = self._calculate_new_streak(state, current_date)
-        allowed_max = rest_settings.rest_max_consecutive_days
-        if new_streak > allowed_max:
+        allowed_max = rest_settings.rest_max_consecutive_days or 0
+        rest_min_frequency = rest_settings.rest_min_frequency or 0
+        if rest_min_frequency and new_streak > rest_min_frequency:
+            return False
+        if allowed_max and new_streak > allowed_max:
             policy = self._get_overload_policy(position.category)
             extended_limit = allowed_max + policy.extra_day_limit
             if new_streak > extended_limit:
@@ -534,25 +620,7 @@ class CalendarScheduler:
         current_date: date,
         is_overtime: bool,
     ) -> None:
-        state.register_assignment(current_date, position.shift_type, is_overtime)
-
-        rest_settings = position.category
-        if position.shift_type == ShiftType.NIGHT:
-            streak = state.consecutive_night_streak
-        elif position.shift_type == ShiftType.DAY:
-            streak = state.consecutive_day_streak
-        else:
-            streak = state.consecutive_streak
-
-        if streak >= rest_settings.rest_max_consecutive_days:
-            block_span = rest_settings.rest_post_shift_days + rest_settings.rest_min_consecutive_days
-            if block_span > 0:
-                block_until = current_date + timedelta(days=block_span)
-                if state.employment_end_date and block_until > state.employment_end_date:
-                    block_until = state.employment_end_date
-                if state.blocked_until:
-                    block_until = max(block_until, state.blocked_until)
-                state.blocked_until = block_until
+        self._apply_assignment_effects(state, position, current_date, is_overtime)
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -684,6 +752,133 @@ class CalendarScheduler:
         for operator_id, state in self._operator_states.items():
             periods = self._rest_periods.get(operator_id, [])
             self._initialize_rest_state(state, periods)
+
+    def _load_recent_history(self) -> None:
+        if not self._operator_states or not self._positions:
+            return
+
+        history_window = self._history_window_days()
+        if history_window <= 0:
+            return
+
+        history_start = self.calendar.start_date - timedelta(days=history_window)
+        operator_ids = list(self._operator_states.keys())
+
+        assignments = (
+            ShiftAssignment.objects.select_related("position", "position__category")
+            .filter(operator_id__in=operator_ids)
+            .exclude(calendar_id=self.calendar.id)
+            .filter(date__lt=self.calendar.start_date, date__gte=history_start)
+            .order_by("date")
+        )
+
+        continuity_cache: Dict[int, PositionContinuity] = {}
+        for assignment in assignments:
+            state = self._operator_states.get(assignment.operator_id)
+            position = assignment.position
+            if not state or not position:
+                continue
+            if assignment.date in state.assigned_dates:
+                continue
+
+            self._apply_assignment_effects(state, position, assignment.date, assignment.is_overtime)
+
+            previous = continuity_cache.get(position.id)
+            if previous and previous.operator_id == assignment.operator_id and previous.last_date == assignment.date - timedelta(days=1):
+                continuity_cache[position.id] = PositionContinuity(
+                    operator_id=assignment.operator_id,
+                    last_date=assignment.date,
+                    streak=previous.streak + 1,
+                )
+            else:
+                continuity_cache[position.id] = PositionContinuity(
+                    operator_id=assignment.operator_id,
+                    last_date=assignment.date,
+                    streak=1,
+                )
+
+        self._position_continuity.update(continuity_cache)
+
+    def _history_window_days(self) -> int:
+        window = 0
+        for position in self._positions:
+            category = position.category
+            if not category:
+                continue
+            rest_max = category.rest_max_consecutive_days or 0
+            rest_min_freq = category.rest_min_frequency or 0
+            rest_post = category.rest_post_shift_days or 0
+            rest_min_consecutive = category.rest_min_consecutive_days or 0
+            policy = self._get_overload_policy(category) if rest_max else None
+            overtime_extension = policy.extra_day_limit if policy else 0
+            window = max(
+                window,
+                rest_max + overtime_extension,
+                rest_min_freq + rest_min_consecutive,
+                rest_post + rest_min_consecutive,
+            )
+        return max(window, 0)
+
+    def _apply_assignment_effects(
+        self,
+        state: OperatorState,
+        position: PositionDefinition,
+        current_date: date,
+        is_overtime: bool,
+    ) -> None:
+        state.register_assignment(current_date, position.shift_type, is_overtime)
+        rest_settings = position.category
+        if not rest_settings:
+            return
+
+        if position.shift_type == ShiftType.NIGHT and rest_settings.rest_post_shift_days:
+            self._extend_rest_block(
+                state,
+                current_date,
+                rest_settings.rest_post_shift_days,
+            )
+
+        rest_min_frequency = rest_settings.rest_min_frequency or 0
+        rest_min_consecutive = rest_settings.rest_min_consecutive_days or 0
+        rest_max = rest_settings.rest_max_consecutive_days or 0
+
+        if rest_min_frequency and state.consecutive_streak >= rest_min_frequency:
+            self._extend_rest_block(
+                state,
+                current_date,
+                max(rest_min_consecutive, 1),
+            )
+
+        if rest_max and state.consecutive_streak >= rest_max:
+            block_span = rest_settings.rest_post_shift_days + rest_min_consecutive
+            if block_span <= 0:
+                block_span = max(rest_min_consecutive, 1)
+            self._extend_rest_block(state, current_date, block_span)
+
+    def _extend_rest_block(
+        self,
+        state: OperatorState,
+        reference_date: date,
+        days: int,
+    ) -> None:
+        if days <= 0:
+            return
+
+        block_until = reference_date + timedelta(days=days)
+        if state.employment_end_date and block_until > state.employment_end_date:
+            block_until = state.employment_end_date
+        if not state.blocked_until or block_until > state.blocked_until:
+            state.blocked_until = block_until
+
+        max_offset = days
+        if state.employment_end_date:
+            remaining = (state.employment_end_date - reference_date).days
+            max_offset = min(days, remaining)
+        for offset in range(1, max_offset + 1):
+            rest_day = reference_date + timedelta(days=offset)
+            if state.employment_end_date and rest_day > state.employment_end_date:
+                break
+            state.rest_dates.add(rest_day)
 
     def _initialize_rest_state(self, state: OperatorState, periods: List[OperatorRestPeriod]) -> None:
         last_completed_rest: Optional[date] = None

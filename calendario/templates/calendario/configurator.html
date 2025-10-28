@@ -245,7 +245,7 @@
                 <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <tr>
                     <th class="px-3 py-2 text-left">Colaborador</th>
-                    <th class="px-3 py-2 text-left">Posiciones</th>
+                    <th class="px-3 py-2 text-left">Fortalezas y sugerencias</th>
                     <th class="px-3 py-2 text-left">Granja preferida</th>
                     <th class="px-3 py-2 text-left">Estado</th>
                     <th class="px-3 py-2 text-left">Acciones</th>
@@ -312,6 +312,12 @@
                   Roles
                   <select id="operator-roles" multiple class="mt-1 h-32 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                   <span class="mt-1 text-xs text-slate-500">Usa Ctrl/⌘ + clic para seleccionar varios roles.</span>
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Posiciones sugeridas (opcional)
+                  <select id="operator-suggested-positions" multiple class="mt-1 h-32 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                  <span class="mt-1 text-xs text-slate-500">El generador intentará asignar primero estas posiciones cuando sea posible.</span>
                 </label>
 
                 <label class="flex items-center gap-2 text-sm text-slate-700">

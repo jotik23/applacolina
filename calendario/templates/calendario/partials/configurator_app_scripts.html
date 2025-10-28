@@ -63,7 +63,28 @@
           dayLabels: new Map(),
           restStatusLabels: new Map(),
           restSourceLabels: new Map(),
+          positionsById: new Map(),
+          positionLabels: new Map(),
         },
+      };
+
+      const formatPositionLabel = (position) => {
+        if (!position) {
+          return '';
+        }
+        const parts = [];
+        if (position.name) {
+          parts.push(position.name);
+        } else if (position.id) {
+          parts.push(`Posición ${position.id}`);
+        }
+        if (position.category?.name) {
+          parts.push(position.category.name);
+        }
+        if (position.farm?.name) {
+          parts.push(position.farm.name);
+        }
+        return parts.join(' · ');
       };
 
       const refreshPositionHighlight = () => {
@@ -142,6 +163,7 @@
         operatorEmploymentEnd: app.querySelector('#operator-employment-end'),
         operatorPreferredFarm: app.querySelector('#operator-preferred-farm'),
         operatorRoles: app.querySelector('#operator-roles'),
+        operatorSuggestedPositions: app.querySelector('#operator-suggested-positions'),
         operatorIsActive: app.querySelector('#operator-is-active'),
         operatorCancelBtn: app.querySelector('#operator-cancel-btn'),
         operatorCapabilityAddBtn: app.querySelector('#operator-capability-add-btn'),
@@ -1107,6 +1129,16 @@
           categoriesById.set(String(category.id), category);
         });
 
+        const positionsById = new Map();
+        (state.metadata.positions || []).forEach((position) => {
+          positionsById.set(Number(position.id), position);
+        });
+
+        const positionLabels = new Map();
+        positionsById.forEach((position, id) => {
+          positionLabels.set(String(id), formatPositionLabel(position));
+        });
+
         const choiceMap = (choices) => {
           const map = new Map();
           choices.forEach((choice) => {
@@ -1122,6 +1154,8 @@
           farmsById,
           rolesById,
           categoriesById,
+           positionsById,
+           positionLabels,
           categoryLabels: choiceMap(state.metadata.choice_sets.position_categories),
           complexityLabels: choiceMap(state.metadata.choice_sets.complexity_levels),
           skillLabels: choiceMap(state.metadata.choice_sets.skill_levels),
@@ -1198,6 +1232,18 @@
           blankLabel: '(sin preferencia)',
           keepValue: true,
         });
+        if (refs.operatorSuggestedPositions) {
+          const suggestedOptions = (state.metadata.positions || []).map((position) => ({
+            value: String(position.id),
+            label: formatPositionLabel(position),
+          }));
+          populateSelect(refs.operatorSuggestedPositions, suggestedOptions, {
+            valueKey: 'value',
+            labelKey: 'label',
+            includeBlank: false,
+            keepValue: true,
+          });
+        }
         populateSelect(refs.operatorRestStatus, state.metadata.choice_sets.rest_statuses || [], {
           blankLabel: 'Selecciona estado',
           keepValue: true,
@@ -1299,6 +1345,9 @@
           preferred_farm: preferredFarmValue ? Number(preferredFarmValue) : null,
           roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
           is_active: Boolean(refs.operatorIsActive?.checked),
+          suggested_positions: Array.from(refs.operatorSuggestedPositions?.selectedOptions || [])
+            .map((option) => Number(option.value))
+            .filter((value) => Number.isFinite(value)),
           capabilities: activeCapabilityEntries()
             .filter((entry) => entry.category)
             .map((entry) => ({
@@ -1345,6 +1394,11 @@
               option.selected = false;
             });
           }
+          if (refs.operatorSuggestedPositions) {
+            Array.from(refs.operatorSuggestedPositions.options || []).forEach((option) => {
+              option.selected = false;
+            });
+          }
           if (refs.operatorIsActive) {
             refs.operatorIsActive.checked = true;
           }
@@ -1386,6 +1440,14 @@
               option.selected = operatorRoles.has(option.value);
             });
           }
+          if (refs.operatorSuggestedPositions) {
+            const suggested = new Set(
+              (operator.suggested_positions || []).map((item) => String(item.id ?? item))
+            );
+            Array.from(refs.operatorSuggestedPositions.options || []).forEach((option) => {
+              option.selected = suggested.has(option.value);
+            });
+          }
           if (refs.operatorIsActive) {
             refs.operatorIsActive.checked = Boolean(operator.is_active);
           }
@@ -1403,6 +1465,11 @@
         setEditingOperator(null);
         resetForm(refs.operatorForm, refs.operatorMessage);
         toggleWrapper(refs.operatorFormWrapper, false);
+        if (refs.operatorSuggestedPositions) {
+          Array.from(refs.operatorSuggestedPositions.options || []).forEach((option) => {
+            option.selected = false;
+          });
+        }
         resetOperatorCapabilitiesDraft();
         setOperatorRestContext(null);
       };
@@ -1784,7 +1851,24 @@
               const skillLabel = state.lookups.skillLabels.get(String(capability.skill_score)) || `${capability.skill_score}/10`;
               return `${escapeHtml(categoryLabel)} (${escapeHtml(skillLabel)})`;
             });
-            const positionsDisplay = positionsList.join(', ') || 'Sin fortalezas activas';
+            const capabilitySummary = positionsList.length
+              ? positionsList.join(', ')
+              : escapeHtml('Sin fortalezas activas');
+            const capabilityLine = `<p>${capabilitySummary}</p>`;
+
+            const suggestionLabels = (operator.suggested_positions || []).map((item) => {
+              const positionId = item?.id ?? item;
+              const detailed =
+                state.lookups.positionsById.get(Number(positionId)) ||
+                item;
+              const label =
+                state.lookups.positionLabels.get(String(positionId)) ||
+                formatPositionLabel(detailed);
+              return escapeHtml(label);
+            });
+            const suggestionsLine = suggestionLabels.length
+              ? `<p class="mt-1 text-xs text-slate-500">Preferencias: ${suggestionLabels.join(', ')}</p>`
+              : '';
 
             const preferredFarm = operator.preferred_farm
               ? state.lookups.farmsById.get(operator.preferred_farm.id) || operator.preferred_farm
@@ -1849,7 +1933,7 @@
                   ${employmentLine}
                   ${rolesLine}
                 </td>
-                <td class="px-3 py-3 align-top text-sm text-slate-600">${positionsDisplay}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${capabilityLine}${suggestionsLine}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${preferredFarmLabel}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${statusBadge}</td>
                 <td class="px-3 py-3 align-top min-w-[12rem]">
