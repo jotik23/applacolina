@@ -294,6 +294,101 @@ class CalendarSchedulerTests(TestCase):
         self.assertNotIn(date(2025, 1, 4), assigned_dates)
         self.assertTrue(all(decision.date != date(2025, 1, 4) for decision in decisions))
 
+    def test_manual_rest_period_allows_postponing_automatic_rest(self) -> None:
+        from calendario.models import OperatorCapability
+
+        self.category.rest_min_frequency = 2
+        self.category.rest_min_consecutive_days = 2
+        self.category.rest_max_consecutive_days = 4
+        self.category.extra_day_limit = 1
+        self.category.save()
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        manual_rest_calendar = ShiftCalendar.objects.create(
+            name="Manual descansos",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 5),
+            status=CalendarStatus.DRAFT,
+        )
+
+        OperatorRestPeriod.objects.create(
+            operator=self.operator,
+            start_date=date(2025, 1, 4),
+            end_date=date(2025, 1, 5),
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+            calendar=manual_rest_calendar,
+        )
+
+        scheduler = CalendarScheduler(manual_rest_calendar)
+        decisions = scheduler.generate(commit=True)
+
+        assigned_dates = {
+            assignment.date for assignment in manual_rest_calendar.assignments.all()
+        }
+
+        self.assertIn(date(2025, 1, 1), assigned_dates)
+        self.assertIn(date(2025, 1, 2), assigned_dates)
+        self.assertIn(date(2025, 1, 3), assigned_dates)
+        self.assertNotIn(date(2025, 1, 4), assigned_dates)
+        self.assertNotIn(date(2025, 1, 5), assigned_dates)
+        self.assertEqual(len(assigned_dates), 3)
+        self.assertEqual(
+            sum(1 for decision in decisions if decision.operator is not None),
+            3,
+        )
+
+    def test_manual_rest_overrides_category_rest_day(self) -> None:
+        from calendario.models import OperatorCapability
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        self.category.automatic_rest_days = [DayOfWeek.SATURDAY]
+        self.category.save(update_fields=["automatic_rest_days"])
+
+        weekend_calendar = ShiftCalendar.objects.create(
+            name="Descanso manual sabado",
+            start_date=date(2025, 1, 10),
+            end_date=date(2025, 1, 12),
+            status=CalendarStatus.DRAFT,
+        )
+
+        OperatorRestPeriod.objects.create(
+            operator=self.operator,
+            start_date=date(2025, 1, 10),
+            end_date=date(2025, 1, 10),
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+            calendar=weekend_calendar,
+        )
+
+        scheduler = CalendarScheduler(weekend_calendar)
+        decisions = []
+        for day in scheduler._calendar_dates:
+            print('DAY', day, 'REST BEFORE', sorted(state.rest_dates), 'BLOCKED', state.blocked_until)
+            day_decisions = scheduler._assign_for_day(day)
+            decisions.extend(day_decisions)
+            print('DAY', day, 'REST AFTER', sorted(state.rest_dates), 'BLOCKED', state.blocked_until)
+        # Apply decisions to persist assignments
+        scheduler._apply_decisions(decisions)
+
+        saturday_assignment = weekend_calendar.assignments.filter(date=date(2025, 1, 11)).first()
+        self.assertIsNotNone(saturday_assignment)
+        assert saturday_assignment is not None
+        self.assertEqual(saturday_assignment.operator, self.operator)
+
+        auto_rest_days = weekend_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR)
+        self.assertFalse(auto_rest_days.filter(start_date=date(2025, 1, 11)).exists())
+
     def test_sync_rest_periods_creates_calendar_period(self) -> None:
         from calendario.models import OperatorCapability
 
@@ -307,6 +402,12 @@ class CalendarSchedulerTests(TestCase):
         self.position.save(update_fields=["valid_until"])
 
         scheduler = CalendarScheduler(self.calendar)
+        for day in scheduler._calendar_dates:
+            candidates = scheduler._eligible_candidates(self.position, day)
+            debug = []
+            for candidate in candidates:
+                debug.append((candidate.operator.get_full_name(), scheduler._candidate_sort_key(candidate, self.position, day)))
+            print('CANDIDATES', day, debug)
         scheduler.generate(commit=True)
 
         rest_periods = OperatorRestPeriod.objects.filter(
@@ -389,6 +490,7 @@ class CalendarSchedulerTests(TestCase):
         assignments = list(
             self.calendar.assignments.filter(position=self.position).order_by("date")
         )
+        print('HISTORY assignments', [(a.date, a.operator.get_full_name()) for a in assignments])
         self.assertEqual(len(assignments), 3)
         self.assertEqual(assignments[0].operator_id, assignments[1].operator_id)
 
@@ -533,16 +635,30 @@ class CalendarSchedulerTests(TestCase):
             )
 
         scheduler = CalendarScheduler(self.calendar)
+        state = scheduler._operator_states[self.operator.id]
+        from calendario.models import OperatorRestPeriod
+        print('REST PERIODS', list(OperatorRestPeriod.objects.filter(operator=self.operator).values_list('start_date', 'end_date', 'source')))
+        print('REST DATES BEFORE', sorted(state.rest_dates))
+        print('BLOCKED UNTIL', state.blocked_until)
+        print('STREAK BEFORE', state.consecutive_streak)
+        print('ASSIGNED DATES', sorted(state.assigned_dates))
+        for day in scheduler._calendar_dates:
+            candidates = scheduler._eligible_candidates(self.position, day)
+            debug = []
+            for candidate in candidates:
+                key = scheduler._candidate_sort_key(candidate, self.position, day)
+                debug.append((candidate.operator.get_full_name(), list(enumerate(key))))
+            print('CANDIDATES', day, debug)
         scheduler.generate(commit=True)
+        print('REST DATES AFTER', sorted(state.rest_dates))
 
         assignments = list(
             self.calendar.assignments.filter(position=self.position).order_by("date")
         )
+        print('ASSIGNMENTS DEBUG', [(a.date, a.operator.get_full_name()) for a in assignments])
         self.assertEqual(len(assignments), 3)
-        # Primeros dos días cubiertos por el suplente debido al bloqueo por descanso.
         self.assertEqual(assignments[0].operator, relief_operator)
         self.assertEqual(assignments[1].operator, relief_operator)
-        # Una vez cumplido el descanso mínimo, el titular puede retomar el turno.
         self.assertEqual(assignments[2].operator, self.operator)
 
     def test_scheduler_skips_operators_before_employment_start(self) -> None:
@@ -614,7 +730,6 @@ class CalendarSchedulerTests(TestCase):
         night_category.rest_max_consecutive_days = 7
         night_category.rest_post_shift_days = 1
         night_category.save()
-
         night_position = PositionDefinition.objects.create(
             name="Turno noche",
             code="NOC-1",

@@ -51,6 +51,12 @@ class OperatorState:
     blocked_until: Optional[date] = None
     overtime_streak: int = 0
     rest_dates: set[date] = field(default_factory=set)
+    manual_rest_dates: set[date] = field(default_factory=set)
+    manual_rest_windows: List[Tuple[date, date]] = field(default_factory=list)
+    manual_rest_weekly: Dict[Tuple[int, int], Dict[int, int]] = field(default_factory=dict)
+    last_manual_rest_end: Optional[date] = None
+    initial_total_assignments: int = 0
+    calendar_assignment_count: int = 0
     last_rest_end: Optional[date] = None
     employment_start_date: Optional[date] = None
     employment_end_date: Optional[date] = None
@@ -256,9 +262,21 @@ class CalendarScheduler:
         for position in self._positions:
             if not position.is_active_on(current_date):
                 continue
-            if self._is_category_rest_day(position, current_date):
-                continue
+            if self.options.honor_rest_rules and self._is_category_rest_day(position, current_date):
+                if not self._can_generate_on_category_rest_day(position, current_date):
+                    continue
             active_positions.append(position)
+
+        if self.options.honor_rest_rules:
+            for position in active_positions:
+                continuity = self._position_continuity.get(position.id)
+                if not continuity:
+                    continue
+                state = self._operator_states.get(continuity.operator_id)
+                if not state:
+                    continue
+                if state.is_rest_day(current_date) or (state.blocked_until and current_date <= state.blocked_until):
+                    self._position_continuity.pop(position.id, None)
 
         if not active_positions:
             return []
@@ -411,10 +429,21 @@ class CalendarScheduler:
                     continuity_priority = 1
             else:
                 continuity_priority = 4 if position.shift_type == ShiftType.NIGHT else 3
+                if state.total_assignments == 0:
+                    prior_rest = any(
+                        self.calendar.start_date <= rest_day < current_date for rest_day in state.rest_dates
+                    )
+                    if prior_rest:
+                        continuity_priority = 0
+                        continuity_score = 0
+                    else:
+                        continuity_priority = min(continuity_priority, 1)
+        suggestion_rank = 0 if self._is_suggested_position(capability.operator_id, position.id) else 1
         rest_flag, base_rest_value = self._rest_pressure(state, position, current_date)
         overtime_risk = 1 if self._would_trigger_overtime(state, position, current_date) else 0
         required_skill = required_skill_for_complexity(position.complexity)
         skill_gap = max(required_skill - capability.skill_score, 0)
+        recent_assignments = sum(1 for day in state.assigned_dates if day >= self.calendar.start_date)
 
         weekend_priority = 1
         weekend_value = 0
@@ -427,21 +456,6 @@ class CalendarScheduler:
                 if not rest_flag:
                     rest_value = -base_rest_value
 
-        return (
-            rest_flag,
-            preference_rank,
-            overtime_risk,
-            continuity_priority,
-            continuity_score,
-            weekend_priority,
-            weekend_value,
-            rest_value,
-            skill_gap,
-            state.total_assignments,
-            state.consecutive_streak,
-            -capability.skill_score,
-            preference_id,
-        )
         if suggestion_rank == 0 and continuity_priority > 0:
             continuity_priority = min(continuity_priority, 1)
 
@@ -456,8 +470,8 @@ class CalendarScheduler:
             weekend_value,
             rest_value,
             skill_gap,
-            state.total_assignments,
-            state.consecutive_streak,
+            recent_assignments,
+            base_rest_value,
             -capability.skill_score,
             preference_id,
         )
@@ -490,13 +504,21 @@ class CalendarScheduler:
         rest_settings = position.category
         new_streak = self._calculate_new_streak(state, current_date)
         rest_min_frequency = rest_settings.rest_min_frequency or 0
+        rest_min_consecutive = rest_settings.rest_min_consecutive_days or 0
         rest_max_limit = rest_settings.rest_max_consecutive_days or 0
         if rest_max_limit <= 0 and rest_min_frequency <= 0:
             return (0, new_streak)
 
+        policy = None
+        if rest_max_limit > 0 or rest_min_frequency > 0:
+            policy = self._get_overload_policy(rest_settings)
+
         allowed_max = rest_max_limit
-        if rest_max_limit > 0:
-            allowed_max += self._get_overload_policy(rest_settings).extra_day_limit
+        if rest_max_limit > 0 and policy:
+            allowed_max += policy.extra_day_limit
+
+        min_extension = policy.extra_day_limit if policy and rest_min_consecutive <= 1 else 0
+        rest_min_limit = rest_min_frequency + min_extension
 
         rest_flag = 0
         if rest_max_limit > 0 and new_streak > rest_max_limit:
@@ -504,7 +526,18 @@ class CalendarScheduler:
             if allowed_max > rest_max_limit and new_streak > allowed_max:
                 rest_flag = 3
         elif rest_min_frequency > 0 and new_streak >= rest_min_frequency:
-            rest_flag = 1
+            if new_streak <= rest_min_limit:
+                rest_flag = 0
+            else:
+                required_span = max(rest_settings.rest_min_consecutive_days or 1, 1)
+                if not self._can_delay_rest_with_manual(
+                    state,
+                    current_date,
+                    rest_settings,
+                    new_streak,
+                    required_span,
+                ):
+                    rest_flag = 1
 
         return (rest_flag, new_streak)
 
@@ -555,17 +588,42 @@ class CalendarScheduler:
         ):
             return False
 
+        category = position.category
+
+        if (
+            category
+            and category.automatic_rest_days
+            and self.options.honor_rest_rules
+            and not self._can_override_category_rest(state, position, current_date)
+        ):
+            return False
+
         if not self.options.honor_rest_rules:
             return True
 
-        rest_settings = position.category
+        rest_settings = category
         new_streak = self._calculate_new_streak(state, current_date)
         allowed_max = rest_settings.rest_max_consecutive_days or 0
         rest_min_frequency = rest_settings.rest_min_frequency or 0
-        if rest_min_frequency and new_streak > rest_min_frequency:
-            return False
+        rest_min_consecutive = rest_settings.rest_min_consecutive_days or 0
+        policy = None
+        if rest_min_frequency or allowed_max:
+            policy = self._get_overload_policy(rest_settings)
+
+        min_extension = policy.extra_day_limit if policy and rest_min_consecutive <= 1 else 0
+        rest_min_limit = rest_min_frequency + min_extension
+        if rest_min_frequency and new_streak > rest_min_limit:
+            required_span = max(rest_settings.rest_min_consecutive_days or 1, 1)
+            if not self._can_delay_rest_with_manual(
+                state,
+                current_date,
+                rest_settings,
+                new_streak,
+                required_span,
+            ):
+                return False
         if allowed_max and new_streak > allowed_max:
-            policy = self._get_overload_policy(position.category)
+            policy = policy or self._get_overload_policy(position.category)
             extended_limit = allowed_max + policy.extra_day_limit
             if new_streak > extended_limit:
                 return False
@@ -621,6 +679,10 @@ class CalendarScheduler:
         is_overtime: bool,
     ) -> None:
         self._apply_assignment_effects(state, position, current_date, is_overtime)
+
+        category = position.category
+        if category and category.automatic_rest_days and current_date.weekday() in category.automatic_rest_days:
+            self._consume_manual_rest_credit(state, category, current_date)
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -819,6 +881,152 @@ class CalendarScheduler:
             )
         return max(window, 0)
 
+    def _next_manual_rest_window(self, state: OperatorState, start_date: date) -> Optional[Tuple[date, date]]:
+        if not state.manual_rest_windows:
+            return None
+
+        for window_start, window_end in state.manual_rest_windows:
+            if window_end < start_date:
+                continue
+            effective_start = max(window_start, start_date)
+            effective_end = window_end
+            employment_limit = state.employment_end_date
+            if employment_limit and effective_start > employment_limit:
+                continue
+            if employment_limit and effective_end > employment_limit:
+                effective_end = employment_limit
+            if effective_start > effective_end:
+                continue
+            return (effective_start, effective_end)
+
+        return None
+
+    def _can_delay_rest_with_manual(
+        self,
+        state: OperatorState,
+        current_date: date,
+        rest_settings: PositionCategory,
+        projected_streak: int,
+        required_span: int,
+    ) -> bool:
+        if required_span <= 0:
+            required_span = 1
+
+        next_day = current_date + timedelta(days=1)
+        manual_window = self._next_manual_rest_window(state, next_day)
+        if not manual_window:
+            return False
+
+        manual_start, manual_end = manual_window
+        manual_length = (manual_end - manual_start).days + 1
+        if manual_length < required_span:
+            return False
+
+        delay = max(0, (manual_start - next_day).days)
+
+        rest_max = rest_settings.rest_max_consecutive_days or 0
+        if rest_max:
+            policy = self._get_overload_policy(rest_settings)
+            allowed_limit = rest_max + (policy.extra_day_limit if policy else 0)
+            if projected_streak + delay > allowed_limit:
+                return False
+        else:
+            max_delay = max(0, (rest_settings.rest_min_consecutive_days or 1) - 1)
+            if delay > max_delay:
+                return False
+
+        return True
+
+    @staticmethod
+    def _manual_week_key(target_date: date) -> Tuple[int, int]:
+        iso = target_date.isocalendar()
+        return (iso.year, iso.week)
+
+    def _register_manual_rest_credit(self, state: OperatorState, manual_day: date) -> None:
+        key = self._manual_week_key(manual_day)
+        bucket = state.manual_rest_weekly.setdefault(key, {})
+        weekday = manual_day.weekday()
+        bucket[weekday] = bucket.get(weekday, 0) + 1
+
+    def _manual_rest_credit_available(
+        self,
+        state: OperatorState,
+        category: PositionCategory,
+        current_date: date,
+    ) -> int:
+        key = self._manual_week_key(current_date)
+        counts = state.manual_rest_weekly.get(key)
+        if not counts:
+            return 0
+
+        automatic_days = set(category.automatic_rest_days or [])
+        return sum(count for weekday, count in counts.items() if weekday not in automatic_days)
+
+    def _consume_manual_rest_credit(
+        self,
+        state: OperatorState,
+        category: PositionCategory,
+        current_date: date,
+    ) -> None:
+        key = self._manual_week_key(current_date)
+        counts = state.manual_rest_weekly.get(key)
+        if not counts:
+            return
+
+        automatic_days = set(category.automatic_rest_days or [])
+        for weekday in sorted(counts):
+            if weekday in automatic_days:
+                continue
+            remaining = counts[weekday]
+            if remaining <= 0:
+                continue
+            counts[weekday] = remaining - 1
+            if counts[weekday] <= 0:
+                counts.pop(weekday)
+            if not counts:
+                state.manual_rest_weekly.pop(key, None)
+            return
+
+    def _can_override_category_rest(
+        self,
+        state: OperatorState,
+        position: PositionDefinition,
+        current_date: date,
+    ) -> bool:
+        category = position.category
+        if not category or not category.automatic_rest_days:
+            return True
+
+        weekday = current_date.weekday()
+        if weekday not in category.automatic_rest_days:
+            return True
+
+        if state.employment_start_date and current_date < state.employment_start_date:
+            return False
+
+        if current_date in state.manual_rest_dates:
+            return False
+
+        credit = self._manual_rest_credit_available(state, category, current_date)
+        return credit > 0
+
+    def _can_generate_on_category_rest_day(self, position: PositionDefinition, current_date: date) -> bool:
+        category = position.category
+        if not category or not category.automatic_rest_days:
+            return True
+
+        if current_date.weekday() not in category.automatic_rest_days:
+            return True
+
+        for capability in self._capabilities_by_category.get(position.category_id, []):
+            state = self._operator_states.get(capability.operator_id)
+            if not state:
+                continue
+            if self._can_override_category_rest(state, position, current_date):
+                return True
+
+        return False
+
     def _apply_assignment_effects(
         self,
         state: OperatorState,
@@ -831,23 +1039,29 @@ class CalendarScheduler:
         if not rest_settings:
             return
 
-        if position.shift_type == ShiftType.NIGHT and rest_settings.rest_post_shift_days:
-            self._extend_rest_block(
-                state,
-                current_date,
-                rest_settings.rest_post_shift_days,
-            )
-
         rest_min_frequency = rest_settings.rest_min_frequency or 0
         rest_min_consecutive = rest_settings.rest_min_consecutive_days or 0
         rest_max = rest_settings.rest_max_consecutive_days or 0
+        policy = None
+        if rest_min_frequency or rest_max:
+            policy = self._get_overload_policy(rest_settings)
+        min_extension = policy.extra_day_limit if policy and rest_min_consecutive <= 1 else 0
+        rest_min_limit = rest_min_frequency + min_extension
 
-        if rest_min_frequency and state.consecutive_streak >= rest_min_frequency:
-            self._extend_rest_block(
+        if rest_min_frequency and state.consecutive_streak >= rest_min_limit:
+            required_span = max(rest_min_consecutive, 1)
+            if not self._can_delay_rest_with_manual(
                 state,
                 current_date,
-                max(rest_min_consecutive, 1),
-            )
+                rest_settings,
+                state.consecutive_streak,
+                required_span,
+            ):
+                self._extend_rest_block(
+                    state,
+                    current_date,
+                    required_span,
+                )
 
         if rest_max and state.consecutive_streak >= rest_max:
             block_span = rest_settings.rest_post_shift_days + rest_min_consecutive
@@ -895,6 +1109,20 @@ class CalendarScheduler:
             if period.start_date > self.calendar.end_date:
                 continue
 
+            is_manual_period = period.source != RestPeriodSource.CALENDAR
+            employment_limit = state.employment_end_date
+            credit_start = period.start_date
+            credit_end = period.end_date
+            if employment_limit and credit_end > employment_limit:
+                credit_end = employment_limit
+
+            if is_manual_period and credit_end >= credit_start:
+                employment_start = state.employment_start_date
+                for manual_day in self._daterange(credit_start, credit_end):
+                    if employment_start and manual_day < employment_start:
+                        continue
+                    self._register_manual_rest_credit(state, manual_day)
+
             overlap_start = max(period.start_date, self.calendar.start_date)
             overlap_end = min(period.end_date, self.calendar.end_date)
             if overlap_start > overlap_end:
@@ -903,13 +1131,22 @@ class CalendarScheduler:
             if period.status == RestPeriodStatus.CANCELLED:
                 continue
 
-            employment_limit = state.employment_end_date
             if employment_limit and overlap_start > employment_limit:
                 continue
 
             effective_end = min(overlap_end, employment_limit) if employment_limit else overlap_end
+            manual_start: Optional[date] = None
+            manual_end: Optional[date] = None
             for day in self._daterange(overlap_start, effective_end):
                 state.rest_dates.add(day)
+                if is_manual_period:
+                    state.manual_rest_dates.add(day)
+                    if manual_start is None:
+                        manual_start = day
+                    manual_end = day
+
+            if is_manual_period and manual_start and manual_end:
+                state.manual_rest_windows.append((manual_start, manual_end))
 
         if last_completed_rest:
             state.last_rest_end = last_completed_rest
@@ -921,6 +1158,9 @@ class CalendarScheduler:
                     state.last_assignment_date = self.calendar.start_date - timedelta(days=1)
         elif state.employment_start_date:
             state.last_rest_end = state.employment_start_date - timedelta(days=1)
+
+        if state.manual_rest_windows:
+            state.manual_rest_windows.sort(key=lambda window: window[0])
 
     def sync_rest_periods(self) -> None:
         sync_calendar_rest_periods(
@@ -983,48 +1223,85 @@ def sync_calendar_rest_periods(
         if not relevant_dates:
             continue
 
-        sequences: List[Tuple[date, date]] = []
+        relevant_set = set(relevant_dates)
+        manual_day_map: Dict[date, OperatorRestPeriod] = {}
+        for period in manual_periods:
+            if period.status == RestPeriodStatus.CANCELLED:
+                continue
+
+            manual_end = period.end_date
+            if employment_limit and manual_end > employment_limit:
+                manual_end = employment_limit
+
+            manual_start = period.start_date
+            if manual_end < manual_start:
+                continue
+
+            for manual_day in CalendarScheduler._daterange(manual_start, manual_end):
+                if manual_day not in relevant_set:
+                    continue
+                manual_day_map[manual_day] = period
+
+        periods_confirmed: Set[int] = set()
         current_start: Optional[date] = None
 
         for day in relevant_dates:
             working = operator_id in assignments_by_day.get(day, set())
+            manual_period = manual_day_map.get(day)
+
             if working:
                 if current_start:
-                    sequences.append((current_start, day - timedelta(days=1)))
+                    new_periods.append(
+                        OperatorRestPeriod(
+                            operator_id=operator_id,
+                            start_date=current_start,
+                            end_date=day - timedelta(days=1),
+                            status=RestPeriodStatus.CONFIRMED,
+                            source=RestPeriodSource.CALENDAR,
+                            calendar=calendar,
+                        )
+                    )
                     current_start = None
-            else:
-                if current_start is None:
-                    current_start = day
+                continue
+
+            if manual_period:
+                if current_start:
+                    new_periods.append(
+                        OperatorRestPeriod(
+                            operator_id=operator_id,
+                            start_date=current_start,
+                            end_date=day - timedelta(days=1),
+                            status=RestPeriodStatus.CONFIRMED,
+                            source=RestPeriodSource.CALENDAR,
+                            calendar=calendar,
+                        )
+                    )
+                    current_start = None
+
+                period_id = manual_period.id
+                if period_id is not None and period_id not in periods_confirmed:
+                    update_fields: List[str] = []
+                    if manual_period.status in {RestPeriodStatus.PLANNED, RestPeriodStatus.APPROVED}:
+                        manual_period.status = RestPeriodStatus.CONFIRMED
+                        update_fields.append("status")
+                    if manual_period.calendar_id != calendar.id:
+                        manual_period.calendar = calendar
+                        update_fields.append("calendar")
+                    if update_fields:
+                        update_fields.append("updated_at")
+                        manual_period.save(update_fields=update_fields)
+                    periods_confirmed.add(period_id)
+                continue
+
+            if current_start is None:
+                current_start = day
 
         if current_start is not None:
-            sequences.append((current_start, relevant_dates[-1]))
-
-        for start, end in sequences:
-            if start > end:
-                continue
-
-            covering_manual = next(
-                (
-                    period
-                    for period in manual_periods
-                    if period.start_date <= start and period.end_date >= end and period.source != RestPeriodSource.CALENDAR
-                ),
-                None,
-            )
-
-            if covering_manual:
-                if covering_manual.status in {RestPeriodStatus.PLANNED, RestPeriodStatus.APPROVED}:
-                    covering_manual.status = RestPeriodStatus.CONFIRMED
-                    if covering_manual.calendar_id != calendar.id:
-                        covering_manual.calendar = calendar
-                    covering_manual.save(update_fields=["status", "calendar", "updated_at"])
-                continue
-
             new_periods.append(
                 OperatorRestPeriod(
                     operator_id=operator_id,
-                    start_date=start,
-                    end_date=end,
+                    start_date=current_start,
+                    end_date=relevant_dates[-1],
                     status=RestPeriodStatus.CONFIRMED,
                     source=RestPeriodSource.CALENDAR,
                     calendar=calendar,
