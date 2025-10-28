@@ -8,6 +8,7 @@ from calendario.models import (
     AssignmentAlertLevel,
     CalendarStatus,
     ComplexityLevel,
+    DayOfWeek,
     OperatorRestPeriod,
     PositionCategory,
     PositionCategoryCode,
@@ -81,7 +82,6 @@ class CalendarSchedulerTests(TestCase):
 
         self.operator.employment_start_date = date(2024, 12, 25)
         self.operator.save(update_fields=["employment_start_date"])
-
 
     def test_scheduler_assigns_operator_with_matching_capability(self) -> None:
         from calendario.models import OperatorCapability
@@ -183,6 +183,33 @@ class CalendarSchedulerTests(TestCase):
 
         self.assertIsNone(decisions[0].operator)
 
+    def test_scheduler_skips_category_automatic_rest_days(self) -> None:
+        from calendario.models import OperatorCapability
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        self.category.automatic_rest_days = [DayOfWeek.SATURDAY]
+        self.category.save(update_fields=["automatic_rest_days"])
+
+        weekend_calendar = ShiftCalendar.objects.create(
+            name="Fin de semana",
+            start_date=date(2025, 1, 3),
+            end_date=date(2025, 1, 5),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(weekend_calendar)
+        decisions = scheduler.generate(commit=True)
+
+        assigned_dates = {assignment.date for assignment in weekend_calendar.assignments.all()}
+        self.assertEqual(len(decisions), 2)
+        self.assertNotIn(date(2025, 1, 4), assigned_dates)
+        self.assertTrue(all(decision.date != date(2025, 1, 4) for decision in decisions))
+
     def test_sync_rest_periods_creates_calendar_period(self) -> None:
         from calendario.models import OperatorCapability
 
@@ -208,3 +235,252 @@ class CalendarSchedulerTests(TestCase):
         assert rest_period is not None
         self.assertEqual(rest_period.start_date, self.calendar.start_date + timedelta(days=2))
         self.assertEqual(rest_period.end_date, self.calendar.start_date + timedelta(days=2))
+
+    def test_scheduler_prioritizes_more_critical_positions(self) -> None:
+        from calendario.models import OperatorCapability
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=10,
+        )
+
+        self.position.complexity = ComplexityLevel.CRITICAL
+        self.position.display_order = 5
+        self.position.save(update_fields=["complexity", "display_order"])
+
+        support_position = PositionDefinition.objects.create(
+            name="Apoyo",
+            code="SUP-1",
+            category=self.category,
+            farm=self.farm,
+            complexity=ComplexityLevel.SUPPORT,
+            allow_lower_complexity=True,
+            valid_from=self.calendar.start_date,
+        )
+        support_position.display_order = 1
+        support_position.save(update_fields=["display_order"])
+
+        scheduler = CalendarScheduler(self.calendar)
+        decisions = scheduler.generate()
+
+        critical_assignments = [
+            decision for decision in decisions if decision.position.id == self.position.id
+        ]
+        support_assignments = [
+            decision for decision in decisions if decision.position.id == support_position.id
+        ]
+
+        self.assertTrue(critical_assignments)
+        self.assertTrue(support_assignments)
+        self.assertTrue(all(decision.operator == self.operator for decision in critical_assignments))
+        self.assertTrue(all(decision.operator is None for decision in support_assignments))
+
+    def test_scheduler_prioritizes_continuous_assignments_when_possible(self) -> None:
+        from calendario.models import OperatorCapability
+
+        second_operator = UserProfile.objects.create_user(
+            cedula="124",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Jamie",
+            apellidos="Lopez",
+            telefono="987654",
+        )
+        second_operator.roles.add(self.role)
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+        OperatorCapability.objects.create(
+            operator=second_operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        scheduler = CalendarScheduler(self.calendar)
+        scheduler.generate(commit=True)
+
+        assignments = list(
+            self.calendar.assignments.filter(position=self.position).order_by("date")
+        )
+        self.assertEqual(len(assignments), 3)
+        self.assertEqual(assignments[0].operator_id, assignments[1].operator_id)
+
+    def test_scheduler_populates_weekend_assignments(self) -> None:
+        from calendario.models import OperatorCapability
+
+        second_operator = UserProfile.objects.create_user(
+            cedula="125",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Taylor",
+            apellidos="Rios",
+            telefono="555123",
+        )
+        second_operator.roles.add(self.role)
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+        OperatorCapability.objects.create(
+            operator=second_operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        week_calendar = ShiftCalendar.objects.create(
+            name="Semana completa",
+            start_date=date(2025, 1, 6),
+            end_date=date(2025, 1, 12),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(week_calendar)
+        scheduler.generate(commit=True)
+
+        assignments = list(
+            week_calendar.assignments.filter(position=self.position).order_by("date")
+        )
+
+        weekend_assignments = [
+            assignment
+            for assignment in assignments
+            if assignment.date.weekday() in {DayOfWeek.SATURDAY, DayOfWeek.SUNDAY}
+        ]
+        self.assertTrue(weekend_assignments)
+
+
+    def test_scheduler_respects_employment_end_date(self) -> None:
+        from calendario.models import OperatorCapability
+
+        employment_end = self.calendar.start_date + timedelta(days=1)
+        self.operator.employment_end_date = employment_end
+        self.operator.save(update_fields=["employment_end_date"])
+
+        extended_calendar = ShiftCalendar.objects.create(
+            name="Semana extendida",
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date + timedelta(days=4),
+            status=CalendarStatus.DRAFT,
+        )
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=self.category,
+            skill_score=8,
+        )
+
+        scheduler = CalendarScheduler(extended_calendar)
+        scheduler.generate(commit=True)
+
+        assignment_dates = list(
+            extended_calendar.assignments.filter(operator=self.operator).values_list("date", flat=True)
+        )
+
+        self.assertTrue(assignment_dates)
+        self.assertTrue(all(date_value <= employment_end for date_value in assignment_dates))
+        self.assertFalse(
+            extended_calendar.assignments.filter(date__gt=employment_end).exists()
+        )
+
+        rest_periods = OperatorRestPeriod.objects.filter(
+            operator=self.operator,
+            source=RestPeriodSource.CALENDAR,
+            calendar=extended_calendar,
+        )
+        self.assertTrue(
+            all(period.end_date <= employment_end for period in rest_periods),
+            "Rest periods should not extend beyond employment end date.",
+        )
+
+    def test_consecutive_night_assignments_followed_by_rest_block(self) -> None:
+        from calendario.models import OperatorCapability
+
+        # Create an additional collaborator for coverage after the rest block.
+        backup_operator = UserProfile.objects.create_user(
+            cedula="126",
+            password="test",  # noqa: S106 - Test credential
+            nombres="Beatriz",
+            apellidos="Nocturna",
+            telefono="321654",
+        )
+        backup_operator.roles.add(self.role)
+
+        night_category, _created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_PRODUCCION_NOCHE,
+            defaults={
+                "name": "Galponero producción noche",
+                "shift_type": ShiftType.NIGHT,
+                "extra_day_limit": 1,
+                "overtime_points": 1,
+                "overload_alert_level": AssignmentAlertLevel.WARN,
+                "rest_min_frequency": 7,
+                "rest_min_consecutive_days": 1,
+                "rest_max_consecutive_days": 7,
+                "rest_post_shift_days": 1,
+                "rest_monthly_days": 5,
+            },
+        )
+        night_category.extra_day_limit = 1
+        night_category.rest_min_consecutive_days = 1
+        night_category.rest_max_consecutive_days = 7
+        night_category.rest_post_shift_days = 1
+        night_category.save()
+
+        night_position = PositionDefinition.objects.create(
+            name="Turno noche",
+            code="NOC-1",
+            category=night_category,
+            farm=self.farm,
+            complexity=ComplexityLevel.INTERMEDIATE,
+            allow_lower_complexity=False,
+            valid_from=date(2025, 1, 1),
+        )
+
+        night_calendar = ShiftCalendar.objects.create(
+            name="Noche extendida",
+            start_date=date(2025, 2, 1),
+            end_date=date(2025, 2, 10),
+            status=CalendarStatus.DRAFT,
+        )
+
+        OperatorCapability.objects.create(
+            operator=self.operator,
+            category=night_category,
+            skill_score=8,
+        )
+        OperatorCapability.objects.create(
+            operator=backup_operator,
+            category=night_category,
+            skill_score=8,
+        )
+
+        scheduler = CalendarScheduler(night_calendar)
+        scheduler.generate(commit=True)
+
+        assignments = list(
+            night_calendar.assignments.filter(position=night_position).order_by("date")
+        )
+        self.assertEqual(len(assignments), 10)
+
+        primary_operator = assignments[0].operator
+        first_run_dates = [assignment.date for assignment in assignments if assignment.operator == primary_operator]
+
+        expected_first_run = [
+            night_calendar.start_date + timedelta(days=offset) for offset in range(7)
+        ]
+        self.assertGreaterEqual(
+            len(first_run_dates),
+            7,
+            "Expected the primary operator to cover the first seven nights consecutively.",
+        )
+        self.assertEqual(first_run_dates[:7], expected_first_run)
+
+        rest_window = {
+            night_calendar.start_date + timedelta(days=7),
+            night_calendar.start_date + timedelta(days=8),
+        }
+        self.assertTrue(rest_window.isdisjoint(first_run_dates))

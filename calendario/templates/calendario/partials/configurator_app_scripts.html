@@ -139,6 +139,7 @@
         operatorPhone: app.querySelector('#operator-phone'),
         operatorEmail: app.querySelector('#operator-email'),
         operatorEmploymentStart: app.querySelector('#operator-employment-start'),
+        operatorEmploymentEnd: app.querySelector('#operator-employment-end'),
         operatorPreferredFarm: app.querySelector('#operator-preferred-farm'),
         operatorRoles: app.querySelector('#operator-roles'),
         operatorIsActive: app.querySelector('#operator-is-active'),
@@ -1286,6 +1287,7 @@
       const getOperatorPayload = () => {
         const preferredFarmValue = refs.operatorPreferredFarm?.value || '';
         const employmentStartValue = refs.operatorEmploymentStart?.value || '';
+        const employmentEndValue = refs.operatorEmploymentEnd?.value || '';
         return {
           cedula: refs.operatorDocument?.value.trim() || '',
           telefono: refs.operatorPhone?.value.trim() || '',
@@ -1293,6 +1295,7 @@
           apellidos: refs.operatorLastName?.value.trim() || '',
           email: refs.operatorEmail?.value.trim() || '',
           employment_start_date: employmentStartValue,
+          employment_end_date: employmentEndValue,
           preferred_farm: preferredFarmValue ? Number(preferredFarmValue) : null,
           roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
           is_active: Boolean(refs.operatorIsActive?.checked),
@@ -1331,6 +1334,9 @@
           if (refs.operatorEmploymentStart) {
             refs.operatorEmploymentStart.value = '';
           }
+          if (refs.operatorEmploymentEnd) {
+            refs.operatorEmploymentEnd.value = '';
+          }
           if (refs.operatorPreferredFarm) {
             refs.operatorPreferredFarm.value = '';
           }
@@ -1365,6 +1371,9 @@
           }
           if (refs.operatorEmploymentStart) {
             refs.operatorEmploymentStart.value = operator.employment_start || '';
+          }
+          if (refs.operatorEmploymentEnd) {
+            refs.operatorEmploymentEnd.value = operator.employment_end || '';
           }
           if (refs.operatorPreferredFarm) {
             refs.operatorPreferredFarm.value = operator.preferred_farm?.id
@@ -1823,9 +1832,13 @@
             const emailLine = operator.email
               ? `<p class="text-xs text-slate-500">${escapeHtml(operator.email)}</p>`
               : '';
-            const employmentLine = operator.employment_start
-              ? `<p class="text-xs text-slate-500">Ingreso: ${escapeHtml(formatDateLabel(operator.employment_start))}</p>`
-              : '';
+        const employmentLine = operator.employment_start
+          ? `<p class="text-xs text-slate-500">Vinculación: ${escapeHtml(formatDateLabel(operator.employment_start))}${
+              operator.employment_end ? ' → ' + escapeHtml(formatDateLabel(operator.employment_end)) : ''
+            }</p>`
+          : operator.employment_end
+            ? `<p class="text-xs text-slate-500">Retiro: ${escapeHtml(formatDateLabel(operator.employment_end))}</p>`
+            : '';
 
             return `
               <tr class="${rowClasses}" data-operator-id="${operator.id}">

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from bisect import bisect_left
 from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -69,7 +70,12 @@ def _build_assignment_matrix(
 ]:
     date_columns = _date_range(calendar.start_date, calendar.end_date)
     assignment_list = list(
-        calendar.assignments.select_related("position", "position__farm", "operator")
+        calendar.assignments.select_related(
+            "position",
+            "position__farm",
+            "position__category",
+            "operator",
+        )
         .prefetch_related("operator__roles")
     )
     assignments = {
@@ -82,19 +88,26 @@ def _build_assignment_matrix(
         if assignment.position and assignment.position.farm_id
     }
 
+    assignment_counts: dict[tuple[int, date], int] = defaultdict(int)
+    for assignment in assignment_list:
+        if assignment.operator_id:
+            assignment_counts[(assignment.operator_id, assignment.date)] += 1
+
     position_filters = Q(valid_from__lte=calendar.end_date) & (
         Q(valid_until__isnull=True) | Q(valid_until__gte=calendar.start_date)
     )
-    active_query = PositionDefinition.objects.filter(position_filters & Q(is_active=True))
+    active_query = PositionDefinition.objects.select_related("category", "farm").filter(
+        position_filters & Q(is_active=True)
+    )
     if farm_ids:
         active_query = active_query.filter(farm_id__in=farm_ids)
     positions = list(active_query.order_by("display_order", "id"))
 
     if assigned_position_ids:
         assigned_positions = list(
-            PositionDefinition.objects.filter(id__in=assigned_position_ids).order_by(
-                "display_order", "id"
-            )
+            PositionDefinition.objects.select_related("category", "farm")
+            .filter(id__in=assigned_position_ids)
+            .order_by("display_order", "id")
         )
         known_ids = {position.id for position in positions}
         for position in assigned_positions:
@@ -103,6 +116,16 @@ def _build_assignment_matrix(
     positions.sort(key=lambda item: (item.display_order, item.id))
 
     eligible_map = _eligible_operator_map(calendar, positions, date_columns, assignment_list)
+
+    operator_ids = {assignment.operator_id for assignment in assignment_list if assignment.operator_id}
+    category_ids = {position.category_id for position in positions if position.category_id}
+    capability_map: dict[tuple[int, int], OperatorCapability] = {}
+    if operator_ids and category_ids:
+        capability_qs = OperatorCapability.objects.filter(
+            operator_id__in=operator_ids,
+            category_id__in=category_ids,
+        ).only("operator_id", "category_id", "skill_score")
+        capability_map = {(cap.operator_id, cap.category_id): cap for cap in capability_qs}
 
     rows: List[dict[str, Any]] = []
     for position in positions:
@@ -115,6 +138,26 @@ def _build_assignment_matrix(
                 if is_position_active
                 else []
             )
+            skill_gap_message: Optional[str] = None
+            if assignment and assignment.operator_id and position.category_id:
+                capability = capability_map.get((assignment.operator_id, position.category_id))
+                required_score = required_skill_for_complexity(position.complexity)
+                if not capability:
+                    skill_gap_message = "Operario sin autorización vigente. Asignación manual confirmada."
+                elif (
+                    capability.skill_score < required_score
+                    and not position.allow_lower_complexity
+                ):
+                    skill_gap_message = "Operario asignado con habilidad inferior a la criticidad requerida."
+
+            overtime_message: Optional[str] = None
+            if assignment and assignment.operator_id and assignment.is_overtime:
+                daily_assignments = assignment_counts.get((assignment.operator_id, assignment.date), 0)
+                if daily_assignments > 1:
+                    overtime_message = "Operario con doble turno hoy. Ajusta descansos."
+                else:
+                    overtime_message = "Operario con sobrecarga consecutiva. Ajusta descansos."
+
             cells.append(
                 {
                     "assignment": assignment,
@@ -123,6 +166,8 @@ def _build_assignment_matrix(
                     "choices": choices,
                     "date": day,
                     "is_position_active": is_position_active,
+                    "skill_gap_message": skill_gap_message,
+                    "overtime_message": overtime_message,
                 }
             )
         rows.append({"position": position, "cells": cells})
@@ -139,14 +184,151 @@ def _build_rest_rows(
 ) -> tuple[List[dict[str, Any]], dict[int, UserProfile]]:
     day_assignments: dict[date, set[int]] = defaultdict(set)
     operators: dict[int, UserProfile] = {}
+    assignments_by_operator: dict[int, List[ShiftAssignment]] = defaultdict(list)
+    assignments_by_operator_day: dict[tuple[int, date], List[ShiftAssignment]] = {}
+    operator_categories: dict[int, dict[int, PositionCategory]] = defaultdict(dict)
 
     for assignment in assignment_list:
         if not assignment.operator_id:
             continue
         day_assignments[assignment.date].add(assignment.operator_id)
         operators[assignment.operator_id] = assignment.operator
+        assignments_by_operator[assignment.operator_id].append(assignment)
+        assignments_by_operator_day.setdefault(
+            (assignment.operator_id, assignment.date),
+            [],
+        ).append(assignment)
+        if assignment.position and assignment.position.category:
+            operator_categories[assignment.operator_id][assignment.position.category_id] = (
+                assignment.position.category
+            )
+
+    assignment_dates_map: dict[int, List[date]] = {}
+    sorted_assignments_map: dict[int, List[ShiftAssignment]] = {}
+    for operator_id, items in assignments_by_operator.items():
+        items.sort(key=lambda item: item.date)
+        sorted_assignments_map[operator_id] = items
+        assignment_dates_map[operator_id] = [assignment.date for assignment in items]
 
     rest_periods_by_day: dict[date, set[int]] = defaultdict(set)
+    rest_reasons_by_day: dict[tuple[date, int], str] = {}
+
+    def _ensure_operator_categories_from_capabilities(operator: UserProfile) -> None:
+        capabilities_manager = getattr(operator, "capabilities", None)
+        if not capabilities_manager:
+            return
+        for capability in capabilities_manager.all():
+            category = capability.category
+            if category:
+                operator_categories[operator.id][category.id] = category
+
+    def _automatic_rest_categories(operator_id: int, target_day: date) -> List[PositionCategory]:
+        categories = operator_categories.get(operator_id, {})
+        if not categories:
+            return []
+        weekday = target_day.weekday()
+        matches: List[PositionCategory] = []
+        for category in categories.values():
+            rest_days = category.automatic_rest_days or []
+            if rest_days and weekday in rest_days:
+                matches.append(category)
+        return matches
+
+    def _weekday_label(weekday: int) -> str:
+        try:
+            return str(DayOfWeek(weekday).label)
+        except ValueError:
+            return str(weekday)
+
+    def _last_assignment_before(operator_id: int, target_day: date) -> Optional[ShiftAssignment]:
+        dates = assignment_dates_map.get(operator_id)
+        if not dates:
+            return None
+        index = bisect_left(dates, target_day)
+        if index == 0:
+            return None
+        assignments = sorted_assignments_map.get(operator_id, [])
+        if not assignments:
+            return None
+        return assignments[index - 1]
+
+    def _count_consecutive_days_before(operator_id: int, target_day: date) -> int:
+        counter = 0
+        pointer = target_day - timedelta(days=1)
+        while pointer >= calendar.start_date:
+            if assignments_by_operator_day.get((operator_id, pointer)):
+                counter += 1
+                pointer -= timedelta(days=1)
+            else:
+                break
+        return counter
+
+    def _calendar_reason(operator_id: int, target_day: date) -> str:
+        last_assignment = _last_assignment_before(operator_id, target_day)
+        if last_assignment and last_assignment.position and last_assignment.position.category:
+            category = last_assignment.position.category
+            consecutive_days = _count_consecutive_days_before(operator_id, target_day)
+            limit = category.rest_max_consecutive_days or 0
+            if limit and consecutive_days >= limit:
+                return (
+                    f"Descanso generado por el calendario tras {consecutive_days} día(s) consecutivo(s) "
+                    f"trabajados en {category.name}. Límite configurado: {limit} día(s)."
+                )
+            rest_post = category.rest_post_shift_days or 0
+            if (
+                rest_post
+                and last_assignment.position.shift_type == ShiftType.NIGHT
+                and target_day
+                <= last_assignment.date + timedelta(days=rest_post)
+            ):
+                formatted_date = last_assignment.date.strftime("%d/%m")
+                return (
+                    f"Descanso posterior al turno nocturno del {formatted_date}. "
+                    f"La categoría exige {rest_post} día(s) de recuperación."
+                )
+
+        if assignments_by_operator.get(operator_id):
+            return "Descanso asignado automáticamente para equilibrar la carga de turnos en la semana."
+        if target_day.weekday() >= 5:
+            return "Descanso asignado por el calendario para priorizar fines de semana libres."
+        return "Descanso programado por el calendario mientras se distribuyen turnos para este colaborador."
+
+    def _describe_rest_period_reason(period: OperatorRestPeriod, target_day: date) -> str:
+        raw_notes = period.notes or ""
+        notes = " ".join(raw_notes.split()).strip()
+        status_label = RestPeriodStatus(period.status).label
+        source_label = RestPeriodSource(period.source).label
+
+        _ensure_operator_categories_from_capabilities(period.operator)
+
+        if period.source == RestPeriodSource.MANUAL:
+            reason_text = "Descanso registrado manualmente por supervisión."
+        else:
+            matches = _automatic_rest_categories(period.operator_id, target_day)
+            if matches:
+                category = matches[0]
+                weekday_text = _weekday_label(target_day.weekday())
+                reason_text = (
+                    f"Descanso automático configurado para la categoría {category.name} "
+                    f"({weekday_text})."
+                )
+            else:
+                reason_text = _calendar_reason(period.operator_id, target_day)
+
+        details = []
+        if status_label:
+            details.append(f"Estado: {status_label}")
+        if source_label:
+            details.append(f"Origen: {source_label}")
+
+        details_label = " · ".join(details)
+
+        segments = [reason_text]
+        if notes:
+            segments.append(notes)
+        if details_label:
+            segments.append(details_label)
+        return " · ".join(segment for segment in segments if segment)
 
     rest_period_qs = (
         calendar.rest_periods.filter(
@@ -155,7 +337,7 @@ def _build_rest_rows(
         )
         .exclude(status=RestPeriodStatus.CANCELLED)
         .select_related("operator")
-        .prefetch_related("operator__roles")
+        .prefetch_related("operator__roles", "operator__capabilities__category")
     )
     manual_rest_qs = (
         OperatorRestPeriod.objects.filter(
@@ -165,7 +347,7 @@ def _build_rest_rows(
         )
         .exclude(status=RestPeriodStatus.CANCELLED)
         .select_related("operator")
-        .prefetch_related("operator__roles")
+        .prefetch_related("operator__roles", "operator__capabilities__category")
     )
 
     def _register_rest_period(periods: Iterable[OperatorRestPeriod]) -> None:
@@ -173,12 +355,16 @@ def _build_rest_rows(
             if not period.operator_id or not period.operator:
                 continue
             operators.setdefault(period.operator_id, period.operator)
+            _ensure_operator_categories_from_capabilities(period.operator)
 
             overlap_start = max(period.start_date, calendar.start_date)
             overlap_end = min(period.end_date, calendar.end_date)
             current = overlap_start
             while current <= overlap_end:
                 rest_periods_by_day[current].add(period.operator_id)
+                rest_reasons_by_day[(current, period.operator_id)] = _describe_rest_period_reason(
+                    period, current
+                )
                 current += timedelta(days=1)
 
     _register_rest_period(rest_period_qs)
@@ -225,15 +411,36 @@ def _build_rest_rows(
                     or operator.apellidos
                     or operator.cedula
                 )
+                _ensure_operator_categories_from_capabilities(operator)
+                reason = rest_reasons_by_day.get((day, operator.id))
+                if not reason:
+                    matches = _automatic_rest_categories(operator.id, day)
+                    if matches:
+                        category = matches[0]
+                        weekday_text = _weekday_label(day.weekday())
+                        reason = (
+                            f"Descanso automático configurado para la categoría {category.name} "
+                            f"({weekday_text})."
+                        )
+                    else:
+                        reason = _calendar_reason(operator.id, day)
                 cells.append(
                     {
                         "operator_id": operator.id,
                         "name": display_name,
                         "role": role_label,
+                        "reason": reason,
                     }
                 )
             else:
-                cells.append({"operator_id": None, "name": "", "role": ""})
+                cells.append(
+                    {
+                        "operator_id": None,
+                        "name": "",
+                        "role": "",
+                        "reason": "",
+                    }
+                )
 
         rest_rows.append(
             {
@@ -279,7 +486,8 @@ def _build_rest_summary(
     for operator_id, operator in operator_map.items():
         operator_periods = periods_by_operator.get(operator_id, [])
         latest_completed: Optional[OperatorRestPeriod] = None
-        upcoming: Optional[OperatorRestPeriod] = None
+        upcoming_after_calendar: Optional[OperatorRestPeriod] = None
+        upcoming_within_calendar: Optional[OperatorRestPeriod] = None
         current: Optional[OperatorRestPeriod] = None
 
         for period in operator_periods:
@@ -289,16 +497,29 @@ def _build_rest_summary(
             if period.end_date < calendar.start_date:
                 if latest_completed is None or period.end_date > latest_completed.end_date:
                     latest_completed = period
+            elif period.start_date > calendar.end_date:
+                if (
+                    upcoming_after_calendar is None
+                    or period.start_date < upcoming_after_calendar.start_date
+                ):
+                    upcoming_after_calendar = period
             elif period.start_date >= calendar.start_date:
-                if upcoming is None or period.start_date < upcoming.start_date:
-                    upcoming = period
+                if (
+                    upcoming_within_calendar is None
+                    or period.start_date < upcoming_within_calendar.start_date
+                ):
+                    upcoming_within_calendar = period
 
         display_name = operator.get_full_name() or operator.nombres or operator.apellidos or ""
+        upcoming = upcoming_after_calendar or upcoming_within_calendar
 
         summary[str(operator_id)] = {
             "name": display_name,
             "employment_start": operator.employment_start_date.isoformat()
             if operator.employment_start_date
+            else None,
+            "employment_end": operator.employment_end_date.isoformat()
+            if operator.employment_end_date
             else None,
             "current": _serialize_rest_period(current) if current else None,
             "recent": _serialize_rest_period(latest_completed) if latest_completed else None,
@@ -421,6 +642,7 @@ def _calculate_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
             assignment = cell["assignment"]
             if not assignment:
                 stats["gaps"] += 1
+                stats["critical"] += 1
                 continue
 
             stats["total_assignments"] += 1
@@ -541,6 +763,9 @@ def _operator_payload(
         ),
         "employment_start": operator.employment_start_date.isoformat()
         if operator.employment_start_date
+        else None,
+        "employment_end": operator.employment_end_date.isoformat()
+        if operator.employment_end_date
         else None,
         "roles": [
             {

@@ -79,6 +79,12 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
         blank=True,
         help_text="Fecha desde la cual el colaborador se considera activo para turnos y descansos.",
     )
+    employment_end_date = models.DateField(
+        "Fecha de retiro",
+        null=True,
+        blank=True,
+        help_text="Si se establece, el colaborador deja de estar disponible para turnos a partir del día siguiente.",
+    )
     roles = models.ManyToManyField(Role, blank=True, related_name="usuarios")
 
     is_active = models.BooleanField(default=True)

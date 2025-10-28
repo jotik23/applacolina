@@ -43,20 +43,35 @@ class RestPeriodApiTests(TestCase):
         self.client.force_login(self.admin_user)
 
         self.farm = Farm.objects.create(name="Colina API")
-        self.category = PositionCategory.objects.create(
+        self.category, _created = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
-            name="Galponero producción día",
-            shift_type=ShiftType.DAY,
-            extra_day_limit=3,
-            overtime_points=1,
-            overload_alert_level=AssignmentAlertLevel.WARN,
-            rest_min_frequency=6,
-            rest_min_consecutive_days=5,
-            rest_max_consecutive_days=8,
-            rest_post_shift_days=0,
-            rest_monthly_days=5,
-            is_active=True,
+            defaults={
+                "name": "Galponero producción día",
+                "shift_type": ShiftType.DAY,
+                "extra_day_limit": 3,
+                "overtime_points": 1,
+                "overload_alert_level": AssignmentAlertLevel.WARN,
+                "rest_min_frequency": 6,
+                "rest_min_consecutive_days": 5,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+                "is_active": True,
+            },
         )
+        if not _created:
+            self.category.name = "Galponero producción día"
+            self.category.shift_type = ShiftType.DAY
+            self.category.extra_day_limit = 3
+            self.category.overtime_points = 1
+            self.category.overload_alert_level = AssignmentAlertLevel.WARN
+            self.category.rest_min_frequency = 6
+            self.category.rest_min_consecutive_days = 5
+            self.category.rest_max_consecutive_days = 8
+            self.category.rest_post_shift_days = 0
+            self.category.rest_monthly_days = 5
+            self.category.is_active = True
+            self.category.save()
         self.position = PositionDefinition.objects.create(
             name="Posición API",
             code="POS-API",

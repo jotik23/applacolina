@@ -5,6 +5,7 @@ from datetime import date
 from typing import Iterable, Optional
 
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -29,15 +30,19 @@ class AssignmentAlertLevel(models.TextChoices):
 
 
 class ComplexityLevel(models.TextChoices):
-    BASIC = "basic", _("Manejable")
-    INTERMEDIATE = "intermediate", _("Importante")
-    ADVANCED = "advanced", _("Crítico")
+    SUPPORT = "support", _("Apoyo (opcional)")
+    BASIC = "basic", _("Baja prioridad")
+    INTERMEDIATE = "intermediate", _("Prioridad media")
+    ADVANCED = "advanced", _("Alta prioridad")
+    CRITICAL = "critical", _("Crítico operativo")
 
 
 COMPLEXITY_LEVEL_SCORE = {
+    ComplexityLevel.SUPPORT: 0,
     ComplexityLevel.BASIC: 1,
     ComplexityLevel.INTERMEDIATE: 2,
     ComplexityLevel.ADVANCED: 3,
+    ComplexityLevel.CRITICAL: 4,
 }
 
 
@@ -47,6 +52,16 @@ def complexity_score(level: str) -> int:
     except ValueError as exc:  # pragma: no cover - defensive
         raise ValidationError(f"Nivel de criticidad inválido: {level}") from exc
     return COMPLEXITY_LEVEL_SCORE[enumeration]
+
+
+class DayOfWeek(models.IntegerChoices):
+    MONDAY = 0, _("Lunes")
+    TUESDAY = 1, _("Martes")
+    WEDNESDAY = 2, _("Miércoles")
+    THURSDAY = 3, _("Jueves")
+    FRIDAY = 4, _("Viernes")
+    SATURDAY = 5, _("Sábado")
+    SUNDAY = 6, _("Domingo")
 
 
 class PositionCategoryCode(models.TextChoices):
@@ -92,6 +107,13 @@ class PositionCategory(models.Model):
         choices=AssignmentAlertLevel.choices,
         default=AssignmentAlertLevel.WARN,
     )
+    automatic_rest_days = ArrayField(
+        base_field=models.PositiveSmallIntegerField(choices=DayOfWeek.choices),
+        default=list,
+        blank=True,
+        verbose_name="Días de descanso automático",
+        help_text="Bloquea las asignaciones automáticas en los días seleccionados.",
+    )
     rest_min_frequency = models.PositiveSmallIntegerField(
         "Frecuencia mínima de descanso",
         validators=[MinValueValidator(1)],
@@ -130,15 +152,21 @@ class PositionCategory(models.Model):
     def is_night_shift(self) -> bool:
         return self.shift_type == ShiftType.NIGHT
 
+    def has_automatic_rest_on(self, target_date: date) -> bool:
+        if not self.automatic_rest_days:
+            return False
+        return target_date.weekday() in self.automatic_rest_days
 
-class DayOfWeek(models.IntegerChoices):
-    MONDAY = 0, _("Lunes")
-    TUESDAY = 1, _("Martes")
-    WEDNESDAY = 2, _("Miércoles")
-    THURSDAY = 3, _("Jueves")
-    FRIDAY = 4, _("Viernes")
-    SATURDAY = 5, _("Sábado")
-    SUNDAY = 6, _("Domingo")
+    def automatic_rest_day_labels(self) -> list[str]:
+        if not self.automatic_rest_days:
+            return []
+        labels: list[str] = []
+        for value in sorted(set(self.automatic_rest_days)):
+            try:
+                labels.append(str(DayOfWeek(value).label))
+            except ValueError:
+                labels.append(str(value))
+        return labels
 
 
 class CalendarStatus(models.TextChoices):
@@ -269,9 +297,11 @@ class PositionDefinition(models.Model):
 
 
 COMPLEXITY_SKILL_THRESHOLDS: dict[str, tuple[int, int]] = {
+    ComplexityLevel.SUPPORT: (1, 2),
     ComplexityLevel.BASIC: (1, 3),
     ComplexityLevel.INTERMEDIATE: (3, 7),
     ComplexityLevel.ADVANCED: (8, 10),
+    ComplexityLevel.CRITICAL: (9, 10),
 }
 
 

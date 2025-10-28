@@ -210,6 +210,24 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             any("Asignación actualizada correctamente." in message.message for message in messages)
         )
 
+        detail_response = self.client.get(url)
+        self.assertEqual(detail_response.status_code, 200)
+        rows = detail_response.context["rows"]
+        primary_row = next(
+            (row for row in rows if row["position"].pk == self.position_primary.pk),
+            None,
+        )
+        self.assertIsNotNone(primary_row)
+        primary_cell = next(
+            (cell for cell in primary_row["cells"] if cell["date"] == self.calendar.start_date),
+            None,
+        )
+        self.assertIsNotNone(primary_cell)
+        self.assertEqual(
+            primary_cell["overtime_message"],
+            "Operario con doble turno hoy. Ajusta descansos.",
+        )
+
     def test_create_assignment_accepts_manual_override_without_capability(self) -> None:
         url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
         target_date = self.calendar.start_date + timedelta(days=1)
@@ -234,7 +252,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         )
 
         self.assertEqual(created_assignment.operator, self.operator_manual)
-        self.assertEqual(created_assignment.alert_level, AssignmentAlertLevel.CRITICAL)
+        self.assertEqual(created_assignment.alert_level, AssignmentAlertLevel.NONE)
         self.assertFalse(created_assignment.is_overtime)
         self.assertEqual(created_assignment.overtime_points, 0)
         self.assertFalse(created_assignment.is_auto_assigned)
@@ -243,6 +261,33 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertTrue(
             any("Turno asignado manualmente." in message.message for message in messages)
         )
+
+        detail_response = self.client.get(url)
+        self.assertEqual(detail_response.status_code, 200)
+        rows = detail_response.context["rows"]
+        matching_row = next(
+            (row for row in rows if row["position"].pk == self.position_secondary.pk),
+            None,
+        )
+        self.assertIsNotNone(matching_row)
+        matching_cell = next(
+            (cell for cell in matching_row["cells"] if cell["date"] == target_date),
+            None,
+        )
+        self.assertIsNotNone(matching_cell)
+        self.assertEqual(
+            matching_cell["skill_gap_message"],
+            "Operario sin autorización vigente. Asignación manual confirmada.",
+        )
+
+    def test_stats_count_gaps_as_critical_alerts(self) -> None:
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        stats = response.context["stats"]
+        self.assertGreater(stats["gaps"], 0)
+        self.assertEqual(stats["critical"], stats["gaps"])
 
     def test_rest_rows_include_manual_rest_operator(self) -> None:
         rest_start = self.calendar.start_date + timedelta(days=1)

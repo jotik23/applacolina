@@ -8,6 +8,13 @@ from . import models
 
 
 class PositionCategoryAdminForm(forms.ModelForm):
+    automatic_rest_days = forms.MultipleChoiceField(
+        choices=models.DayOfWeek.choices,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Días de descanso automático",
+    )
+
     class Meta:
         model = models.PositionCategory
         fields = "__all__"
@@ -27,6 +34,16 @@ class PositionCategoryAdminForm(forms.ModelForm):
         for field_name, label in labels.items():
             if field_name in self.fields:
                 self.fields[field_name].label = label
+
+        if self.instance and self.instance.pk and self.instance.automatic_rest_days:
+            self.initial.setdefault(
+                "automatic_rest_days",
+                [str(day) for day in self.instance.automatic_rest_days],
+            )
+
+    def clean_automatic_rest_days(self) -> list[int]:
+        values = self.cleaned_data.get("automatic_rest_days") or []
+        return [int(value) for value in values]
 
 
 @admin.register(models.PositionDefinition)
@@ -67,6 +84,7 @@ class PositionCategoryAdmin(admin.ModelAdmin):
         "name",
         "code",
         "shift_type",
+        "automatic_rest_days",
         "rest_max_consecutive_days",
         "extra_day_limit",
         "rest_post_shift_days",
@@ -81,6 +99,7 @@ class PositionCategoryAdmin(admin.ModelAdmin):
         "name",
         "code",
         "shift_type",
+        "automatic_rest_days_display",
         "extra_day_limit",
         "overtime_points",
         "overload_alert_level",
@@ -89,6 +108,11 @@ class PositionCategoryAdmin(admin.ModelAdmin):
     )
     list_filter = ("shift_type", "is_active")
     search_fields = ("name", "code")
+
+    def automatic_rest_days_display(self, obj: models.PositionCategory) -> str:
+        labels = obj.automatic_rest_day_labels()
+        return ", ".join(str(label) for label in labels) if labels else "—"
+    automatic_rest_days_display.short_description = "Descanso automático"
 
 
 @admin.register(models.OperatorCapability)

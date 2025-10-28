@@ -123,6 +123,8 @@ class BaseAssignmentForm(forms.Form):
         alert_level = AssignmentAlertLevel.NONE
         is_overtime = False
         overtime_points = 0
+        lacks_authorization = False
+        strict_skill_gap = False
 
         if not position.is_active_on(target_date):
             raise forms.ValidationError("La posición no está vigente para la fecha seleccionada.")
@@ -137,25 +139,24 @@ class BaseAssignmentForm(forms.Form):
                 raise forms.ValidationError(
                     "El operario no está habilitado para esta posición en la fecha seleccionada."
                 )
-            alert_level = AssignmentAlertLevel.CRITICAL
+            lacks_authorization = True
         else:
             skill_score = capability.skill_score
 
-            if skill_score < required_score and not position.allow_lower_complexity:
-                if not allow_override:
-                    raise forms.ValidationError(
-                        "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
-                    )
-                alert_level = AssignmentAlertLevel.CRITICAL
-            elif skill_score < required_score:
-                diff = required_score - skill_score
-                alert_level = (
-                    AssignmentAlertLevel.WARN
-                    if diff == 1
-                    else AssignmentAlertLevel.CRITICAL
-                )
+            if skill_score < required_score:
+                if not position.allow_lower_complexity:
+                    if not allow_override:
+                        raise forms.ValidationError(
+                            "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
+                        )
+                    strict_skill_gap = True
+                else:
+                    alert_level = AssignmentAlertLevel.WARN
             else:
                 alert_level = AssignmentAlertLevel.NONE
+
+        if allow_override and (lacks_authorization or strict_skill_gap):
+            alert_level = AssignmentAlertLevel.NONE
 
         conflict = (
             ShiftAssignment.objects.filter(
@@ -377,6 +378,7 @@ class OperatorProfileForm(forms.ModelForm):
             "telefono",
             "email",
             "employment_start_date",
+            "employment_end_date",
             "preferred_farm",
             "roles",
             "is_active",
@@ -388,6 +390,10 @@ class OperatorProfileForm(forms.ModelForm):
         if employment_field:
             employment_field.widget.input_type = "date"
             employment_field.required = False
+        employment_end_field = self.fields.get("employment_end_date")
+        if employment_end_field:
+            employment_end_field.widget.input_type = "date"
+            employment_end_field.required = False
 
     def clean_cedula(self) -> str:
         cedula = self.cleaned_data.get("cedula", "")

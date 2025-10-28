@@ -89,6 +89,7 @@ class UserProfileAdmin(UserAdmin):
                     "email",
                     "preferred_farm",
                     "employment_start_date",
+                    "employment_end_date",
                     "direccion",
                 )
             },
@@ -118,6 +119,7 @@ class UserProfileAdmin(UserAdmin):
                     "direccion",
                     "preferred_farm",
                     "employment_start_date",
+                    "employment_end_date",
                     "contacto_nombre",
                     "contacto_telefono",
                     "roles",
