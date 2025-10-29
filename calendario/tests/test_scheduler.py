@@ -208,3 +208,70 @@ class CalendarSchedulerTests(TestCase):
         self.assertIsNone(decisions[1].operator)
         self.assertEqual(decisions[1].alert_level, AssignmentAlertLevel.CRITICAL)
         self.assertIn("ya tenía turno", decisions[1].notes)
+
+    def test_respects_rest_max_consecutive_days(self) -> None:
+        self.category.rest_max_consecutive_days = 2
+        self.category.rest_monthly_days = 5
+        self.category.save(update_fields=["rest_max_consecutive_days", "rest_monthly_days"])
+
+        self.backup_operator.suggested_positions.clear()
+
+        target_calendar = ShiftCalendar.objects.create(
+            name="Semana con descanso obligatorio",
+            start_date=date(2025, 10, 21),
+            end_date=date(2025, 10, 23),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(target_calendar)
+        decisions = scheduler.generate(commit=True)
+
+        assignments = list(target_calendar.assignments.order_by("date"))
+        self.assertEqual(len(assignments), 2)
+        self.assertEqual([assignment.operator for assignment in assignments], [self.primary_operator, self.primary_operator])
+
+        self.assertEqual(len(decisions), 3)
+        self.assertIsNone(decisions[-1].operator)
+        self.assertEqual(decisions[-1].alert_level, AssignmentAlertLevel.CRITICAL)
+
+        rest_periods = list(
+            target_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).order_by("start_date")
+        )
+        self.assertEqual(len(rest_periods), 1)
+        self.assertEqual(rest_periods[0].start_date, date(2025, 10, 23))
+        self.assertEqual(rest_periods[0].end_date, date(2025, 10, 23))
+
+    def test_rest_skipped_when_monthly_quota_reached(self) -> None:
+        self.category.rest_max_consecutive_days = 1
+        self.category.rest_monthly_days = 1
+        self.category.save(update_fields=["rest_max_consecutive_days", "rest_monthly_days"])
+
+        OperatorRestPeriod.objects.create(
+            operator=self.primary_operator,
+            start_date=date(2025, 10, 20),
+            end_date=date(2025, 10, 20),
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+        )
+
+        target_calendar = ShiftCalendar.objects.create(
+            name="Semana sin descansos extra",
+            start_date=date(2025, 10, 21),
+            end_date=date(2025, 10, 22),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(target_calendar)
+        decisions = scheduler.generate(commit=True)
+
+        assignments = list(target_calendar.assignments.order_by("date"))
+        self.assertEqual(len(assignments), 2)
+        self.assertTrue(all(assignment.operator == self.primary_operator for assignment in assignments))
+
+        self.assertEqual(len(decisions), 2)
+        self.assertTrue(all(decision.operator == self.primary_operator for decision in decisions))
+
+        rest_periods = list(
+            target_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).order_by("start_date")
+        )
+        self.assertEqual(len(rest_periods), 0)

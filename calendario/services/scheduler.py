@@ -55,12 +55,25 @@ class CalendarScheduler:
             for operator_id, operator in self._operator_cache.items()
         }
         self._manual_rest_index = self._build_manual_rest_index()
+        self._history_start_date = min(
+            calendar.start_date - timedelta(days=60),
+            date(calendar.start_date.year, calendar.start_date.month, 1),
+        )
+        self._rest_counter_start_date = date(calendar.start_date.year, calendar.start_date.month, 1)
+        self._rest_counter_end_date = calendar.end_date
+        self._rest_usage: DefaultDict[OperatorId, Dict[Tuple[int, int], int]] = defaultdict(lambda: defaultdict(int))
+        self._registered_rest_days: DefaultDict[OperatorId, Set[date]] = defaultdict(set)
+        self._work_streak: DefaultDict[OperatorId, int] = defaultdict(int)
+        self._rest_history = self._load_rest_history()
+        self._assignment_history = self._load_assignment_history()
+        self._initialize_rest_tracking()
+        self._snapshot_rest_state()
         self._position_history = self._load_position_history()
         self._candidate_priority = self._build_candidate_priority()
 
     def generate(self, *, commit: bool = False) -> List[AssignmentDecision]:
         self._validate_calendar_range()
-        self._planned_rest_days.clear()
+        self._restore_rest_state()
         self._post_shift_rest_by_assignment.clear()
 
         decisions = self._plan_schedule()
@@ -154,6 +167,229 @@ class CalendarScheduler:
                 rest_index[operator_id].add(rest_day)
 
         return dict(rest_index)
+
+    def _load_rest_history(self) -> Dict[OperatorId, Set[date]]:
+        if not self._operator_cache:
+            return {}
+
+        operator_ids = list(self._operator_cache.keys())
+        rest_qs = (
+            OperatorRestPeriod.objects.filter(
+                operator_id__in=operator_ids,
+                start_date__lte=self.calendar.end_date,
+                end_date__gte=self._history_start_date,
+            )
+            .exclude(status=RestPeriodStatus.CANCELLED)
+        )
+
+        rest_history: DefaultDict[OperatorId, Set[date]] = defaultdict(set)
+        for period in rest_qs:
+            operator_id = period.operator_id
+            if not operator_id:
+                continue
+            start = max(period.start_date, self._history_start_date)
+            end = min(period.end_date, self.calendar.end_date)
+            for rest_day in self._daterange(start, end):
+                rest_history[operator_id].add(rest_day)
+
+        return dict(rest_history)
+
+    def _load_assignment_history(self) -> Dict[OperatorId, Set[date]]:
+        if not self._operator_cache:
+            return {}
+
+        history_end = self.calendar.start_date - timedelta(days=1)
+        if history_end < self._history_start_date:
+            return {}
+
+        operator_ids = list(self._operator_cache.keys())
+        assignment_qs = ShiftAssignment.objects.filter(
+            operator_id__in=operator_ids,
+            date__gte=self._history_start_date,
+            date__lte=history_end,
+        )
+
+        assignment_history: DefaultDict[OperatorId, Set[date]] = defaultdict(set)
+        for assignment in assignment_qs:
+            operator_id = assignment.operator_id
+            if not operator_id:
+                continue
+            assignment_history[operator_id].add(assignment.date)
+
+        return dict(assignment_history)
+
+    def _initialize_rest_tracking(self) -> None:
+        for operator_id in self._operator_cache.keys():
+            rest_days = self._rest_history.get(operator_id, set())
+            for rest_day in sorted(rest_days):
+                self._record_rest_day(operator_id, rest_day, initial=True)
+
+            assignments = self._assignment_history.get(operator_id, set())
+            streak = 0
+            day = self.calendar.start_date - timedelta(days=1)
+            while day >= self._history_start_date:
+                if day in rest_days:
+                    break
+                if day not in assignments:
+                    break
+                streak += 1
+                day -= timedelta(days=1)
+            self._work_streak[operator_id] = streak
+
+    def _snapshot_rest_state(self) -> None:
+        self._rest_usage_snapshot: Dict[OperatorId, Dict[Tuple[int, int], int]] = {
+            operator_id: dict(month_counts)
+            for operator_id, month_counts in self._rest_usage.items()
+        }
+        self._registered_rest_days_snapshot: Dict[OperatorId, Set[date]] = {
+            operator_id: set(days)
+            for operator_id, days in self._registered_rest_days.items()
+        }
+        self._work_streak_snapshot: Dict[OperatorId, int] = dict(self._work_streak)
+
+    def _restore_rest_state(self) -> None:
+        self._rest_usage = defaultdict(lambda: defaultdict(int))
+        for operator_id, month_counts in self._rest_usage_snapshot.items():
+            month_usage = self._rest_usage[operator_id]
+            for month_key, value in month_counts.items():
+                month_usage[month_key] = value
+
+        self._registered_rest_days = defaultdict(set)
+        for operator_id, days in self._registered_rest_days_snapshot.items():
+            self._registered_rest_days[operator_id].update(days)
+
+        self._work_streak = defaultdict(int)
+        for operator_id, streak in self._work_streak_snapshot.items():
+            self._work_streak[operator_id] = streak
+
+        self._planned_rest_days = defaultdict(set)
+
+    @staticmethod
+    def _month_key(target_date: date) -> Tuple[int, int]:
+        return (target_date.year, target_date.month)
+
+    def _record_rest_day(self, operator_id: OperatorId, rest_day: date, *, initial: bool) -> None:
+        if rest_day in self._registered_rest_days[operator_id]:
+            return
+
+        self._registered_rest_days[operator_id].add(rest_day)
+
+        if self._rest_counter_start_date <= rest_day <= self._rest_counter_end_date:
+            month_key = self._month_key(rest_day)
+            self._rest_usage[operator_id][month_key] += 1
+
+        if not initial and self.calendar.start_date <= rest_day <= self.calendar.end_date:
+            self._planned_rest_days[operator_id].add(rest_day)
+
+    def _reserve_rest_day(
+        self,
+        *,
+        operator_id: OperatorId,
+        rest_day: date,
+        rest_quota: int,
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
+    ) -> bool:
+        if rest_day < self.calendar.start_date or rest_day > self.calendar.end_date:
+            return False
+
+        if rest_day in self._registered_rest_days[operator_id]:
+            dynamic_rest_blocks[operator_id].add(rest_day)
+            self._work_streak[operator_id] = 0
+            return True
+
+        if rest_quota and rest_quota > 0:
+            month_key = self._month_key(rest_day)
+            if self._rest_usage[operator_id][month_key] >= rest_quota:
+                return False
+
+        self._record_rest_day(operator_id, rest_day, initial=False)
+        dynamic_rest_blocks[operator_id].add(rest_day)
+        self._work_streak[operator_id] = 0
+        return True
+
+    def _force_rest_day(
+        self,
+        *,
+        operator_id: OperatorId,
+        rest_day: date,
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
+    ) -> None:
+        if rest_day < self.calendar.start_date or rest_day > self.calendar.end_date:
+            return
+
+        if rest_day not in self._registered_rest_days[operator_id]:
+            self._record_rest_day(operator_id, rest_day, initial=False)
+
+        dynamic_rest_blocks[operator_id].add(rest_day)
+
+    def _prepare_day_state(
+        self,
+        current_date: date,
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
+    ) -> None:
+        for operator_id in self._operator_cache.keys():
+            if current_date in self._registered_rest_days[operator_id]:
+                self._work_streak[operator_id] = 0
+                continue
+
+            if current_date in dynamic_rest_blocks.get(operator_id, set()):
+                if current_date not in self._registered_rest_days[operator_id]:
+                    self._record_rest_day(operator_id, current_date, initial=False)
+                self._work_streak[operator_id] = 0
+
+    def _unregister_planned_rest_day(self, operator_id: OperatorId, rest_day: date) -> None:
+        planned_days = self._planned_rest_days.get(operator_id)
+        if not planned_days or rest_day not in planned_days:
+            return
+
+        planned_days.discard(rest_day)
+
+        registered_days = self._registered_rest_days.get(operator_id)
+        if registered_days and rest_day in registered_days:
+            registered_days.discard(rest_day)
+
+        if self._rest_counter_start_date <= rest_day <= self._rest_counter_end_date:
+            month_key = self._month_key(rest_day)
+            month_usage = self._rest_usage.get(operator_id)
+            if month_usage and month_key in month_usage:
+                month_usage[month_key] -= 1
+                if month_usage[month_key] <= 0:
+                    month_usage.pop(month_key, None)
+
+    def _should_block_for_rest(
+        self,
+        *,
+        operator_id: OperatorId,
+        position: PositionDefinition,
+        target_date: date,
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
+    ) -> bool:
+        category = position.category
+        rest_quota = getattr(category, "rest_monthly_days", 0) or 0
+        rest_max = getattr(category, "rest_max_consecutive_days", 0) or 0
+
+        streak_value = self._work_streak.get(operator_id, 0)
+        if rest_max and streak_value >= rest_max:
+            if self._reserve_rest_day(
+                operator_id=operator_id,
+                rest_day=target_date,
+                rest_quota=rest_quota,
+                dynamic_rest_blocks=dynamic_rest_blocks,
+            ):
+                return True
+
+        automatic_days = self._automatic_rest_index.get(operator_id)
+        if automatic_days and target_date.weekday() in automatic_days:
+            if self._reserve_rest_day(
+                operator_id=operator_id,
+                rest_day=target_date,
+                rest_quota=rest_quota,
+                dynamic_rest_blocks=dynamic_rest_blocks,
+            ):
+                return True
+
+        return False
+
 
     def _load_position_history(self) -> Dict[PositionId, Dict[OperatorId, Tuple[date, Optional[datetime]]]]:
         position_ids = [position.id for position in self._positions if position.id]
@@ -289,13 +525,8 @@ class CalendarScheduler:
             if not rest_days:
                 continue
 
-            day_set = self._planned_rest_days.get(operator.id)
-            if not day_set:
-                continue
-
-            day_set.difference_update(rest_days)
-            if not day_set:
-                self._planned_rest_days.pop(operator.id, None)
+            for rest_day in rest_days:
+                self._unregister_planned_rest_day(operator.id, rest_day)
 
     def _schedule_day(
         self,
@@ -305,6 +536,8 @@ class CalendarScheduler:
         dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
         position_last_operator: Dict[PositionId, OperatorId],
     ) -> List[AssignmentDecision]:
+        self._prepare_day_state(current_date, dynamic_rest_blocks)
+
         active_positions = [
             position
             for position in self._positions
@@ -394,6 +627,7 @@ class CalendarScheduler:
                 preferred_id = preferred_operator_per_position.get(position_index)
                 if preferred_id is None or preferred_id == operator.id:
                     position_last_operator[position.id] = operator.id
+            self._work_streak[operator.id] += 1
             self._schedule_post_shift_rest(
                 operator_id=operator.id,
                 position=position,
@@ -447,12 +681,14 @@ class CalendarScheduler:
         if target_date in dynamic_rest_blocks.get(operator_id, set()):
             return False
 
-        automatic_days = self._automatic_rest_index.get(operator_id)
-        if automatic_days and target_date.weekday() in automatic_days:
-            self._planned_rest_days[operator_id].add(target_date)
+        if self._should_block_for_rest(
+            operator_id=operator_id,
+            position=position,
+            target_date=target_date,
+            dynamic_rest_blocks=dynamic_rest_blocks,
+        ):
             return False
 
-        _ = position  # Se reserva para reglas adicionales por categoría.
         return True
 
     def _select_operator(
@@ -510,12 +746,14 @@ class CalendarScheduler:
         if target_date in dynamic_rest_blocks.get(operator_id, set()):
             return False
 
-        automatic_days = self._automatic_rest_index.get(operator_id)
-        if automatic_days and target_date.weekday() in automatic_days:
-            self._planned_rest_days[operator_id].add(target_date)
+        if self._should_block_for_rest(
+            operator_id=operator_id,
+            position=position,
+            target_date=target_date,
+            dynamic_rest_blocks=dynamic_rest_blocks,
+        ):
             return False
 
-        _ = position  # Reserva para reglas futuras basadas en categoría.
         return True
 
     def _schedule_post_shift_rest(
@@ -537,8 +775,11 @@ class CalendarScheduler:
             target_day = work_date + timedelta(days=offset)
             if target_day < self.calendar.start_date or target_day > self.calendar.end_date:
                 continue
-            dynamic_rest_blocks[operator_id].add(target_day)
-            self._planned_rest_days[operator_id].add(target_day)
+            self._force_rest_day(
+                operator_id=operator_id,
+                rest_day=target_day,
+                dynamic_rest_blocks=dynamic_rest_blocks,
+            )
             if position_id is not None:
                 rest_key = (operator_id, work_date, position_id)
                 self._post_shift_rest_by_assignment[rest_key].add(target_day)
