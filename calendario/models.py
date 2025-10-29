@@ -29,31 +29,6 @@ class AssignmentAlertLevel(models.TextChoices):
     CRITICAL = "critical", _("Desajuste crítico")
 
 
-class ComplexityLevel(models.TextChoices):
-    SUPPORT = "support", _("Apoyo (opcional)")
-    BASIC = "basic", _("Baja prioridad")
-    INTERMEDIATE = "intermediate", _("Prioridad media")
-    ADVANCED = "advanced", _("Alta prioridad")
-    CRITICAL = "critical", _("Crítico operativo")
-
-
-COMPLEXITY_LEVEL_SCORE = {
-    ComplexityLevel.SUPPORT: 0,
-    ComplexityLevel.BASIC: 1,
-    ComplexityLevel.INTERMEDIATE: 2,
-    ComplexityLevel.ADVANCED: 3,
-    ComplexityLevel.CRITICAL: 4,
-}
-
-
-def complexity_score(level: str) -> int:
-    try:
-        enumeration = ComplexityLevel(level)
-    except ValueError as exc:  # pragma: no cover - defensive
-        raise ValidationError(f"Nivel de criticidad inválido: {level}") from exc
-    return COMPLEXITY_LEVEL_SCORE[enumeration]
-
-
 class DayOfWeek(models.IntegerChoices):
     MONDAY = 0, _("Lunes")
     TUESDAY = 1, _("Martes")
@@ -84,45 +59,11 @@ class PositionCategory(models.Model):
         choices=PositionCategoryCode.choices,
         unique=True,
     )
-    name = models.CharField("Nombre", max_length=150)
     shift_type = models.CharField(
         "Turno",
         max_length=16,
         choices=ShiftType.choices,
         default=ShiftType.DAY,
-    )
-    extra_day_limit = models.PositiveSmallIntegerField(
-        "Máximo días extra consecutivos",
-        validators=[MinValueValidator(1)],
-        default=3,
-    )
-    overtime_points = models.PositiveSmallIntegerField(
-        "Puntos por día extra",
-        validators=[MinValueValidator(1)],
-        default=1,
-    )
-    overload_alert_level = models.CharField(
-        "Nivel de alerta de sobrecarga",
-        max_length=16,
-        choices=AssignmentAlertLevel.choices,
-        default=AssignmentAlertLevel.WARN,
-    )
-    automatic_rest_days = ArrayField(
-        base_field=models.PositiveSmallIntegerField(choices=DayOfWeek.choices),
-        default=list,
-        blank=True,
-        verbose_name="Días de descanso automático",
-        help_text="Bloquea las asignaciones automáticas en los días seleccionados.",
-    )
-    rest_min_frequency = models.PositiveSmallIntegerField(
-        "Frecuencia mínima de descanso",
-        validators=[MinValueValidator(1)],
-        default=6,
-    )
-    rest_min_consecutive_days = models.PositiveSmallIntegerField(
-        "Días de descanso consecutivos mínimos",
-        validators=[MinValueValidator(1)],
-        default=5,
     )
     rest_max_consecutive_days = models.PositiveSmallIntegerField(
         "Días de descanso consecutivos máximos",
@@ -143,30 +84,18 @@ class PositionCategory(models.Model):
     class Meta:
         verbose_name = "Categoría de posición"
         verbose_name_plural = "Categorías de posiciones"
-        ordering = ("name", "code")
+        ordering = ("code",)
 
     def __str__(self) -> str:
-        return self.name
+        return self.display_name
 
     @property
     def is_night_shift(self) -> bool:
         return self.shift_type == ShiftType.NIGHT
 
-    def has_automatic_rest_on(self, target_date: date) -> bool:
-        if not self.automatic_rest_days:
-            return False
-        return target_date.weekday() in self.automatic_rest_days
-
-    def automatic_rest_day_labels(self) -> list[str]:
-        if not self.automatic_rest_days:
-            return []
-        labels: list[str] = []
-        for value in sorted(set(self.automatic_rest_days)):
-            try:
-                labels.append(str(DayOfWeek(value).label))
-            except ValueError:
-                labels.append(str(value))
-        return labels
+    @property
+    def display_name(self) -> str:
+        return self.get_code_display()
 
 
 class CalendarStatus(models.TextChoices):
@@ -225,19 +154,9 @@ class PositionDefinition(models.Model):
         verbose_name="Salones",
         blank=True,
     )
-    complexity = models.CharField(
-        "Nivel de criticidad",
-        max_length=16,
-        choices=ComplexityLevel.choices,
-        default=ComplexityLevel.BASIC,
-    )
-    allow_lower_complexity = models.BooleanField(
-        "Permitir cubrir con criticidad inferior", default=False
-    )
     valid_from = models.DateField("Válido desde")
     valid_until = models.DateField("Válido hasta", null=True, blank=True)
     is_active = models.BooleanField("Activo", default=True)
-    notes = models.TextField("Notas", blank=True)
 
     objects = PositionDefinitionQuerySet.as_manager()
 
@@ -294,57 +213,6 @@ class PositionDefinition(models.Model):
         if self.valid_until and target_date > self.valid_until:
             return False
         return True
-
-
-COMPLEXITY_SKILL_THRESHOLDS: dict[str, tuple[int, int]] = {
-    ComplexityLevel.SUPPORT: (1, 2),
-    ComplexityLevel.BASIC: (1, 3),
-    ComplexityLevel.INTERMEDIATE: (3, 7),
-    ComplexityLevel.ADVANCED: (8, 10),
-    ComplexityLevel.CRITICAL: (9, 10),
-}
-
-
-def required_skill_for_complexity(level: str) -> int:
-    try:
-        enumeration = ComplexityLevel(level)
-    except ValueError as exc:  # pragma: no cover - defensive
-        raise ValidationError(f"Nivel de criticidad inválido: {level}") from exc
-    minimum, _maximum = COMPLEXITY_SKILL_THRESHOLDS[enumeration]
-    return minimum
-
-
-class OperatorCapability(models.Model):
-    operator = models.ForeignKey(
-        UserProfile,
-        on_delete=models.CASCADE,
-        related_name="capabilities",
-        verbose_name="Operario",
-    )
-    category = models.ForeignKey(
-        PositionCategory,
-        on_delete=models.CASCADE,
-        related_name="capabilities",
-        verbose_name="Categoría",
-    )
-    skill_score = models.PositiveSmallIntegerField(
-        "Nivel de habilidad",
-        validators=[MinValueValidator(1), MaxValueValidator(10)],
-        default=5,
-    )
-
-    class Meta:
-        verbose_name = "Capacidad de operario"
-        verbose_name_plural = "Capacidades de operarios"
-        unique_together = ("operator", "category")
-        ordering = (
-            "operator__apellidos",
-            "operator__nombres",
-            "category__name",
-        )
-
-    def __str__(self) -> str:
-        return f"{self.operator} - {self.category.name} ({self.skill_score}/10)"
 
 
 class ShiftCalendar(models.Model):
@@ -650,25 +518,13 @@ class AssignmentDecision:
 
 @dataclass(frozen=True)
 class OverloadPolicyData:
-    extra_day_limit: int
-    overtime_points: int
-    alert_level: AssignmentAlertLevel
-
-
-def filter_capabilities_for_category(
-    capabilities: Iterable[OperatorCapability],
-    category_id: int,
-) -> list[OperatorCapability]:
-    return [capability for capability in capabilities if capability.category_id == category_id]
+    extra_day_limit: int = 0
+    overtime_points: int = 0
+    alert_level: AssignmentAlertLevel = AssignmentAlertLevel.NONE
 
 
 def resolve_overload_policy(category: PositionCategory) -> OverloadPolicyData:
     shift_type = category.shift_type
     limit_cap = 2 if shift_type == ShiftType.NIGHT else 3
-    extra_limit = min(category.extra_day_limit, limit_cap)
-    extra_limit = max(extra_limit, 1)
-    return OverloadPolicyData(
-        extra_day_limit=extra_limit,
-        overtime_points=category.overtime_points,
-        alert_level=AssignmentAlertLevel(category.overload_alert_level),
-    )
+    extra_limit = max(limit_cap, 1)
+    return OverloadPolicyData(extra_day_limit=extra_limit)

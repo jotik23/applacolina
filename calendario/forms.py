@@ -10,18 +10,15 @@ from django.db.models.functions import Cast
 from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
-    OperatorCapability,
     OperatorRestPeriod,
-    PositionCategory,
     PositionDefinition,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
-    required_skill_for_complexity,
     resolve_overload_policy,
 )
-from users.models import Role, UserProfile
-from granjas.models import Farm, Room
+from users.models import Role, UserProfile, RestDayOfWeek
+from granjas.models import Room
 
 
 class CalendarGenerationForm(forms.Form):
@@ -124,38 +121,19 @@ class BaseAssignmentForm(forms.Form):
         is_overtime = False
         overtime_points = 0
         lacks_authorization = False
-        strict_skill_gap = False
 
         if not position.is_active_on(target_date):
             raise forms.ValidationError("La posición no está vigente para la fecha seleccionada.")
 
-        required_score = required_skill_for_complexity(position.complexity)
-        capability = OperatorCapability.objects.filter(
-            operator=operator, category=position.category
-        ).first()
-
-        if not capability:
+        has_suggestion = operator.suggested_positions.filter(pk=position.pk).exists()
+        if not has_suggestion:
             if not allow_override:
                 raise forms.ValidationError(
-                    "El operario no está habilitado para esta posición en la fecha seleccionada."
+                    "El operario no tiene esta posición sugerida para la fecha seleccionada."
                 )
             lacks_authorization = True
-        else:
-            skill_score = capability.skill_score
 
-            if skill_score < required_score:
-                if not position.allow_lower_complexity:
-                    if not allow_override:
-                        raise forms.ValidationError(
-                            "La posición requiere un nivel de criticidad superior y no admite coberturas inferiores."
-                        )
-                    strict_skill_gap = True
-                else:
-                    alert_level = AssignmentAlertLevel.WARN
-            else:
-                alert_level = AssignmentAlertLevel.NONE
-
-        if allow_override and (lacks_authorization or strict_skill_gap):
+        if allow_override and lacks_authorization:
             alert_level = AssignmentAlertLevel.NONE
 
         conflict = (
@@ -282,12 +260,9 @@ class PositionDefinitionForm(forms.ModelForm):
             "farm",
             "chicken_house",
             "rooms",
-            "complexity",
-            "allow_lower_complexity",
             "valid_from",
             "valid_until",
             "is_active",
-            "notes",
         ]
 
     def clean(self) -> dict[str, Any]:
@@ -363,14 +338,15 @@ class OperatorProfileForm(forms.ModelForm):
         queryset=Role.objects.order_by("name"),
         required=False,
     )
-    preferred_farm = forms.ModelChoiceField(
-        queryset=Farm.objects.order_by("name"),
-        required=False,
-        empty_label="(sin preferencia)",
-    )
     suggested_positions = forms.ModelMultipleChoiceField(
         queryset=PositionDefinition.objects.none(),
         required=False,
+    )
+    automatic_rest_days = forms.MultipleChoiceField(
+        label="Días de descanso automático",
+        required=False,
+        choices=RestDayOfWeek.choices,
+        widget=forms.CheckboxSelectMultiple,
     )
 
     class Meta:
@@ -380,10 +356,9 @@ class OperatorProfileForm(forms.ModelForm):
             "nombres",
             "apellidos",
             "telefono",
-            "email",
             "employment_start_date",
             "employment_end_date",
-            "preferred_farm",
+            "automatic_rest_days",
             "suggested_positions",
             "roles",
             "is_active",
@@ -405,6 +380,10 @@ class OperatorProfileForm(forms.ModelForm):
                 "display_order",
                 "name",
             )
+        rest_field = self.fields.get("automatic_rest_days")
+        existing_values = getattr(self.instance, "automatic_rest_days", None)
+        if rest_field and existing_values:
+            rest_field.initial = [str(value) for value in existing_values]
 
     def clean_cedula(self) -> str:
         cedula = self.cleaned_data.get("cedula", "")
@@ -413,6 +392,10 @@ class OperatorProfileForm(forms.ModelForm):
     def clean_telefono(self) -> str:
         telefono = self.cleaned_data.get("telefono", "")
         return telefono.strip()
+
+    def clean_automatic_rest_days(self) -> list[int]:
+        values = self.cleaned_data.get("automatic_rest_days") or []
+        return [int(value) for value in values]
 
     def save(self, commit: bool = True) -> UserProfile:
         instance: UserProfile = super().save(commit=False)
@@ -424,16 +407,6 @@ class OperatorProfileForm(forms.ModelForm):
             self.save_m2m()
 
         return instance
-
-
-class OperatorCapabilityForm(forms.ModelForm):
-    class Meta:
-        model = OperatorCapability
-        fields = [
-            "operator",
-            "category",
-            "skill_score",
-        ]
 
 
 class OperatorRestPeriodForm(forms.ModelForm):

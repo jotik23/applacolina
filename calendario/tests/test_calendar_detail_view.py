@@ -9,8 +9,6 @@ from django.urls import reverse
 from calendario.models import (
     AssignmentAlertLevel,
     CalendarStatus,
-    ComplexityLevel,
-    OperatorCapability,
     OperatorRestPeriod,
     PositionCategory,
     PositionCategoryCode,
@@ -20,6 +18,7 @@ from calendario.models import (
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
+    WorkloadSnapshot,
 )
 from granjas.models import Farm
 from users.models import UserProfile
@@ -41,27 +40,16 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.category, _created = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
             defaults={
-                "name": "Galponero producción día",
                 "shift_type": ShiftType.DAY,
-                "extra_day_limit": 3,
-                "overtime_points": 1,
-                "overload_alert_level": AssignmentAlertLevel.WARN,
-                "rest_min_frequency": 6,
-                "rest_min_consecutive_days": 5,
                 "rest_max_consecutive_days": 8,
                 "rest_post_shift_days": 0,
                 "rest_monthly_days": 5,
             },
         )
 
-        self.category.rest_min_frequency = 6
-        self.category.rest_min_consecutive_days = 5
         self.category.rest_max_consecutive_days = 8
         self.category.rest_post_shift_days = 0
         self.category.rest_monthly_days = 5
-        self.category.extra_day_limit = 3
-        self.category.overtime_points = 1
-        self.category.overload_alert_level = AssignmentAlertLevel.WARN
         self.category.save()
 
         self.calendar = ShiftCalendar.objects.create(
@@ -77,8 +65,6 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             code="POS-A",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=self.calendar.start_date,
             valid_until=self.calendar.end_date,
         )
@@ -87,8 +73,6 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             code="POS-B",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=self.calendar.start_date,
             valid_until=self.calendar.end_date,
         )
@@ -115,15 +99,10 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             telefono="3100000003",
         )
 
-        OperatorCapability.objects.create(
-            operator=self.operator_initial,
-            category=self.position_primary.category,
-            skill_score=5,
-        )
-        OperatorCapability.objects.create(
-            operator=self.operator_conflict,
-            category=self.position_primary.category,
-            skill_score=5,
+        self.operator_initial.suggested_positions.add(self.position_primary)
+        self.operator_conflict.suggested_positions.add(
+            self.position_primary,
+            self.position_secondary,
         )
 
         self.assignment_primary = ShiftAssignment.objects.create(
@@ -202,7 +181,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertEqual(self.assignment_primary.operator, self.operator_conflict)
         self.assertEqual(self.assignment_primary.alert_level, AssignmentAlertLevel.CRITICAL)
         self.assertTrue(self.assignment_primary.is_overtime)
-        self.assertEqual(self.assignment_primary.overtime_points, 1)
+        self.assertEqual(self.assignment_primary.overtime_points, 0)
         self.assertFalse(self.assignment_primary.is_auto_assigned)
 
         messages = list(get_messages(response.wsgi_request))
@@ -228,7 +207,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             "Operario con doble turno hoy. Ajusta descansos.",
         )
 
-    def test_create_assignment_accepts_manual_override_without_capability(self) -> None:
+    def test_create_assignment_accepts_manual_override_without_suggestion(self) -> None:
         url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
         target_date = self.calendar.start_date + timedelta(days=1)
 
@@ -277,7 +256,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertIsNotNone(matching_cell)
         self.assertEqual(
             matching_cell["skill_gap_message"],
-            "Operario sin autorización vigente. Asignación manual confirmada.",
+            "Operario sin sugerencia registrada. Asignación manual confirmada.",
         )
 
     def test_stats_count_gaps_as_critical_alerts(self) -> None:
@@ -346,6 +325,45 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(
             any("La posición no está vigente para la fecha seleccionada." in message.message for message in messages)
+        )
+
+    def test_regenerate_clears_related_records(self) -> None:
+        OperatorRestPeriod.objects.create(
+            operator=self.operator_initial,
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date + timedelta(days=1),
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.CALENDAR,
+            calendar=self.calendar,
+        )
+        WorkloadSnapshot.objects.create(
+            calendar=self.calendar,
+            operator=self.operator_initial,
+            total_shifts=2,
+            day_shifts=2,
+            night_shifts=0,
+            rest_days=0,
+            overtime_days=0,
+            overtime_points_total=0,
+            month_reference=date(self.calendar.start_date.year, self.calendar.start_date.month, 1),
+        )
+
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.post(
+            url,
+            data={
+                "action": "regenerate",
+            },
+        )
+
+        self.assertRedirects(response, url)
+        self.assertFalse(ShiftAssignment.objects.filter(calendar=self.calendar).exists())
+        self.assertFalse(OperatorRestPeriod.objects.filter(calendar=self.calendar).exists())
+        self.assertFalse(self.calendar.workload_snapshots.exists())
+
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(
+            any("Calendario regenerado" in message.message for message in messages)
         )
 
 
@@ -425,27 +443,16 @@ class CalendarActivePositionVisibilityTests(TestCase):
         self.category, _created = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
             defaults={
-                "name": "Galponero producción día",
                 "shift_type": ShiftType.DAY,
-                "extra_day_limit": 3,
-                "overtime_points": 1,
-                "overload_alert_level": AssignmentAlertLevel.WARN,
-                "rest_min_frequency": 6,
-                "rest_min_consecutive_days": 5,
                 "rest_max_consecutive_days": 8,
                 "rest_post_shift_days": 0,
                 "rest_monthly_days": 5,
             },
         )
 
-        self.category.rest_min_frequency = 6
-        self.category.rest_min_consecutive_days = 5
         self.category.rest_max_consecutive_days = 8
         self.category.rest_post_shift_days = 0
         self.category.rest_monthly_days = 5
-        self.category.extra_day_limit = 3
-        self.category.overtime_points = 1
-        self.category.overload_alert_level = AssignmentAlertLevel.WARN
         self.category.save()
 
     def test_summary_excludes_inactive_positions_without_assignments(self) -> None:
@@ -462,8 +469,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             code="ACTIVE-1",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=calendar.start_date,
             valid_until=calendar.end_date,
             is_active=True,
@@ -473,8 +478,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             code="INACTIVE-1",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=calendar.start_date,
             valid_until=calendar.end_date,
             is_active=False,
@@ -503,8 +506,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             code="PARTIAL-CTX",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=calendar.start_date + timedelta(days=1),
             valid_until=calendar.end_date,
             is_active=True,
@@ -537,8 +538,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             code="PARTIAL-1",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=calendar.start_date + timedelta(days=1),
             valid_until=calendar.end_date,
             is_active=True,
@@ -552,11 +551,7 @@ class CalendarActivePositionVisibilityTests(TestCase):
             telefono="3100000006",
         )
 
-        OperatorCapability.objects.create(
-            operator=operator,
-            category=self.category,
-            skill_score=8,
-        )
+        operator.suggested_positions.add(position)
 
         url = reverse(
             "calendario-api:calendar-eligible-operators",
@@ -598,8 +593,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             code="PARTIAL-SUMMARY",
             category=self.category,
             farm=self.farm,
-            complexity=ComplexityLevel.BASIC,
-            allow_lower_complexity=False,
             valid_from=calendar.start_date + timedelta(days=1),
             valid_until=calendar.end_date,
             is_active=True,

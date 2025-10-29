@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from .managers import UserProfileManager
 
@@ -56,23 +58,24 @@ class RolePermission(models.Model):
         return f"{self.role.get_name_display()} - {self.get_permission_code_display()}"
 
 
+class RestDayOfWeek(models.IntegerChoices):
+    MONDAY = 0, _("Lunes")
+    TUESDAY = 1, _("Martes")
+    WEDNESDAY = 2, _("Miércoles")
+    THURSDAY = 3, _("Jueves")
+    FRIDAY = 4, _("Viernes")
+    SATURDAY = 5, _("Sábado")
+    SUNDAY = 6, _("Domingo")
+
+
 class UserProfile(AbstractBaseUser, PermissionsMixin):
     cedula = models.CharField(max_length=32, unique=True)
     nombres = models.CharField(max_length=150)
     apellidos = models.CharField(max_length=150)
     telefono = models.CharField(max_length=32, unique=True)
-    email = models.EmailField(blank=True)
     direccion = models.CharField(max_length=255, blank=True)
     contacto_nombre = models.CharField(max_length=150, blank=True)
     contacto_telefono = models.CharField(max_length=32, blank=True)
-    preferred_farm = models.ForeignKey(
-        "granjas.Farm",
-        on_delete=models.SET_NULL,
-        related_name="preferred_operators",
-        verbose_name="Granja preferida",
-        null=True,
-        blank=True,
-    )
     suggested_positions = models.ManyToManyField(
         "calendario.PositionDefinition",
         blank=True,
@@ -91,6 +94,13 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
         null=True,
         blank=True,
         help_text="Si se establece, el colaborador deja de estar disponible para turnos a partir del día siguiente.",
+    )
+    automatic_rest_days = ArrayField(
+        base_field=models.PositiveSmallIntegerField(choices=RestDayOfWeek.choices),
+        default=list,
+        blank=True,
+        verbose_name="Días de descanso automático",
+        help_text="Bloquea las asignaciones automáticas en los días seleccionados.",
     )
     roles = models.ManyToManyField(Role, blank=True, related_name="usuarios")
 
@@ -120,3 +130,14 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self) -> str:
         return self.nombres.split(" ")[0] if self.nombres else ""
+
+    def automatic_rest_day_labels(self) -> list[str]:
+        if not self.automatic_rest_days:
+            return []
+        labels: list[str] = []
+        for value in sorted(set(self.automatic_rest_days)):
+            try:
+                labels.append(str(RestDayOfWeek(value).label))
+            except ValueError:
+                labels.append(str(value))
+        return labels

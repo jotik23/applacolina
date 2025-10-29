@@ -68,13 +68,13 @@ class UserProfileAdmin(UserAdmin):
         "cedula",
         "nombre_completo",
         "telefono",
-        "preferred_farm",
+        "automatic_rest_days_display",
         "listar_roles",
         "is_active",
         "is_staff",
     )
     list_filter = ("is_active", "is_staff", "roles")
-    search_fields = ("cedula", "nombres", "apellidos", "telefono", "email")
+    search_fields = ("cedula", "nombres", "apellidos", "telefono")
     ordering = ("apellidos", "nombres")
 
     fieldsets = (
@@ -86,8 +86,7 @@ class UserProfileAdmin(UserAdmin):
                     "nombres",
                     "apellidos",
                     "telefono",
-                    "email",
-                    "preferred_farm",
+                    "automatic_rest_days",
                     "suggested_positions",
                     "employment_start_date",
                     "employment_end_date",
@@ -116,9 +115,8 @@ class UserProfileAdmin(UserAdmin):
                     "nombres",
                     "apellidos",
                     "telefono",
-                    "email",
                     "direccion",
-                    "preferred_farm",
+                    "automatic_rest_days",
                     "suggested_positions",
                     "employment_start_date",
                     "employment_end_date",
@@ -161,3 +159,9 @@ class UserProfileAdmin(UserAdmin):
         return ", ".join(role.get_name_display() for role in obj.roles.all())
 
     listar_roles.short_description = "Roles"
+
+    def automatic_rest_days_display(self, obj: UserProfile) -> str:
+        labels = obj.automatic_rest_day_labels()
+        return ", ".join(labels) if labels else "—"
+
+    automatic_rest_days_display.short_description = "Descanso automático"

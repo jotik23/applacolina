@@ -1,0 +1,13 @@
+from django.db import migrations
+
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("calendario", "0013_remove_positiondefinition_allow_lower_complexity_and_more"),
+    ]
+
+    operations = [
+        migrations.DeleteModel(
+            name="OperatorCapability",
+        ),
+    ]

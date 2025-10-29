@@ -9,8 +9,6 @@ from .views import (
     CalendarListView,
     CalendarMetadataView,
     CalendarSummaryView,
-    CapabilityCollectionView,
-    CapabilityDetailView,
     RestPeriodCollectionView,
     RestPeriodDetailView,
     OperatorCollectionView,
@@ -64,12 +62,6 @@ urlpatterns = [
         "calendars/positions/reorder/",
         PositionReorderView.as_view(),
         name="calendar-position-reorder",
-    ),
-    path("calendars/capabilities/", CapabilityCollectionView.as_view(), name="calendar-capabilities"),
-    path(
-        "calendars/capabilities/<int:capability_id>/",
-        CapabilityDetailView.as_view(),
-        name="calendar-capability-detail",
     ),
     path(
         "calendars/rest-periods/",

@@ -3,629 +3,656 @@
 {% block title %}Detalle calendario | {{ calendar.name|default:'Sin título' }}{% endblock %}
 
 {% block content %}
-<div class="space-y-6 overflow-x-hidden">
-  <div class="rounded-xl bg-white p-6 shadow-sm">
-    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-      <div>
-        <h1 class="text-xl font-semibold text-slate-900">
-            {{ calendar.name|default:"Calendario sin título" }}
+<div class="flex flex-col gap-6">
+  <section class="rounded-2xl bg-white shadow-sm">
+    <div class="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div class="space-y-2">
+          <h1 class="flex flex-wrap items-center gap-3 text-2xl font-semibold text-slate-900">
+            <span>{{ calendar.name|default:"Calendario sin título" }}</span>
             {% if calendar.status == 'draft' %}
-                <span class="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">Borrador</span>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">Borrador</span>
             {% elif calendar.status == 'approved' %}
-                <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Aprobado</span>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Aprobado</span>
             {% elif calendar.status == 'modified' %}
-                <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Modificado</span>
+              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Modificado</span>
             {% endif %}
-        </h1>
-        <p class="mt-1 text-sm text-slate-500">{{ calendar.start_date }} → {{ calendar.end_date }}</p>
-        <div class="mt-3 flex flex-wrap items-center gap-2">
-          {% if calendar.base_calendar %}
-            <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600">Modifica: #{{ calendar.base_calendar_id }}</span>
-          {% endif %}
+          </h1>
+          <p class="text-sm text-slate-500">{{ calendar.start_date }} → {{ calendar.end_date }}</p>
+          <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 font-medium uppercase tracking-wide">ID #{{ calendar.pk }}</span>
+            {% if calendar.base_calendar %}
+              <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 font-medium text-slate-600">Modifica: #{{ calendar.base_calendar_id }}</span>
+            {% endif %}
+          </div>
         </div>
-      </div>
-      <div class="flex flex-wrap items-center gap-3">
-        {% if calendar.status != 'approved' %}
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="approve" />
-            <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">Aprobar calendario</button>
-          </form>
-        {% else %}
-          <div class="flex flex-col items-start gap-2 text-sm font-medium text-slate-500 md:flex-row md:items-center">
-            <span>
-              {% if calendar.approved_by %}
-                Aprobado por {{ calendar.approved_by.get_full_name|default:calendar.approved_by }} el {{ calendar.approved_at|date:"d/m/Y H:i" }}
-              {% else %}
-                Aprobado el {{ calendar.approved_at|date:"d/m/Y H:i" }}
-              {% endif %}
-            </span>
-            <form method="post">
+        <div class="flex flex-wrap items-center justify-end gap-3">
+          {% if calendar.status != 'approved' %}
+            <form method="post" class="contents">
               {% csrf_token %}
-              <input type="hidden" name="action" value="mark-modified" />
-              <button type="submit" class="inline-flex items-center rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">Modificar calendario</button>
+              <input type="hidden" name="action" value="approve" />
+              <button type="submit" class="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">
+                Aprobar calendario
+              </button>
+            </form>
+            <form method="post" class="contents">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="regenerate" />
+              <button type="submit" class="inline-flex items-center rounded-full border border-amber-300 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 hover:border-amber-400 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-200">
+                Regenerar calendario
+              </button>
+            </form>
+          {% else %}
+            <div class="flex flex-col items-start gap-2 text-sm font-medium text-slate-500 md:flex-row md:items-center">
+              <span>
+                {% if calendar.approved_by %}
+                  Aprobado por {{ calendar.approved_by.get_full_name|default:calendar.approved_by }} el {{ calendar.approved_at|date:"d/m/Y H:i" }}
+                {% else %}
+                  Aprobado el {{ calendar.approved_at|date:"d/m/Y H:i" }}
+                {% endif %}
+              </span>
+              <form method="post" class="contents">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="mark-modified" />
+                <button type="submit" class="inline-flex items-center rounded-full border border-slate-300 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">
+                  Marcar como modificada
+                </button>
+              </form>
+            </div>
+          {% endif %}
+          <div class="relative" data-double-confirm>
+            <button type="button" class="inline-flex items-center rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-red-600 hover:border-red-300 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200" data-double-confirm-trigger>Eliminar calendario</button>
+            <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-panel>
+              <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+                <p class="font-semibold text-slate-900">¿Eliminar este calendario?</p>
+                <p class="mt-1 text-xs text-slate-500">Se eliminarán todas las asignaciones relacionadas.</p>
+                <div class="mt-3 flex justify-end gap-2">
+                  <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel data-double-confirm-focus>Cancelar</button>
+                  <button type="button" class="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400" data-double-confirm-continue>Confirmar</button>
+                </div>
+              </div>
+            </div>
+            <form method="post" action="{% url 'calendario:calendar-delete' calendar.pk %}" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-final>
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'calendario:dashboard' %}" />
+              <div class="w-full max-w-sm rounded-xl border border-red-200 bg-white p-4 text-left shadow-lg">
+                <p class="text-sm font-semibold text-red-700">Confirmación final</p>
+                <p class="mt-1 text-xs text-slate-500">Esta acción es irreversible.</p>
+                <div class="mt-3 flex justify-end gap-2">
+                  <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel>Cancelar</button>
+                  <button type="submit" class="inline-flex items-center rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300" data-double-confirm-final-submit data-double-confirm-focus>Eliminar definitivamente</button>
+                </div>
+              </div>
             </form>
           </div>
-        {% endif %}
-        <div class="relative" data-double-confirm>
-          <button type="button" class="inline-flex items-center rounded border border-red-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-600 hover:border-red-300 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200" data-double-confirm-trigger>Eliminar calendario</button>
-          <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-panel>
-            <div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
-              <p class="font-semibold text-slate-900">¿Eliminar este calendario?</p>
-              <p class="mt-1 text-xs text-slate-500">Se eliminarán todas las asignaciones relacionadas.</p>
-              <div class="mt-3 flex justify-end gap-2">
-                <button type="button" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel data-double-confirm-focus>Cancelar</button>
-                <button type="button" class="inline-flex items-center rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400" data-double-confirm-continue>Confirmar</button>
-              </div>
-            </div>
-          </div>
-          <form method="post" action="{% url 'calendario:calendar-delete' calendar.pk %}" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-final>
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{% url 'calendario:dashboard' %}" />
-            <div class="w-full max-w-sm rounded-lg border border-red-200 bg-white p-4 text-left shadow-lg">
-              <p class="text-sm font-semibold text-red-700">Confirmación final</p>
-              <p class="mt-1 text-xs text-slate-500">Esta acción es irreversible.</p>
-              <div class="mt-3 flex justify-end gap-2">
-                <button type="button" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel>Cancelar</button>
-                <button type="submit" class="inline-flex items-center rounded bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300" data-double-confirm-final-submit data-double-confirm-focus>Eliminar definitivamente</button>
-              </div>
-            </div>
-          </form>
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Turnos asignados</p>
+          <p class="mt-2 text-3xl font-semibold text-slate-900">{{ stats.total_assignments }}</p>
+        </div>
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <p class="text-xs uppercase tracking-wide text-amber-600">Advertencias</p>
+          <p class="mt-2 text-3xl font-semibold text-amber-700">{{ stats.warn }}</p>
+        </div>
+        <div class="rounded-2xl border border-red-200 bg-red-50 p-5">
+          <p class="text-xs uppercase tracking-wide text-red-600">Alertas críticas</p>
+          <p class="mt-2 text-3xl font-semibold text-red-700">{{ stats.critical }}</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Sobrecargas</p>
+          <p class="mt-2 text-3xl font-semibold text-slate-900">{{ stats.overtime }}</p>
         </div>
       </div>
     </div>
+  </section>
 
-    <dl class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <dt class="text-xs uppercase tracking-wide text-slate-500">Turnos asignados</dt>
-        <dd class="mt-2 text-2xl font-semibold text-slate-900">{{ stats.total_assignments }}</dd>
-      </div>
-      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
-        <dt class="text-xs uppercase tracking-wide text-amber-600">Advertencias</dt>
-        <dd class="mt-2 text-2xl font-semibold text-amber-700">{{ stats.warn }}</dd>
-      </div>
-      <div class="rounded-lg border border-red-200 bg-red-50 p-4">
-        <dt class="text-xs uppercase tracking-wide text-red-600">Alertas críticas</dt>
-        <dd class="mt-2 text-2xl font-semibold text-red-700">{{ stats.critical }}</dd>
-      </div>
-      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <dt class="text-xs uppercase tracking-wide text-slate-500">Sobrecargas</dt>
-        <dd class="mt-2 text-2xl font-semibold text-slate-900">{{ stats.overtime }}</dd>
-      </div>
-    </dl>
 
-      <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-          <div class="flex items-center space-x-3">
-            <span class="inline-flex h-3 w-3 rounded-full bg-emerald-400"></span>
-            <span>Sin alerta: asignación según reglas.</span>
-          </div>
-          <div class="flex items-center space-x-3">
-            <span class="inline-flex h-3 w-3 rounded-full bg-amber-400"></span>
-            <span>Advertencia: menor criticidad o situación especial.</span>
-          </div>
-          <div class="flex items-center space-x-3">
-            <span class="inline-flex h-3 w-3 rounded-full bg-red-500"></span>
-            <span>Crítico: requiere intervención del supervisor.</span>
-          </div>
-          <div class="flex items-center space-x-3">
-            <span class="inline-flex h-3 w-3 rounded-full bg-slate-900"></span>
-            <span>Sobrecarga: aplicar bono y compensación.</span>
-          </div>
-        </dl>
-  </div>
-
-  <div class="rounded-xl bg-white shadow-sm">
-    <header class="border-b border-slate-100 px-6 py-4">
-      <h2 class="text-lg font-semibold text-slate-900">Asignaciones</h2>
-    </header>
-
-    {{ rest_summary|json_script:"rest-summary-data" }}
-    <div class="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 text-sm text-slate-700 shadow-sm" data-rest-panel>
-      <div class="flex flex-wrap items-center justify-between gap-3">
+  <section class="rounded-2xl bg-white shadow-sm">
+    <div class="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span class="text-xs uppercase tracking-wide text-indigo-600">Descansos del colaborador</span>
-          <p class="text-sm font-semibold text-slate-900" data-rest-operator-title>Selecciona un colaborador para ver sus descansos.</p>
-          <p class="text-xs text-slate-500" data-rest-employment></p>
+          <h2 class="text-xl font-semibold text-slate-900">Asignaciones</h2>
         </div>
-        <button type="button" class="inline-flex items-center rounded border border-indigo-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700 hover:border-indigo-300 hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2" data-rest-clear>
-          Limpiar selección
-        </button>
-      </div>
-      <dl class="mt-3 grid gap-3 text-sm md:grid-cols-3">
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Descanso vigente</dt>
-          <dd class="mt-1 font-medium text-slate-900" data-rest-current>Sin descanso vigente</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Último descanso</dt>
-          <dd class="mt-1 font-medium text-slate-900" data-rest-recent>Sin registro</dd>
-        </div>
-        <div>
-          <dt class="text-xs uppercase tracking-wide text-slate-500">Próximo descanso</dt>
-          <dd class="mt-1 font-medium text-slate-900" data-rest-upcoming>Sin programación futura</dd>
-        </div>
-      </dl>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-max min-w-full divide-y divide-slate-100 text-xs sm:text-sm">
-        <thead class="sticky top-0 z-20 bg-slate-50 shadow">
-          <tr>
-            <th class="sticky left-0 top-0 z-30 bg-slate-50 px-6 py-2 text-left font-semibold text-slate-600 w-60 min-w-[15rem]">Posición</th>
-            {% for day in date_columns %}
-              <th class="sticky top-0 z-20 bg-slate-50 px-4 py-2 text-left font-semibold text-slate-600">
-                <span class="block text-xs font-medium uppercase tracking-wide text-slate-400">{{ day|date:"d/M" }}</span>
-                <span class="block text-sm font-semibold text-slate-600">{{ day|date:"l"|capfirst }}</span>
-              </th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for row in rows %}
-            <tr class="bg-white">
-              <th class="sticky left-0 z-10 bg-white px-6 py-2 text-left font-medium text-slate-800 shadow-[1px_0_0_rgba(15,23,42,0.05)] w-60 min-w-[15rem]">
-                <span class="block text-xs uppercase tracking-wide text-slate-400">{{ row.position.farm.name }}</span>
-                <p class="text-sm font-semibold text-slate-900">{{ row.position.name }}</p>
-                <span class="block text-xs text-slate-500">{{ row.position.get_category_display }}</span>
-              </th>
-              {% for cell in row.cells %}
-                <td class="px-3 py-2 align-top">
-                  {% if cell.assignment %}
-                    {% if cell.is_position_active %}
-                      <div class="rounded-lg border p-2 shadow-sm transition hover:shadow-md {% if cell.alert == 'critical' %}border-red-300 bg-red-50/80{% elif cell.alert == 'warn' %}border-amber-300 bg-amber-50/80{% else %}border-emerald-200 bg-emerald-50/70{% endif %} {% if cell.is_overtime %}ring-1 ring-slate-900/10{% endif %}" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}" data-operator-name="{{ cell.assignment.operator.get_full_name|default:cell.assignment.operator.nombres|default:cell.assignment.operator.apellidos|escape }}">
-                        {% if can_override and manual_operator_choices %}
-                          <form method="post" class="flex items-center gap-2">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="update-assignment" />
-                            <input type="hidden" name="assignment_id" value="{{ cell.assignment.id }}" />
-                            <input type="hidden" name="force_override" value="1" />
-                            <label class="sr-only">Selecciona</label>
-                            <select name="operator_id" class="flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:ring-brand">
-                              {% for option in manual_operator_choices %}
-                                <option value="{{ option.id }}" {% if option.id == cell.assignment.operator_id %}selected{% endif %}>
-                                  {{ option.label }}
-                                </option>
-                              {% endfor %}
-                            </select>
-                            <div class="flex items-center gap-1">
-                              {% if cell.alert == 'critical' %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Crítico" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.721-1.36 3.486 0l5.223 9.298c.75 1.334-.213 2.998-1.742 2.998H4.776c-1.53 0-2.492-1.664-1.743-2.998l5.224-9.298zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-.25-5.75a.75.75 0 10-1.5 0v3.5a.75.75 0 001.5 0v-3.5z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Operario sin autorización vigente. Corrige de inmediato.</span>
-                                </span>
-                              {% elif cell.alert == 'warn' %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-400 bg-amber-100/60 text-amber-700" role="img" aria-label="Seguimiento" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-4a1 1 0 100-2 1 1 0 000 2zm.75-7.5a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Operario habilitado a menor nivel. Monitorea su desempeño.</span>
-                                </span>
-                              {% endif %}
-                              {% if cell.skill_gap_message %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-500 bg-emerald-100/70 text-emerald-700" role="img" aria-label="Asignación manual" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">{{ cell.skill_gap_message }}</span>
-                                </span>
-                              {% endif %}
-                              {% if cell.is_overtime %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-500 bg-slate-900/10 text-slate-700" role="img" aria-label="Sobrecarga" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h1.586A2 2 0 019 2.586L10.414 4H14a2 2 0 012 2v2h-2V6H6v8h4v2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-                                      <path fill-rule="evenodd" d="M12 12a1 1 0 011-1h5.5a.5.5 0 01.5.5V13a1 1 0 01-.293.707l-4.5 4.5A1 1 0 0112 17.5V13a1 1 0 011-1z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">{{ cell.overtime_message|default:"Operario con sobrecarga consecutiva. Ajusta descansos." }}</span>
-                                </span>
-                              {% endif %}
-                              <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
-                                <span class="sr-only">Actualizar turno</span>
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
-                              </button>
-                            </div>
-                          </form>
-                          {% with role=cell.assignment.operator.roles.first %}
-                            {% if role %}
-                              <p class="mt-1 text-[11px] text-slate-600">{{ role.get_name_display }}</p>
-                            {% endif %}
-                          {% endwith %}
-                        {% else %}
-                          <div class="flex items-center gap-2">
-                            <div class="min-w-0">
-                              <p class="truncate text-sm font-semibold text-slate-900">{{ cell.assignment.operator.get_full_name }}</p>
-                              {% with role=cell.assignment.operator.roles.first %}
-                                {% if role %}
-                                  <p class="text-xs text-slate-500">{{ role.get_name_display }}</p>
-                                {% endif %}
-                              {% endwith %}
-                            </div>
-                            <div class="ml-auto flex items-center gap-1">
-                              {% if cell.alert == 'critical' %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Crítico" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.721-1.36 3.486 0l5.223 9.298c.75 1.334-.213 2.998-1.742 2.998H4.776c-1.53 0-2.492-1.664-1.743-2.998l5.224-9.298zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-.25-5.75a.75.75 0 10-1.5 0v3.5a.75.75 0 001.5 0v-3.5z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Operario sin autorización vigente. Corrige de inmediato.</span>
-                                </span>
-                              {% elif cell.alert == 'warn' %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-400 bg-amber-100/60 text-amber-700" role="img" aria-label="Seguimiento" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-4a1 1 0 100-2 1 1 0 000 2zm.75-7.5a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Operario habilitado a menor nivel. Monitorea su desempeño.</span>
-                                </span>
-                              {% endif %}
-                              {% if cell.skill_gap_message %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-500 bg-emerald-100/70 text-emerald-700" role="img" aria-label="Asignación manual" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">{{ cell.skill_gap_message }}</span>
-                                </span>
-                              {% endif %}
-                              {% if cell.is_overtime %}
-                                <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-500 bg-slate-900/10 text-slate-700" role="img" aria-label="Sobrecarga" tabindex="0">
-                                    <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h1.586A2 2 0 019 2.586L10.414 4H14a2 2 0 012 2v2h-2V6H6v8h4v2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-                                      <path fill-rule="evenodd" d="M12 12a1 1 0 011-1h5.5a.5.5 0 01.5.5V13a1 1 0 01-.293.707l-4.5 4.5A1 1 0 0112 17.5V13a1 1 0 011-1z" clip-rule="evenodd" />
-                                    </svg>
-                                  </span>
-                                  <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">{{ cell.overtime_message|default:"Operario con sobrecarga consecutiva. Ajusta descansos." }}</span>
-                                </span>
-                              {% endif %}
-                            </div>
-                          </div>
-                        {% endif %}
-                      </div>
-                    {% else %}
-                      <div class="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-500 shadow-sm" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}" data-operator-name="{{ cell.assignment.operator.get_full_name|default:cell.assignment.operator.nombres|default:cell.assignment.operator.apellidos|escape }}">
-                        <div class="flex items-start justify-between gap-2">
-                          <div>
-                            <p class="font-semibold text-slate-600">{{ cell.assignment.operator.get_full_name }}</p>
-                            {% with role=cell.assignment.operator.roles.first %}
-                              {% if role %}
-                                <p class="text-xs text-slate-400">{{ role.get_name_display }}</p>
-                              {% endif %}
-                            {% endwith %}
-                          </div>
-                          <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Fuera de vigencia</span>
-                        </div>
-                        {% if cell.alert or cell.is_overtime %}
-                          <p class="mt-2 text-[11px] text-slate-400">Los indicadores aplican a una asignación previa. Sin edición disponible.</p>
-                        {% endif %}
-                      </div>
-                    {% endif %}
-                  {% else %}
-                    {% if cell.is_position_active %}
-                      <div class="rounded-lg border border-red-300 bg-red-50/80 p-2 text-sm shadow-sm transition hover:shadow-md">
-                        {% if can_override and manual_operator_choices %}
-                          <form method="post" class="flex items-center gap-2">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="create-assignment" />
-                            <input type="hidden" name="position_id" value="{{ row.position.id }}" />
-                            <input type="hidden" name="date" value="{{ cell.date|date:'Y-m-d' }}" />
-                            <input type="hidden" name="force_override" value="1" />
-                            <label class="sr-only">Selecciona</label>
-                            <select name="operator_id" class="flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-brand focus:ring-brand">
-                              <option value="" selected disabled>Selecciona…</option>
-                              {% for option in manual_operator_choices %}
-                                <option value="{{ option.id }}">
-                                  {{ option.label }}
-                                </option>
-                              {% endfor %}
-                            </select>
-                            <div class="flex items-center gap-1">
-                              <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Sin cobertura" tabindex="0">
-                                  <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L2.382 14.553A1 1 0 003.276 16h13.448a1 1 0 00.894-1.447L11.894 2.553A1 1 0 0011 2H9zm1 5a1 1 0 01.993.883L11 8v2a1 1 0 01-1.993.117L9 10V8a1 1 0 011-1zm0 6a1 1 0 110 2 1 1 0 010-2z" clip-rule="evenodd" />
-                                  </svg>
-                                </span>
-                                <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Sin operario asignado. Programa cobertura.</span>
-                              </span>
-                              <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
-                                <span class="sr-only">Actualizar turno</span>
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
-                              </button>
-                            </div>
-                          </form>
-                        {% elif can_override %}
-                          <div class="flex items-center justify-end gap-1">
-                            <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                              <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Sin cobertura" tabindex="0">
-                                <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L2.382 14.553A1 1 0 003.276 16h13.448a1 1 0 00.894-1.447L11.894 2.553A1 1 0 0011 2H9zm1 5a1 1 0 01.993.883L11 8v2a1 1 0 01-1.993.117L9 10V8a1 1 0 011-1zm0 6a1 1 0 110 2 1 1 0 010-2z" clip-rule="evenodd" />
-                                </svg>
-                              </span>
-                              <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Sin operario asignado. Programa cobertura.</span>
-                            </span>
-                          </div>
-                          <p class="mt-2 text-xs text-slate-600">No hay colaboradores disponibles.</p>
-                        {% else %}
-                          <div class="flex items-center justify-end gap-1">
-                            <span class="group relative inline-flex h-7 w-7 items-center justify-center">
-                              <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-500 bg-red-100/60 text-red-700" role="img" aria-label="Sin cobertura" tabindex="0">
-                                <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L2.382 14.553A1 1 0 003.276 16h13.448a1 1 0 00.894-1.447L11.894 2.553A1 1 0 0011 2H9zm1 5a1 1 0 01.993.883L11 8v2a1 1 0 01-1.993.117L9 10V8a1 1 0 011-1zm0 6a1 1 0 110 2 1 1 0 010-2z" clip-rule="evenodd" />
-                                </svg>
-                              </span>
-                              <span class="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow group-hover:opacity-100 group-focus-within:opacity-100">Sin operario asignado. Programa cobertura.</span>
-                            </span>
-                          </div>
-                        {% endif %}
-                      </div>
-                    {% else %}
-                      <div class="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-400 shadow-sm">
-                        <div class="flex items-center justify-between">
-                          <span>—</span>
-                          <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Fuera de vigencia</span>
-                        </div>
-                      </div>
-                    {% endif %}
-                  {% endif %}
-                </td>
-              {% endfor %}
-            </tr>
-          {% endfor %}
-          {% if rest_rows %}
-            {% for rest_row in rest_rows %}
-              <tr class="bg-slate-50">
-                <th class="sticky left-0 z-10 bg-slate-50 px-6 py-2 text-left font-medium text-slate-800 shadow-[1px_0_0_rgba(15,23,42,0.05)] w-60 min-w-[15rem]">
-                  <span class="block text-xs uppercase tracking-wide text-slate-400">{{ rest_row.label }}</span>
-                  <p class="text-sm font-semibold text-slate-900">Turno libre {{ rest_row.slot }}</p>
-                  <span class="block text-xs text-slate-500">Descansos programados</span>
-                </th>
-                {% for cell in rest_row.cells %}
-                  <td class="px-3 py-2 align-top">
-                    {% if cell.operator_id %}
-                      <div class="rounded-lg border border-slate-200 bg-white p-2 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}">
-                        <div class="flex items-start justify-between gap-2">
-                          <div>
-                            <p class="text-sm font-semibold text-slate-900">{{ cell.name }}</p>
-                            {% if cell.role %}
-                              <span class="block text-xs text-slate-500">{{ cell.role }}</span>
-                            {% endif %}
-                          </div>
-                          {% if cell.reason %}
-                            <span class="group relative inline-flex h-7 w-7 shrink-0 items-center justify-center">
-                              <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400" role="img" aria-label="Motivo de descanso" tabindex="0">
-                                <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-11.25a.75.75 0 101.5 0 .75.75 0 00-1.5 0zm.75 2.25a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5a.75.75 0 01.75-.75z" clip-rule="evenodd" />
-                                </svg>
-                              </span>
-                              <span class="pointer-events-none absolute left-1/2 top-9 z-10 -translate-x-1/2 max-w-[16rem] whitespace-normal rounded bg-slate-900 px-3 py-2 text-[11px] font-medium text-white opacity-0 shadow-lg group-hover:opacity-100 group-focus-within:opacity-100">{{ cell.reason }}</span>
-                            </span>
-                          {% endif %}
-                        </div>
-                      </div>
-                    {% else %}
-                      <div class="rounded-lg border border-dashed border-slate-200 bg-white p-2 text-center text-[11px] font-medium uppercase tracking-wide text-slate-300">—</div>
-                    {% endif %}
-                  </td>
-                {% endfor %}
-              </tr>
-            {% endfor %}
+        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {% if can_override and manual_operator_choices %}
+            <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-indigo-700">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M2.879 2.879a3 3 0 014.242 0L10 5.757l2.879-2.878a3 3 0 014.242 4.242L14.243 10l2.878 2.879a3 3 0 11-4.242 4.242L10 14.243l-2.879 2.878a3 3 0 01-4.242-4.242L5.757 10 2.879 7.121a3 3 0 010-4.242z" clip-rule="evenodd" />
+              </svg>
+              Reasignación manual activa
+            </span>
+          {% elif can_override %}
+            <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2H3V4zm0 4h14v8a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm4 2a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+              </svg>
+              Edición supervisada
+            </span>
           {% endif %}
-        </tbody>
-      </table>
-    </div>
-    <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        var highlightClasses = ['outline', 'outline-2', 'outline-offset-2', 'outline-indigo-500', 'bg-indigo-50', 'shadow-lg'];
-        var cards = Array.prototype.slice.call(document.querySelectorAll('[data-operator-id]'));
-        var restSummaryDataEl = document.getElementById('rest-summary-data');
-        var restSummary = {};
-        if (restSummaryDataEl) {
-          try {
-            restSummary = JSON.parse(restSummaryDataEl.textContent);
-          } catch (error) {
-            restSummary = {};
-          }
-        }
-        var restPanel = document.querySelector('[data-rest-panel]');
-        var restOperatorTitle = restPanel ? restPanel.querySelector('[data-rest-operator-title]') : null;
-        var restEmployment = restPanel ? restPanel.querySelector('[data-rest-employment]') : null;
-        var restCurrent = restPanel ? restPanel.querySelector('[data-rest-current]') : null;
-        var restRecent = restPanel ? restPanel.querySelector('[data-rest-recent]') : null;
-        var restUpcoming = restPanel ? restPanel.querySelector('[data-rest-upcoming]') : null;
-        var restClear = restPanel ? restPanel.querySelector('[data-rest-clear]') : null;
+        </div>
+      </div>
 
-        function formatDate(isoString) {
-          if (!isoString) {
-            return '';
-          }
-          var parts = isoString.split('-');
-          if (parts.length !== 3) {
-            return isoString;
-          }
-          return parts[2] + '/' + parts[1] + '/' + parts[0];
-        }
+      {{ rest_summary|json_script:"rest-summary-data" }}
+      {{ position_groups.group_map|json_script:"position-group-map" }}
+      {{ position_groups.position_to_group|json_script:"position-to-group-map" }}
 
-        function describePeriod(period) {
-          if (!period) {
-            return null;
-          }
-          var startLabel = formatDate(period.start);
-          var endLabel = formatDate(period.end);
-          var rangeLabel = startLabel === endLabel || !endLabel ? startLabel : startLabel + ' → ' + endLabel;
-          var qualifiers = [];
-          if (period.status_label) {
-            qualifiers.push(period.status_label);
-          }
-          if (period.source_label) {
-            qualifiers.push(period.source_label);
-          }
-          if (qualifiers.length) {
-            rangeLabel += ' · ' + qualifiers.join(' · ');
-          }
-          return rangeLabel;
-        }
+      <div class="grid gap-6 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
+        <aside class="flex flex-col gap-4">
+          <div class="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-sm text-slate-700 shadow-sm" data-rest-panel>
+            <div class="flex flex-col gap-4">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <span class="text-xs uppercase tracking-wide text-indigo-600">Descansos del colaborador</span>
+                  <p class="mt-1 text-sm font-semibold text-slate-900" data-rest-operator-title>Selecciona un colaborador para ver sus descansos.</p>
+                  <p class="text-xs text-slate-500" data-rest-employment></p>
+                </div>
+              </div>
+              <dl class="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
+                <div>
+                  <dt class="text-xs uppercase tracking-wide text-slate-500">Último descanso</dt>
+                  <dd class="mt-1 font-medium text-slate-900" data-rest-recent>Sin registro</dd>
+                </div>
+                <div>
+                  <dt class="text-xs uppercase tracking-wide text-slate-500">Próximo descanso</dt>
+                  <dd class="mt-1 font-medium text-slate-900" data-rest-upcoming>Sin programación futura</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
 
-        function clearRestPanel() {
-          if (!restPanel) {
-            return;
-          }
-          if (restOperatorTitle) {
-            restOperatorTitle.textContent = 'Selecciona un colaborador para ver sus descansos.';
-          }
-          if (restEmployment) {
-            restEmployment.textContent = '';
-          }
-          if (restCurrent) {
-            restCurrent.textContent = 'Sin descanso vigente';
-          }
-          if (restRecent) {
-            restRecent.textContent = 'Sin registro';
-          }
-          if (restUpcoming) {
-            restUpcoming.textContent = 'Sin programación futura';
-          }
-        }
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Leyenda de estados</h3>
+            <ul class="mt-3 space-y-3">
+              <li class="flex items-center gap-3">
+                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span>
+                <span>Sin alerta: asignación dentro de reglas.</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span>
+                <span>Advertencia: requiere seguimiento puntual.</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-red-500"></span>
+                <span>Crítico: intervención inmediata.</span>
+              </li>
+              <li class="flex items-center gap-3">
+                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-slate-900"></span>
+                <span>Sobrecarga: activar compensaciones.</span>
+              </li>
+            </ul>
+          </div>
+        </aside>
 
-        function updateRestPanel(operatorId, sourceCard) {
-          if (!restPanel || !restOperatorTitle || !restCurrent || !restRecent || !restUpcoming) {
-            return;
+        <div class="flex min-h-[420px] flex-col gap-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide text-slate-500">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">{{ rows|length }} posiciones</span>
+              <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">{{ date_columns|length }} días visibles</span>
+            </div>
+            <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">Turnos registrados: {{ stats.total_assignments }}</span>
+          </div>
+
+          <div class="relative flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div class="flex h-full flex-col">
+              <div class="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <span>Vista operativa</span>
+                <span class="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                  <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M4 3a1 1 0 011-1h2a1 1 0 01.894.553L8.618 4H16a1 1 0 011 1v2H3V3zm-1 6h16v8a1 1 0 01-1 1H4a1 1 0 01-1-1V9zm5 2a1 1 0 100 2h6a1 1 0 100-2H8z" clip-rule="evenodd" />
+                  </svg>
+                  Horizontal scroll para más días
+                </span>
+              </div>
+              <div class="flex-1 overflow-auto">
+                <table class="w-max min-w-full divide-y divide-slate-100 text-xs sm:text-sm">
+                  <tbody class="divide-y divide-slate-100">
+                    {% for row in rows %}
+                      {% with group=row.display_group %}
+                        {% ifchanged group.key %}
+                          <tr class="bg-white text-xs font-semibold uppercase tracking-wide text-slate-500" data-group-header="true" data-group-key="{{ group.key|default:'' }}" data-group-type="{{ group.type|default:'' }}">
+                            <th class="sticky left-0 z-20 w-60 min-w-[15rem] bg-white px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Posición
+                            </th>
+                            {% for day in date_columns %}
+                              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                <span class="block text-[11px] font-medium text-slate-400">{{ day|date:"d/M" }}</span>
+                                <span class="block text-sm font-semibold text-slate-700">{{ day|date:"l"|capfirst }}</span>
+                              </th>
+                            {% endfor %}
+                          </tr>
+                        {% endifchanged %}
+                        {% with row_color=group.color_class|default:'bg-white' %}
+                          <tr class="{{ row_color }} hover:bg-white/60" data-group-key="{{ group.key|default:'' }}" data-group-type="{{ group.type|default:'' }}" data-group-label="{{ group.label|default:'' }}" {% if row.position %}data-position-id="{{ row.position.id }}"{% endif %}>
+                        <th class="sticky left-0 z-20 {{ row_color }} px-6 py-4 text-left align-top text-sm font-semibold text-slate-900 shadow-[1px_0_0_rgba(15,23,42,0.08)]">
+                          <span class="block text-xs uppercase tracking-wide text-slate-400">{{ row.position.farm.name }}</span>
+                          <p class="text-base font-semibold text-slate-900">{{ row.position.name }}</p>
+                          <span class="block text-xs text-slate-500">{{ row.position.get_category_display }}</span>
+                        </th>
+                        {% for cell in row.cells %}
+                          <td class="px-4 py-4 align-top">
+                            {% if cell.assignment %}
+                              {% if cell.is_position_active %}
+                                <div class="relative flex h-full flex-col gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-lg ring-1 {% if cell.alert == 'critical' %}ring-red-200{% elif cell.alert == 'warn' %}ring-amber-200{% else %}ring-emerald-200{% endif %} {% if cell.is_overtime %}ring-offset-2 ring-offset-slate-100{% endif %}" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}" data-operator-name="{{ cell.assignment.operator.get_full_name|default:cell.assignment.operator.nombres|default:cell.assignment.operator.apellidos|escape }}">
+                                  {% if can_override and manual_operator_choices %}
+                                    <form method="post" class="flex flex-col gap-4">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="action" value="update-assignment" />
+                                      <input type="hidden" name="assignment_id" value="{{ cell.assignment.id }}" />
+                                      <input type="hidden" name="force_override" value="1" />
+                                      <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Colaborador asignado</p>
+                                          <label class="sr-only" for="assignment-operator-{{ cell.assignment.id }}">Selecciona un colaborador para este turno</label>
+                                          <select id="assignment-operator-{{ cell.assignment.id }}" name="operator_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:border-brand focus:ring-brand">
+                                            {% for option in manual_operator_choices %}
+                                              <option value="{{ option.id }}" {% if option.id == cell.assignment.operator_id %}selected{% endif %}>
+                                                {{ option.label }}
+                                              </option>
+                                            {% endfor %}
+                                          </select>
+                                          {% with role=cell.assignment.operator.roles.first %}
+                                            {% if role %}
+                                              <p class="mt-1 text-xs text-slate-500">{{ role.get_name_display }}</p>
+                                            {% endif %}
+                                          {% endwith %}
+                                        </div>
+                                        <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if cell.alert == 'critical' %}border border-red-200 bg-red-50 text-red-700{% elif cell.alert == 'warn' %}border border-amber-200 bg-amber-50 text-amber-700{% else %}border border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
+                                          <span class="h-2.5 w-2.5 rounded-full {% if cell.alert == 'critical' %}bg-red-500{% elif cell.alert == 'warn' %}bg-amber-400{% else %}bg-emerald-400{% endif %}"></span>
+                                          {% if cell.alert == 'critical' %}
+                                            Alerta crítica
+                                          {% elif cell.alert == 'warn' %}
+                                            Advertencia
+                                          {% else %}
+                                            Sin alerta
+                                          {% endif %}
+                                        </span>
+                                      </div>
+                                      <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <div class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                          {% include 'calendario/partials/assignment_alert_icons.html' with cell=cell %}
+                                          {% if not cell.alert and not cell.skill_gap_message and not cell.is_overtime %}
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Sin alertas registradas</span>
+                                          {% endif %}
+                                        </div>
+                                        <button type="submit" class="inline-flex items-center gap-2 rounded-full bg-brand px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white shadow transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">
+                                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                          </svg>
+                                          Guardar cambios
+                                        </button>
+                                      </div>
+                                    </form>
+                                  {% else %}
+                                    <div class="flex flex-col gap-3">
+                                      <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                          <p class="truncate text-sm font-semibold text-slate-900">{{ cell.assignment.operator.get_full_name }}</p>
+                                          {% with role=cell.assignment.operator.roles.first %}
+                                            {% if role %}
+                                              <p class="text-xs text-slate-500">{{ role.get_name_display }}</p>
+                                            {% endif %}
+                                          {% endwith %}
+                                        </div>
+                                        <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if cell.alert == 'critical' %}border border-red-200 bg-red-50 text-red-700{% elif cell.alert == 'warn' %}border border-amber-200 bg-amber-50 text-amber-700{% else %}border border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
+                                          <span class="h-2.5 w-2.5 rounded-full {% if cell.alert == 'critical' %}bg-red-500{% elif cell.alert == 'warn' %}bg-amber-400{% else %}bg-emerald-400{% endif %}"></span>
+                                          {% if cell.alert == 'critical' %}
+                                            Alerta crítica
+                                          {% elif cell.alert == 'warn' %}
+                                            Advertencia
+                                          {% else %}
+                                            Sin alerta
+                                          {% endif %}
+                                        </span>
+                                      </div>
+                                      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                                        <div class="flex flex-wrap items-center gap-1">
+                                          {% include 'calendario/partials/assignment_alert_icons.html' with cell=cell %}
+                                          {% if not cell.alert and not cell.skill_gap_message and not cell.is_overtime %}
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Sin alertas registradas</span>
+                                          {% endif %}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  {% endif %}
+                                </div>
+                              {% else %}
+                                <div class="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm">
+                                  <div class="flex items-center justify-between">
+                                    <span>—</span>
+                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Fuera de vigencia</span>
+                                  </div>
+                                </div>
+                              {% endif %}
+                            {% endif %}
+                          </td>
+                        {% endfor %}
+                          </tr>
+                        {% endwith %}
+                      {% endwith %}
+                    {% endfor %}
+                    {% if rest_rows %}
+                      {% for rest_row in rest_rows %}
+                        {% with rest_group=rest_row.display_group %}
+                          {% if forloop.first %}
+                            <tr class="bg-white text-xs font-semibold uppercase tracking-wide text-slate-500" data-group-header="true" data-group-key="{{ rest_group.key|default:'' }}" data-group-type="{{ rest_group.type|default:'' }}">
+                              <th class="sticky left-0 z-20 w-60 min-w-[15rem] bg-white px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Colaborador
+                              </th>
+                              {% for day in date_columns %}
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  <span class="block text-[11px] font-medium text-slate-400">{{ day|date:"d/M" }}</span>
+                                  <span class="block text-sm font-semibold text-slate-700">{{ day|date:"l"|capfirst }}</span>
+                                </th>
+                              {% endfor %}
+                            </tr>
+                          {% endif %}
+                          {% with rest_color=rest_group.color_class|default:'bg-slate-50' %}
+                        <tr class="{{ rest_color }}" data-group-key="{{ rest_group.key|default:'' }}" data-group-type="{{ rest_group.type|default:'' }}" data-group-label="{{ rest_group.label|default:'' }}">
+                          <th class="sticky left-0 z-20 {{ rest_color }} px-6 py-4 text-left align-top text-sm font-semibold text-slate-900 shadow-[1px_0_0_rgba(15,23,42,0.08)]">
+                            <span class="block text-xs uppercase tracking-wide text-slate-400">{{ rest_row.label }}</span>
+                            <p class="text-base font-semibold text-slate-900">{{ rest_row.slot }}</p>
+                            <span class="block text-xs text-slate-500">Descansos programados</span>
+                          </th>
+                          {% for cell in rest_row.cells %}
+                            <td class="px-4 py-4 align-top">
+                              {% if cell.operator_id %}
+                                <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}">
+                                  <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                      <p class="text-sm font-semibold text-slate-900">{{ cell.name }}</p>
+                                      {% if cell.role %}
+                                        <span class="block text-xs text-slate-500">{{ cell.role }}</span>
+                                      {% endif %}
+                                    </div>
+                                    {% if cell.reason %}
+                                      <span class="group relative inline-flex h-7 w-7 shrink-0 items-center justify-center">
+                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400" role="img" aria-label="Motivo de descanso" tabindex="0">
+                                          <svg aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-11.25a.75.75 0 101.5 0 .75.75 0 00-1.5 0zm.75 2.25a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5a.75.75 0 01.75-.75z" clip-rule="evenodd" />
+                                          </svg>
+                                        </span>
+                                        <span class="pointer-events-none absolute left-1/2 top-9 z-10 -translate-x-1/2 max-w-[16rem] whitespace-normal rounded bg-slate-900 px-3 py-2 text-[11px] font-medium text-white opacity-0 shadow-lg group-hover:opacity-100 group-focus-within:opacity-100">{{ cell.reason }}</span>
+                                      </span>
+                                    {% endif %}
+                                  </div>
+                                </div>
+                              {% else %}
+                                <div class="rounded-xl border-2 border-dashed border-slate-200 bg-white p-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-300">—</div>
+                              {% endif %}
+                            </td>
+                          {% endfor %}
+                        </tr>
+                          {% endwith %}
+                        {% endwith %}
+                      {% endfor %}
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          var highlightClasses = ['outline', 'outline-2', 'outline-offset-2', 'outline-indigo-500', 'bg-indigo-50', 'shadow-lg'];
+          var cards = Array.prototype.slice.call(document.querySelectorAll('[data-operator-id]'));
+          var groupMapEl = document.getElementById('position-group-map');
+          var positionGroupEl = document.getElementById('position-to-group-map');
+          var groupMap = {};
+          var positionToGroup = {};
+          if (groupMapEl) {
+            try {
+              groupMap = JSON.parse(groupMapEl.textContent || '{}');
+            } catch (error) {
+              groupMap = {};
+            }
+          }
+          if (positionGroupEl) {
+            try {
+              positionToGroup = JSON.parse(positionGroupEl.textContent || '{}');
+            } catch (error) {
+              positionToGroup = {};
+            }
+          }
+          var restSummaryDataEl = document.getElementById('rest-summary-data');
+          var restSummary = {};
+          if (restSummaryDataEl) {
+            try {
+              restSummary = JSON.parse(restSummaryDataEl.textContent);
+            } catch (error) {
+              restSummary = {};
+            }
+          }
+          function applyGroupHighlighting() {
+            if (!groupMap || Object.keys(groupMap).length === 0) {
+              return;
+            }
+            var rows = Array.prototype.slice.call(document.querySelectorAll('tbody tr'));
+            rows.forEach(function (row) {
+              var groupKey = row.getAttribute('data-group-key');
+              if (!groupKey) {
+                var positionId = row.getAttribute('data-position-id');
+                if (positionId && positionToGroup && positionToGroup[positionId]) {
+                  groupKey = positionToGroup[positionId];
+                  row.setAttribute('data-group-key', groupKey);
+                }
+              }
+              if (!groupKey) {
+                return;
+              }
+              var meta = groupMap[groupKey];
+              if (!meta) {
+                return;
+              }
+              var colorClass = meta.color_class || '';
+              if (colorClass) {
+                row.classList.add(colorClass);
+                var headerCell = row.querySelector('th.sticky');
+                if (headerCell && !headerCell.classList.contains(colorClass)) {
+                  headerCell.classList.add(colorClass);
+                }
+              }
+              if (!row.getAttribute('data-group-label') && meta.label) {
+                row.setAttribute('data-group-label', meta.label);
+              }
+              if (!row.getAttribute('data-group-type') && meta.type) {
+                row.setAttribute('data-group-type', meta.type);
+              }
+            });
           }
 
-          var summary = restSummary[operatorId];
-          if (!summary) {
-            restOperatorTitle.textContent = 'Sin información de descansos para este colaborador.';
+          applyGroupHighlighting();
+          var restPanel = document.querySelector('[data-rest-panel]');
+          var restOperatorTitle = restPanel ? restPanel.querySelector('[data-rest-operator-title]') : null;
+          var restEmployment = restPanel ? restPanel.querySelector('[data-rest-employment]') : null;
+          var restCurrent = restPanel ? restPanel.querySelector('[data-rest-current]') : null;
+          var restRecent = restPanel ? restPanel.querySelector('[data-rest-recent]') : null;
+          var restUpcoming = restPanel ? restPanel.querySelector('[data-rest-upcoming]') : null;
+          var restClear = restPanel ? restPanel.querySelector('[data-rest-clear]') : null;
+
+          function formatDate(isoString) {
+            if (!isoString) {
+              return '';
+            }
+            var parts = isoString.split('-');
+            if (parts.length !== 3) {
+              return isoString;
+            }
+            return parts[2] + '/' + parts[1] + '/' + parts[0];
+          }
+
+          function describePeriod(period) {
+            if (!period) {
+              return null;
+            }
+            var startLabel = formatDate(period.start);
+            var endLabel = formatDate(period.end);
+            var rangeLabel = startLabel === endLabel || !endLabel ? startLabel : startLabel + ' → ' + endLabel;
+            var qualifiers = [];
+            if (period.status_label) {
+              qualifiers.push(period.status_label);
+            }
+            if (period.source_label) {
+              qualifiers.push(period.source_label);
+            }
+            if (qualifiers.length) {
+              rangeLabel += ' · ' + qualifiers.join(' · ');
+            }
+            return rangeLabel;
+          }
+
+          function clearRestPanel() {
+            if (!restPanel) {
+              return;
+            }
+            if (restOperatorTitle) {
+              restOperatorTitle.textContent = 'Selecciona un colaborador para ver sus descansos.';
+            }
             if (restEmployment) {
               restEmployment.textContent = '';
             }
-            restCurrent.textContent = 'Sin datos';
-            restRecent.textContent = 'Sin datos';
-            restUpcoming.textContent = 'Sin datos';
-            return;
-          }
-
-          var operatorName = sourceCard ? (sourceCard.dataset.operatorName || '') : '';
-          if (!operatorName && summary.name) {
-            operatorName = summary.name;
-          }
-          if (!operatorName) {
-            operatorName = 'Colaborador seleccionado';
-          }
-          restOperatorTitle.textContent = operatorName;
-
-          if (restEmployment) {
-            if (summary.employment_start && summary.employment_end) {
-              restEmployment.textContent =
-                'Vinculación: ' +
-                formatDate(summary.employment_start) +
-                ' → ' +
-                formatDate(summary.employment_end);
-            } else if (summary.employment_start) {
-              restEmployment.textContent = 'Ingreso: ' + formatDate(summary.employment_start);
-            } else if (summary.employment_end) {
-              restEmployment.textContent = 'Retiro: ' + formatDate(summary.employment_end);
-            } else {
-              restEmployment.textContent = 'Ingreso no registrado';
+            if (restCurrent) {
+              restCurrent.textContent = 'Sin descanso vigente';
+            }
+            if (restRecent) {
+              restRecent.textContent = 'Sin registro';
+            }
+            if (restUpcoming) {
+              restUpcoming.textContent = 'Sin programación futura';
             }
           }
 
-          var currentLabel = describePeriod(summary.current);
-          restCurrent.textContent = currentLabel || 'Sin descanso vigente';
-          var recentLabel = describePeriod(summary.recent);
-          restRecent.textContent = recentLabel || 'Sin registro';
-          var upcomingLabel = describePeriod(summary.upcoming);
-          restUpcoming.textContent = upcomingLabel || 'Sin programación futura';
-
-          restPanel.classList.remove('hidden');
-        }
-
-        var highlightedOperator = null;
-
-        function setHighlight(operatorId, sourceCard) {
-          highlightedOperator = operatorId;
-          var referenceCard = null;
-          cards.forEach(function (card) {
-            var matches = card.dataset.operatorId === operatorId;
-            if (matches && !referenceCard) {
-              referenceCard = card;
-            }
-            highlightClasses.forEach(function (className) {
-              card.classList.toggle(className, matches);
-            });
-          });
-          updateRestPanel(operatorId, referenceCard || sourceCard || null);
-        }
-
-        function clearHighlight() {
-          cards.forEach(function (card) {
-            highlightClasses.forEach(function (className) {
-              card.classList.remove(className);
-            });
-          });
-          highlightedOperator = null;
-          clearRestPanel();
-        }
-
-        function clearHighlightIfUnlocked(operatorId) {
-          if (!operatorId || highlightedOperator === operatorId) {
-            clearHighlight();
-          }
-        }
-
-        if (restClear) {
-          restClear.addEventListener('click', function () {
-            clearHighlight();
-            clearRestPanel();
-          });
-        }
-
-        clearRestPanel();
-
-        cards.forEach(function (card) {
-          var operatorId = card.dataset.operatorId;
-          if (!operatorId) {
-            return;
-          }
-
-          card.addEventListener('click', function (event) {
-            if (event.detail > 1) {
+          function updateRestPanel(operatorId, sourceCard) {
+            if (!restPanel || !restOperatorTitle || !restCurrent || !restRecent || !restUpcoming) {
               return;
             }
-            if (highlightedOperator === operatorId) {
+
+            var summary = restSummary[operatorId];
+            if (!summary) {
+              restOperatorTitle.textContent = 'Sin información de descansos para este colaborador.';
+              if (restEmployment) {
+                restEmployment.textContent = '';
+              }
+              restCurrent.textContent = 'Sin datos';
+              restRecent.textContent = 'Sin datos';
+              restUpcoming.textContent = 'Sin datos';
+              return;
+            }
+
+            var operatorName = sourceCard ? (sourceCard.dataset.operatorName || '') : '';
+            if (!operatorName && summary.name) {
+              operatorName = summary.name;
+            }
+            if (!operatorName) {
+              operatorName = 'Colaborador seleccionado';
+            }
+            restOperatorTitle.textContent = operatorName;
+
+            if (restEmployment) {
+              if (summary.employment_start && summary.employment_end) {
+                restEmployment.textContent = summary.employment_start + ' → ' + summary.employment_end;
+              } else if (summary.employment_start) {
+                restEmployment.textContent = 'Ingreso: ' + summary.employment_start;
+              } else {
+                restEmployment.textContent = '';
+              }
+            }
+
+            var currentLabel = describePeriod(summary.current);
+            restCurrent.textContent = currentLabel || 'Sin descanso vigente';
+
+            var recentLabel = describePeriod(summary.recent);
+            restRecent.textContent = recentLabel || 'Sin registro';
+
+            var upcomingLabel = describePeriod(summary.upcoming);
+            restUpcoming.textContent = upcomingLabel || 'Sin programación futura';
+          }
+
+          var highlightedOperator = null;
+          var highlightedCards = [];
+
+          function clearHighlight() {
+            highlightedCards.forEach(function (card) {
+              highlightClasses.forEach(function (cls) {
+                card.classList.remove(cls);
+              });
+            });
+            highlightedCards = [];
+            highlightedOperator = null;
+          }
+
+          function setHighlight(operatorId, sourceCard) {
+            clearHighlight();
+            highlightedOperator = operatorId;
+            highlightedCards = cards.filter(function (card) {
+              return card.dataset.operatorId === operatorId;
+            });
+            highlightedCards.forEach(function (card) {
+              highlightClasses.forEach(function (cls) {
+                card.classList.add(cls);
+              });
+            });
+            updateRestPanel(operatorId, sourceCard);
+          }
+
+          function clearHighlightIfUnlocked(operatorId) {
+            if (operatorId !== highlightedOperator) {
+              return;
+            }
+            setTimeout(function () {
+              if (document.activeElement && document.activeElement.closest('[data-operator-id="' + operatorId + '"]')) {
+                return;
+              }
               clearHighlight();
               clearRestPanel();
-            } else {
+            }, 100);
+          }
+
+          if (restClear) {
+            restClear.addEventListener('click', function () {
+              clearHighlight();
+              clearRestPanel();
+            });
+          }
+
+          clearRestPanel();
+
+          cards.forEach(function (card) {
+            var operatorId = card.dataset.operatorId;
+            if (!operatorId) {
+              return;
+            }
+
+            card.addEventListener('click', function (event) {
+              if (event.detail > 1) {
+                return;
+              }
+              if (highlightedOperator === operatorId) {
+                clearHighlight();
+                clearRestPanel();
+              } else {
+                setHighlight(operatorId, card);
+              }
+            });
+
+            card.addEventListener('focusin', function () {
               setHighlight(operatorId, card);
-            }
-          });
+            });
 
-          card.addEventListener('focusin', function () {
-            setHighlight(operatorId, card);
-          });
-
-          card.addEventListener('focusout', function (event) {
-            if (highlightedOperator === operatorId && !card.contains(event.relatedTarget)) {
-              clearHighlightIfUnlocked(operatorId);
-            }
+            card.addEventListener('focusout', function (event) {
+              if (highlightedOperator === operatorId && !card.contains(event.relatedTarget)) {
+                clearHighlightIfUnlocked(operatorId);
+              }
+            });
           });
         });
-      });
-    </script>
-  </div>
+      </script>
+    </div>
+  </section>
+
 </div>
 {% endblock %}

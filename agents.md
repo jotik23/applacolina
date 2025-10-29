@@ -24,3 +24,8 @@
 - Los comandos de Docker pueden requerir permisos elevados cuando se ejecutan desde entornos restringidos (p. ej., Codex CLI).
 - El proyecto usa un volumen que monta el directorio actual dentro del contenedor, por lo que los cambios locales se reflejan al instante en `web`.
 
+## Configuración visual del calendario
+- La grilla mantiene columnas por día y filas ordenadas con `PositionDefinition.display_order`; cada celda muestra la asignación (o vacío) y banderas de alerta.
+- La sección lateral usa los mismos datos para filtros por granja/galpón/categoría sin modificar rutas actuales.
+- El panel inferior de descansos lista filas con operadores y motivos; se debe seguir enviando estructura aunque no se calculen descansos automáticamente.
+- Las vistas existentes (`calendar_detail`, `calendar_generate`, `rest_periods`) deben conservar sus endpoints y formatos JSON para reutilizar los componentes del front. 

@@ -18,8 +18,6 @@
       data-positions-url="{% url 'calendario-api:calendar-positions' %}"
       data-position-detail-url-template="{% url 'calendario-api:calendar-position-detail' 0 %}"
       data-position-reorder-url="{% url 'calendario-api:calendar-position-reorder' %}"
-      data-capabilities-url="{% url 'calendario-api:calendar-capabilities' %}"
-      data-capability-detail-url-template="{% url 'calendario-api:calendar-capability-detail' 0 %}"
       data-operators-url="{% url 'calendario-api:calendar-operators' %}"
       data-operator-detail-url-template="{% url 'calendario-api:calendar-operator-detail' 0 %}"
       data-rest-periods-url="{% url 'calendario-api:calendar-rest-periods' %}"
@@ -69,7 +67,7 @@
                   <ul class="mt-2 list-disc pl-4">
                     <li>Verifica que el rango de fechas sea correcto.</li>
                     <li>Confirma que las posiciones activas y los colaboradores estén actualizados.</li>
-                    <li>Asegúrate de que los parámetros de descanso por categoría estén definidos en el panel administrativo.</li>
+                    <li>Asegúrate de registrar los días de descanso automático directamente en cada colaborador.</li>
                   </ul>
                 </div>
 
@@ -104,6 +102,7 @@
         <section data-step-index="1" class="rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
           <header class="flex flex-col gap-1">
             <h2 class="text-xl font-semibold text-slate-900">1. Posiciones vigentes</h2>
+            <p class="text-sm text-slate-600">El generador intentará asignar primero las posiciones que estén más arriba en esta lista. Si necesitas prioridades o turnos asegurados, ordénalas al inicio.</p>
           </header>
 
           <div class="mt-4 flex flex-col gap-4">
@@ -123,7 +122,6 @@
                 <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <tr>
                     <th class="px-3 py-2 text-left">Posición</th>
-                    <th class="px-3 py-2 text-left">Nivel de criticidad</th>
                     <th class="px-3 py-2 text-left">Vigencia</th>
                     <th class="px-3 py-2 text-left">Activo</th>
                     <th class="px-3 py-2 text-left">Acciones</th>
@@ -131,7 +129,7 @@
                 </thead>
                 <tbody id="positions-body" class="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">Cargando posiciones…</td>
+                    <td colspan="4" class="px-3 py-4 text-center text-sm text-slate-500">Cargando posiciones…</td>
                   </tr>
                 </tbody>
               </table>
@@ -157,6 +155,16 @@
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
+                  Vigente desde
+                  <input id="position-valid-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
+                  Vigente hasta
+                  <input id="position-valid-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
+                </label>
+
+                <label class="flex flex-col text-sm text-slate-700">
                   Granja
                   <select id="position-farm" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                 </label>
@@ -172,34 +180,9 @@
                   <span class="mt-1 text-xs text-slate-500">Usa Ctrl/⌘ + clic para seleccionar varios salones.</span>
                 </label>
 
-                <label class="flex flex-col text-sm text-slate-700">
-                  Nivel de criticidad
-                  <select id="position-complexity" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Vigente desde
-                  <input id="position-valid-from" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
-                  Vigente hasta
-                  <input id="position-valid-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-
-                <label class="flex items-center gap-2 text-sm text-slate-700">
-                  <input id="position-allow-lower" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
-                  Permitir cubrir con criticidad inferior
-                </label>
-
                 <label class="flex items-center gap-2 text-sm text-slate-700">
                   <input id="position-is-active" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" checked />
                   Posición activa
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700 md:col-span-2">
-                  Notas internas
-                  <textarea id="position-notes" rows="2" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
                 </label>
 
                 <div id="position-form-message" class="hidden md:col-span-2 rounded border px-3 py-2 text-sm"></div>
@@ -230,8 +213,8 @@
               </div>
               <div class="flex flex-wrap gap-2 text-xs">
                 <input id="operator-search" type="search" placeholder="Buscar por nombre" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand sm:w-64" />
-                <select id="operator-category-filter" class="rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
-                  <option value="">Todas las categorías</option>
+                <select id="operator-position-filter" class="rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
+                  <option value="">Todas las posiciones</option>
                 </select>
                 <label class="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-600">
                   <input type="checkbox" id="operator-include-inactive" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
@@ -245,15 +228,14 @@
                 <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <tr>
                     <th class="px-3 py-2 text-left">Colaborador</th>
-                    <th class="px-3 py-2 text-left">Fortalezas y sugerencias</th>
-                    <th class="px-3 py-2 text-left">Granja preferida</th>
+                    <th class="px-3 py-2 text-left">Posiciones sugeridas</th>
                     <th class="px-3 py-2 text-left">Estado</th>
                     <th class="px-3 py-2 text-left">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="operator-body" class="divide-y divide-slate-100 bg-white">
                   <tr>
-                    <td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">Cargando colaboradores…</td>
+                    <td colspan="4" class="px-3 py-4 text-center text-sm text-slate-500">Cargando colaboradores…</td>
                   </tr>
                 </tbody>
               </table>
@@ -284,11 +266,6 @@
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
-                  Correo electrónico (opcional)
-                  <input id="operator-email" type="email" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
                   Fecha de ingreso
                   <input id="operator-employment-start" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
                   <span class="mt-1 text-xs text-slate-500">Permite controlar descansos y rachas iniciales del colaborador.</span>
@@ -301,24 +278,22 @@
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
-                  Granja preferida
-                  <select id="operator-preferred-farm" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
-                    <option value="">(sin preferencia)</option>
-                  </select>
-                  <span class="mt-1 text-xs text-slate-500">Opcional. Se usa como sugerencia principal al asignar turnos.</span>
-                </label>
-
-                <label class="flex flex-col text-sm text-slate-700">
                   Roles
                   <select id="operator-roles" multiple class="mt-1 h-32 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                   <span class="mt-1 text-xs text-slate-500">Usa Ctrl/⌘ + clic para seleccionar varios roles.</span>
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
-                  Posiciones sugeridas (opcional)
+                  Posiciones sugeridas
                   <select id="operator-suggested-positions" multiple class="mt-1 h-32 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                   <span class="mt-1 text-xs text-slate-500">El generador intentará asignar primero estas posiciones cuando sea posible.</span>
                 </label>
+
+                <fieldset class="md:col-span-2 flex flex-col gap-2 text-sm text-slate-700">
+                  <legend class="font-medium text-slate-800">Descansos Automáticos</legend>
+                  <div id="operator-rest-days" class="flex flex-wrap gap-2"></div>
+                  <span class="text-xs text-slate-500">Selecciona los días de descanso asignados por defecto para el colaborador.</span>
+                </fieldset>
 
                 <label class="flex items-center gap-2 text-sm text-slate-700">
                   <input id="operator-is-active" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
@@ -326,22 +301,9 @@
                 </label>
 
                 <div class="md:col-span-2 space-y-3">
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h3 class="text-sm font-semibold text-slate-800">Fortalezas</h3>
-                      <p class="text-xs text-slate-500">Define el nivel de habilidad del colaborador para cada categoría (1 = en aprendizaje, 10 = experto).</p>
-                    </div>
-                    <button type="button" id="operator-capability-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Agregar fortaleza</button>
-                  </div>
-                  <div id="operator-capabilities-editor" class="space-y-3">
-                    <p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>
-                  </div>
-                </div>
-
-                <div class="md:col-span-2 space-y-3">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 class="text-sm font-semibold text-slate-800">Descansos</h3>
+                      <h3 class="text-sm font-semibold text-slate-800">Descansos Manuales</h3>
                       <p class="text-xs text-slate-500">Gestiona descansos manuales y generados automáticamente para coordinar asignaciones.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
@@ -349,8 +311,6 @@
                         <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="past">Pasados</button>
                         <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="current">Vigentes</button>
                         <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="future">Futuros</button>
-                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="last15">Últimos 15 días</button>
-                        <button type="button" class="rest-filter-btn rounded-full border border-slate-300 px-3 py-1 text-slate-600 hover:bg-slate-100" data-filter="next15">Próximos 15 días</button>
                       </div>
                       <button type="button" id="operator-rest-add-btn" class="rounded border border-amber-300 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100">Registrar descanso</button>
                     </div>

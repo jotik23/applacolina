@@ -32,14 +32,8 @@
     "pk": 1,
     "fields": {
       "code": "GALPONERO_PRODUCCION_DIA",
-      "name": "Galponero producción día",
       "shift_type": "day",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -50,14 +44,8 @@
     "pk": 2,
     "fields": {
       "code": "GALPONERO_LEVANTE_DIA",
-      "name": "Galponero levante día",
       "shift_type": "day",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -68,14 +56,8 @@
     "pk": 3,
     "fields": {
       "code": "GALPONERO_PRODUCCION_NOCHE",
-      "name": "Galponero producción noche",
       "shift_type": "night",
       "is_active": true,
-      "extra_day_limit": 2,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -86,14 +68,8 @@
     "pk": 4,
     "fields": {
       "code": "GALPONERO_LEVANTE_NOCHE",
-      "name": "Galponero levante noche",
       "shift_type": "night",
       "is_active": true,
-      "extra_day_limit": 2,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -104,14 +80,8 @@
     "pk": 5,
     "fields": {
       "code": "CLASIFICADOR_DIA",
-      "name": "Clasificador día",
       "shift_type": "day",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -122,14 +92,8 @@
     "pk": 6,
     "fields": {
       "code": "CLASIFICADOR_NOCHE",
-      "name": "Clasificador noche",
       "shift_type": "night",
       "is_active": true,
-      "extra_day_limit": 2,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -140,14 +104,8 @@
     "pk": 7,
     "fields": {
       "code": "LIDER_GRANJA",
-      "name": "Líder de granja",
       "shift_type": "mixed",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -158,14 +116,8 @@
     "pk": 8,
     "fields": {
       "code": "SUPERVISOR",
-      "name": "Supervisor",
       "shift_type": "day",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -176,14 +128,8 @@
     "pk": 9,
     "fields": {
       "code": "LIDER_TECNICO",
-      "name": "Líder técnico",
       "shift_type": "day",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -194,14 +140,8 @@
     "pk": 10,
     "fields": {
       "code": "OFICIOS_VARIOS",
-      "name": "Oficios varios",
       "shift_type": "day",
       "is_active": true,
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "overload_alert_level": "warn",
-      "rest_min_frequency": 6,
-      "rest_min_consecutive_days": 5,
       "rest_max_consecutive_days": 8,
       "rest_post_shift_days": 0,
       "rest_monthly_days": 5
@@ -241,7 +181,6 @@
       "nombres": "Alex",
       "apellidos": "Forero",
       "telefono": "3001111111",
-      "email": "alex.forero@example.com",
       "direccion": "Vereda La Colina",
       "contacto_nombre": "Laura Forero",
       "contacto_telefono": "3009998888",
@@ -264,7 +203,6 @@
       "nombres": "Cesar",
       "apellidos": "Ortiz",
       "telefono": "3002222222",
-      "email": "cesar.ortiz@example.com",
       "direccion": "Vereda La Colina",
       "contacto_nombre": "Angela Ortiz",
       "contacto_telefono": "3001112233",
@@ -287,7 +225,6 @@
       "nombres": "Leiner",
       "apellidos": "Garzón",
       "telefono": "3003333333",
-      "email": "leiner.garzon@example.com",
       "direccion": "Vereda La Colina",
       "contacto_nombre": "Diana Garzón",
       "contacto_telefono": "3004445555",
@@ -310,7 +247,6 @@
       "nombres": "Yina",
       "apellidos": "Torres",
       "telefono": "3004444444",
-      "email": "yina.torres@example.com",
       "direccion": "Pueblo Nuevo",
       "contacto_nombre": "Camila Torres",
       "contacto_telefono": "3007778888",
@@ -333,7 +269,6 @@
       "nombres": "Sonia",
       "apellidos": "Rojas",
       "telefono": "3005555555",
-      "email": "sonia.rojas@example.com",
       "direccion": "Centro Urbano",
       "contacto_nombre": "Jorge Rojas",
       "contacto_telefono": "3105556666",
@@ -355,12 +290,9 @@
       "farm": 1,
       "chicken_house": 1,
       "rooms": [],
-      "complexity": "intermediate",
-      "allow_lower_complexity": true,
       "valid_from": "2025-01-01",
       "valid_until": null,
-      "is_active": true,
-      "notes": "Cobertura principal día"
+      "is_active": true
     }
   },
   {
@@ -373,12 +305,9 @@
       "farm": 1,
       "chicken_house": 1,
       "rooms": [],
-      "complexity": "advanced",
-      "allow_lower_complexity": true,
       "valid_from": "2025-01-01",
       "valid_until": null,
-      "is_active": true,
-      "notes": "Cobertura nocturna"
+      "is_active": true
     }
   },
   {
@@ -391,12 +320,9 @@
       "farm": 1,
       "chicken_house": null,
       "rooms": [],
-      "complexity": "basic",
-      "allow_lower_complexity": false,
       "valid_from": "2025-01-01",
       "valid_until": null,
-      "is_active": true,
-      "notes": "Clasificación de huevo"
+      "is_active": true
     }
   },
   {
@@ -512,17 +438,6 @@
       "enforce_additional_rest": false,
       "active_from": "2025-01-01",
       "active_until": null
-    }
-  },
-  {
-    "model": "calendario.overloadallowance",
-    "pk": 1,
-    "fields": {
-      "category": 1,
-      "shift_type": "day",
-      "extra_day_limit": 3,
-      "overtime_points": 1,
-      "alert_level": "warn"
     }
   },
   {

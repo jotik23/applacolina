@@ -17,8 +17,6 @@
         positions: app.dataset.positionsUrl,
         positionDetailTemplate: app.dataset.positionDetailUrlTemplate,
         positionReorder: app.dataset.positionReorderUrl,
-        capabilities: app.dataset.capabilitiesUrl,
-        capabilityDetailTemplate: app.dataset.capabilityDetailUrlTemplate,
         operators: app.dataset.operatorsUrl,
         operatorDetailTemplate: app.dataset.operatorDetailUrlTemplate,
         restPeriods: app.dataset.restPeriodsUrl,
@@ -35,16 +33,13 @@
           includeInactiveOperators: false,
         },
         restFilters: {
-          past: false,
+          past: true,
           current: true,
           future: true,
-          last15: false,
-          next15: false,
         },
         editing: {
           positionId: null,
           operatorId: null,
-          operatorCapabilities: [],
           restOperatorId: null,
           restPeriodId: null,
         },
@@ -55,9 +50,6 @@
           farmsById: new Map(),
           rolesById: new Map(),
           categoriesById: new Map(),
-          categoryLabels: new Map(),
-          complexityLabels: new Map(),
-          skillLabels: new Map(),
           shiftLabels: new Map(),
           alertLabels: new Map(),
           dayLabels: new Map(),
@@ -135,18 +127,14 @@
         positionFarm: app.querySelector('#position-farm'),
         positionHouse: app.querySelector('#position-house'),
         positionRooms: app.querySelector('#position-rooms'),
-        positionComplexity: app.querySelector('#position-complexity'),
         positionValidFrom: app.querySelector('#position-valid-from'),
         positionValidUntil: app.querySelector('#position-valid-until'),
-        positionAllowLower: app.querySelector('#position-allow-lower'),
         positionIsActive: app.querySelector('#position-is-active'),
-        positionNotes: app.querySelector('#position-notes'),
         positionCancelBtn: app.querySelector('#position-cancel-btn'),
         operatorCount: app.querySelector('#operator-count'),
-        capabilityCount: app.querySelector('#capability-count'),
         operatorBody: app.querySelector('#operator-body'),
         operatorSearch: app.querySelector('#operator-search'),
-        operatorCategoryFilter: app.querySelector('#operator-category-filter'),
+        operatorPositionFilter: app.querySelector('#operator-position-filter'),
         operatorIncludeInactive: app.querySelector('#operator-include-inactive'),
         operatorAddBtn: app.querySelector('#operator-add-btn'),
         operatorRefreshBtn: app.querySelector('#operator-refresh-btn'),
@@ -158,16 +146,13 @@
         operatorFirstName: app.querySelector('#operator-first-name'),
         operatorLastName: app.querySelector('#operator-last-name'),
         operatorPhone: app.querySelector('#operator-phone'),
-        operatorEmail: app.querySelector('#operator-email'),
         operatorEmploymentStart: app.querySelector('#operator-employment-start'),
         operatorEmploymentEnd: app.querySelector('#operator-employment-end'),
-        operatorPreferredFarm: app.querySelector('#operator-preferred-farm'),
+        operatorRestDays: app.querySelector('#operator-rest-days'),
         operatorRoles: app.querySelector('#operator-roles'),
         operatorSuggestedPositions: app.querySelector('#operator-suggested-positions'),
         operatorIsActive: app.querySelector('#operator-is-active'),
         operatorCancelBtn: app.querySelector('#operator-cancel-btn'),
-        operatorCapabilityAddBtn: app.querySelector('#operator-capability-add-btn'),
-        operatorCapabilitiesEditor: app.querySelector('#operator-capabilities-editor'),
         operatorRestAddBtn: app.querySelector('#operator-rest-add-btn'),
         operatorRestFilters: app.querySelector('#operator-rest-filters'),
         operatorRestList: app.querySelector('#operator-rest-list'),
@@ -242,6 +227,51 @@
           .replace(/'/g, '&#39;');
       };
 
+      const getRestDayInputs = () => {
+        if (!refs.operatorRestDays) {
+          return [];
+        }
+        return Array.from(refs.operatorRestDays.querySelectorAll('input[type="checkbox"]'));
+      };
+
+      const getSelectedRestDays = () => {
+        return getRestDayInputs()
+          .filter((input) => input.checked)
+          .map((input) => Number.parseInt(input.value, 10))
+          .filter((value) => Number.isFinite(value));
+      };
+
+      const setSelectedRestDays = (values) => {
+        const selected = new Set((values || []).map((value) => String(value)));
+        getRestDayInputs().forEach((input) => {
+          input.checked = selected.has(input.value);
+        });
+      };
+
+      const renderRestDayOptions = () => {
+        if (!refs.operatorRestDays) {
+          return;
+        }
+        const choices = state.metadata?.choice_sets?.days_of_week || [];
+        if (!choices.length) {
+          refs.operatorRestDays.innerHTML =
+            '<p class="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">No hay días configurados. Revisa la configuración del calendario.</p>';
+          return;
+        }
+        const previousSelection = getSelectedRestDays();
+        refs.operatorRestDays.innerHTML = choices
+          .map((choice) => {
+            const value = escapeHtml(String(choice.value));
+            const label = escapeHtml(choice.label);
+            return `<label class="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 shadow-sm">
+              <input type="checkbox" value="${value}" class="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand" />
+              <span>${label}</span>
+            </label>`;
+          })
+          .join('');
+        setSelectedRestDays(previousSelection);
+      };
+
       const formatDateLabel = (isoDate) => {
         if (!isoDate) {
           return '';
@@ -257,194 +287,8 @@
         return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
       };
 
-      let capabilityRowCounter = 0;
-      const nextCapabilityRowId = () => {
-        capabilityRowCounter += 1;
-        return `cap-${capabilityRowCounter}`;
-      };
-
-      const allCapabilityChoices = () => state.metadata?.choice_sets?.position_categories || [];
-
-      const activeCapabilityEntries = () => state.editing.operatorCapabilities || [];
-
-      const updateAddCapabilityState = () => {
-        if (!refs.operatorCapabilityAddBtn) {
-          return;
-        }
-        const choices = allCapabilityChoices();
-        const usedCount = activeCapabilityEntries().length;
-        const disable = !choices.length || usedCount >= choices.length;
-        refs.operatorCapabilityAddBtn.disabled = disable;
-      };
-
-      const renderOperatorCapabilitiesEditor = () => {
-        if (!refs.operatorCapabilitiesEditor) {
-          return;
-        }
-
-        const choices = allCapabilityChoices();
-        const entries = activeCapabilityEntries();
-
-        if (!entries.length) {
-          refs.operatorCapabilitiesEditor.innerHTML =
-            '<p class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500">No hay fortalezas registradas.</p>';
-          updateAddCapabilityState();
-          return;
-        }
-
-        const usedCategories = new Set(entries.map((entry) => String(entry.category || '')).filter(Boolean));
-
-        refs.operatorCapabilitiesEditor.innerHTML = entries
-          .map((entry) => {
-            const options = choices
-              .map((choice) => {
-                const choiceValue = String(choice.value);
-                const entryValue = String(entry.category || '');
-                const selected = choiceValue === entryValue ? 'selected' : '';
-                const disabled = !selected && usedCategories.has(choiceValue) ? 'disabled' : '';
-                return `<option value="${escapeHtml(choice.value)}" ${selected} ${disabled}>${escapeHtml(choice.label)}</option>`;
-              })
-              .join('');
-
-            const skillScore = Number(entry.skill_score) || 1;
-            const skillLabel = state.lookups.skillLabels.get(String(skillScore)) || `${skillScore}/10`;
-
-            return `
-              <div class="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,1fr)_auto]" data-entry-id="${escapeHtml(entry.id)}">
-                <label class="flex flex-col text-sm text-slate-700">
-                  Categoría
-                  <select data-role="capability-category" data-entry-id="${escapeHtml(entry.id)}" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand">
-                    <option value="">Selecciona categoría</option>
-                    ${options}
-                  </select>
-                </label>
-
-                <div class="flex flex-col gap-2">
-                  <label class="flex flex-col text-sm text-slate-700">
-                    Nivel de habilidad
-                    <input type="range" min="1" max="10" value="${skillScore}" data-role="capability-skill" data-entry-id="${escapeHtml(entry.id)}" class="mt-1 w-full accent-emerald-600" />
-                  </label>
-                  <span class="text-xs font-semibold text-emerald-700" data-role="capability-skill-label" data-entry-id="${escapeHtml(entry.id)}">${escapeHtml(skillLabel)}</span>
-                </div>
-
-                <button type="button" class="mt-2 inline-flex items-center rounded border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 md:mt-6" data-action="remove-capability" data-entry-id="${escapeHtml(entry.id)}">Quitar</button>
-              </div>
-            `;
-          })
-          .join('');
-
-        refs.operatorCapabilitiesEditor
-          .querySelectorAll('[data-role="capability-category"]')
-          .forEach((select) => {
-            select.addEventListener('change', (event) => {
-              const { entryId } = event.target.dataset;
-              updateOperatorCapabilityCategory(entryId, event.target.value);
-            });
-          });
-
-        refs.operatorCapabilitiesEditor
-          .querySelectorAll('[data-role="capability-skill"]')
-          .forEach((input) => {
-            input.addEventListener('input', (event) => {
-              const { entryId } = event.target.dataset;
-              updateOperatorCapabilitySkill(entryId, Number(event.target.value));
-            });
-          });
-
-        refs.operatorCapabilitiesEditor
-          .querySelectorAll('[data-action="remove-capability"]')
-          .forEach((button) => {
-            button.addEventListener('click', (event) => {
-              const { entryId } = event.target.dataset;
-              removeOperatorCapabilityRow(entryId);
-            });
-          });
-
-        updateAddCapabilityState();
-      };
-
-      const setOperatorCapabilitiesDraft = (entries) => {
-        state.editing.operatorCapabilities = entries.map((entry) => ({
-          id: nextCapabilityRowId(),
-          category: String(entry.category_id ?? entry.category?.id ?? ''),
-          skill_score: Number(entry.skill_score) || 5,
-        }));
-        renderOperatorCapabilitiesEditor();
-      };
-
-      const resetOperatorCapabilitiesDraft = () => {
-        state.editing.operatorCapabilities = [];
-        renderOperatorCapabilitiesEditor();
-      };
-
-      const addOperatorCapabilityRow = () => {
-        const choices = allCapabilityChoices();
-        if (!choices.length) {
-          return;
-        }
-
-        const used = new Set(activeCapabilityEntries().map((entry) => String(entry.category || '')).filter(Boolean));
-        const nextChoice = choices.find((choice) => !used.has(choice.value));
-        if (!nextChoice) {
-          return;
-        }
-
-        state.editing.operatorCapabilities = [
-          ...activeCapabilityEntries(),
-          {
-            id: nextCapabilityRowId(),
-            category: nextChoice.value,
-            skill_score: 5,
-          },
-        ];
-        renderOperatorCapabilitiesEditor();
-      };
-
-      const updateOperatorCapabilityCategory = (entryId, value) => {
-        if (!entryId) {
-          return;
-        }
-        state.editing.operatorCapabilities = activeCapabilityEntries().map((entry) =>
-          entry.id === entryId
-            ? {
-                ...entry,
-                category: value || '',
-              }
-            : entry,
-        );
-        renderOperatorCapabilitiesEditor();
-      };
-
-      const updateOperatorCapabilitySkill = (entryId, value) => {
-        if (!entryId) {
-          return;
-        }
-        const entries = activeCapabilityEntries();
-        const entry = entries.find((item) => item.id === entryId);
-        if (!entry) {
-          return;
-        }
-        entry.skill_score = value;
-        const label = state.lookups.skillLabels.get(String(value)) || `${value}/10`;
-        const labelNode = refs.operatorCapabilitiesEditor?.querySelector(
-          `[data-role="capability-skill-label"][data-entry-id="${entryId}"]`,
-        );
-        if (labelNode) {
-          labelNode.textContent = label;
-        }
-      };
-
-      const removeOperatorCapabilityRow = (entryId) => {
-        if (!entryId) {
-          return;
-        }
-        state.editing.operatorCapabilities = activeCapabilityEntries().filter((entry) => entry.id !== entryId);
-        renderOperatorCapabilitiesEditor();
-      };
-
       const restFilterActiveClasses = ['border-amber-400', 'bg-amber-50', 'text-amber-700', 'hover:bg-amber-100'];
       const restFilterInactiveClasses = ['border-slate-300', 'text-slate-600', 'hover:bg-slate-100'];
-      const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
       const syncRestFiltersUI = () => {
         if (!refs.operatorRestFilters) {
@@ -492,21 +336,15 @@
             isPast: false,
             isCurrent: false,
             isFuture: false,
-            pastWithin15: false,
-            futureWithin15: false,
           };
         }
         const isPast = endDate < today;
         const isFuture = startDate > today;
         const isCurrent = !isPast && !isFuture;
-        const pastWithin15 = isPast && Math.floor((today.getTime() - endDate.getTime()) / MS_PER_DAY) <= 15;
-        const futureWithin15 = isFuture && Math.floor((startDate.getTime() - today.getTime()) / MS_PER_DAY) <= 15;
         return {
           isPast,
           isCurrent,
           isFuture,
-          pastWithin15,
-          futureWithin15,
         };
       };
 
@@ -519,12 +357,6 @@
           (filters.current && classification.isCurrent) ||
           (filters.future && classification.isFuture);
         if (typeFiltersActive && !typeMatch) {
-          return false;
-        }
-        if (filters.last15 && !classification.pastWithin15) {
-          return false;
-        }
-        if (filters.next15 && !classification.futureWithin15) {
           return false;
         }
         return true;
@@ -1154,11 +986,8 @@
           farmsById,
           rolesById,
           categoriesById,
-           positionsById,
-           positionLabels,
-          categoryLabels: choiceMap(state.metadata.choice_sets.position_categories),
-          complexityLabels: choiceMap(state.metadata.choice_sets.complexity_levels),
-          skillLabels: choiceMap(state.metadata.choice_sets.skill_levels),
+          positionsById,
+          positionLabels,
           shiftLabels: choiceMap(state.metadata.choice_sets.shift_types),
           alertLabels: choiceMap(state.metadata.choice_sets.alert_levels),
           dayLabels: choiceMap(state.metadata.choice_sets.days_of_week),
@@ -1211,11 +1040,6 @@
         updateRoomOptions(effectiveHouse, { selectedRooms, keepValue: false });
       };
 
-      const findCategory = (categoryId) => {
-        const target = String(categoryId || '');
-        return state.lookups.categoriesById.get(target) || null;
-      };
-
       const populateStaticOptions = () => {
         if (!state.metadata || state.orderLocked) {
           return;
@@ -1223,15 +1047,8 @@
 
         populateSelect(refs.positionCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
         populateSelect(refs.positionFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
-        populateSelect(refs.positionComplexity, state.metadata.choice_sets.complexity_levels, { blankLabel: 'Selecciona nivel de criticidad' });
 
         populateSelect(refs.operatorRoles, state.metadata.roles, { valueKey: 'id', labelKey: 'label', includeBlank: false, keepValue: false });
-        populateSelect(refs.operatorPreferredFarm, state.metadata.farms, {
-          valueKey: 'id',
-          labelKey: 'name',
-          blankLabel: '(sin preferencia)',
-          keepValue: true,
-        });
         if (refs.operatorSuggestedPositions) {
           const suggestedOptions = (state.metadata.positions || []).map((position) => ({
             value: String(position.id),
@@ -1262,12 +1079,9 @@
         farm: refs.positionFarm?.value || '',
         chicken_house: refs.positionHouse?.value || '',
         rooms: Array.from(refs.positionRooms?.selectedOptions || []).map((option) => option.value),
-        complexity: refs.positionComplexity?.value || '',
-        allow_lower_complexity: Boolean(refs.positionAllowLower?.checked),
         valid_from: refs.positionValidFrom?.value || '',
         valid_until: refs.positionValidUntil?.value || '',
         is_active: Boolean(refs.positionIsActive?.checked),
-        notes: refs.positionNotes?.value.trim() || '',
       });
 
       const openPositionForm = (position = null) => {
@@ -1277,7 +1091,6 @@
         if (!position) {
           refs.positionId.value = '';
           refs.positionIsActive.checked = true;
-          refs.positionAllowLower.checked = false;
           if (refs.positionCodeDisplay) {
             refs.positionCodeDisplay.classList.add('hidden');
           }
@@ -1301,12 +1114,9 @@
             refs.positionCodeValue.textContent = position.code || '—';
           }
           refs.positionCategory.value = position.category_id || '';
-          refs.positionComplexity.value = position.complexity || '';
           refs.positionValidFrom.value = position.valid_from || '';
           refs.positionValidUntil.value = position.valid_until || '';
-          refs.positionAllowLower.checked = Boolean(position.allow_lower_complexity);
           refs.positionIsActive.checked = Boolean(position.is_active);
-          refs.positionNotes.value = position.notes || '';
           const farmId = position.farm?.id ? String(position.farm.id) : '';
           const houseId = position.chicken_house?.id ? String(position.chicken_house.id) : '';
           const roomIds = Array.isArray(position.rooms)
@@ -1331,7 +1141,6 @@
       };
 
       const getOperatorPayload = () => {
-        const preferredFarmValue = refs.operatorPreferredFarm?.value || '';
         const employmentStartValue = refs.operatorEmploymentStart?.value || '';
         const employmentEndValue = refs.operatorEmploymentEnd?.value || '';
         return {
@@ -1339,21 +1148,14 @@
           telefono: refs.operatorPhone?.value.trim() || '',
           nombres: refs.operatorFirstName?.value.trim() || '',
           apellidos: refs.operatorLastName?.value.trim() || '',
-          email: refs.operatorEmail?.value.trim() || '',
           employment_start_date: employmentStartValue,
           employment_end_date: employmentEndValue,
-          preferred_farm: preferredFarmValue ? Number(preferredFarmValue) : null,
+          automatic_rest_days: getSelectedRestDays(),
           roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
           is_active: Boolean(refs.operatorIsActive?.checked),
           suggested_positions: Array.from(refs.operatorSuggestedPositions?.selectedOptions || [])
             .map((option) => Number(option.value))
             .filter((value) => Number.isFinite(value)),
-          capabilities: activeCapabilityEntries()
-            .filter((entry) => entry.category)
-            .map((entry) => ({
-              category: String(entry.category),
-              skill_score: Number(entry.skill_score) || 1,
-            })),
         };
       };
 
@@ -1377,17 +1179,11 @@
           if (refs.operatorLastName) {
             refs.operatorLastName.value = '';
           }
-          if (refs.operatorEmail) {
-            refs.operatorEmail.value = '';
-          }
           if (refs.operatorEmploymentStart) {
             refs.operatorEmploymentStart.value = '';
           }
           if (refs.operatorEmploymentEnd) {
             refs.operatorEmploymentEnd.value = '';
-          }
-          if (refs.operatorPreferredFarm) {
-            refs.operatorPreferredFarm.value = '';
           }
           if (refs.operatorRoles) {
             Array.from(refs.operatorRoles.options).forEach((option) => {
@@ -1402,7 +1198,7 @@
           if (refs.operatorIsActive) {
             refs.operatorIsActive.checked = true;
           }
-          resetOperatorCapabilitiesDraft();
+          setSelectedRestDays([]);
           setOperatorRestContext(null);
         } else {
           if (refs.operatorId) {
@@ -1420,19 +1216,11 @@
           if (refs.operatorLastName) {
             refs.operatorLastName.value = operator.apellidos || '';
           }
-          if (refs.operatorEmail) {
-            refs.operatorEmail.value = operator.email || '';
-          }
           if (refs.operatorEmploymentStart) {
             refs.operatorEmploymentStart.value = operator.employment_start || '';
           }
           if (refs.operatorEmploymentEnd) {
             refs.operatorEmploymentEnd.value = operator.employment_end || '';
-          }
-          if (refs.operatorPreferredFarm) {
-            refs.operatorPreferredFarm.value = operator.preferred_farm?.id
-              ? String(operator.preferred_farm.id)
-              : '';
           }
           if (refs.operatorRoles) {
             const operatorRoles = new Set((operator.roles || []).map((role) => String(role.id)));
@@ -1451,13 +1239,9 @@
           if (refs.operatorIsActive) {
             refs.operatorIsActive.checked = Boolean(operator.is_active);
           }
-          const operatorCapabilities = (state.metadata?.capabilities || []).filter(
-            (capability) => capability.operator_id === operator.id,
-          );
-          setOperatorCapabilitiesDraft(operatorCapabilities);
+          setSelectedRestDays(operator.automatic_rest_days || []);
           setOperatorRestContext(operator.id);
         }
-        updateAddCapabilityState();
         focusWrapper(refs.operatorFormWrapper, refs.operatorDocument);
       };
 
@@ -1470,7 +1254,7 @@
             option.selected = false;
           });
         }
-        resetOperatorCapabilitiesDraft();
+        setSelectedRestDays([]);
         setOperatorRestContext(null);
       };
 
@@ -1680,7 +1464,7 @@
           const emptyMessage = includeInactive
             ? 'No hay posiciones registradas en este momento.'
             : 'No hay posiciones activas en este momento.';
-          refs.positionsBody.innerHTML = `<tr><td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">${emptyMessage}</td></tr>`;
+          refs.positionsBody.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center text-sm text-slate-500">${emptyMessage}</td></tr>`;
           return;
         }
 
@@ -1699,8 +1483,6 @@
           .map((position, index) => {
             const orderValue = getOrderValue(position);
             const orderLabel = orderValue > 0 ? orderValue : index + 1;
-            const complexityLabel =
-              state.lookups.complexityLabels.get(position.complexity) || position.complexity;
             const validity = position.valid_until
               ? `${escapeHtml(position.valid_from)} → ${escapeHtml(position.valid_until)}`
               : `${escapeHtml(position.valid_from)} → vigencia abierta`;
@@ -1748,7 +1530,6 @@
                     </div>
                   </div>
                 </td>
-                <td class="px-3 py-3 align-top text-sm text-slate-600">${escapeHtml(complexityLabel)}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${validity}</td>
                 <td class="px-3 py-3 align-top">
                   <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -1799,16 +1580,12 @@
         }
 
         const searchTerm = (refs.operatorSearch?.value || '').toLowerCase();
-        const categoryFilter = refs.operatorCategoryFilter?.value || '';
+        const positionFilter = refs.operatorPositionFilter?.value || '';
         const includeInactiveOperators = state.filters.includeInactiveOperators;
 
-        const { operators = [], capabilities = [] } = state.metadata;
-        const capabilitiesByOperator = capabilities.reduce((acc, capability) => {
-          const list = acc.get(capability.operator_id) || [];
-          list.push(capability);
-          acc.set(capability.operator_id, list);
-          return acc;
-        }, new Map());
+        const operators = Array.isArray(state.metadata.operators)
+          ? [...state.metadata.operators]
+          : [];
 
         const filtered = operators.filter((operator) => {
           if (!includeInactiveOperators && !operator.is_active) {
@@ -1821,41 +1598,26 @@
             return false;
           }
 
-          if (!categoryFilter) {
+          if (!positionFilter) {
             return true;
           }
 
-          const operatorCapabilities = capabilitiesByOperator.get(operator.id) || [];
-          return operatorCapabilities.some((item) => String(item.category_id ?? item.category?.id ?? '') === categoryFilter);
+          const suggestions = operator.suggested_positions || [];
+          return suggestions.some((item) => String(item.id ?? item) === positionFilter);
         });
 
         if (refs.operatorCount) {
           refs.operatorCount.textContent = `${filtered.length} colaboradores`;
         }
-        if (refs.capabilityCount) {
-          refs.capabilityCount.textContent = `${capabilities.length} fortalezas activas`;
-        }
 
         if (!filtered.length) {
           refs.operatorBody.innerHTML =
-            '<tr><td colspan="5" class="px-3 py-4 text-center text-sm text-slate-500">No encontramos colaboradores con ese criterio.</td></tr>';
+            '<tr><td colspan="4" class="px-3 py-4 text-center text-sm text-slate-500">No encontramos colaboradores con ese criterio.</td></tr>';
           return;
         }
 
         refs.operatorBody.innerHTML = filtered
           .map((operator) => {
-            const operatorCapabilities = capabilitiesByOperator.get(operator.id) || [];
-            const positionsList = operatorCapabilities.map((capability) => {
-              const categoryValue = String(capability.category_id ?? capability.category?.id ?? '');
-              const categoryLabel = state.lookups.categoryLabels.get(categoryValue) || capability.category?.name || categoryValue;
-              const skillLabel = state.lookups.skillLabels.get(String(capability.skill_score)) || `${capability.skill_score}/10`;
-              return `${escapeHtml(categoryLabel)} (${escapeHtml(skillLabel)})`;
-            });
-            const capabilitySummary = positionsList.length
-              ? positionsList.join(', ')
-              : escapeHtml('Sin fortalezas activas');
-            const capabilityLine = `<p>${capabilitySummary}</p>`;
-
             const suggestionLabels = (operator.suggested_positions || []).map((item) => {
               const positionId = item?.id ?? item;
               const detailed =
@@ -1863,17 +1625,18 @@
                 item;
               const label =
                 state.lookups.positionLabels.get(String(positionId)) ||
-                formatPositionLabel(detailed);
+                formatPositionLabel(detailed) ||
+                `Posición ${positionId}`;
               return escapeHtml(label);
             });
             const suggestionsLine = suggestionLabels.length
-              ? `<p class="mt-1 text-xs text-slate-500">Preferencias: ${suggestionLabels.join(', ')}</p>`
-              : '';
+              ? `<p class="text-xs text-slate-500">Posiciones sugeridas: ${suggestionLabels.join(', ')}</p>`
+              : '<p class="text-xs text-slate-500">Sin posiciones sugeridas</p>';
 
-            const preferredFarm = operator.preferred_farm
-              ? state.lookups.farmsById.get(operator.preferred_farm.id) || operator.preferred_farm
-              : null;
-            const preferredFarmLabel = preferredFarm ? escapeHtml(preferredFarm.name) : 'Sin preferencia';
+            const restDayLabels = (operator.automatic_rest_days || []).map((value) => {
+              const label = state.lookups.dayLabels.get(String(value));
+              return escapeHtml(label || value);
+            });
 
             const roles = (operator.roles || []).map((role) => escapeHtml(role.label)).join(', ');
             const rolesLine = roles
@@ -1913,28 +1676,15 @@
             const contactLine = operator.telefono
               ? `${escapeHtml(operator.document)} · ${escapeHtml(operator.telefono)}`
               : escapeHtml(operator.document);
-            const emailLine = operator.email
-              ? `<p class="text-xs text-slate-500">${escapeHtml(operator.email)}</p>`
-              : '';
-        const employmentLine = operator.employment_start
-          ? `<p class="text-xs text-slate-500">Vinculación: ${escapeHtml(formatDateLabel(operator.employment_start))}${
-              operator.employment_end ? ' → ' + escapeHtml(formatDateLabel(operator.employment_end)) : ''
-            }</p>`
-          : operator.employment_end
-            ? `<p class="text-xs text-slate-500">Retiro: ${escapeHtml(formatDateLabel(operator.employment_end))}</p>`
-            : '';
 
             return `
               <tr class="${rowClasses}" data-operator-id="${operator.id}">
                 <td class="px-3 py-3 align-top">
                   <p class="font-semibold text-slate-800">${escapeHtml(operator.name)}</p>
                   <p class="text-xs text-slate-500">${contactLine}</p>
-                  ${emailLine}
-                  ${employmentLine}
                   ${rolesLine}
                 </td>
-                <td class="px-3 py-3 align-top text-sm text-slate-600">${capabilityLine}${suggestionsLine}</td>
-                <td class="px-3 py-3 align-top text-sm text-slate-600">${preferredFarmLabel}</td>
+                <td class="px-3 py-3 align-top text-sm text-slate-600">${suggestionsLine}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${statusBadge}</td>
                 <td class="px-3 py-3 align-top min-w-[12rem]">
                   <div class="flex items-center gap-2 whitespace-nowrap">
@@ -1948,19 +1698,43 @@
           .join('');
       };
 
-      const populateCategoryFilter = () => {
-        if (!refs.operatorCategoryFilter || !state.metadata) {
+      const populateOperatorPositionFilter = () => {
+        if (!refs.operatorPositionFilter || !state.metadata) {
           return;
         }
 
-        const select = refs.operatorCategoryFilter;
+        const select = refs.operatorPositionFilter;
         const currentValue = select.value;
-        select.innerHTML = '<option value="">Todas las categorías</option>' + state.metadata.choice_sets.position_categories
-          .map((choice) => `<option value="${escapeHtml(choice.value)}">${escapeHtml(choice.label)}</option>`)
-          .join('');
+        const suggestedPositionIds = new Set();
+        (state.metadata.operators || []).forEach((operator) => {
+          (operator.suggested_positions || []).forEach((item) => {
+            const rawValue = item?.id ?? item ?? '';
+            const value = String(rawValue);
+            if (value) {
+              suggestedPositionIds.add(value);
+            }
+          });
+        });
 
-        if (currentValue) {
+        const sortedValues = Array.from(suggestedPositionIds).sort((a, b) => {
+          const labelA = state.lookups.positionLabels.get(a) || `Posición ${a}`;
+          const labelB = state.lookups.positionLabels.get(b) || `Posición ${b}`;
+          return labelA.localeCompare(labelB, 'es');
+        });
+
+        select.innerHTML =
+          '<option value="">Todas las posiciones</option>' +
+          sortedValues
+            .map((value) => {
+              const label = state.lookups.positionLabels.get(value) || `Posición ${value}`;
+              return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+            })
+            .join('');
+
+        if (currentValue && suggestedPositionIds.has(currentValue)) {
           select.value = currentValue;
+        } else {
+          select.value = '';
         }
       };
 
@@ -2161,13 +1935,9 @@
         if (!key) {
           return;
         }
-        if (key === 'last15' || key === 'next15') {
-          state.restFilters[key] = !state.restFilters[key];
-        } else {
-          state.restFilters[key] = !state.restFilters[key];
-          if (!state.restFilters.past && !state.restFilters.current && !state.restFilters.future) {
-            state.restFilters[key] = true;
-          }
+        state.restFilters[key] = !state.restFilters[key];
+        if (!state.restFilters.past && !state.restFilters.current && !state.restFilters.future) {
+          state.restFilters[key] = true;
         }
         syncRestFiltersUI();
         renderOperatorRestList(state.editing.restOperatorId);
@@ -2381,12 +2151,12 @@
           if (refs.operatorIncludeInactive) {
             refs.operatorIncludeInactive.checked = state.filters.includeInactiveOperators;
           }
+          renderRestDayOptions();
           rebuildLookups();
           populateStaticOptions();
           renderPositions();
-          populateCategoryFilter();
+          populateOperatorPositionFilter();
           renderOperators();
-          renderOperatorCapabilitiesEditor();
           renderOperatorRestList(state.editing.restOperatorId);
           syncRestFiltersUI();
           updateMetadataStatus('Información actualizada.', 'success');
@@ -2398,7 +2168,7 @@
 
       const initFilters = () => {
         refs.operatorSearch?.addEventListener('input', () => renderOperators());
-        refs.operatorCategoryFilter?.addEventListener('change', () => renderOperators());
+        refs.operatorPositionFilter?.addEventListener('change', () => renderOperators());
       };
 
       const resolveInitialStep = () => {

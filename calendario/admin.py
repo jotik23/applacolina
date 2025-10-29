@@ -8,13 +8,6 @@ from . import models
 
 
 class PositionCategoryAdminForm(forms.ModelForm):
-    automatic_rest_days = forms.MultipleChoiceField(
-        choices=models.DayOfWeek.choices,
-        required=False,
-        widget=forms.CheckboxSelectMultiple,
-        label="Días de descanso automático",
-    )
-
     class Meta:
         model = models.PositionCategory
         fields = "__all__"
@@ -23,10 +16,6 @@ class PositionCategoryAdminForm(forms.ModelForm):
         # Clarify how scheduling uses each numeric field.
         super().__init__(*args, **kwargs)
         labels = {
-            "extra_day_limit": "Días de trabajo extra permitidos sobre el máximo",
-            "overtime_points": "Puntos por cada día extra laborado",
-            "rest_min_frequency": "Máximo de días laborados antes de sugerir descanso (UI)",
-            "rest_min_consecutive_days": "Días de trabajo mínimo (UI)",
             "rest_max_consecutive_days": "Días de trabajo antes de descanso",
             "rest_post_shift_days": "Días post-turno",
             "rest_monthly_days": "Meta de días de descanso al mes (UI)",
@@ -34,16 +23,6 @@ class PositionCategoryAdminForm(forms.ModelForm):
         for field_name, label in labels.items():
             if field_name in self.fields:
                 self.fields[field_name].label = label
-
-        if self.instance and self.instance.pk and self.instance.automatic_rest_days:
-            self.initial.setdefault(
-                "automatic_rest_days",
-                [str(day) for day in self.instance.automatic_rest_days],
-            )
-
-    def clean_automatic_rest_days(self) -> list[int]:
-        values = self.cleaned_data.get("automatic_rest_days") or []
-        return [int(value) for value in values]
 
 
 @admin.register(models.PositionDefinition)
@@ -53,18 +32,16 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
         "name",
         "category",
         "farm",
-        "complexity",
         "valid_from",
         "valid_until",
         "is_active",
     )
     list_filter = (
         "category",
-        "complexity",
         "farm",
         "is_active",
     )
-    search_fields = ("code", "name", "notes")
+    search_fields = ("code", "name")
     list_editable = ("is_active",)
     date_hierarchy = "valid_from"
 
@@ -81,54 +58,28 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
 class PositionCategoryAdmin(admin.ModelAdmin):
     form = PositionCategoryAdminForm
     fields = (
-        "name",
+        "display_name",
         "code",
         "shift_type",
-        "automatic_rest_days",
         "rest_max_consecutive_days",
-        "extra_day_limit",
         "rest_post_shift_days",
-        "overtime_points",
-        "rest_min_frequency",
-        "rest_min_consecutive_days",
         "rest_monthly_days",
-        "overload_alert_level",
         "is_active",
     )
+    readonly_fields = ("display_name",)
     list_display = (
-        "name",
         "code",
+        "display_name",
         "shift_type",
-        "automatic_rest_days_display",
-        "extra_day_limit",
-        "overtime_points",
-        "overload_alert_level",
         "rest_max_consecutive_days",
         "is_active",
     )
     list_filter = ("shift_type", "is_active")
-    search_fields = ("name", "code")
+    search_fields = ("code",)
 
-    def automatic_rest_days_display(self, obj: models.PositionCategory) -> str:
-        labels = obj.automatic_rest_day_labels()
-        return ", ".join(str(label) for label in labels) if labels else "—"
-    automatic_rest_days_display.short_description = "Descanso automático"
-
-
-@admin.register(models.OperatorCapability)
-class OperatorCapabilityAdmin(admin.ModelAdmin):
-    list_display = (
-        "operator",
-        "category",
-        "skill_score",
-    )
-    list_filter = ("category",)
-    search_fields = (
-        "operator__nombres",
-        "operator__apellidos",
-        "operator__cedula",
-    )
-    autocomplete_fields = ("operator",)
+    @admin.display(description="Nombre")
+    def display_name(self, obj: models.PositionCategory) -> str:
+        return obj.display_name
 
 
 class AssignmentChangeLogInline(admin.TabularInline):
