@@ -430,7 +430,7 @@ class CalendarScheduler:
                         status=RestPeriodStatus.PLANNED,
                         source=RestPeriodSource.CALENDAR,
                         calendar=self.calendar,
-                        notes="Descanso automático asignado por el calendario.",
+                        notes="Descanso automático.",
                     )
                 )
 

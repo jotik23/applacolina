@@ -58,6 +58,165 @@ def _date_range(start: date, end: date) -> List[date]:
     return [start + timedelta(days=offset) for offset in range(days + 1)]
 
 
+REST_CELL_STATE_REST = "rest"
+REST_CELL_STATE_UNASSIGNED = "unassigned"
+REST_CELL_STATE_ASSIGNED = "assigned"
+REST_CELL_STATE_INACTIVE = "inactive"
+
+
+def _operator_display_name(operator: Optional[UserProfile]) -> str:
+    if not operator:
+        return ""
+    return operator.get_full_name() or operator.nombres or operator.apellidos or ""
+
+
+def _primary_role_label(operator: Optional[UserProfile]) -> str:
+    if not operator:
+        return ""
+    roles = list(operator.roles.all())
+    return roles[0].get_name_display() if roles else ""
+
+
+def _build_rest_rows(
+    date_columns: Iterable[date],
+    assignments_by_operator_day: dict[tuple[int, date], List[ShiftAssignment]],
+    rest_periods: Iterable[OperatorRestPeriod],
+    operator_map: dict[int, UserProfile],
+    operator_ids_with_assignments: set[int],
+) -> tuple[list[dict[str, Any]], set[int]]:
+    date_list = list(date_columns)
+    if not date_list:
+        return [], set()
+
+    rest_periods_by_operator: dict[int, List[OperatorRestPeriod]] = defaultdict(list)
+    for rest_period in rest_periods:
+        operator_id = getattr(rest_period.operator, "id", None)
+        if not operator_id:
+            continue
+        rest_periods_by_operator[operator_id].append(rest_period)
+
+    for periods in rest_periods_by_operator.values():
+        periods.sort(key=lambda period: (period.start_date, period.end_date))
+
+    rest_operator_ids = set(rest_periods_by_operator.keys())
+    operator_ids = operator_ids_with_assignments | rest_operator_ids
+    if not operator_ids:
+        return [], rest_operator_ids
+
+    def _sort_key(operator_id: int) -> tuple[str, str, int]:
+        operator = operator_map.get(operator_id)
+        if not operator:
+            return ("", "", operator_id)
+        return (
+            (operator.apellidos or "").lower(),
+            (operator.nombres or "").lower(),
+            operator.id or 0,
+        )
+
+    ordered_operator_ids = sorted(operator_ids, key=_sort_key)
+    first_day = date_list[0]
+    last_day = date_list[-1]
+
+    rest_rows: list[dict[str, Any]] = []
+
+    for operator_id in ordered_operator_ids:
+        operator = operator_map.get(operator_id)
+        if not operator:
+            continue
+
+        operator_name = _operator_display_name(operator)
+        role_label = _primary_role_label(operator)
+
+        rest_by_day: dict[date, OperatorRestPeriod] = {}
+        for period in rest_periods_by_operator.get(operator_id, []):
+            start = max(period.start_date, first_day)
+            end = min(period.end_date, last_day)
+            if start > end:
+                continue
+            current = start
+            while current <= end:
+                rest_by_day[current] = period
+                current += timedelta(days=1)
+
+        cells: list[dict[str, Any]] = []
+        has_rest_day = False
+        has_unassigned_day = False
+
+        for day in date_list:
+            period = rest_by_day.get(day)
+            assignments = assignments_by_operator_day.get((operator_id, day), [])
+            is_assigned = bool(assignments)
+            is_active = operator.is_active_on(day)
+
+            if period:
+                has_rest_day = True
+                reason = period.notes or period.get_status_display()
+                status_label = period.get_status_display()
+                cells.append(
+                    {
+                        "operator_id": operator_id,
+                        "name": operator_name,
+                        "role": role_label,
+                        "reason": reason,
+                        "state": REST_CELL_STATE_REST,
+                        "status_label": status_label,
+                    }
+                )
+                continue
+
+            if is_assigned:
+                cells.append(
+                    {
+                        "operator_id": None,
+                        "name": "",
+                        "role": "",
+                        "reason": "",
+                        "state": REST_CELL_STATE_ASSIGNED,
+                        "status_label": "",
+                    }
+                )
+                continue
+
+            if is_active:
+                has_unassigned_day = True
+                cells.append(
+                    {
+                        "operator_id": operator_id,
+                        "name": operator_name,
+                        "role": role_label,
+                        "reason": "",
+                        "state": REST_CELL_STATE_UNASSIGNED,
+                        "status_label": "Sin asignación",
+                    }
+                )
+                continue
+
+            cells.append(
+                {
+                    "operator_id": None,
+                    "name": "",
+                    "role": "",
+                    "reason": "",
+                    "state": REST_CELL_STATE_INACTIVE,
+                    "status_label": "",
+                }
+            )
+
+        if has_rest_day or has_unassigned_day:
+            rest_rows.append(
+                {
+                    "label": role_label or "Colaborador",
+                    "slot": operator_name or f"Operador #{operator_id}",
+                    "operator_id": operator_id,
+                    "has_rest": has_rest_day,
+                    "has_unassigned": has_unassigned_day,
+                    "cells": cells,
+                }
+            )
+
+    return rest_rows, rest_operator_ids
+
+
 def _build_assignment_matrix(
     calendar: ShiftCalendar,
 ) -> tuple[
@@ -84,6 +243,7 @@ def _build_assignment_matrix(
     )
 
     assignment_map: dict[tuple[int, date], ShiftAssignment] = {}
+    operator_map: dict[int, UserProfile] = {}
     assignments_by_operator_day: dict[tuple[int, date], List[ShiftAssignment]] = defaultdict(list)
     position_ids_with_assignments: set[int] = set()
     operator_ids_with_assignments: set[int] = set()
@@ -100,6 +260,8 @@ def _build_assignment_matrix(
                 suggestion_map[assignment.operator_id] = {
                     position.id for position in operator.suggested_positions.all()
                 }
+            if operator and assignment.operator_id not in operator_map:
+                operator_map[assignment.operator_id] = operator
 
     active_position_filter = (
         Q(valid_from__lte=calendar.end_date)
@@ -192,59 +354,20 @@ def _build_assignment_matrix(
         .order_by("start_date", "operator__apellidos", "operator__nombres")
     )
 
-    rest_rows: List[dict[str, Any]] = []
-    rest_operator_ids: set[int] = set()
-
-    for rest_period in rest_periods:
-        operator = rest_period.operator
-        operator_id = getattr(operator, "id", None)
-        if not operator_id:
-            continue
-
-        rest_operator_ids.add(operator_id)
-        operator_name = operator.get_full_name() or operator.nombres or operator.apellidos or ""
-        roles = list(operator.roles.all())
-        role_label = roles[0].get_name_display() if roles else ""
-
-        cells: List[dict[str, Any]] = []
-        for day in date_columns:
-            if rest_period.start_date <= day <= rest_period.end_date:
-                cells.append(
-                    {
-                        "operator_id": operator_id,
-                        "name": operator_name,
-                        "role": role_label,
-                        "reason": rest_period.notes or rest_period.get_status_display(),
-                    }
-                )
-            else:
-                cells.append(
-                    {
-                        "operator_id": None,
-                        "name": "",
-                        "role": "",
-                        "reason": "",
-                    }
-                )
-
-        rest_rows.append(
-            {
-                "label": rest_period.get_status_display(),
-                "slot": operator_name,
-                "cells": cells,
-            }
-        )
-
-    relevant_operator_ids = operator_ids_with_assignments | rest_operator_ids
-
-    operator_map: dict[int, UserProfile] = {}
-    for assignment in assignments:
-        if assignment.operator_id and assignment.operator_id not in operator_map:
-            operator_map[assignment.operator_id] = assignment.operator
     for rest_period in rest_periods:
         operator = rest_period.operator
         if operator and operator.id not in operator_map:
             operator_map[operator.id] = operator
+
+    rest_rows, rest_operator_ids = _build_rest_rows(
+        date_columns=date_columns,
+        assignments_by_operator_day=assignments_by_operator_day,
+        rest_periods=rest_periods,
+        operator_map=operator_map,
+        operator_ids_with_assignments=operator_ids_with_assignments,
+    )
+
+    relevant_operator_ids = operator_ids_with_assignments | rest_operator_ids
 
     rest_summary: dict[str, dict[str, Any]] = {}
     if relevant_operator_ids:
@@ -714,7 +837,7 @@ def _build_operational_position_groups(
     rest_group_payload = {
         "key": "rests",
         "type": "rest",
-        "label": "Descansos programados",
+        "label": "Descansos y disponibilidad",
         "color_class": REST_GROUP_COLOR,
     }
     group_map[rest_group_payload["key"]] = rest_group_payload
@@ -1774,12 +1897,17 @@ class CalendarSummaryView(LoginRequiredMixin, View):
                 {
                     "label": rest_row["label"],
                     "slot": rest_row["slot"],
+                    "operator_id": rest_row.get("operator_id"),
+                    "has_rest": rest_row.get("has_rest", False),
+                    "has_unassigned": rest_row.get("has_unassigned", False),
                     "cells": [
                         {
                             "operator_id": cell["operator_id"],
                             "name": cell["name"],
                             "role": cell["role"],
                             "reason": cell["reason"],
+                            "state": cell.get("state"),
+                            "status_label": cell.get("status_label"),
                         }
                         for cell in rest_row["cells"]
                     ],

@@ -20,6 +20,8 @@ from calendario.models import (
     ShiftType,
     WorkloadSnapshot,
 )
+REST_CELL_STATE_REST = "rest"
+REST_CELL_STATE_UNASSIGNED = "unassigned"
 from granjas.models import Farm
 from users.models import UserProfile
 
@@ -290,12 +292,27 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         day_index = (rest_start - self.calendar.start_date).days
         manual_present = any(
             row["cells"][day_index]["operator_id"] == self.operator_manual.id
+            and row["cells"][day_index]["state"] == REST_CELL_STATE_REST
             for row in rest_rows
         )
         self.assertTrue(manual_present)
 
         rest_summary = response.context["rest_summary"]
         self.assertIn(str(self.operator_manual.id), rest_summary)
+
+    def test_rest_rows_include_unassigned_days_for_operator(self) -> None:
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        rest_rows = response.context["rest_rows"]
+        operator_name = self.operator_conflict.get_full_name()
+        operator_row = next((row for row in rest_rows if row["slot"] == operator_name), None)
+        self.assertIsNotNone(operator_row)
+
+        self.assertTrue(
+            any(cell["state"] == REST_CELL_STATE_UNASSIGNED for cell in operator_row["cells"])
+        )
 
     def test_create_assignment_rejects_out_of_range_position(self) -> None:
         self.position_secondary.valid_from = self.calendar.start_date + timedelta(days=2)
@@ -357,7 +374,12 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         )
 
         self.assertRedirects(response, url)
-        self.assertFalse(ShiftAssignment.objects.filter(calendar=self.calendar).exists())
+        self.assertFalse(
+            ShiftAssignment.objects.filter(
+                pk__in=[self.assignment_primary.pk, self.assignment_conflict.pk]
+            ).exists()
+        )
+        self.assertGreater(ShiftAssignment.objects.filter(calendar=self.calendar).count(), 0)
         self.assertFalse(OperatorRestPeriod.objects.filter(calendar=self.calendar).exists())
         self.assertFalse(self.calendar.workload_snapshots.exists())
 
