@@ -1,21 +1,19 @@
+Generador de calendarios: Utiliza agents.md para guardar los logs de las reglas que vamos agregando y/o modificando para que siempre sepas como refinar el algoritmo de generación de calendarios considerando sus reglas: 
+Regla: El generador construye la asignación sugerida para un calendario, asumiendo que es un nuevo calendario o se está sobreescribiendo uno existente y la data anterior de asignaciones ha sido eliminada. 
+Regla: El generador es llamado en el contexto de una interfaz gráfica que permite diligenciar un nombre del calendario, fecha inicio y fecha fin; o en el contexto de la regeneración de un calendario existente que ya tiene u nombre, fecha inicio y fecha fin pero que sus asignaciones han sido eliminadas.
+Regla: El generador recibe una fecha de inicio y fin; sobre las cuales debe realizar la asignación de turnos a las posiciones. 
+Regla: El generador no permite constuir fechas en rangos de calendario solapados con otros calendarios. Cada rango de fechas del calendario deben ser únicos y excluyentes, pero complementarios.
+Regla: El calendario está compuesto por asignaciones de turnos y de descansos. 
+Regla: El generador asigna turnos al calendario en el orden determinado por las posiciones activas durante el periodo de vigencia de la posición (desde - hasta; incluyentes). Esto significa que el orden de la posición determina la importancia de la asignación, y el algoritmo intenta llenar todas asignaciones de esa posición para el periodo del calendario acorde a todas las reglas del generador. 
+Regla: Se sabe si la posición está activa si: fecha de asignación >= fecha vigente desde de la posición && fecha de asignación <= fecha vigente hasta de la posición.
+Regla: Si la posición no es activa se excluye por completo del calendario a generar.
+Regla: Si la posición está fuera de vigencia total (en relación al rango del calendario), se excluye por completo del calendario a generar. 
+Regla: Si la posición está en vigencia parcial respecto a las fechas del calendario a generar, se incluye en el calendario a generar, pero solo se realizan las asignaciones para el periodo de vigencia que coexiste con los slots de las posiciones activas del calendario, fechas incluyentes.
+Regla: El generador asigna los colaboradores activos, considerando sus posiciones sugeridas, la configuración de descansos manuales y automáticos, así como la configuración del positioncategory asociado a cada posición sugerida. 
+Regla: El generador determina si un colaborador está activo, si fecha asignación >= fecha ingreso del colaborador && fecha asignación <= fecha de retiro del colaborador (o la fecha de retiro está vacía).
+Regla: El generador solo considera un colaborador para una posición si la posición a asignar está dentro del listado de posiciones sugeridas.
+Regla: El generador considera a los colaboradores para una posición en el orden determinado por el historico de asignaciones para la posición fuera y dentro del calendario a generar. Es decir, el generador busca consistencia en la asignación de los turnos futuros, un colaborador debe seguir consistentemente en la última posición asignada.  Si se cambia la asignación manualmente, el generador debe considerar la última posición asignada para el colaborador como punto de partida de consistencia. Si no hay asignaciones historicas, el generador toma colaboradores aleatorios que cumplan con los demás criterios, para la primera asignación, y luego busca consistencia en las siguientes asignaciones de esa posición. 
+Regla: Un colaborador solo puede estar asignado a una posición en el mismo día, ya sea de turno o de descanso. Son excluyentes. No puede estar de turno y de descanso a la vez el mismo día, tampoco puede estar asignado a dos posiciones el mismo día. 
+Regla: Descansos: El colaborador puede tener descansos manuales asignados para un rango de fechas especifico. Estos descansos manuales tienen más peso que las asignaciones de turnos. Es decir, si un colaborador tiene descansos manuales programados, se le debe asignar el descanso y considerar otro colaborador para el turno.
 
-
-- 
-
-- Utilizando el tooltip informativo de los desdansos, se espera entender la asinación del algoritmo para guiar la forma de corregirlo. Tambíen para seguimiento posterior.
-
-- Refactorizar, usar librería practica javascript en vez de vanilla. 
-- Desplegar
-
-
-
-
-Te daré un ejemplo de como debió quedar parte del calendario con ID 34 para que evalues todos los errores en la lógica del algoritmo de generación de calendario, propongas un plan para ajustarlo y tras aprobación procedas con los cambios:
-Posicion | 24/10 | 25/10 | 26/10 | 27/10 | 28/10 | 29/10 | 30/10 | 31/10
-Líder Colina 1 | Eriberto A2 | Eriberto A2 | Jose Findlay | Jose Findlay | Jose Findlay | Jose Findlay | Jose Findlay | Jose Findlay
-Colina 1: G1 | Cesar Olea | Cesar Olea | Cesar Olea | Cesar Olea | Cesar Olea | Cesar Olea | Alex F | Cesar Olea
-Colina 1: G4 | | Orlis Manuel | Orlis Manuel | Orlis Manuel | Orlis Manuel | Orlis Manuel | Orlis Manuel | Orlis Manuel
-Colina 1: G5 | Alex F | William A | | Alex F | Alex F | Alex F | Alex F | Alex F
-Colina 1: Noche | Orlando | Orlando | Orlando | William A | William A | William A | William A | William A
-Descasos 1: | Jose Findlay | Jose Findlay | Alex F | Orlando | Orlando | | Cesar O | William A
-Descasos 1: |  | Alex F | | | | | Eriberto A2 | |
+Tomas las reglas definidas hasta el momento y genera la lógica de generación de calendarios. Implementa código modular y mantenible, ya que se seguiran agregando reglas en interaciones posteriores. Las reglas provistas sobrescriben cualquier regla anteriormente prevista.

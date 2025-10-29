@@ -268,7 +268,6 @@ class PositionDefinitionForm(forms.ModelForm):
             "rooms",
             "valid_from",
             "valid_until",
-            "is_active",
         ]
 
     def clean(self) -> dict[str, Any]:
@@ -381,9 +380,13 @@ class OperatorProfileForm(forms.ModelForm):
             employment_end_field.required = False
         suggested_field = self.fields.get("suggested_positions")
         if suggested_field:
-            suggested_field.queryset = PositionDefinition.objects.filter(is_active=True).order_by(
-                "display_order",
-                "name",
+            today = UserProfile.colombia_today()
+            suggested_field.queryset = (
+                PositionDefinition.objects.active_on(today)
+                .order_by(
+                    "display_order",
+                    "name",
+                )
             )
         rest_field = self.fields.get("automatic_rest_days")
         existing_values = getattr(self.instance, "automatic_rest_days", None)

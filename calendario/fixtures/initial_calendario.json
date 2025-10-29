@@ -291,8 +291,7 @@
       "chicken_house": 1,
       "rooms": [],
       "valid_from": "2025-01-01",
-      "valid_until": null,
-      "is_active": true
+      "valid_until": null
     }
   },
   {
@@ -306,8 +305,7 @@
       "chicken_house": 1,
       "rooms": [],
       "valid_from": "2025-01-01",
-      "valid_until": null,
-      "is_active": true
+      "valid_until": null
     }
   },
   {
@@ -321,8 +319,7 @@
       "chicken_house": null,
       "rooms": [],
       "valid_from": "2025-01-01",
-      "valid_until": null,
-      "is_active": true
+      "valid_until": null
     }
   },
   {

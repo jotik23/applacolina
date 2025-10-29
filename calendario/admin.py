@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib import admin
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 
 from . import models
+from users.models import UserProfile
 
 
 class PositionCategoryAdminForm(forms.ModelForm):
@@ -25,6 +26,29 @@ class PositionCategoryAdminForm(forms.ModelForm):
                 self.fields[field_name].label = label
 
 
+class ActiveTodayFilter(admin.SimpleListFilter):
+    title = "Activa hoy"
+    parameter_name = "is_active_today"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("yes", "Sí"),
+            ("no", "No"),
+        )
+
+    def queryset(self, request, queryset: QuerySet):
+        reference_date = UserProfile.colombia_today()
+        if self.value() == "yes":
+            return queryset.active_on(reference_date)
+        if self.value() == "no":
+            inactive_filter = Q(valid_from__gt=reference_date) | Q(
+                valid_until__lt=reference_date,
+                valid_until__isnull=False,
+            )
+            return queryset.filter(inactive_filter)
+        return queryset
+
+
 @admin.register(models.PositionDefinition)
 class PositionDefinitionAdmin(admin.ModelAdmin):
     list_display = (
@@ -34,15 +58,14 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
         "farm",
         "valid_from",
         "valid_until",
-        "is_active",
+        "is_active_today",
     )
     list_filter = (
         "category",
         "farm",
-        "is_active",
+        ActiveTodayFilter,
     )
     search_fields = ("code", "name")
-    list_editable = ("is_active",)
     date_hierarchy = "valid_from"
 
     def get_queryset(self, request) -> QuerySet:
@@ -52,6 +75,10 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
             .select_related("farm", "chicken_house", "category")
             .prefetch_related("rooms")
         )
+
+    @admin.display(description="Activa hoy", boolean=True)
+    def is_active_today(self, obj: models.PositionDefinition) -> bool:
+        return obj.is_active_today()
 
 
 @admin.register(models.PositionCategory)

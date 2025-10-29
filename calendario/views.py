@@ -102,8 +102,7 @@ def _build_assignment_matrix(
                 }
 
     active_position_filter = (
-        Q(is_active=True)
-        & Q(valid_from__lte=calendar.end_date)
+        Q(valid_from__lte=calendar.end_date)
         & (Q(valid_until__isnull=True) | Q(valid_until__gte=calendar.start_date))
     )
 
@@ -792,7 +791,8 @@ def _choice_payload(choices: Iterable[tuple[str, str]]) -> List[dict[str, str]]:
     ]
 
 
-def _position_payload(position: PositionDefinition) -> dict[str, Any]:
+def _position_payload(position: PositionDefinition, *, reference_date: date | None = None) -> dict[str, Any]:
+    active_reference = reference_date or UserProfile.colombia_today()
     return {
         "id": position.id,
         "name": position.name,
@@ -823,7 +823,7 @@ def _position_payload(position: PositionDefinition) -> dict[str, Any]:
         "shift_type": position.shift_type,
         "valid_from": position.valid_from.isoformat(),
         "valid_until": position.valid_until.isoformat() if position.valid_until else None,
-        "is_active": position.is_active,
+        "is_active": position.is_active_on(active_reference),
     }
 
 
@@ -1611,6 +1611,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         include_inactive = request.GET.get("include_inactive") == "true"
         farm_filter = request.GET.get("farm")
+        reference_date = UserProfile.colombia_today()
 
         position_qs = PositionDefinition.objects.select_related("farm", "chicken_house", "category").prefetch_related("rooms")
         if farm_filter:
@@ -1619,10 +1620,10 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             except (TypeError, ValueError):  # pragma: no cover - defensive casting
                 return HttpResponseBadRequest("Identificador de granja inválido.")
         if not include_inactive:
-            position_qs = position_qs.filter(is_active=True)
+            position_qs = position_qs.active_on(reference_date)
 
         positions_payload = [
-            _position_payload(position)
+            _position_payload(position, reference_date=reference_date)
             for position in position_qs.order_by("display_order", "id")
         ]
 

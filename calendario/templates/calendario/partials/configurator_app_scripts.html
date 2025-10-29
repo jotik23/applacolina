@@ -129,7 +129,6 @@
         positionRooms: app.querySelector('#position-rooms'),
         positionValidFrom: app.querySelector('#position-valid-from'),
         positionValidUntil: app.querySelector('#position-valid-until'),
-        positionIsActive: app.querySelector('#position-is-active'),
         positionCancelBtn: app.querySelector('#position-cancel-btn'),
         operatorCount: app.querySelector('#operator-count'),
         operatorBody: app.querySelector('#operator-body'),
@@ -1080,7 +1079,6 @@
         rooms: Array.from(refs.positionRooms?.selectedOptions || []).map((option) => option.value),
         valid_from: refs.positionValidFrom?.value || '',
         valid_until: refs.positionValidUntil?.value || '',
-        is_active: Boolean(refs.positionIsActive?.checked),
       });
 
       const openPositionForm = (position = null) => {
@@ -1089,7 +1087,6 @@
         setEditingPosition(position ? position.id : null);
         if (!position) {
           refs.positionId.value = '';
-          refs.positionIsActive.checked = true;
           if (refs.positionCodeDisplay) {
             refs.positionCodeDisplay.classList.add('hidden');
           }
@@ -1115,7 +1112,6 @@
           refs.positionCategory.value = position.category_id || '';
           refs.positionValidFrom.value = position.valid_from || '';
           refs.positionValidUntil.value = position.valid_until || '';
-          refs.positionIsActive.checked = Boolean(position.is_active);
           const farmId = position.farm?.id ? String(position.farm.id) : '';
           const houseId = position.chicken_house?.id ? String(position.chicken_house.id) : '';
           const roomIds = Array.isArray(position.rooms)

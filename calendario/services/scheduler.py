@@ -59,7 +59,6 @@ class CalendarScheduler:
         return list(
             PositionDefinition.objects.select_related("farm", "chicken_house", "category")
             .prefetch_related("rooms")
-            .filter(is_active=True)
             .filter(valid_from__lte=self.calendar.end_date)
             .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=self.calendar.start_date))
             .order_by("display_order", "id")

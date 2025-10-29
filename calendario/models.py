@@ -156,7 +156,6 @@ class PositionDefinition(models.Model):
     )
     valid_from = models.DateField("Válido desde")
     valid_until = models.DateField("Válido hasta", null=True, blank=True)
-    is_active = models.BooleanField("Activo", default=True)
 
     objects = PositionDefinitionQuerySet.as_manager()
 
@@ -206,13 +205,16 @@ class PositionDefinition(models.Model):
             return self.shift_type
 
     def is_active_on(self, target_date: date) -> bool:
-        if not self.is_active:
+        if not target_date:
             return False
         if target_date < self.valid_from:
             return False
         if self.valid_until and target_date > self.valid_until:
             return False
         return True
+
+    def is_active_today(self) -> bool:
+        return self.is_active_on(UserProfile.colombia_today())
 
 
 class ShiftCalendar(models.Model):

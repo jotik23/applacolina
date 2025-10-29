@@ -471,16 +471,14 @@ class CalendarActivePositionVisibilityTests(TestCase):
             farm=self.farm,
             valid_from=calendar.start_date,
             valid_until=calendar.end_date,
-            is_active=True,
         )
         inactive_position = PositionDefinition.objects.create(
             name="Posición inactiva",
             code="INACTIVE-1",
             category=self.category,
             farm=self.farm,
-            valid_from=calendar.start_date,
-            valid_until=calendar.end_date,
-            is_active=False,
+            valid_from=calendar.end_date + timedelta(days=1),
+            valid_until=calendar.end_date + timedelta(days=7),
         )
 
         url = reverse("calendario-api:calendar-summary", args=[calendar.pk])
@@ -508,7 +506,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             farm=self.farm,
             valid_from=calendar.start_date + timedelta(days=1),
             valid_until=calendar.end_date,
-            is_active=True,
         )
 
         response = self.client.get(reverse("calendario:calendar-detail", args=[calendar.pk]))
@@ -540,7 +537,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             farm=self.farm,
             valid_from=calendar.start_date + timedelta(days=1),
             valid_until=calendar.end_date,
-            is_active=True,
         )
 
         operator = UserProfile.objects.create_user(
@@ -595,7 +591,6 @@ class CalendarActivePositionVisibilityTests(TestCase):
             farm=self.farm,
             valid_from=calendar.start_date + timedelta(days=1),
             valid_until=calendar.end_date,
-            is_active=True,
         )
 
         url = reverse("calendario-api:calendar-summary", args=[calendar.pk])

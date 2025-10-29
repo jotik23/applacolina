@@ -17,9 +17,8 @@ Representa un rol operativo disponible en un rango de fechas determinado.
 | `chicken_house` | Relación | No | Galpón específico (si aplica). |
 | `rooms` | Relación (múltiple) | No | Salones dentro del galpón (si aplica). |
 | `valid_from` / `valid_until` | Fecha | Sí / No | Ventana de vigencia. |
-| `is_active` | Booleano | No | Activa la posición para el motor de asignación. |
 
-**Impacto:** una posición activa y vigente aparece en la generación del calendario. El turno se infiere automáticamente según la categoría seleccionada (día, noche o mixto), por lo que no se edita manualmente.
+**Impacto:** una posición se considera activa para una fecha si está dentro de su ventana de vigencia (`valid_from` ≤ fecha ≤ `valid_until` o sin fecha de retiro). El turno se infiere automáticamente según la categoría seleccionada (día, noche o mixto), por lo que no se edita manualmente.
 
 ---
 
