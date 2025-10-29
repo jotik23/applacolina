@@ -214,4 +214,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+LOGIN_URL = 'portal:login'
+LOGIN_REDIRECT_URL = 'calendario:dashboard'
+LOGOUT_REDIRECT_URL = 'portal:login'
+
 AUTH_USER_MODEL = 'users.UserProfile'

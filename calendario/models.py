@@ -346,6 +346,12 @@ class ShiftAssignment(models.Model):
         verbose_name_plural = "Asignaciones"
         unique_together = ("calendar", "position", "date")
         ordering = ("date", "position__display_order", "position__code")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("calendar", "operator", "date"),
+                name="uniq_calendar_operator_date",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.date} - {self.position} -> {self.operator}"

@@ -45,6 +45,7 @@ class CalendarScheduler:
         self.calendar = calendar
         self.options = options or SchedulerOptions()
         self._planned_rest_days: DefaultDict[OperatorId, Set[date]] = defaultdict(set)
+        self._post_shift_rest_by_assignment: DefaultDict[Tuple[OperatorId, date, PositionId], Set[date]] = defaultdict(set)
 
         self._calendar_dates = list(self._daterange(calendar.start_date, calendar.end_date))
         self._positions = self._load_positions()
@@ -60,55 +61,10 @@ class CalendarScheduler:
     def generate(self, *, commit: bool = False) -> List[AssignmentDecision]:
         self._validate_calendar_range()
         self._planned_rest_days.clear()
+        self._post_shift_rest_by_assignment.clear()
 
-        decisions: List[AssignmentDecision] = []
-        assigned_per_day: DefaultDict[date, Set[OperatorId]] = defaultdict(set)
-        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]] = defaultdict(set)
-        position_last_operator: Dict[PositionId, OperatorId] = {}
-
-        for current_date in self._calendar_dates:
-            for position in self._positions:
-                position_id = position.id
-                if position_id is None or not position.is_active_on(current_date):
-                    continue
-
-                operator = self._select_operator(
-                    position=position,
-                    target_date=current_date,
-                    assigned_per_day=assigned_per_day,
-                    dynamic_rest_blocks=dynamic_rest_blocks,
-                    position_last_operator=position_last_operator,
-                )
-
-                if operator is None:
-                    decisions.append(
-                        AssignmentDecision(
-                            position=position,
-                            operator=None,
-                            date=current_date,
-                            alert_level=AssignmentAlertLevel.CRITICAL,
-                            notes="Sin operarios elegibles tras aplicar reglas.",
-                        )
-                    )
-                    continue
-
-                decisions.append(
-                    AssignmentDecision(
-                        position=position,
-                        operator=operator,
-                        date=current_date,
-                        alert_level=AssignmentAlertLevel.NONE,
-                    )
-                )
-
-                assigned_per_day[current_date].add(operator.id)
-                position_last_operator[position_id] = operator.id
-                self._schedule_post_shift_rest(
-                    operator_id=operator.id,
-                    category=position.category,
-                    work_date=current_date,
-                    dynamic_rest_blocks=dynamic_rest_blocks,
-                )
+        decisions = self._plan_schedule()
+        self._enforce_daily_operator_uniqueness(decisions)
 
         if commit:
             self._commit_decisions(decisions)
@@ -278,6 +234,227 @@ class CalendarScheduler:
     # Selección de operadores
     # ------------------------------------------------------------------ #
 
+    def _plan_schedule(self) -> List[AssignmentDecision]:
+        decisions: List[AssignmentDecision] = []
+        assigned_per_day: DefaultDict[date, Set[OperatorId]] = defaultdict(set)
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]] = defaultdict(set)
+        position_last_operator: Dict[PositionId, OperatorId] = {}
+
+        for current_date in self._calendar_dates:
+            day_decisions = self._schedule_day(
+                current_date=current_date,
+                assigned_per_day=assigned_per_day,
+                dynamic_rest_blocks=dynamic_rest_blocks,
+                position_last_operator=position_last_operator,
+            )
+            decisions.extend(day_decisions)
+
+        return decisions
+
+    def _enforce_daily_operator_uniqueness(self, decisions: List[AssignmentDecision]) -> None:
+        seen: Dict[Tuple[date, OperatorId], int] = {}
+
+        for index, decision in enumerate(decisions):
+            operator = decision.operator
+            if not operator or operator.id is None:
+                continue
+
+            key = (decision.date, operator.id)
+            existing_index = seen.get(key)
+            if existing_index is None:
+                seen[key] = index
+                continue
+
+            previous_decision = decisions[existing_index]
+            operator_name = operator.get_full_name() or operator.nombres or operator.apellidos or str(operator.id)
+            conflict_note = (
+                f"{operator_name} ya tenía turno asignado en {previous_decision.position.code} "
+                f"para {decision.date.isoformat()}."
+            )
+
+            decisions[index] = AssignmentDecision(
+                position=decision.position,
+                operator=None,
+                date=decision.date,
+                alert_level=AssignmentAlertLevel.CRITICAL,
+                notes=conflict_note,
+            )
+
+            position_id = getattr(decision.position, "id", None)
+            if position_id is None:
+                continue
+
+            rest_key = (operator.id, decision.date, position_id)
+            rest_days = self._post_shift_rest_by_assignment.pop(rest_key, set())
+            if not rest_days:
+                continue
+
+            day_set = self._planned_rest_days.get(operator.id)
+            if not day_set:
+                continue
+
+            day_set.difference_update(rest_days)
+            if not day_set:
+                self._planned_rest_days.pop(operator.id, None)
+
+    def _schedule_day(
+        self,
+        *,
+        current_date: date,
+        assigned_per_day: DefaultDict[date, Set[OperatorId]],
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
+        position_last_operator: Dict[PositionId, OperatorId],
+    ) -> List[AssignmentDecision]:
+        active_positions = [
+            position
+            for position in self._positions
+            if position.id is not None and position.is_active_on(current_date)
+        ]
+        if not active_positions:
+            return []
+
+        assigned_selection: List[Optional[UserProfile]] = [None] * len(active_positions)
+        operator_to_position: Dict[OperatorId, int] = {}
+        preferred_operator_per_position: Dict[int, Optional[OperatorId]] = {}
+
+        def try_assign(position_index: int, seen_positions: Set[int], seen_operators: Set[OperatorId]) -> bool:
+            if position_index in seen_positions:
+                return False
+            seen_positions.add(position_index)
+
+            position = active_positions[position_index]
+            candidate_order = self._candidate_order(position, position_last_operator)
+            if position_index not in preferred_operator_per_position:
+                preferred_operator_per_position[position_index] = candidate_order[0] if candidate_order else None
+
+            for operator_id in candidate_order:
+                operator = self._operator_cache.get(operator_id)
+                if not operator:
+                    continue
+
+                if operator_id in seen_operators:
+                    continue
+                seen_operators.add(operator_id)
+
+                if not self._is_operator_allowed_for_day(
+                    operator=operator,
+                    position=position,
+                    target_date=current_date,
+                    dynamic_rest_blocks=dynamic_rest_blocks,
+                ):
+                    continue
+
+                current_owner = operator_to_position.get(operator_id)
+                if current_owner is not None and current_owner != position_index:
+                    previous_operator = assigned_selection[current_owner]
+                    operator_to_position.pop(operator_id, None)
+                    assigned_selection[current_owner] = None
+                    if not try_assign(current_owner, seen_positions, seen_operators):
+                        operator_to_position[operator_id] = current_owner
+                        assigned_selection[current_owner] = previous_operator
+                        continue
+
+                operator_to_position[operator_id] = position_index
+                assigned_selection[position_index] = operator
+                return True
+
+            return False
+
+        for index in range(len(active_positions)):
+            try_assign(index, set(), set())
+
+        decisions: List[AssignmentDecision] = []
+
+        day_assigned_set = assigned_per_day[current_date]
+        day_assigned_set.clear()
+
+        for position_index, (position, operator) in enumerate(zip(active_positions, assigned_selection)):
+            if operator is None:
+                decisions.append(
+                    AssignmentDecision(
+                        position=position,
+                        operator=None,
+                        date=current_date,
+                        alert_level=AssignmentAlertLevel.CRITICAL,
+                        notes="Sin operarios elegibles tras aplicar reglas.",
+                    )
+                )
+                continue
+
+            decisions.append(
+                AssignmentDecision(
+                    position=position,
+                    operator=operator,
+                    date=current_date,
+                    alert_level=AssignmentAlertLevel.NONE,
+                )
+            )
+            day_assigned_set.add(operator.id)
+            if position.id is not None:
+                preferred_id = preferred_operator_per_position.get(position_index)
+                if preferred_id is None or preferred_id == operator.id:
+                    position_last_operator[position.id] = operator.id
+            self._schedule_post_shift_rest(
+                operator_id=operator.id,
+                position=position,
+                work_date=current_date,
+                dynamic_rest_blocks=dynamic_rest_blocks,
+            )
+
+        return decisions
+
+    def _candidate_order(
+        self,
+        position: PositionDefinition,
+        position_last_operator: Dict[PositionId, OperatorId],
+    ) -> List[OperatorId]:
+        position_id = position.id
+        if position_id is None:
+            return []
+
+        candidate_order: List[OperatorId] = []
+        last_operator_id = position_last_operator.get(position_id)
+        if last_operator_id:
+            candidate_order.append(last_operator_id)
+
+        for operator_id in self._candidate_priority.get(position_id, []):
+            if operator_id not in candidate_order:
+                candidate_order.append(operator_id)
+
+        return candidate_order
+
+    def _is_operator_allowed_for_day(
+        self,
+        *,
+        operator: UserProfile,
+        position: PositionDefinition,
+        target_date: date,
+        dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
+    ) -> bool:
+        operator_id = operator.id
+        if operator_id is None:
+            return False
+
+        if not operator.is_active:
+            return False
+
+        if not operator.is_active_on(target_date):
+            return False
+
+        if target_date in self._manual_rest_index.get(operator_id, set()):
+            return False
+
+        if target_date in dynamic_rest_blocks.get(operator_id, set()):
+            return False
+
+        automatic_days = self._automatic_rest_index.get(operator_id)
+        if automatic_days and target_date.weekday() in automatic_days:
+            self._planned_rest_days[operator_id].add(target_date)
+            return False
+
+        _ = position  # Se reserva para reglas adicionales por categoría.
+        return True
+
     def _select_operator(
         self,
         *,
@@ -287,15 +464,7 @@ class CalendarScheduler:
         dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
         position_last_operator: Dict[PositionId, OperatorId],
     ) -> Optional[UserProfile]:
-        candidate_order: List[OperatorId] = []
-
-        last_operator_id = position_last_operator.get(position.id or -1)
-        if last_operator_id:
-            candidate_order.append(last_operator_id)
-
-        for operator_id in self._candidate_priority.get(position.id or -1, []):
-            if operator_id not in candidate_order:
-                candidate_order.append(operator_id)
+        candidate_order = self._candidate_order(position, position_last_operator)
 
         for operator_id in candidate_order:
             operator = self._operator_cache.get(operator_id)
@@ -353,13 +522,16 @@ class CalendarScheduler:
         self,
         *,
         operator_id: OperatorId,
-        category,
+        position: PositionDefinition,
         work_date: date,
         dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
     ) -> None:
+        category = position.category
         rest_span = getattr(category, "rest_post_shift_days", 0) or 0
         if rest_span <= 0:
             return
+
+        position_id = getattr(position, "id", None)
 
         for offset in range(1, rest_span + 1):
             target_day = work_date + timedelta(days=offset)
@@ -367,6 +539,9 @@ class CalendarScheduler:
                 continue
             dynamic_rest_blocks[operator_id].add(target_day)
             self._planned_rest_days[operator_id].add(target_day)
+            if position_id is not None:
+                rest_key = (operator_id, work_date, position_id)
+                self._post_shift_rest_by_assignment[rest_key].add(target_day)
 
     # ------------------------------------------------------------------ #
     # Persistencia

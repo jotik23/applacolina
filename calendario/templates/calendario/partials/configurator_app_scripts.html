@@ -60,6 +60,9 @@
         },
       };
 
+      let pendingPositionDeleteId = null;
+      let lastFocusedBeforeDeleteDialog = null;
+
       const formatPositionLabel = (position) => {
         if (!position) {
           return '';
@@ -120,6 +123,10 @@
         positionForm: app.querySelector('#position-form'),
         positionMessage: app.querySelector('#position-form-message'),
         positionId: app.querySelector('#position-id'),
+        positionDeleteDialog: app.querySelector('#position-delete-dialog'),
+        positionDeleteCancel: app.querySelector('#position-delete-cancel'),
+        positionDeleteConfirm: app.querySelector('#position-delete-confirm'),
+        positionDeleteName: app.querySelector('[data-position-delete-name]'),
         positionName: app.querySelector('#position-name'),
         positionCodeDisplay: app.querySelector('#position-code-display'),
         positionCodeValue: app.querySelector('#position-code-value'),
@@ -176,6 +183,48 @@
         calendarActions: app.querySelector('#calendar-actions'),
         calendarDetailLink: app.querySelector('#open-calendar-detail'),
         generateCalendarBtn: document.getElementById('generate-calendar-btn'),
+      };
+
+      const openPositionDeleteDialog = (positionId) => {
+        if (!refs.positionDeleteDialog) {
+          return false;
+        }
+        pendingPositionDeleteId = positionId;
+        const position = state.metadata?.positions?.find((item) => item.id === positionId);
+        if (refs.positionDeleteName) {
+          const label = formatPositionLabel(position);
+          refs.positionDeleteName.textContent = label || '';
+          if (label) {
+            refs.positionDeleteName.classList.remove('hidden');
+          } else {
+            refs.positionDeleteName.classList.add('hidden');
+          }
+        }
+        const activeElement = document.activeElement;
+        lastFocusedBeforeDeleteDialog = activeElement instanceof HTMLElement ? activeElement : null;
+        refs.positionDeleteDialog.classList.remove('hidden');
+        window.setTimeout(() => {
+          if (refs.positionDeleteConfirm && typeof refs.positionDeleteConfirm.focus === 'function') {
+            refs.positionDeleteConfirm.focus();
+          }
+        }, 0);
+        return true;
+      };
+
+      const closePositionDeleteDialog = () => {
+        if (refs.positionDeleteDialog) {
+          refs.positionDeleteDialog.classList.add('hidden');
+        }
+        if (refs.positionDeleteName) {
+          refs.positionDeleteName.textContent = '';
+          refs.positionDeleteName.classList.add('hidden');
+        }
+        pendingPositionDeleteId = null;
+        const target = lastFocusedBeforeDeleteDialog;
+        lastFocusedBeforeDeleteDialog = null;
+        if (target && typeof target.focus === 'function') {
+          target.focus();
+        }
       };
 
       const availableSteps = new Set(
@@ -2014,10 +2063,7 @@
         openPositionForm(position);
       };
 
-      const handlePositionDelete = (id) => {
-        if (!confirm('¿Confirma eliminar esta posición? Esta acción no se puede deshacer.')) {
-          return;
-        }
+      const performPositionDelete = (id) => {
         deleteEntity(replaceId(API.positionDetailTemplate, id), {
           afterSuccess: () => {
             if (refs.positionId?.value === String(id)) {
@@ -2026,6 +2072,48 @@
           },
         });
       };
+
+      const handlePositionDelete = (id) => {
+        if (!Number.isFinite(id) || id <= 0) {
+          return;
+        }
+        if (openPositionDeleteDialog(id)) {
+          return;
+        }
+        if (!confirm('¿Confirma eliminar esta posición? Esta acción no se puede deshacer.')) {
+          return;
+        }
+        performPositionDelete(id);
+      };
+
+      if (refs.positionDeleteCancel) {
+        refs.positionDeleteCancel.addEventListener('click', () => {
+          closePositionDeleteDialog();
+        });
+      }
+
+      if (refs.positionDeleteDialog) {
+        refs.positionDeleteDialog.addEventListener('click', (event) => {
+          if (event.target === refs.positionDeleteDialog) {
+            closePositionDeleteDialog();
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && !refs.positionDeleteDialog.classList.contains('hidden')) {
+            closePositionDeleteDialog();
+          }
+        });
+      }
+
+      if (refs.positionDeleteConfirm) {
+        refs.positionDeleteConfirm.addEventListener('click', () => {
+          const id = pendingPositionDeleteId;
+          closePositionDeleteDialog();
+          if (Number.isFinite(id) && id > 0) {
+            performPositionDelete(id);
+          }
+        });
+      }
 
       app.addEventListener('click', (event) => {
         const target = event.target.closest('[data-action]');

@@ -23,6 +23,7 @@ admin.site.index_title = "Panel de administracion"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', include('users.urls', namespace='portal')),
     path('calendario/', include('calendario.urls', namespace='calendario')),
     path('api/', include('calendario.api_urls', namespace='calendario-api')),
 ]

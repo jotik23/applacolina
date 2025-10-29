@@ -1,5 +1,6 @@
-Generador de calendarios: Utiliza agents.md para guardar los logs de las reglas que vamos agregando y/o modificando para que siempre sepas como refinar el algoritmo de generación de calendarios considerando sus reglas: 
-Regla: El generador construye la asignación sugerida para un calendario, asumiendo que es un nuevo calendario o se está sobreescribiendo uno existente y la data anterior de asignaciones ha sido eliminada. 
+Generador de calendarios: Utiliza agents.md para guardar los logs de las reglas que vamos agregando y/o modificando para que siempre sepas como refinar el algoritmo de generación de calendarios considerando sus reglas:
+
+Regla: El generador construye la asignación sugerida para un calendario, asumiendo que es un nuevo calendario o se está sobreescribiendo uno existente y la data anterior de asignaciones ha sido eliminada.
 Regla: El generador es llamado en el contexto de una interfaz gráfica que permite diligenciar un nombre del calendario, fecha inicio y fecha fin; o en el contexto de la regeneración de un calendario existente que ya tiene u nombre, fecha inicio y fecha fin pero que sus asignaciones han sido eliminadas.
 Regla: El generador recibe una fecha de inicio y fin; sobre las cuales debe realizar la asignación de turnos a las posiciones. 
 Regla: El generador no permite constuir fechas en rangos de calendario solapados con otros calendarios. Cada rango de fechas del calendario deben ser únicos y excluyentes, pero complementarios.

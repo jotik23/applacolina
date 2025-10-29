@@ -18,6 +18,7 @@
   - Migraciones: `docker compose exec web python manage.py migrate`
   - Listar migraciones: `docker compose exec web python manage.py showmigrations`
   - Pruebas: `docker compose exec web python manage.py test`
+  - Nota: el agente nunca debe correr tests contra la base de datos de la aplicación. Solo puede correr tests contra una base de datos de prueba.
 
 ## Notas operativas
 - Los contenedores actuales se pueden verificar con `docker compose ps`.
@@ -32,13 +33,21 @@
 
 ## Registro – Generador de calendarios
 ### 2025-10-29 · Iteración de reglas
-- El generador asume que trabaja sobre un calendario nuevo o que las asignaciones previas ya fueron eliminadas antes de regenerar.
-- El calendario llega desde la interfaz con nombre, fecha inicio y fecha fin definidos; en regeneraciones esos valores ya existen aunque las asignaciones se hayan purgado.
-- Se recibe un rango [fecha inicio, fecha fin] y se deben poblar turnos para las posiciones activas en ese intervalo.
-- Los rangos de calendario no pueden solaparse con otros calendarios existentes; cada calendario usa un intervalo exclusivo.
-- El calendario debe reflejar tanto turnos como descansos.
-- Las posiciones se iteran según `display_order`, siempre que estén vigentes en la fecha asignada (valid_from/valid_until incluyentes). Posiciones fuera de vigencia total se omiten; si están vigentes parcialmente solo se cubre la intersección del rango.
-- Un colaborador se considera para una posición solo si está activo en la fecha (entre ingreso y retiro, si aplica) y la posición está listada en sus sugeridas.
-- Se prioriza consistencia histórica: por posición se respeta el orden de las últimas asignaciones (incluyendo cambios manuales) y, en ausencia de historial, se recurre a candidatos que cumplan las demás reglas.
-- Un colaborador no puede tener más de una asignación el mismo día ni combinar turno y descanso en la misma fecha.
-- Los descansos manuales prevalecen sobre los turnos y deben respetarse junto con los descansos automáticos configurados por colaborador y la configuración de la categoría de la posición.
+Regla: El generador construye la asignación sugerida para un calendario, asumiendo que es un nuevo calendario o se está sobreescribiendo uno existente y la data anterior de asignaciones ha sido eliminada.
+Regla: El generador es llamado en el contexto de una interfaz gráfica que permite diligenciar un nombre del calendario, fecha inicio y fecha fin; o en el contexto de la regeneración de un calendario existente que ya tiene u nombre, fecha inicio y fecha fin pero que sus asignaciones han sido eliminadas.
+Regla: El generador recibe una fecha de inicio y fin; sobre las cuales debe realizar la asignación de turnos a las posiciones. 
+Regla: El generador no permite constuir fechas en rangos de calendario solapados con otros calendarios. Cada rango de fechas del calendario deben ser únicos y excluyentes, pero complementarios.
+Regla: El calendario está compuesto por asignaciones de turnos y de descansos. 
+Regla: El generador asigna turnos al calendario en el orden determinado por las posiciones activas durante el periodo de vigencia de la posición (desde - hasta; incluyentes). Esto significa que el orden de la posición determina la importancia de la asignación, y el algoritmo intenta llenar todas asignaciones de esa posición para el periodo del calendario acorde a todas las reglas del generador. 
+Regla: Se sabe si la posición está activa si: fecha de asignación >= fecha vigente desde de la posición && fecha de asignación <= fecha vigente hasta de la posición.
+Regla: Si la posición no es activa se excluye por completo del calendario a generar.
+Regla: Si la posición está fuera de vigencia total (en relación al rango del calendario), se excluye por completo del calendario a generar. 
+Regla: Si la posición está en vigencia parcial respecto a las fechas del calendario a generar, se incluye en el calendario a generar, pero solo se realizan las asignaciones para el periodo de vigencia que coexiste con los slots de las posiciones activas del calendario, fechas incluyentes.
+Regla: El generador asigna los colaboradores activos, considerando sus posiciones sugeridas, la configuración de descansos manuales y automáticos, así como la configuración del positioncategory asociado a cada posición sugerida. 
+Regla: El generador determina si un colaborador está activo, si fecha asignación >= fecha ingreso del colaborador && fecha asignación <= fecha de retiro del colaborador (o la fecha de retiro está vacía).
+Regla: El generador solo considera un colaborador para una posición si la posición a asignar está dentro del listado de posiciones sugeridas.
+Regla: El generador considera a los colaboradores para una posición en el orden determinado por el historico de asignaciones para la posición fuera y dentro del calendario a generar. Es decir, el generador busca consistencia en la asignación de los turnos futuros, un colaborador debe seguir consistentemente en la última posición asignada.  Si se cambia la asignación manualmente, el generador debe considerar la última posición asignada para el colaborador como punto de partida de consistencia. Si no hay asignaciones historicas, el generador toma colaboradores aleatorios que cumplan con los demás criterios, para la primera asignación, y luego busca consistencia en las siguientes asignaciones de esa posición. 
+Regla: Un colaborador solo puede estar asignado a una posición en el mismo día, ya sea de turno o de descanso. Son excluyentes. No puede estar de turno y de descanso a la vez el mismo día, tampoco puede estar asignado a dos posiciones el mismo día. 
+Regla: Descansos: El colaborador puede tener descansos manuales asignados para un rango de fechas especifico. Estos descansos manuales tienen más peso que las asignaciones de turnos. Es decir, si un colaborador tiene descansos manuales programados, se le debe asignar el descanso y considerar otro colaborador para el turno.
+### 2025-11-02 · Optimización iterativa
+Regla: Tras la primera pasada de asignaciones, el generador revisa iterativamente las posiciones que quedaron sin colaborador elegible y reevalúa reasignaciones posibles respetando las reglas anteriores, liberando operadores de posiciones previas solo cuando exista un candidato alternativo válido. El proceso se repite tantas veces como sea necesario hasta que no mejore el número de asignaciones válidas.

@@ -140,7 +140,7 @@ class BaseAssignmentForm(forms.Form):
             lacks_authorization = True
 
         if allow_override and lacks_authorization:
-            alert_level = AssignmentAlertLevel.NONE
+            alert_level = AssignmentAlertLevel.WARN
 
         conflict = (
             ShiftAssignment.objects.filter(
@@ -152,12 +152,10 @@ class BaseAssignmentForm(forms.Form):
             .exists()
         )
         if conflict:
-            if not allow_override:
-                raise forms.ValidationError(
-                    "El operario ya tiene un turno asignado en esta fecha dentro del calendario."
-                )
-            is_overtime = True
-            alert_level = AssignmentAlertLevel.CRITICAL
+            raise forms.ValidationError(
+                "El operario ya tiene un turno asignado en esta fecha dentro del calendario. "
+                "Debes liberar ese turno antes de reasignarlo."
+            )
 
         if is_overtime:
             policy = resolve_overload_policy(position.category)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from unittest import mock
 
 from django.test import TestCase
 
@@ -16,6 +17,7 @@ from calendario.models import (
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
+    AssignmentDecision,
 )
 from calendario.services import CalendarScheduler
 from granjas.models import Farm
@@ -25,13 +27,31 @@ from users.models import UserProfile
 class CalendarSchedulerTests(TestCase):
     def setUp(self) -> None:
         self.farm = Farm.objects.create(name="Colina Principal")
-        self.category = PositionCategory.objects.create(
+        self.category, created = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
-            shift_type=ShiftType.DAY,
-            rest_max_consecutive_days=8,
-            rest_post_shift_days=0,
-            rest_monthly_days=5,
+            defaults={
+                "shift_type": ShiftType.DAY,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
         )
+        if not created:
+            update_fields: list[str] = []
+            if self.category.shift_type != ShiftType.DAY:
+                self.category.shift_type = ShiftType.DAY
+                update_fields.append("shift_type")
+            if self.category.rest_max_consecutive_days != 8:
+                self.category.rest_max_consecutive_days = 8
+                update_fields.append("rest_max_consecutive_days")
+            if self.category.rest_post_shift_days != 0:
+                self.category.rest_post_shift_days = 0
+                update_fields.append("rest_post_shift_days")
+            if self.category.rest_monthly_days != 5:
+                self.category.rest_monthly_days = 5
+                update_fields.append("rest_monthly_days")
+            if update_fields:
+                self.category.save(update_fields=update_fields)
         self.position = PositionDefinition.objects.create(
             name="Galpón A",
             code="GPA-001",
@@ -149,3 +169,42 @@ class CalendarSchedulerTests(TestCase):
         self.assertEqual(len(rest_periods), 1)
         self.assertEqual(rest_periods[0].start_date, date(2025, 10, 22))
         self.assertEqual(rest_periods[0].end_date, date(2025, 10, 22))
+
+    def test_generate_enforces_unique_operator_per_day(self) -> None:
+        second_position = PositionDefinition.objects.create(
+            name="Galpón B",
+            code="GPB-002",
+            category=self.category,
+            farm=self.farm,
+            valid_from=date(2025, 10, 1),
+        )
+        self.primary_operator.suggested_positions.add(second_position)
+
+        target_calendar = ShiftCalendar.objects.create(
+            name="Semana con duplicados",
+            start_date=date(2025, 10, 21),
+            end_date=date(2025, 10, 21),
+            status=CalendarStatus.DRAFT,
+        )
+
+        duplicate_decisions = [
+            AssignmentDecision(
+                position=self.position,
+                operator=self.primary_operator,
+                date=target_calendar.start_date,
+            ),
+            AssignmentDecision(
+                position=second_position,
+                operator=self.primary_operator,
+                date=target_calendar.start_date,
+            ),
+        ]
+
+        scheduler = CalendarScheduler(target_calendar)
+        with mock.patch.object(CalendarScheduler, "_plan_schedule", return_value=duplicate_decisions):
+            decisions = scheduler.generate()
+
+        self.assertEqual(decisions[0].operator, self.primary_operator)
+        self.assertIsNone(decisions[1].operator)
+        self.assertEqual(decisions[1].alert_level, AssignmentAlertLevel.CRITICAL)
+        self.assertIn("ya tenía turno", decisions[1].notes)

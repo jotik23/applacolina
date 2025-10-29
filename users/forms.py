@@ -1,10 +1,42 @@
 from __future__ import annotations
 
 from django import forms
-from django.contrib.auth.forms import ReadOnlyPasswordHashField
+from django.contrib.auth.forms import AuthenticationForm, ReadOnlyPasswordHashField
 from django.apps import apps
 
 from .models import Role, UserProfile, RestDayOfWeek
+
+
+class PortalAuthenticationForm(AuthenticationForm):
+    username = forms.CharField(
+        label="Cédula",
+        widget=forms.TextInput(
+            attrs={
+                "autofocus": True,
+                "autocomplete": "username",
+                "class": "block w-full rounded border border-slate-300 px-3 py-2 text-slate-900 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand",
+                "placeholder": "Ingresa la cédula",
+            }
+        ),
+    )
+    password = forms.CharField(
+        label="Clave",
+        strip=False,
+        widget=forms.PasswordInput(
+            attrs={
+                "autocomplete": "current-password",
+                "class": "block w-full rounded border border-slate-300 px-3 py-2 text-slate-900 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand",
+                "placeholder": "Ingresa la clave",
+            }
+        ),
+    )
+
+    error_messages = {
+        "invalid_login": (
+            "Los datos ingresados no son válidos. Verifica la cédula y la clave."
+        ),
+        "inactive": "Tu cuenta está inactiva. Contacta al administrador.",
+    }
 
 
 class UserCreationForm(forms.ModelForm):

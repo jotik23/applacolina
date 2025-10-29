@@ -31,7 +31,7 @@
             <a href="{% url 'calendario:dashboard' %}#listado" class="rounded px-3 py-1 hover:bg-slate-100">Calendario</a>
           </nav>
         </div>
-        <div class="hidden items-center space-x-4 text-sm text-slate-500 md:flex">
+        <div class="flex items-center space-x-4 text-sm text-slate-500">
           {% if request.user.is_authenticated %}
             {% with full_name=request.user.get_full_name %}
               <span>
@@ -42,10 +42,10 @@
                 {% endif %}
               </span>
             {% endwith %}
-            <a href="{% url 'admin:logout' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Salir</a>
+            <a href="{% url 'portal:logout' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Cerrar sesión</a>
           {% else %}
             <span>Invitado</span>
-            <a href="{% url 'admin:login' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Iniciar sesión</a>
+            <a href="{% url 'portal:login' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Iniciar sesión</a>
           {% endif %}
         </div>
       </div>
@@ -100,6 +100,7 @@
         }
 
         var current = null;
+        var currentConfirmation = null;
 
         function focusFirst(target) {
           if (!target) {
@@ -128,6 +129,22 @@
           }
           if (current === data) {
             current = null;
+          }
+        }
+
+        function hideConfirmation(data) {
+          if (!data) {
+            return;
+          }
+          if (data.overlay) {
+            data.overlay.classList.add('hidden');
+          }
+          var focusTarget = data.lastActive || data.trigger;
+          if (focusTarget && typeof focusTarget.focus === 'function') {
+            focusTarget.focus();
+          }
+          if (currentConfirmation === data) {
+            currentConfirmation = null;
           }
         }
 
@@ -189,14 +206,82 @@
           });
         }
 
+        function attachConfirmation(form) {
+          if (form.dataset.confirmationBound === 'true') {
+            return;
+          }
+
+          var overlay = form.querySelector('[data-confirmation-overlay]');
+          var confirmButton = overlay ? overlay.querySelector('[data-confirmation-confirm]') : null;
+
+          if (!overlay || !confirmButton) {
+            return;
+          }
+
+          form.dataset.confirmationBound = 'true';
+
+          var trigger = form.querySelector('[data-confirmation-trigger]');
+          var cancelButtons = toArray(form.querySelectorAll('[data-confirmation-cancel]'));
+
+          var data = {
+            form: form,
+            overlay: overlay,
+            trigger: trigger,
+            lastActive: null,
+          };
+
+          function open() {
+            if (currentConfirmation && currentConfirmation !== data) {
+              hideConfirmation(currentConfirmation);
+            }
+            data.lastActive = document.activeElement;
+            overlay.classList.remove('hidden');
+            focusFirst(overlay);
+            currentConfirmation = data;
+          }
+
+          form.addEventListener('submit', function (event) {
+            if (form.__confirmationSubmitting) {
+              form.__confirmationSubmitting = false;
+              return;
+            }
+            event.preventDefault();
+            open();
+          });
+
+          confirmButton.addEventListener('click', function () {
+            hideConfirmation(data);
+            form.__confirmationSubmitting = true;
+            form.submit();
+            form.__confirmationSubmitting = false;
+          });
+
+          cancelButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              hideConfirmation(data);
+            });
+          });
+
+          overlay.addEventListener('click', function (event) {
+            if (event.target === overlay) {
+              hideConfirmation(data);
+            }
+          });
+        }
+
         document.addEventListener('keydown', function (event) {
           if (event.key === 'Escape' && current) {
             hide(current);
+            return;
+          }
+          if (event.key === 'Escape' && currentConfirmation) {
+            hideConfirmation(currentConfirmation);
           }
         });
 
         document.addEventListener('DOMContentLoaded', function () {
           toArray(document.querySelectorAll('[data-double-confirm]')).forEach(attach);
+          toArray(document.querySelectorAll('[data-confirmation]')).forEach(attachConfirmation);
         });
       })();
     </script>

@@ -278,6 +278,72 @@ def _build_assignment_matrix(
 
     choices_map = _eligible_operator_map(calendar, positions, date_columns, assignments)
 
+    alert_priority = {
+        AssignmentAlertLevel.NONE: 0,
+        AssignmentAlertLevel.WARN: 1,
+        AssignmentAlertLevel.CRITICAL: 2,
+    }
+
+    def _normalize_alert_level(
+        value: AssignmentAlertLevel | str | None,
+    ) -> AssignmentAlertLevel:
+        if isinstance(value, AssignmentAlertLevel):
+            return value
+        if value:
+            try:
+                return AssignmentAlertLevel(value)
+            except ValueError:
+                return AssignmentAlertLevel.NONE
+        return AssignmentAlertLevel.NONE
+
+    def _escalate_alert(
+        current: AssignmentAlertLevel,
+        candidate: AssignmentAlertLevel,
+    ) -> AssignmentAlertLevel:
+        if alert_priority[candidate] > alert_priority[current]:
+            return candidate
+        return current
+
+    rest_periods = list(
+        OperatorRestPeriod.objects.select_related("operator")
+        .prefetch_related("operator__roles")
+        .filter(start_date__lte=calendar.end_date, end_date__gte=calendar.start_date)
+        .order_by("start_date", "operator__apellidos", "operator__nombres")
+    )
+
+    resting_operator_ids_by_day: dict[date, set[int]] = defaultdict(set)
+    for rest_period in rest_periods:
+        operator = rest_period.operator
+        operator_id = getattr(operator, "id", None)
+        if not operator_id:
+            continue
+        if operator_id not in operator_map and operator:
+            operator_map[operator_id] = operator
+        start = max(rest_period.start_date, calendar.start_date)
+        end = min(rest_period.end_date, calendar.end_date)
+        current_day = start
+        while current_day <= end:
+            resting_operator_ids_by_day[current_day].add(operator_id)
+            current_day += timedelta(days=1)
+
+    available_operator_qs = (
+        UserProfile.objects.filter(
+            Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=calendar.end_date),
+            Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=calendar.start_date),
+            is_active=True,
+        )
+        .prefetch_related("roles")
+        .order_by("apellidos", "nombres")
+    )
+
+    active_candidates_by_day: dict[date, set[int]] = defaultdict(set)
+    for operator in available_operator_qs:
+        if operator.id not in operator_map:
+            operator_map[operator.id] = operator
+        for target_day in date_columns:
+            if operator.is_active_on(target_day):
+                active_candidates_by_day[target_day].add(operator.id)
+
     def _suggestion_gap_message(
         assignment: ShiftAssignment,
         position: PositionDefinition,
@@ -312,6 +378,16 @@ def _build_assignment_matrix(
             return "Operario con doble turno hoy. Ajusta descansos."
         return "Operario con sobrecarga consecutiva. Ajusta descansos."
 
+    def _operator_sort_key(operator_id: int) -> tuple[str, str, int]:
+        operator = operator_map.get(operator_id)
+        if not operator:
+            return ("", "", operator_id)
+        return (
+            (operator.apellidos or "").lower(),
+            (operator.nombres or "").lower(),
+            operator_id,
+        )
+
     rows: List[dict[str, Any]] = []
     for position in positions:
         position_choices = choices_map.get(position.id, {})
@@ -319,20 +395,132 @@ def _build_assignment_matrix(
         for day in date_columns:
             assignment = assignment_map.get((position.id, day))
             is_active = position.is_active_on(day)
-            choices = position_choices.get(day, [])
+
+            raw_choices = position_choices.get(day, [])
+            choices = [dict(option) for option in raw_choices]
+            choices.sort(key=lambda item: item["label"].lower())
+
+            if assignment and assignment.operator_id:
+                operator = getattr(assignment, "operator", None)
+                if operator and not any(option["id"] == assignment.operator_id for option in choices):
+                    choices.insert(
+                        0,
+                        {
+                            "id": assignment.operator_id,
+                            "label": _format_operator_label(operator),
+                            "alert": AssignmentAlertLevel.NONE,
+                            "disabled": False,
+                        },
+                    )
+                elif operator is None and not any(option["id"] == assignment.operator_id for option in choices):
+                    choices.insert(
+                        0,
+                        {
+                            "id": assignment.operator_id,
+                            "label": str(assignment.operator_id),
+                            "alert": AssignmentAlertLevel.NONE,
+                            "disabled": False,
+                        },
+                    )
+
             if not is_active:
                 choices = []
 
-            alert = assignment.alert_level if assignment else AssignmentAlertLevel.NONE
             skill_gap_message = _suggestion_gap_message(assignment, position) if assignment else None
             is_overtime = bool(assignment and assignment.is_overtime)
             overtime_message = _overtime_message(assignment) if assignment else None
+
+            alert_level = _normalize_alert_level(assignment.alert_level if assignment else None)
+
+            if not assignment:
+                alert_level = (
+                    AssignmentAlertLevel.CRITICAL if is_active else AssignmentAlertLevel.NONE
+                )
+            else:
+                if is_overtime:
+                    alert_level = _escalate_alert(alert_level, AssignmentAlertLevel.CRITICAL)
+                if skill_gap_message:
+                    manual_override = not assignment.is_auto_assigned
+                    desired_alert = (
+                        AssignmentAlertLevel.WARN if manual_override else AssignmentAlertLevel.CRITICAL
+                    )
+                    alert_level = _escalate_alert(alert_level, desired_alert)
+
+            if not assignment and is_active:
+                existing_ids = {option.get("id") for option in choices}
+                emergency_choices: List[dict[str, Any]] = []
+
+                def _append_suffix(label: str, suffix_value: str) -> str:
+                    if not suffix_value:
+                        return label
+                    normalized_suffix = suffix_value.strip()
+                    if not normalized_suffix:
+                        return label
+                    suffix_patterns = (
+                        f" - {normalized_suffix}",
+                        f" · {normalized_suffix}",
+                    )
+                    for pattern in suffix_patterns:
+                        if pattern.lower() in label.lower():
+                            return label
+                    return f"{label} - {normalized_suffix}"
+
+                def _append_emergency_choice(operator_id: int, suffix: str) -> None:
+                    if not operator_id:
+                        return
+                    existing_option = None
+                    for container in (choices, emergency_choices):
+                        for item in container:
+                            if item.get("id") == operator_id:
+                                existing_option = item
+                                break
+                        if existing_option:
+                            break
+                    normalized_suffix = suffix.strip() if suffix else ""
+                    if existing_option:
+                        if normalized_suffix:
+                            existing_option["label"] = _append_suffix(
+                                existing_option["label"], normalized_suffix
+                            )
+                        return
+                    if operator_id in existing_ids:
+                        return
+                    if assignments_by_operator_day.get((operator_id, day)):
+                        return
+                    operator = operator_map.get(operator_id)
+                    if not operator:
+                        return
+                    label = _format_operator_label(operator)
+                    label = _append_suffix(label, normalized_suffix)
+                    emergency_choices.append(
+                        {
+                            "id": operator_id,
+                            "label": label,
+                            "alert": AssignmentAlertLevel.NONE,
+                            "disabled": False,
+                        }
+                    )
+                    existing_ids.add(operator_id)
+
+                rest_emergency_ids = resting_operator_ids_by_day.get(day, set())
+                for operator_id in sorted(rest_emergency_ids, key=_operator_sort_key):
+                    _append_emergency_choice(operator_id, "En descanso")
+
+                active_emergency_ids = active_candidates_by_day.get(day, set())
+                for operator_id in sorted(active_emergency_ids, key=_operator_sort_key):
+                    if operator_id in rest_emergency_ids:
+                        continue
+                    _append_emergency_choice(operator_id, "Disponible")
+
+                if emergency_choices:
+                    choices.extend(emergency_choices)
+                    choices.sort(key=lambda item: item["label"].lower())
 
             row_cells.append(
                 {
                     "date": day,
                     "assignment": assignment,
-                    "alert": alert,
+                    "alert": alert_level.value,
                     "is_position_active": is_active,
                     "choices": choices,
                     "skill_gap_message": skill_gap_message,
@@ -346,18 +534,6 @@ def _build_assignment_matrix(
                 "cells": row_cells,
             }
         )
-
-    rest_periods = list(
-        OperatorRestPeriod.objects.select_related("operator")
-        .prefetch_related("operator__roles")
-        .filter(start_date__lte=calendar.end_date, end_date__gte=calendar.start_date)
-        .order_by("start_date", "operator__apellidos", "operator__nombres")
-    )
-
-    for rest_period in rest_periods:
-        operator = rest_period.operator
-        if operator and operator.id not in operator_map:
-            operator_map[operator.id] = operator
 
     rest_rows, rest_operator_ids = _build_rest_rows(
         date_columns=date_columns,
@@ -535,17 +711,23 @@ def _calculate_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     for row in rows:
         for cell in row["cells"]:
             assignment = cell["assignment"]
+            alert_value = cell.get("alert") or AssignmentAlertLevel.NONE.value
+            try:
+                alert_level = AssignmentAlertLevel(alert_value)
+            except ValueError:  # pragma: no cover - defensive
+                alert_level = AssignmentAlertLevel.NONE
             if not assignment:
                 stats["gaps"] += 1
-                stats["critical"] += 1
+                if alert_level == AssignmentAlertLevel.CRITICAL:
+                    stats["critical"] += 1
                 continue
 
             stats["total_assignments"] += 1
-            if assignment.alert_level == AssignmentAlertLevel.WARN:
+            if alert_level == AssignmentAlertLevel.WARN:
                 stats["warn"] += 1
-            if assignment.alert_level == AssignmentAlertLevel.CRITICAL:
+            if alert_level == AssignmentAlertLevel.CRITICAL:
                 stats["critical"] += 1
-            if assignment.is_overtime:
+            if cell.get("is_overtime"):
                 stats["overtime"] += 1
 
     return stats
@@ -1191,22 +1373,11 @@ class CalendarDetailView(LoginRequiredMixin, View):
         date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
         can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
-
-        manual_operator_choices: list[dict[str, Any]] = []
-        if can_override:
-            reference_date = calendar.start_date
-            operator_qs = (
-                UserProfile.objects.active_on(reference_date)
-                .prefetch_related("roles")
-                .order_by("apellidos", "nombres")
-            )
-            manual_operator_choices = [
-                {
-                    "id": operator.id,
-                    "label": _format_operator_label(operator),
-                }
-                for operator in operator_qs
-            ]
+        has_manual_choices = any(
+            cell.get("choices")
+            for row in rows
+            for cell in row.get("cells", [])
+        )
 
         return render(
             request,
@@ -1219,7 +1390,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 "rest_rows": rest_rows,
                 "rest_summary": rest_summary,
                 "can_override": can_override,
-                "manual_operator_choices": manual_operator_choices,
+                "has_manual_choices": has_manual_choices,
                 "position_groups": position_groups,
             },
         )
