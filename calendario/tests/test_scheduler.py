@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from unittest import mock
 
 from django.test import TestCase
@@ -275,3 +275,289 @@ class CalendarSchedulerTests(TestCase):
             target_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).order_by("start_date")
         )
         self.assertEqual(len(rest_periods), 0)
+
+    def test_generate_flips_night_to_day_after_rest(self) -> None:
+        night_category, created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_PRODUCCION_NOCHE,
+            defaults={
+                "shift_type": ShiftType.NIGHT,
+                "rest_max_consecutive_days": 2,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+        if not created:
+            update_fields: list[str] = []
+            if night_category.shift_type != ShiftType.NIGHT:
+                night_category.shift_type = ShiftType.NIGHT
+                update_fields.append("shift_type")
+            if night_category.rest_max_consecutive_days != 2:
+                night_category.rest_max_consecutive_days = 2
+                update_fields.append("rest_max_consecutive_days")
+            if night_category.rest_post_shift_days != 0:
+                night_category.rest_post_shift_days = 0
+                update_fields.append("rest_post_shift_days")
+            if night_category.rest_monthly_days != 5:
+                night_category.rest_monthly_days = 5
+                update_fields.append("rest_monthly_days")
+            if update_fields:
+                night_category.save(update_fields=update_fields)
+
+        calendar_start = date(2025, 11, 1)
+        night_position = PositionDefinition.objects.create(
+            name="Vigilante Nocturno",
+            code="VIG-NT-001",
+            category=night_category,
+            farm=self.farm,
+            valid_from=calendar_start,
+            display_order=1,
+        )
+        day_position = PositionDefinition.objects.create(
+            name="Vigilante Diurno",
+            code="VIG-DI-001",
+            category=self.category,
+            farm=self.farm,
+            valid_from=calendar_start + timedelta(days=3),
+            display_order=2,
+        )
+
+        hybrid_operator = UserProfile.objects.create_user(
+            cedula="2001",
+            password="pass",  # noqa: S106 - credencial de prueba
+            nombres="Camila",
+            apellidos="Aldana",
+            telefono="3000001000",
+        )
+        hybrid_operator.suggested_positions.add(night_position, day_position)
+
+        night_backup = UserProfile.objects.create_user(
+            cedula="2002",
+            password="pass",  # noqa: S106 - credencial de prueba
+            nombres="Diego",
+            apellidos="Zuluaga",
+            telefono="3000001001",
+        )
+        night_backup.suggested_positions.add(night_position)
+
+        target_calendar = ShiftCalendar.objects.create(
+            name="Flip noche a día",
+            start_date=calendar_start,
+            end_date=calendar_start + timedelta(days=4),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(target_calendar)
+        decisions = scheduler.generate()
+
+        assignments_by_date: dict[date, dict[str, Optional[UserProfile]]] = {}
+        for decision in decisions:
+            day_assignments = assignments_by_date.setdefault(decision.date, {})
+            day_assignments[decision.position.code] = decision.operator
+
+        day1 = calendar_start
+        day2 = calendar_start + timedelta(days=1)
+        day3 = calendar_start + timedelta(days=2)
+        day4 = calendar_start + timedelta(days=3)
+        day5 = calendar_start + timedelta(days=4)
+
+        self.assertEqual(assignments_by_date[day1]["VIG-NT-001"], hybrid_operator)
+        self.assertEqual(assignments_by_date[day2]["VIG-NT-001"], hybrid_operator)
+        self.assertEqual(assignments_by_date[day3]["VIG-NT-001"], night_backup)
+        self.assertEqual(assignments_by_date[day4]["VIG-NT-001"], night_backup)
+        self.assertEqual(assignments_by_date[day4]["VIG-DI-001"], hybrid_operator)
+        self.assertEqual(assignments_by_date[day5]["VIG-DI-001"], hybrid_operator)
+
+    def test_generate_continues_same_shift_without_opposite_option(self) -> None:
+        night_category, created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.GALPONERO_LEVANTE_NOCHE,
+            defaults={
+                "shift_type": ShiftType.NIGHT,
+                "rest_max_consecutive_days": 2,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+        if not created:
+            update_fields: list[str] = []
+            if night_category.shift_type != ShiftType.NIGHT:
+                night_category.shift_type = ShiftType.NIGHT
+                update_fields.append("shift_type")
+            if night_category.rest_max_consecutive_days != 2:
+                night_category.rest_max_consecutive_days = 2
+                update_fields.append("rest_max_consecutive_days")
+            if night_category.rest_post_shift_days != 0:
+                night_category.rest_post_shift_days = 0
+                update_fields.append("rest_post_shift_days")
+            if night_category.rest_monthly_days != 5:
+                night_category.rest_monthly_days = 5
+                update_fields.append("rest_monthly_days")
+            if update_fields:
+                night_category.save(update_fields=update_fields)
+
+        calendar_start = date(2025, 11, 8)
+        night_position = PositionDefinition.objects.create(
+            name="Supervisor Noche",
+            code="SUP-NT-001",
+            category=night_category,
+            farm=self.farm,
+            valid_from=calendar_start,
+            display_order=1,
+        )
+
+        night_only = UserProfile.objects.create_user(
+            cedula="2010",
+            password="pass",  # noqa: S106 - credencial de prueba
+            nombres="Elena",
+            apellidos="Arango",
+            telefono="3000001010",
+        )
+        night_only.suggested_positions.add(night_position)
+
+        night_backup = UserProfile.objects.create_user(
+            cedula="2011",
+            password="pass",  # noqa: S106 - credencial de prueba
+            nombres="Fabio",
+            apellidos="Zamora",
+            telefono="3000001011",
+        )
+        night_backup.suggested_positions.add(night_position)
+
+        target_calendar = ShiftCalendar.objects.create(
+            name="Continuidad nocturna",
+            start_date=calendar_start,
+            end_date=calendar_start + timedelta(days=4),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(target_calendar)
+        decisions = scheduler.generate()
+
+        assignments_by_date: dict[date, dict[str, Optional[UserProfile]]] = {}
+        for decision in decisions:
+            day_assignments = assignments_by_date.setdefault(decision.date, {})
+            day_assignments[decision.position.code] = decision.operator
+
+        day1 = calendar_start
+        day2 = calendar_start + timedelta(days=1)
+        day3 = calendar_start + timedelta(days=2)
+        day4 = calendar_start + timedelta(days=3)
+
+        self.assertEqual(assignments_by_date[day1]["SUP-NT-001"], night_only)
+        self.assertEqual(assignments_by_date[day2]["SUP-NT-001"], night_only)
+        self.assertEqual(assignments_by_date[day3]["SUP-NT-001"], night_backup)
+        self.assertEqual(assignments_by_date[day4]["SUP-NT-001"], night_only)
+
+    def test_generate_flips_day_to_night_after_rest(self) -> None:
+        day_category, created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.CLASIFICADOR_DIA,
+            defaults={
+                "shift_type": ShiftType.DAY,
+                "rest_max_consecutive_days": 2,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+        if not created:
+            update_fields: list[str] = []
+            if day_category.shift_type != ShiftType.DAY:
+                day_category.shift_type = ShiftType.DAY
+                update_fields.append("shift_type")
+            if day_category.rest_max_consecutive_days != 2:
+                day_category.rest_max_consecutive_days = 2
+                update_fields.append("rest_max_consecutive_days")
+            if day_category.rest_post_shift_days != 0:
+                day_category.rest_post_shift_days = 0
+                update_fields.append("rest_post_shift_days")
+            if day_category.rest_monthly_days != 5:
+                day_category.rest_monthly_days = 5
+                update_fields.append("rest_monthly_days")
+            if update_fields:
+                day_category.save(update_fields=update_fields)
+
+        night_category, created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.CLASIFICADOR_NOCHE,
+            defaults={
+                "shift_type": ShiftType.NIGHT,
+                "rest_max_consecutive_days": 2,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+        if not created:
+            update_fields: list[str] = []
+            if night_category.shift_type != ShiftType.NIGHT:
+                night_category.shift_type = ShiftType.NIGHT
+                update_fields.append("shift_type")
+            if night_category.rest_max_consecutive_days != 2:
+                night_category.rest_max_consecutive_days = 2
+                update_fields.append("rest_max_consecutive_days")
+            if night_category.rest_post_shift_days != 0:
+                night_category.rest_post_shift_days = 0
+                update_fields.append("rest_post_shift_days")
+            if night_category.rest_monthly_days != 5:
+                night_category.rest_monthly_days = 5
+                update_fields.append("rest_monthly_days")
+            if update_fields:
+                night_category.save(update_fields=update_fields)
+
+        calendar_start = date(2025, 11, 15)
+        day_position = PositionDefinition.objects.create(
+            name="Operario Día",
+            code="OP-DI-001",
+            category=day_category,
+            farm=self.farm,
+            valid_from=calendar_start,
+            display_order=1,
+        )
+        night_position = PositionDefinition.objects.create(
+            name="Operario Noche",
+            code="OP-NT-001",
+            category=night_category,
+            farm=self.farm,
+            valid_from=calendar_start + timedelta(days=3),
+            display_order=2,
+        )
+
+        hybrid_operator = UserProfile.objects.create_user(
+            cedula="2020",
+            password="pass",  # noqa: S106 - credencial de prueba
+            nombres="Gina",
+            apellidos="Almonacid",
+            telefono="3000001020",
+        )
+        hybrid_operator.suggested_positions.add(day_position, night_position)
+
+        day_backup = UserProfile.objects.create_user(
+            cedula="2021",
+            password="pass",  # noqa: S106 - credencial de prueba
+            nombres="Héctor",
+            apellidos="Barrera",
+            telefono="3000001021",
+        )
+        day_backup.suggested_positions.add(day_position)
+
+        target_calendar = ShiftCalendar.objects.create(
+            name="Flip día a noche",
+            start_date=calendar_start,
+            end_date=calendar_start + timedelta(days=4),
+            status=CalendarStatus.DRAFT,
+        )
+
+        scheduler = CalendarScheduler(target_calendar)
+        decisions = scheduler.generate()
+
+        assignments_by_date: dict[date, dict[str, Optional[UserProfile]]] = {}
+        for decision in decisions:
+            day_assignments = assignments_by_date.setdefault(decision.date, {})
+            day_assignments[decision.position.code] = decision.operator
+
+        day1 = calendar_start
+        day2 = calendar_start + timedelta(days=1)
+        day3 = calendar_start + timedelta(days=2)
+        day4 = calendar_start + timedelta(days=3)
+
+        self.assertEqual(assignments_by_date[day1]["OP-DI-001"], hybrid_operator)
+        self.assertEqual(assignments_by_date[day2]["OP-DI-001"], hybrid_operator)
+        self.assertEqual(assignments_by_date[day3]["OP-DI-001"], day_backup)
+        self.assertEqual(assignments_by_date[day4]["OP-DI-001"], day_backup)
+        self.assertEqual(assignments_by_date[day4]["OP-NT-001"], hybrid_operator)

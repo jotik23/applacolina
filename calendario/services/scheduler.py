@@ -14,6 +14,7 @@ from ..models import (
     CalendarStatus,
     OperatorRestPeriod,
     PositionDefinition,
+    ShiftType,
     RestPeriodSource,
     RestPeriodStatus,
     ShiftAssignment,
@@ -49,7 +50,11 @@ class CalendarScheduler:
 
         self._calendar_dates = list(self._daterange(calendar.start_date, calendar.end_date))
         self._positions = self._load_positions()
+        self._position_index: Dict[PositionId, PositionDefinition] = {
+            position.id: position for position in self._positions if position.id is not None
+        }
         self._position_candidates, self._operator_cache = self._load_position_candidates()
+        self._operator_shift_catalog = self._build_operator_shift_catalog()
         self._automatic_rest_index: Dict[OperatorId, Set[int]] = {
             operator_id: set(operator.automatic_rest_days or [])
             for operator_id, operator in self._operator_cache.items()
@@ -66,14 +71,20 @@ class CalendarScheduler:
         self._work_streak: DefaultDict[OperatorId, int] = defaultdict(int)
         self._rest_history = self._load_rest_history()
         self._assignment_history = self._load_assignment_history()
+        self._operator_last_shift_type = self._load_operator_last_shift()
+        self._operator_current_shift: Dict[OperatorId, Optional[str]] = {}
+        self._operator_pending_shift: Dict[OperatorId, Optional[str]] = {}
         self._initialize_rest_tracking()
+        self._initialize_shift_tracking()
         self._snapshot_rest_state()
+        self._snapshot_shift_state()
         self._position_history = self._load_position_history()
         self._candidate_priority = self._build_candidate_priority()
 
     def generate(self, *, commit: bool = False) -> List[AssignmentDecision]:
         self._validate_calendar_range()
         self._restore_rest_state()
+        self._restore_shift_state()
         self._post_shift_rest_by_assignment.clear()
 
         decisions = self._plan_schedule()
@@ -143,6 +154,65 @@ class CalendarScheduler:
             )
 
         return dict(candidates), operator_cache
+
+    def _build_operator_shift_catalog(self) -> Dict[OperatorId, Set[str]]:
+        catalog: Dict[OperatorId, Set[str]] = {}
+        for operator_id, operator in self._operator_cache.items():
+            shift_types: Set[str] = set()
+            for suggested in operator.suggested_positions.all():
+                if suggested.category_id:
+                    shift_types.add(suggested.category.shift_type)
+            if shift_types:
+                catalog[operator_id] = shift_types
+        return catalog
+
+    def _load_operator_last_shift(self) -> Dict[OperatorId, str]:
+        if not self._operator_cache:
+            return {}
+
+        history_end = self.calendar.start_date - timedelta(days=1)
+        if history_end < self._history_start_date:
+            return {}
+
+        operator_ids = list(self._operator_cache.keys())
+        assignment_qs = (
+            ShiftAssignment.objects.filter(
+                operator_id__in=operator_ids,
+                date__gte=self._history_start_date,
+                date__lte=history_end,
+            )
+            .select_related("position__category")
+            .order_by("operator_id", "-date", "-updated_at")
+        )
+
+        last_shift: Dict[OperatorId, Tuple[date, Optional[datetime], str]] = {}
+
+        for assignment in assignment_qs:
+            operator_id = assignment.operator_id
+            if not operator_id:
+                continue
+
+            position = assignment.position
+            if position is None or position.category_id is None:
+                continue
+
+            shift_type = position.category.shift_type
+            recorded = last_shift.get(operator_id)
+            if recorded:
+                stored_date, stored_updated, _ = recorded
+                if assignment.date < stored_date:
+                    continue
+                if (
+                    assignment.date == stored_date
+                    and stored_updated
+                    and assignment.updated_at
+                    and assignment.updated_at <= stored_updated
+                ):
+                    continue
+
+            last_shift[operator_id] = (assignment.date, assignment.updated_at, shift_type)
+
+        return {operator_id: shift for operator_id, (_, __, shift) in last_shift.items()}
 
     def _build_manual_rest_index(self) -> Dict[OperatorId, Set[date]]:
         if not self._operator_cache:
@@ -236,6 +306,46 @@ class CalendarScheduler:
                 day -= timedelta(days=1)
             self._work_streak[operator_id] = streak
 
+    def _initialize_shift_tracking(self) -> None:
+        for operator_id in self._operator_cache.keys():
+            last_shift = self._operator_last_shift_type.get(operator_id)
+            if self._work_streak.get(operator_id, 0) > 0 and last_shift:
+                self._operator_current_shift[operator_id] = last_shift
+                self._operator_pending_shift[operator_id] = None
+                continue
+
+            self._operator_current_shift[operator_id] = None
+            desired_shift = self._determine_post_rest_shift(operator_id, last_shift)
+            self._operator_pending_shift[operator_id] = desired_shift
+
+    def _determine_post_rest_shift(
+        self,
+        operator_id: OperatorId,
+        last_shift: Optional[str],
+    ) -> Optional[str]:
+        if not last_shift or last_shift not in (ShiftType.DAY, ShiftType.NIGHT):
+            return None
+
+        opposite = ShiftType.NIGHT if last_shift == ShiftType.DAY else ShiftType.DAY
+        if self._operator_supports_shift(operator_id, opposite):
+            return opposite
+
+        if self._operator_supports_shift(operator_id, last_shift):
+            return last_shift
+
+        return None
+
+    def _operator_supports_shift(self, operator_id: OperatorId, shift_type: str) -> bool:
+        catalog = self._operator_shift_catalog.get(operator_id, set())
+        if not catalog:
+            return False
+
+        if shift_type == ShiftType.DAY:
+            return ShiftType.DAY in catalog or ShiftType.MIXED in catalog
+        if shift_type == ShiftType.NIGHT:
+            return ShiftType.NIGHT in catalog or ShiftType.MIXED in catalog
+        return shift_type in catalog
+
     def _snapshot_rest_state(self) -> None:
         self._rest_usage_snapshot: Dict[OperatorId, Dict[Tuple[int, int], int]] = {
             operator_id: dict(month_counts)
@@ -246,6 +356,17 @@ class CalendarScheduler:
             for operator_id, days in self._registered_rest_days.items()
         }
         self._work_streak_snapshot: Dict[OperatorId, int] = dict(self._work_streak)
+
+    def _snapshot_shift_state(self) -> None:
+        self._operator_last_shift_type_snapshot: Dict[OperatorId, Optional[str]] = dict(
+            self._operator_last_shift_type
+        )
+        self._operator_current_shift_snapshot: Dict[OperatorId, Optional[str]] = dict(
+            self._operator_current_shift
+        )
+        self._operator_pending_shift_snapshot: Dict[OperatorId, Optional[str]] = dict(
+            self._operator_pending_shift
+        )
 
     def _restore_rest_state(self) -> None:
         self._rest_usage = defaultdict(lambda: defaultdict(int))
@@ -263,6 +384,11 @@ class CalendarScheduler:
             self._work_streak[operator_id] = streak
 
         self._planned_rest_days = defaultdict(set)
+
+    def _restore_shift_state(self) -> None:
+        self._operator_last_shift_type = dict(self._operator_last_shift_type_snapshot)
+        self._operator_current_shift = dict(self._operator_current_shift_snapshot)
+        self._operator_pending_shift = dict(self._operator_pending_shift_snapshot)
 
     @staticmethod
     def _month_key(target_date: date) -> Tuple[int, int]:
@@ -295,6 +421,7 @@ class CalendarScheduler:
         if rest_day in self._registered_rest_days[operator_id]:
             dynamic_rest_blocks[operator_id].add(rest_day)
             self._work_streak[operator_id] = 0
+            self._handle_rest_day(operator_id)
             return True
 
         if rest_quota and rest_quota > 0:
@@ -305,6 +432,7 @@ class CalendarScheduler:
         self._record_rest_day(operator_id, rest_day, initial=False)
         dynamic_rest_blocks[operator_id].add(rest_day)
         self._work_streak[operator_id] = 0
+        self._handle_rest_day(operator_id)
         return True
 
     def _force_rest_day(
@@ -322,19 +450,34 @@ class CalendarScheduler:
 
         dynamic_rest_blocks[operator_id].add(rest_day)
 
+    def _handle_rest_day(self, operator_id: OperatorId) -> None:
+        current_shift = self._operator_current_shift.get(operator_id)
+        if current_shift is not None:
+            self._operator_last_shift_type[operator_id] = current_shift
+
+        last_shift = current_shift or self._operator_last_shift_type.get(operator_id)
+        self._operator_current_shift[operator_id] = None
+        desired_shift = self._determine_post_rest_shift(operator_id, last_shift)
+        self._operator_pending_shift[operator_id] = desired_shift
+
     def _prepare_day_state(
         self,
         current_date: date,
         dynamic_rest_blocks: DefaultDict[OperatorId, Set[date]],
     ) -> None:
         for operator_id in self._operator_cache.keys():
-            if current_date in self._registered_rest_days[operator_id]:
+            registered_days = self._registered_rest_days.get(operator_id, set())
+            if current_date in registered_days:
+                self._handle_rest_day(operator_id)
                 self._work_streak[operator_id] = 0
                 continue
 
-            if current_date in dynamic_rest_blocks.get(operator_id, set()):
-                if current_date not in self._registered_rest_days[operator_id]:
+            dynamic_days = dynamic_rest_blocks.get(operator_id, set())
+            if current_date in dynamic_days:
+                if current_date not in registered_days:
                     self._record_rest_day(operator_id, current_date, initial=False)
+                    registered_days = self._registered_rest_days.get(operator_id, set())
+                self._handle_rest_day(operator_id)
                 self._work_streak[operator_id] = 0
 
     def _unregister_planned_rest_day(self, operator_id: OperatorId, rest_day: date) -> None:
@@ -390,6 +533,26 @@ class CalendarScheduler:
 
         return False
 
+
+    def _register_assignment_shift(
+        self,
+        *,
+        operator: UserProfile,
+        position: PositionDefinition,
+    ) -> None:
+        operator_id = operator.id
+        if operator_id is None:
+            return
+
+        shift_type = position.shift_type
+        self._operator_last_shift_type[operator_id] = shift_type
+
+        if shift_type in (ShiftType.DAY, ShiftType.NIGHT):
+            self._operator_current_shift[operator_id] = shift_type
+        else:
+            self._operator_current_shift[operator_id] = None
+
+        self._operator_pending_shift[operator_id] = None
 
     def _load_position_history(self) -> Dict[PositionId, Dict[OperatorId, Tuple[date, Optional[datetime]]]]:
         position_ids = [position.id for position in self._positions if position.id]
@@ -627,6 +790,10 @@ class CalendarScheduler:
                 preferred_id = preferred_operator_per_position.get(position_index)
                 if preferred_id is None or preferred_id == operator.id:
                     position_last_operator[position.id] = operator.id
+            self._register_assignment_shift(
+                operator=operator,
+                position=position,
+            )
             self._work_streak[operator.id] += 1
             self._schedule_post_shift_rest(
                 operator_id=operator.id,
@@ -657,6 +824,35 @@ class CalendarScheduler:
 
         return candidate_order
 
+    def _is_shift_assignment_allowed(
+        self,
+        *,
+        operator_id: OperatorId,
+        position: PositionDefinition,
+    ) -> bool:
+        shift_type = position.shift_type
+        current_shift = self._operator_current_shift.get(operator_id)
+        if current_shift and not self._shift_types_compatible(shift_type, current_shift):
+            return False
+
+        desired_shift = self._operator_pending_shift.get(operator_id)
+        if desired_shift and not self._shift_types_compatible(shift_type, desired_shift):
+            if current_shift is None or not self._shift_types_compatible(current_shift, desired_shift):
+                return False
+
+        return True
+
+    @staticmethod
+    def _shift_types_compatible(
+        lhs: Optional[str],
+        rhs: Optional[str],
+    ) -> bool:
+        if lhs is None or rhs is None:
+            return True
+        if lhs == rhs:
+            return True
+        return lhs == ShiftType.MIXED or rhs == ShiftType.MIXED
+
     def _is_operator_allowed_for_day(
         self,
         *,
@@ -673,6 +869,9 @@ class CalendarScheduler:
             return False
 
         if not operator.is_active_on(target_date):
+            return False
+
+        if not self._is_shift_assignment_allowed(operator_id=operator_id, position=position):
             return False
 
         if target_date in self._manual_rest_index.get(operator_id, set()):
@@ -735,6 +934,9 @@ class CalendarScheduler:
             return False
 
         if not operator.is_active_on(target_date):
+            return False
+
+        if not self._is_shift_assignment_allowed(operator_id=operator_id, position=position):
             return False
 
         if operator_id in assigned_per_day.get(target_date, set()):
