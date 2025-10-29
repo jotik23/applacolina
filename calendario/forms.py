@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from django import forms
@@ -102,11 +103,16 @@ class BaseAssignmentForm(forms.Form):
         self.calendar = calendar
         super().__init__(*args, **kwargs)
 
-    def _get_operator(self, operator_id: int) -> UserProfile:
+    def _get_operator(self, operator_id: int, *, target_date: date | None = None) -> UserProfile:
         try:
-            return UserProfile.objects.get(pk=operator_id, is_active=True)
+            operator = UserProfile.objects.get(pk=operator_id)
         except UserProfile.DoesNotExist as exc:  # pragma: no cover - defensive
             raise forms.ValidationError("El operario seleccionado no existe.") from exc
+
+        if target_date and not operator.is_active_on(target_date):
+            raise forms.ValidationError("El operario no está activo en la fecha seleccionada.")
+
+        return operator
 
     def _resolve_assignment_outcome(
         self,
@@ -179,7 +185,7 @@ class AssignmentUpdateForm(BaseAssignmentForm):
         except ShiftAssignment.DoesNotExist as exc:
             raise forms.ValidationError("La asignación indicada no existe en este calendario.") from exc
 
-        operator = self._get_operator(operator_id)
+        operator = self._get_operator(operator_id, target_date=assignment.date)
         allow_override = bool(cleaned_data.get("force_override"))
         alert_level, is_overtime, overtime_points = self._resolve_assignment_outcome(
             operator,
@@ -226,7 +232,7 @@ class AssignmentCreateForm(BaseAssignmentForm):
         if exists:
             raise forms.ValidationError("Ya existe una asignación para esta posición en la fecha indicada.")
 
-        operator = self._get_operator(operator_id)
+        operator = self._get_operator(operator_id, target_date=target_date)
         allow_override = bool(cleaned_data.get("force_override"))
         alert_level, is_overtime, overtime_points = self._resolve_assignment_outcome(
             operator,
@@ -361,7 +367,6 @@ class OperatorProfileForm(forms.ModelForm):
             "automatic_rest_days",
             "suggested_positions",
             "roles",
-            "is_active",
         ]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

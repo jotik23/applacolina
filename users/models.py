@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .managers import UserProfileManager
+
+
+COLOMBIA_TZ_NAME = "America/Bogota"
 
 
 class Role(models.Model):
@@ -130,6 +136,32 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self) -> str:
         return self.nombres.split(" ")[0] if self.nombres else ""
+
+    @staticmethod
+    def colombia_today() -> date:
+        current = timezone.now()
+        try:
+            localized = current.astimezone(ZoneInfo(COLOMBIA_TZ_NAME))
+        except ZoneInfoNotFoundError:  # pragma: no cover - fallback when zoneinfo is unavailable
+            localized = timezone.localtime(current)
+        return localized.date()
+
+    def is_active_on(self, target_date: date) -> bool:
+        if not target_date:
+            return False
+
+        start_date = self.employment_start_date
+        end_date = self.employment_end_date
+
+        if start_date and target_date < start_date:
+            return False
+        if end_date and target_date > end_date:
+            return False
+
+        return True
+
+    def is_active_today(self) -> bool:
+        return self.is_active_on(self.colombia_today())
 
     def automatic_rest_day_labels(self) -> list[str]:
         if not self.automatic_rest_days:

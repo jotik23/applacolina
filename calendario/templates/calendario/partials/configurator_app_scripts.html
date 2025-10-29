@@ -151,7 +151,6 @@
         operatorRestDays: app.querySelector('#operator-rest-days'),
         operatorRoles: app.querySelector('#operator-roles'),
         operatorSuggestedPositions: app.querySelector('#operator-suggested-positions'),
-        operatorIsActive: app.querySelector('#operator-is-active'),
         operatorCancelBtn: app.querySelector('#operator-cancel-btn'),
         operatorRestAddBtn: app.querySelector('#operator-rest-add-btn'),
         operatorRestFilters: app.querySelector('#operator-rest-filters'),
@@ -1152,7 +1151,6 @@
           employment_end_date: employmentEndValue,
           automatic_rest_days: getSelectedRestDays(),
           roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
-          is_active: Boolean(refs.operatorIsActive?.checked),
           suggested_positions: Array.from(refs.operatorSuggestedPositions?.selectedOptions || [])
             .map((option) => Number(option.value))
             .filter((value) => Number.isFinite(value)),
@@ -1195,9 +1193,6 @@
               option.selected = false;
             });
           }
-          if (refs.operatorIsActive) {
-            refs.operatorIsActive.checked = true;
-          }
           setSelectedRestDays([]);
           setOperatorRestContext(null);
         } else {
@@ -1235,9 +1230,6 @@
             Array.from(refs.operatorSuggestedPositions.options || []).forEach((option) => {
               option.selected = suggested.has(option.value);
             });
-          }
-          if (refs.operatorIsActive) {
-            refs.operatorIsActive.checked = Boolean(operator.is_active);
           }
           setSelectedRestDays(operator.automatic_rest_days || []);
           setOperatorRestContext(operator.id);
@@ -1645,11 +1637,6 @@
             const statusBadge = operator.is_active
               ? '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Activo</span>'
               : '<span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">Inactivo</span>';
-            const toggleLabel = operator.is_active ? 'Deshabilitar' : 'Habilitar';
-            const toggleClasses = operator.is_active
-              ? 'border-red-200 text-red-700 hover:bg-red-50'
-              : 'border-emerald-300 text-emerald-700 hover:bg-emerald-100';
-            const desiredState = operator.is_active ? 'false' : 'true';
             const isEditing = state.editing.operatorId === operator.id;
             const rowClassList = ['transition-colors'];
             if (isEditing) {
@@ -1689,7 +1676,6 @@
                 <td class="px-3 py-3 align-top min-w-[12rem]">
                   <div class="flex items-center gap-2 whitespace-nowrap">
                     <button type="button" data-action="operator-edit" data-id="${operator.id}" class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">Editar</button>
-                    <button type="button" data-action="operator-toggle" data-id="${operator.id}" data-active="${desiredState}" class="rounded border ${toggleClasses} px-2 py-1 text-xs">${toggleLabel}</button>
                   </div>
                 </td>
               </tr>
@@ -2024,23 +2010,6 @@
         openOperatorForm(operator);
       };
 
-      const handleOperatorToggle = (id, nextActive) => {
-        const enable = Boolean(nextActive);
-        if (!enable) {
-          const confirmed = confirm('¿Deshabilitar este colaborador? Podrás habilitarlo nuevamente cuando lo necesites.');
-          if (!confirmed) {
-            return;
-          }
-        }
-        submitEntity({
-          url: replaceId(API.operatorDetailTemplate, id),
-          method: 'PATCH',
-          payload: { is_active: enable },
-          messageRef: refs.metadataStatus,
-          successMessage: enable ? 'Colaborador habilitado.' : 'Colaborador deshabilitado.',
-        });
-      };
-
       const handlePositionEdit = (id) => {
         const position = state.metadata?.positions?.find((item) => item.id === id);
         if (!position) {
@@ -2073,9 +2042,6 @@
         switch (action) {
           case 'operator-edit':
             handleOperatorEdit(id);
-            break;
-          case 'operator-toggle':
-            handleOperatorToggle(id, target.dataset.active === 'true');
             break;
           case 'position-move':
             handlePositionMove(id, target.dataset.direction);

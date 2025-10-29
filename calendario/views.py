@@ -375,6 +375,9 @@ def _eligible_operator_map(
                 if not operator:
                     continue
 
+                if not operator.is_active_on(day):
+                    continue
+
                 busy_assignments = assignment_by_operator_day.get((operator_id, day), [])
                 disabled = any(assign.position_id != position.id for assign in busy_assignments)
 
@@ -828,9 +831,11 @@ def _operator_payload(
     operator: UserProfile,
     *,
     roles: Optional[Iterable[Role]] = None,
+    reference_date: date | None = None,
 ) -> dict[str, Any]:
     role_items = roles if roles is not None else list(operator.roles.all())
     suggested_positions = list(operator.suggested_positions.all())
+    active_reference = reference_date or UserProfile.colombia_today()
     return {
         "id": operator.id,
         "name": operator.get_full_name() or operator.nombres,
@@ -862,7 +867,7 @@ def _operator_payload(
             }
             for role in role_items
         ],
-        "is_active": operator.is_active,
+        "is_active": operator.is_active_on(active_reference),
     }
 
 
@@ -938,7 +943,11 @@ def _assignment_payload(assignment: Optional[ShiftAssignment]) -> Optional[dict[
     operator_payload: Optional[dict[str, Any]] = None
     if assignment.operator_id:
         roles = list(assignment.operator.roles.all()) if assignment.operator_id else []
-        operator_payload = _operator_payload(assignment.operator, roles=roles) if assignment.operator_id else None
+        operator_payload = (
+            _operator_payload(assignment.operator, roles=roles, reference_date=assignment.date)
+            if assignment.operator_id
+            else None
+        )
 
     return {
         "id": assignment.id,
@@ -1062,8 +1071,9 @@ class CalendarDetailView(LoginRequiredMixin, View):
 
         manual_operator_choices: list[dict[str, Any]] = []
         if can_override:
+            reference_date = calendar.start_date
             operator_qs = (
-                UserProfile.objects.filter(is_active=True)
+                UserProfile.objects.active_on(reference_date)
                 .prefetch_related("roles")
                 .order_by("apellidos", "nombres")
             )
@@ -1309,7 +1319,8 @@ class OperatorCollectionView(LoginRequiredMixin, View):
             operator = form.save()
 
         operator = UserProfile.objects.prefetch_related("roles", "suggested_positions").get(pk=operator.pk)
-        return JsonResponse({"operator": _operator_payload(operator)}, status=201)
+        reference_date = UserProfile.colombia_today()
+        return JsonResponse({"operator": _operator_payload(operator, reference_date=reference_date)}, status=201)
 
 
 class OperatorDetailView(LoginRequiredMixin, View):
@@ -1344,7 +1355,8 @@ class OperatorDetailView(LoginRequiredMixin, View):
             operator = form.save()
 
         operator = UserProfile.objects.prefetch_related("roles", "suggested_positions").get(pk=operator.pk)
-        return JsonResponse({"operator": _operator_payload(operator)})
+        reference_date = UserProfile.colombia_today()
+        return JsonResponse({"operator": _operator_payload(operator, reference_date=reference_date)})
 
 
 class PositionCollectionView(LoginRequiredMixin, View):
@@ -1671,12 +1683,14 @@ class CalendarMetadataView(LoginRequiredMixin, View):
             for category in category_qs
         ]
 
+        reference_date = UserProfile.colombia_today()
+
         operator_qs = UserProfile.objects.prefetch_related("roles", "suggested_positions").order_by(
             "apellidos",
             "nombres",
         )
         operators_payload = [
-            _operator_payload(operator, roles=list(operator.roles.all()))
+            _operator_payload(operator, roles=list(operator.roles.all()), reference_date=reference_date)
             for operator in operator_qs
         ]
 

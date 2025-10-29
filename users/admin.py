@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from calendario.models import OperatorRestPeriod
@@ -58,6 +59,30 @@ class OperatorRestPeriodInline(admin.TabularInline):
     fk_name = "operator"
 
 
+class ActiveTodayFilter(admin.SimpleListFilter):
+    title = "Activo hoy (Colombia)"
+    parameter_name = "active_today"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("yes", "Activo hoy"),
+            ("no", "Inactivo hoy"),
+        )
+
+    def queryset(self, request, queryset):
+        today = UserProfile.colombia_today()
+        active_condition = (
+            (Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=today))
+            & (Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=today))
+        )
+
+        if self.value() == "yes":
+            return queryset.filter(active_condition)
+        if self.value() == "no":
+            return queryset.exclude(active_condition)
+        return queryset
+
+
 @admin.register(UserProfile)
 class UserProfileAdmin(UserAdmin):
     add_form = UserCreationForm
@@ -70,10 +95,10 @@ class UserProfileAdmin(UserAdmin):
         "telefono",
         "automatic_rest_days_display",
         "listar_roles",
-        "is_active",
+        "active_today",
         "is_staff",
     )
-    list_filter = ("is_active", "is_staff", "roles")
+    list_filter = (ActiveTodayFilter, "is_active", "is_staff", "roles")
     search_fields = ("cedula", "nombres", "apellidos", "telefono")
     ordering = ("apellidos", "nombres")
 
@@ -90,6 +115,7 @@ class UserProfileAdmin(UserAdmin):
                     "suggested_positions",
                     "employment_start_date",
                     "employment_end_date",
+                    "active_today",
                     "direccion",
                 )
             },
@@ -134,10 +160,16 @@ class UserProfileAdmin(UserAdmin):
     )
 
     filter_horizontal = ("roles", "groups", "user_permissions", "suggested_positions")
-    readonly_fields = ("last_login", "date_joined")
+    readonly_fields = ("last_login", "date_joined", "active_today")
 
     actions = (activar_usuarios, desactivar_usuarios, resetear_clave)
     inlines = (OperatorRestPeriodInline,)
+
+    @admin.display(boolean=True, description="Activo hoy (Colombia)")
+    def active_today(self, obj: UserProfile | None) -> bool:
+        if obj is None:
+            return False
+        return obj.is_active_today()
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = super().get_fieldsets(request, obj)

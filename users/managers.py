@@ -1,12 +1,37 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.contrib.auth.base_user import BaseUserManager
+from django.db import models
+from django.db.models import Q
+
+
+class UserProfileQuerySet(models.QuerySet):
+    """Custom queryset helpers for UserProfile."""
+
+    def active_on(self, target_date: date) -> "UserProfileQuerySet":
+        """Filter collaborators that are active on the given date."""
+
+        if not target_date:
+            return self.none()
+
+        return self.filter(
+            Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=target_date),
+            Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=target_date),
+        )
 
 
 class UserProfileManager(BaseUserManager):
     """Custom manager for the UserProfile model."""
 
     use_in_migrations = True
+
+    def get_queryset(self):  # type: ignore[override]
+        return UserProfileQuerySet(self.model, using=self._db)
+
+    def active_on(self, target_date: date):
+        return self.get_queryset().active_on(target_date)
 
     def _create_user(self, cedula: str, password: str | None, **extra_fields):
         if not cedula:
@@ -34,4 +59,3 @@ class UserProfileManager(BaseUserManager):
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Los superusuarios deben tener is_superuser=True.")
         return self._create_user(cedula, password, **extra_fields)
-
