@@ -138,6 +138,14 @@
       {{ rest_summary|json_script:"rest-summary-data" }}
       {{ position_groups.group_map|json_script:"position-group-map" }}
       {{ position_groups.position_to_group|json_script:"position-to-group-map" }}
+      <div
+        class="hidden"
+        data-rest-config
+        data-rest-enabled="{{ can_override|yesno:'true,false' }}"
+        data-rest-create-url="{% url 'calendario-api:calendar-rest-periods' %}"
+        data-rest-detail-url-template="{% url 'calendario-api:calendar-rest-period-detail' 0 %}"
+        data-calendar-id="{{ calendar.id }}"
+      ></div>
 
       <div class="flex flex-col gap-6">
         <div class="grid gap-4 md:grid-cols-2" data-assignments-sidebar>
@@ -214,7 +222,10 @@
                   Horizontal scroll para más días
                 </span>
               </div>
-              <div class="flex-1 overflow-auto">
+              <div class="flex-1 overflow-auto" data-rest-scope>
+                {% if can_override %}
+                  <div class="sticky top-0 z-10 mb-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700" data-rest-message></div>
+                {% endif %}
                 <table class="w-max min-w-full divide-y divide-slate-100 text-xs sm:text-sm">
                   <tbody class="divide-y divide-slate-100">
                     {% for row in rows %}
@@ -398,7 +409,7 @@
                           {% for cell in rest_row.cells %}
                             <td class="px-4 py-4 align-top">
                               {% if cell.state == 'rest' %}
-                                <div class="rounded-xl border border-emerald-200 bg-white p-3 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}" data-rest-state="rest">
+                                <div class="relative rounded-xl border border-emerald-200 bg-white p-3 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}" data-rest-state="rest" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}" data-rest-period-id="{{ cell.rest_period_id|default_if_none:'' }}" data-rest-source="{{ cell.rest_source|default:'' }}">
                                   <div class="flex items-start justify-between gap-2">
                                     <div>
                                       <p class="text-sm font-semibold text-slate-900">{{ cell.name }}</p>
@@ -406,9 +417,19 @@
                                         <span class="block text-xs text-slate-500">{{ cell.role }}</span>
                                       {% endif %}
                                     </div>
-                                    {% if cell.status_label %}
-                                      <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{{ cell.status_label }}</span>
-                                    {% endif %}
+                                    <div class="flex items-center gap-2">
+                                      {% if cell.status_label %}
+                                        <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{{ cell.status_label }}</span>
+                                      {% endif %}
+                                      {% if can_override and cell.rest_period_id %}
+                                        <button type="button" title="Eliminar descanso" class="inline-flex items-center justify-center rounded-full border border-red-200 bg-white p-1 text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2" data-rest-action="delete" data-rest-period-id="{{ cell.rest_period_id }}" data-rest-operator-id="{{ cell.operator_id }}" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}" data-operator-name="{{ cell.name|default:''|escape }}">
+                                          <span class="sr-only">Eliminar descanso</span>
+                                          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-2.28-9.53a.75.75 0 011.06 0L10 9.69l1.22-1.22a.75.75 0 111.06 1.06L11.06 10.75l1.22 1.22a.75.75 0 11-1.06 1.06L10 11.81l-1.22 1.22a.75.75 0 01-1.06-1.06l1.22-1.22-1.22-1.22a.75.75 0 010-1.06z" clip-rule="evenodd" />
+                                          </svg>
+                                        </button>
+                                      {% endif %}
+                                    </div>
                                   </div>
                                   {% if cell.reason %}
                                     <div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
@@ -422,7 +443,7 @@
                                   {% endif %}
                                 </div>
                               {% elif cell.state == 'unassigned' %}
-                                <div class="rounded-xl border border-sky-300 bg-sky-50 p-3 text-sky-800 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}" data-rest-state="unassigned">
+                                <div class="rounded-xl border border-sky-300 bg-sky-50 p-3 text-sky-800 shadow-sm" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}" data-rest-state="unassigned" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}">
                                   <div class="flex items-start justify-between gap-2">
                                     <div>
                                       <p class="text-sm font-semibold text-sky-900">{{ cell.name }}</p>
@@ -434,9 +455,28 @@
                                       <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">{{ cell.status_label }}</span>
                                     {% endif %}
                                   </div>
+                                  {% if can_override and cell.operator_id %}
+                                    <button type="button" title="Programar descanso manual" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-sky-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2" data-rest-action="create" data-rest-operator-id="{{ cell.operator_id }}" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}" data-operator-name="{{ cell.name|default:''|escape }}">
+                                      <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 010 2h-5v5a1 1 0 01-2 0v-5H4a1 1 0 010-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                                      </svg>
+                                      <span>Agregar descanso</span>
+                                    </button>
+                                  {% endif %}
+                                </div>
+                              {% elif cell.state == 'assigned' %}
+                                <div class="flex h-full items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-white p-3 text-center" data-operator-card data-operator-id="{{ cell.operator_id }}" data-operator-name="{{ cell.name|escape }}" data-rest-state="assigned" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}">
+                                  {% if can_override and cell.operator_id %}
+                                    <button type="button" title="Programar descanso manual" class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-1" data-rest-action="create" data-rest-operator-id="{{ cell.operator_id }}" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}" data-operator-name="{{ cell.name|default:''|escape }}">
+                                      <span class="text-base leading-none font-semibold">+</span>
+                                      <span>Agregar descanso</span>
+                                    </button>
+                                  {% else %}
+                                    <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">—</span>
+                                  {% endif %}
                                 </div>
                               {% else %}
-                                <div class="rounded-xl border-2 border-dashed border-slate-200 bg-white p-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-300">—</div>
+                                <div class="rounded-xl border-2 border-dashed border-slate-200 bg-white p-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-300" data-operator-card data-operator-id="{{ cell.operator_id|default_if_none:'' }}" data-operator-name="{{ cell.name|default:''|escape }}" data-rest-state="inactive" data-rest-date="{{ cell.date }}" data-rest-label="{{ cell.date_display }}">—</div>
                               {% endif %}
                             </td>
                           {% endfor %}
@@ -483,6 +523,238 @@
             } catch (error) {
               restSummary = {};
             }
+          }
+          var restConfigEl = document.querySelector('[data-rest-config]');
+          var restScope = document.querySelector('[data-rest-scope]');
+          var restMessageEl = restScope ? restScope.querySelector('[data-rest-message]') : null;
+          var restActionsEnabled = restConfigEl ? restConfigEl.dataset.restEnabled === 'true' : false;
+          var restCreateUrl = restConfigEl ? restConfigEl.dataset.restCreateUrl || '' : '';
+          var restDetailTemplate = restConfigEl ? restConfigEl.dataset.restDetailUrlTemplate || '' : '';
+          var restCalendarId = restConfigEl ? restConfigEl.dataset.calendarId || '' : '';
+          var restBusy = false;
+          var csrfSafeMethods = { GET: true, HEAD: true, OPTIONS: true, TRACE: true };
+
+          function getCookie(name) {
+            if (typeof document === 'undefined') {
+              return '';
+            }
+            var cookies = document.cookie ? document.cookie.split('; ') : [];
+            for (var i = 0; i < cookies.length; i += 1) {
+              if (cookies[i].startsWith(name + '=')) {
+                return decodeURIComponent(cookies[i].slice(name.length + 1));
+              }
+            }
+            return '';
+          }
+
+          function getCsrfToken() {
+            return getCookie('csrftoken');
+          }
+
+          function apiRequest(url, options) {
+            var settings = options || {};
+            var method = (settings.method || 'GET').toUpperCase();
+            var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+            if (!csrfSafeMethods[method]) {
+              var token = getCsrfToken();
+              if (token) {
+                headers['X-CSRFToken'] = token;
+              }
+            }
+            if (settings.headers) {
+              Object.keys(settings.headers).forEach(function (key) {
+                headers[key] = settings.headers[key];
+              });
+            }
+            var fetchOptions = {
+              method: method,
+              headers: headers,
+              credentials: 'same-origin',
+            };
+            if (settings.body !== undefined) {
+              fetchOptions.body = JSON.stringify(settings.body);
+              fetchOptions.headers['Content-Type'] = 'application/json';
+            }
+            return fetch(url, fetchOptions);
+          }
+
+          function clearRestMessage() {
+            if (!restMessageEl) {
+              return;
+            }
+            restMessageEl.textContent = '';
+            restMessageEl.classList.add('hidden');
+          }
+
+          function showRestError(message) {
+            if (restMessageEl) {
+              restMessageEl.textContent = message || 'No fue posible completar la acción.';
+              restMessageEl.classList.remove('hidden');
+            } else if (message) {
+              window.alert(message);
+            }
+          }
+
+          function setButtonLoading(button, isLoading) {
+            if (!button) {
+              return;
+            }
+            if (isLoading) {
+              button.disabled = true;
+              button.classList.add('opacity-60', 'cursor-wait');
+            } else {
+              button.disabled = false;
+              button.classList.remove('opacity-60', 'cursor-wait');
+            }
+          }
+
+          function parseIntSafe(value) {
+            if (value === null || value === undefined || value === '') {
+              return null;
+            }
+            var parsed = Number.parseInt(value, 10);
+            if (Number.isNaN(parsed)) {
+              return null;
+            }
+            return parsed;
+          }
+
+          function resolveRestDetailUrl(restPeriodId) {
+            if (!restDetailTemplate) {
+              return '';
+            }
+            var id = String(restPeriodId);
+            if (restDetailTemplate.endsWith('/0/')) {
+              return restDetailTemplate.slice(0, -2) + id + '/';
+            }
+            if (restDetailTemplate.endsWith('/0')) {
+              return restDetailTemplate.slice(0, -1) + id;
+            }
+            var lastIndex = restDetailTemplate.lastIndexOf('0');
+            if (lastIndex === -1) {
+              return '';
+            }
+            return restDetailTemplate.slice(0, lastIndex) + id + restDetailTemplate.slice(lastIndex + 1);
+          }
+
+          function sendRestRequest(url, method, payload, button) {
+            if (!url) {
+              showRestError('No encontramos la ruta para completar la acción.');
+              return;
+            }
+            if (restBusy) {
+              return;
+            }
+            restBusy = true;
+            setButtonLoading(button, true);
+            clearRestMessage();
+            var options = { method: method };
+            if (payload !== undefined) {
+              options.body = payload;
+            }
+            apiRequest(url, options)
+              .then(function (response) {
+                if (!response.ok) {
+                  return response
+                    .json()
+                    .catch(function () {
+                      return {};
+                    })
+                    .then(function (data) {
+                      var message = data && data.error ? data.error : 'No fue posible completar la acción.';
+                      throw new Error(message);
+                    });
+                }
+                return response.json().catch(function () {
+                  return null;
+                });
+              })
+              .then(function () {
+                window.location.reload();
+              })
+              .catch(function (error) {
+                restBusy = false;
+                setButtonLoading(button, false);
+                showRestError(error.message || 'No fue posible completar la acción.');
+              })
+              .finally(function () {
+                if (!restBusy) {
+                  return;
+                }
+                restBusy = false;
+                setButtonLoading(button, false);
+              });
+          }
+
+          function handleRestCreate(button) {
+            if (!restActionsEnabled) {
+              return;
+            }
+            var operatorId = parseIntSafe(button ? button.dataset.restOperatorId : null);
+            var dateValue = button ? button.dataset.restDate || '' : '';
+            if (!operatorId || !dateValue) {
+              showRestError('No fue posible identificar al colaborador y la fecha seleccionados.');
+              return;
+            }
+            var payload = {
+              operator: operatorId,
+              start_date: dateValue,
+              end_date: dateValue,
+              status: 'planned',
+              source: 'manual',
+            };
+            var calendarId = parseIntSafe(restCalendarId);
+            if (calendarId) {
+              payload.calendar = calendarId;
+            }
+            sendRestRequest(restCreateUrl, 'POST', payload, button);
+          }
+
+          function handleRestDelete(button) {
+            if (!restActionsEnabled) {
+              return;
+            }
+            var restPeriodId = parseIntSafe(button ? button.dataset.restPeriodId : null);
+            if (!restPeriodId) {
+              showRestError('No encontramos el descanso seleccionado.');
+              return;
+            }
+            var label = button ? button.dataset.restLabel || '' : '';
+            var operatorName = button ? button.dataset.operatorName || '' : '';
+            var confirmationLabel = '¿Eliminar el descanso';
+            if (operatorName) {
+              confirmationLabel += ' de ' + operatorName;
+            }
+            if (label) {
+              confirmationLabel += label ? ' (' + label + ')' : '';
+            }
+            confirmationLabel += '?';
+            if (!window.confirm(confirmationLabel)) {
+              return;
+            }
+            var url = resolveRestDetailUrl(restPeriodId);
+            if (!url) {
+              showRestError('No encontramos la ruta para eliminar el descanso.');
+              return;
+            }
+            sendRestRequest(url, 'DELETE', undefined, button);
+          }
+
+          if (restActionsEnabled && restScope) {
+            restScope.addEventListener('click', function (event) {
+              var button = event.target.closest('[data-rest-action]');
+              if (!button) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              var action = button.dataset.restAction;
+              if (action === 'create') {
+                handleRestCreate(button);
+              } else if (action === 'delete') {
+                handleRestDelete(button);
+              }
+            });
           }
           function applyGroupHighlighting() {
             if (!groupMap || Object.keys(groupMap).length === 0) {

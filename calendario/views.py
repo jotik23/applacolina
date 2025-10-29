@@ -149,6 +149,8 @@ def _build_rest_rows(
             assignments = assignments_by_operator_day.get((operator_id, day), [])
             is_assigned = bool(assignments)
             is_active = operator.is_active_on(day)
+            date_iso = day.isoformat()
+            date_display = day.strftime("%d/%m/%Y")
 
             if period:
                 has_rest_day = True
@@ -162,19 +164,29 @@ def _build_rest_rows(
                         "reason": reason,
                         "state": REST_CELL_STATE_REST,
                         "status_label": status_label,
+                        "date": date_iso,
+                        "date_display": date_display,
+                        "rest_period_id": period.id,
+                        "rest_source": period.source or "",
                     }
                 )
                 continue
 
             if is_assigned:
+                assignment_count = len(assignments)
                 cells.append(
                     {
-                        "operator_id": None,
-                        "name": "",
-                        "role": "",
+                        "operator_id": operator_id,
+                        "name": operator_name,
+                        "role": role_label,
                         "reason": "",
                         "state": REST_CELL_STATE_ASSIGNED,
-                        "status_label": "",
+                        "status_label": "Turno asignado",
+                        "date": date_iso,
+                        "date_display": date_display,
+                        "rest_period_id": None,
+                        "rest_source": "",
+                        "assignment_count": assignment_count,
                     }
                 )
                 continue
@@ -189,18 +201,26 @@ def _build_rest_rows(
                         "reason": "",
                         "state": REST_CELL_STATE_UNASSIGNED,
                         "status_label": "Sin asignación",
+                        "date": date_iso,
+                        "date_display": date_display,
+                        "rest_period_id": None,
+                        "rest_source": "",
                     }
                 )
                 continue
 
             cells.append(
                 {
-                    "operator_id": None,
-                    "name": "",
-                    "role": "",
+                    "operator_id": operator_id,
+                    "name": operator_name,
+                    "role": role_label,
                     "reason": "",
                     "state": REST_CELL_STATE_INACTIVE,
                     "status_label": "",
+                    "date": date_iso,
+                    "date_display": date_display,
+                    "rest_period_id": None,
+                    "rest_source": "",
                 }
             )
 
@@ -1138,6 +1158,31 @@ def _refresh_workload_snapshots(calendar: ShiftCalendar) -> None:
     sync_calendar_rest_periods(calendar)
 
 
+def _release_assignments_for_rest_period(rest_period: OperatorRestPeriod) -> tuple[int, set[int]]:
+    if not rest_period.operator_id:
+        return 0, set()
+
+    assignment_qs = ShiftAssignment.objects.filter(
+        operator_id=rest_period.operator_id,
+        date__range=(rest_period.start_date, rest_period.end_date),
+    )
+    if rest_period.calendar_id:
+        assignment_qs = assignment_qs.filter(calendar_id=rest_period.calendar_id)
+
+    assignments = list(
+        assignment_qs.select_related("calendar").only("id", "calendar_id")
+    )
+    if not assignments:
+        return 0, set()
+
+    assignment_ids = [assignment.id for assignment in assignments]
+    calendar_ids = {assignment.calendar_id for assignment in assignments if assignment.calendar_id}
+
+    ShiftAssignment.objects.filter(pk__in=assignment_ids).delete()
+
+    return len(assignment_ids), calendar_ids
+
+
 def _apply_assignment_conflict_resets(
     *,
     conflicting_assignment: ShiftAssignment | None,
@@ -1943,10 +1988,19 @@ class RestPeriodCollectionView(LoginRequiredMixin, View):
             rest_period.created_by = request.user
         rest_period.save()
 
+        removed_assignment_count, affected_calendar_ids = _release_assignments_for_rest_period(rest_period)
+        if rest_period.calendar_id:
+            affected_calendar_ids.add(rest_period.calendar_id)
+
         rest_period = (
             OperatorRestPeriod.objects.select_related("calendar", "created_by", "operator")
             .get(pk=rest_period.pk)
         )
+
+        if affected_calendar_ids:
+            calendars = ShiftCalendar.objects.filter(pk__in=affected_calendar_ids)
+            for calendar in calendars:
+                _refresh_workload_snapshots(calendar)
 
         requires_refresh = _rest_period_requires_calendar_refresh(
             rest_period.operator_id,
@@ -1958,7 +2012,8 @@ class RestPeriodCollectionView(LoginRequiredMixin, View):
         return JsonResponse(
             {
                 "rest_period": _rest_period_payload(rest_period),
-                "requires_calendar_refresh": requires_refresh,
+                "requires_calendar_refresh": bool(removed_assignment_count) or requires_refresh,
+                "removed_assignments": removed_assignment_count,
             },
             status=201,
         )
@@ -1995,6 +2050,15 @@ class RestPeriodDetailView(LoginRequiredMixin, View):
             .get(pk=rest_period.pk)
         )
 
+        removed_assignment_count, affected_calendar_ids = _release_assignments_for_rest_period(rest_period)
+        if rest_period.calendar_id:
+            affected_calendar_ids.add(rest_period.calendar_id)
+
+        if affected_calendar_ids:
+            calendars = ShiftCalendar.objects.filter(pk__in=affected_calendar_ids)
+            for calendar in calendars:
+                _refresh_workload_snapshots(calendar)
+
         requires_refresh = _rest_period_requires_calendar_refresh(
             rest_period.operator_id,
             rest_period.start_date,
@@ -2005,7 +2069,8 @@ class RestPeriodDetailView(LoginRequiredMixin, View):
         return JsonResponse(
             {
                 "rest_period": _rest_period_payload(rest_period),
-                "requires_calendar_refresh": requires_refresh,
+                "requires_calendar_refresh": bool(removed_assignment_count) or requires_refresh,
+                "removed_assignments": removed_assignment_count,
             }
         )
 
