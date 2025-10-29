@@ -123,6 +123,8 @@ def _build_rest_rows(
         operator = operator_map.get(operator_id)
         if not operator:
             continue
+        if operator.is_staff:
+            continue
 
         operator_name = _operator_display_name(operator)
         role_label = _primary_role_label(operator)
@@ -263,6 +265,11 @@ def _build_assignment_matrix(
             if operator and assignment.operator_id not in operator_map:
                 operator_map[assignment.operator_id] = operator
 
+    assigned_operator_ids_by_day: dict[date, set[int]] = defaultdict(set)
+    for (operator_id, assignment_day), related_assignments in assignments_by_operator_day.items():
+        if related_assignments:
+            assigned_operator_ids_by_day[assignment_day].add(operator_id)
+
     active_position_filter = (
         Q(valid_from__lte=calendar.end_date)
         & (Q(valid_until__isnull=True) | Q(valid_until__gte=calendar.start_date))
@@ -277,6 +284,17 @@ def _build_assignment_matrix(
     )
 
     choices_map = _eligible_operator_map(calendar, positions, date_columns, assignments)
+
+    farm_order_index: dict[int, int] = {}
+    farm_candidates: list[tuple[str, int]] = []
+    for position in positions:
+        farm = getattr(position, "farm", None)
+        if farm and farm.id is not None and farm.id not in farm_order_index:
+            farm_candidates.append((farm.name or "", farm.id))
+    farm_candidates.sort(key=lambda item: (item[0].lower(), item[1]))
+    for idx, (_, farm_id) in enumerate(farm_candidates):
+        farm_order_index[farm_id] = idx
+    default_farm_order = len(farm_order_index)
 
     alert_priority = {
         AssignmentAlertLevel.NONE: 0,
@@ -317,6 +335,8 @@ def _build_assignment_matrix(
         operator_id = getattr(operator, "id", None)
         if not operator_id:
             continue
+        if operator and operator.is_staff:
+            continue
         if operator_id not in operator_map and operator:
             operator_map[operator_id] = operator
         start = max(rest_period.start_date, calendar.start_date)
@@ -331,6 +351,7 @@ def _build_assignment_matrix(
             Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=calendar.end_date),
             Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=calendar.start_date),
             is_active=True,
+            is_staff=False,
         )
         .prefetch_related("roles")
         .order_by("apellidos", "nombres")
@@ -387,6 +408,34 @@ def _build_assignment_matrix(
             (operator.nombres or "").lower(),
             operator_id,
         )
+
+    def _operator_status_suffix(operator_id: int, target_day: date) -> str:
+        if operator_id in resting_operator_ids_by_day.get(target_day, set()):
+            return "En descanso"
+
+        assignments_today = assignments_by_operator_day.get((operator_id, target_day), [])
+        if assignments_today:
+            position_labels: list[str] = []
+            seen_labels: set[str] = set()
+            for related_assignment in assignments_today:
+                position = getattr(related_assignment, "position", None)
+                if position and position.name:
+                    label = position.name
+                elif position and position.code:
+                    label = position.code
+                elif related_assignment.position_id:
+                    label = f"#{related_assignment.position_id}"
+                else:
+                    label = "Asignado"
+                if label not in seen_labels:
+                    seen_labels.add(label)
+                    position_labels.append(label)
+            if position_labels:
+                joined = ", ".join(position_labels)
+                return f"{joined}"
+            return "Posición asignada"
+
+        return "Disponible"
 
     rows: List[dict[str, Any]] = []
     for position in positions:
@@ -446,75 +495,103 @@ def _build_assignment_matrix(
                     )
                     alert_level = _escalate_alert(alert_level, desired_alert)
 
-            if not assignment and is_active:
-                existing_ids = {option.get("id") for option in choices}
-                emergency_choices: List[dict[str, Any]] = []
+            if is_active:
+                choice_lookup: dict[int, dict[str, Any]] = {
+                    option_id: option
+                    for option in choices
+                    if (option_id := option.get("id")) not in (None, "")
+                }
+                operator_ids: set[int] = set(choice_lookup.keys())
+                operator_ids.update(active_candidates_by_day.get(day, set()))
+                operator_ids.update(resting_operator_ids_by_day.get(day, set()))
+                operator_ids.update(assigned_operator_ids_by_day.get(day, set()))
+                if assignment and assignment.operator_id:
+                    operator_ids.add(assignment.operator_id)
 
-                def _append_suffix(label: str, suffix_value: str) -> str:
-                    if not suffix_value:
-                        return label
-                    normalized_suffix = suffix_value.strip()
-                    if not normalized_suffix:
-                        return label
-                    suffix_patterns = (
-                        f" - {normalized_suffix}",
-                        f" · {normalized_suffix}",
-                    )
-                    for pattern in suffix_patterns:
-                        if pattern.lower() in label.lower():
-                            return label
-                    return f"{label} - {normalized_suffix}"
+                sorted_choices: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+                assigned_today_ids = assigned_operator_ids_by_day.get(day, set())
 
-                def _append_emergency_choice(operator_id: int, suffix: str) -> None:
+                for operator_id in sorted(operator_ids, key=_operator_sort_key):
                     if not operator_id:
-                        return
-                    existing_option = None
-                    for container in (choices, emergency_choices):
-                        for item in container:
-                            if item.get("id") == operator_id:
-                                existing_option = item
-                                break
-                        if existing_option:
-                            break
-                    normalized_suffix = suffix.strip() if suffix else ""
-                    if existing_option:
-                        if normalized_suffix:
-                            existing_option["label"] = _append_suffix(
-                                existing_option["label"], normalized_suffix
-                            )
-                        return
-                    if operator_id in existing_ids:
-                        return
-                    if assignments_by_operator_day.get((operator_id, day)):
-                        return
+                        continue
+
                     operator = operator_map.get(operator_id)
+                    if not operator and assignment and assignment.operator_id == operator_id:
+                        operator = assignment.operator
+                        if operator:
+                            operator_map[operator_id] = operator
                     if not operator:
-                        return
-                    label = _format_operator_label(operator)
-                    label = _append_suffix(label, normalized_suffix)
-                    emergency_choices.append(
+                        continue
+
+                    is_operator_active = operator.is_active_on(day)
+                    if not is_operator_active:
+                        is_assigned_today = operator_id in assigned_today_ids
+                        if assignment and assignment.operator_id == operator_id:
+                            is_assigned_today = True
+                        if not is_assigned_today:
+                            continue
+
+                    base_choice = choice_lookup.get(operator_id)
+                    choice_data = dict(base_choice) if base_choice else {
+                        "id": operator_id,
+                        "label": "",
+                        "alert": AssignmentAlertLevel.NONE,
+                        "disabled": False,
+                    }
+
+                    is_current_assignment_operator = bool(assignment and assignment.operator_id == operator_id)
+                    if operator.is_staff and not is_current_assignment_operator:
+                        continue
+
+                    base_label = _format_operator_label(operator)
+                    suffix = _operator_status_suffix(operator_id, day)
+                    choice_data["label"] = f"{base_label} - {suffix}" if suffix else base_label
+                    choice_data["disabled"] = False
+
+                    assignments_today = assignments_by_operator_day.get((operator_id, day), [])
+                    is_assigned_today = bool(assignments_today)
+                    is_resting_today = operator_id in resting_operator_ids_by_day.get(day, set())
+
+                    if is_assigned_today:
+                        farm_orders: list[int] = []
+                        for related_assignment in assignments_today:
+                            related_position = getattr(related_assignment, "position", None)
+                            if related_position and related_position.farm_id is not None:
+                                farm_orders.append(
+                                    farm_order_index.get(related_position.farm_id, default_farm_order)
+                                )
+                        primary_farm_order = min(farm_orders) if farm_orders else default_farm_order
+                        status_priority = 1
+                    elif is_resting_today:
+                        primary_farm_order = default_farm_order + 1
+                        status_priority = 2
+                    else:
+                        primary_farm_order = -1
+                        status_priority = 0
+
+                    operator_sort = _operator_sort_key(operator_id)
+                    sort_key = (
+                        status_priority,
+                        primary_farm_order,
+                        operator_sort[0],
+                        operator_sort[1],
+                        operator_sort[2],
+                    )
+                    sorted_choices.append((sort_key, choice_data))
+
+                sorted_choices.sort(key=lambda item: item[0])
+                choices = [choice for _, choice in sorted_choices]
+
+                if assignment:
+                    choices.insert(
+                        0,
                         {
-                            "id": operator_id,
-                            "label": label,
+                            "id": "",
+                            "label": "Selecciona",
                             "alert": AssignmentAlertLevel.NONE,
                             "disabled": False,
-                        }
+                        },
                     )
-                    existing_ids.add(operator_id)
-
-                rest_emergency_ids = resting_operator_ids_by_day.get(day, set())
-                for operator_id in sorted(rest_emergency_ids, key=_operator_sort_key):
-                    _append_emergency_choice(operator_id, "En descanso")
-
-                active_emergency_ids = active_candidates_by_day.get(day, set())
-                for operator_id in sorted(active_emergency_ids, key=_operator_sort_key):
-                    if operator_id in rest_emergency_ids:
-                        continue
-                    _append_emergency_choice(operator_id, "Disponible")
-
-                if emergency_choices:
-                    choices.extend(emergency_choices)
-                    choices.sort(key=lambda item: item["label"].lower())
 
             row_cells.append(
                 {
@@ -571,6 +648,8 @@ def _build_assignment_matrix(
         for operator_id in relevant_operator_ids:
             operator = operator_map.get(operator_id)
             if not operator:
+                continue
+            if operator.is_staff:
                 continue
 
             periods = periods_by_operator.get(operator_id, [])
@@ -641,7 +720,7 @@ def _eligible_operator_map(
 
     operator_qs = (
         UserProfile.objects.prefetch_related("roles", "suggested_positions")
-        .filter(suggested_positions__in=position_ids)
+        .filter(suggested_positions__in=position_ids, is_staff=False)
         .distinct()
     )
 
@@ -1059,6 +1138,24 @@ def _refresh_workload_snapshots(calendar: ShiftCalendar) -> None:
     sync_calendar_rest_periods(calendar)
 
 
+def _apply_assignment_conflict_resets(
+    *,
+    conflicting_assignment: ShiftAssignment | None,
+    conflicting_rest_periods: Iterable[OperatorRestPeriod],
+) -> tuple[str, int]:
+    removed_assignment_label = ""
+    rest_periods = list(conflicting_rest_periods)
+
+    if conflicting_assignment:
+        removed_assignment_label = f"{conflicting_assignment.position.name} ({conflicting_assignment.date})"
+        conflicting_assignment.delete()
+
+    for rest_period in rest_periods:
+        rest_period.delete()
+
+    return removed_assignment_label, len(rest_periods)
+
+
 def _json_error(message: str, *, status: int = 400, errors: Optional[dict[str, Any]] = None) -> JsonResponse:
     payload: dict[str, Any] = {"error": message}
     if errors:
@@ -1406,6 +1503,27 @@ class CalendarDetailView(LoginRequiredMixin, View):
             else:
                 messages.info(request, "El calendario ya se encuentra aprobado.")
         elif action == "update-assignment":
+            operator_id_raw = (request.POST.get("operator_id") or "").strip()
+            assignment_id_raw = (request.POST.get("assignment_id") or "").strip()
+            redirect_url = reverse("calendario:calendar-detail", args=[calendar.id])
+
+            if not operator_id_raw:
+                try:
+                    assignment_id = int(assignment_id_raw)
+                except (TypeError, ValueError):
+                    messages.error(request, "No se identificó la asignación que deseas liberar.")
+                    return redirect(redirect_url)
+
+                assignment = calendar.assignments.filter(pk=assignment_id).first()
+                if not assignment:
+                    messages.info(request, "La asignación ya no se encuentra registrada.")
+                    return redirect(redirect_url)
+
+                assignment.delete()
+                _refresh_workload_snapshots(calendar)
+                messages.success(request, "Turno liberado. La celda quedó sin colaborador.")
+                return redirect(redirect_url)
+
             form = AssignmentUpdateForm(request.POST, calendar=calendar)
             if form.is_valid():
                 assignment: ShiftAssignment = form.cleaned_data["assignment"]
@@ -1413,25 +1531,53 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 alert_level: AssignmentAlertLevel = form.cleaned_data["alert_level"]
                 is_overtime: bool = form.cleaned_data["is_overtime"]
                 overtime_points: int = form.cleaned_data["overtime_points"]
-
-                assignment.operator = operator
-                assignment.alert_level = alert_level
-                assignment.is_overtime = is_overtime
-                assignment.overtime_points = overtime_points if is_overtime else 0
-                assignment.is_auto_assigned = False
-                assignment.save(
-                    update_fields=[
-                        "operator",
-                        "alert_level",
-                        "is_overtime",
-                        "overtime_points",
-                        "is_auto_assigned",
-                        "updated_at",
-                    ]
+                conflicting_assignment: ShiftAssignment | None = form.cleaned_data.get("conflicting_assignment")
+                conflicting_rest_periods: list[OperatorRestPeriod] = list(
+                    form.cleaned_data.get(
+                        "conflicting_rest_periods",
+                        [],
+                    )
                 )
 
+                removed_assignment_label = ""
+                removed_rest_count = 0
+                with transaction.atomic():
+                    removed_assignment_label, removed_rest_count = _apply_assignment_conflict_resets(
+                        conflicting_assignment=conflicting_assignment,
+                        conflicting_rest_periods=conflicting_rest_periods,
+                    )
+
+                    assignment.operator = operator
+                    assignment.alert_level = alert_level
+                    assignment.is_overtime = is_overtime
+                    assignment.overtime_points = overtime_points if is_overtime else 0
+                    assignment.is_auto_assigned = False
+                    assignment.save(
+                        update_fields=[
+                            "operator",
+                            "alert_level",
+                            "is_overtime",
+                            "overtime_points",
+                            "is_auto_assigned",
+                            "updated_at",
+                        ]
+                    )
+
                 _refresh_workload_snapshots(calendar)
-                messages.success(request, "Asignación actualizada correctamente.")
+                message_parts = ["Asignación actualizada correctamente."]
+                if removed_assignment_label:
+                    message_parts.append(
+                        f"Se liberó el turno previo de {removed_assignment_label}."
+                    )
+                if removed_rest_count == 1:
+                    message_parts.append(
+                        "Se eliminó 1 descanso que se superponía con la nueva asignación."
+                    )
+                elif removed_rest_count > 1:
+                    message_parts.append(
+                        f"Se eliminaron {removed_rest_count} descansos que se superponían con la nueva asignación."
+                    )
+                messages.success(request, " ".join(message_parts))
             else:
                 messages.error(request, form.errors.as_text())
         elif action == "create-assignment":
@@ -1443,20 +1589,46 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 target_date = form.cleaned_data["target_date"]
                 is_overtime: bool = form.cleaned_data["is_overtime"]
                 overtime_points: int = form.cleaned_data["overtime_points"]
-
-                ShiftAssignment.objects.create(
-                    calendar=calendar,
-                    position=position,
-                    date=target_date,
-                    operator=operator,
-                    alert_level=alert_level,
-                    is_overtime=is_overtime,
-                    overtime_points=overtime_points if is_overtime else 0,
-                    is_auto_assigned=False,
+                conflicting_assignment: ShiftAssignment | None = form.cleaned_data.get("conflicting_assignment")
+                conflicting_rest_periods: list[OperatorRestPeriod] = list(
+                    form.cleaned_data.get("conflicting_rest_periods", [])
                 )
 
+                removed_assignment_label = ""
+                removed_rest_count = 0
+
+                with transaction.atomic():
+                    removed_assignment_label, removed_rest_count = _apply_assignment_conflict_resets(
+                        conflicting_assignment=conflicting_assignment,
+                        conflicting_rest_periods=conflicting_rest_periods,
+                    )
+
+                    ShiftAssignment.objects.create(
+                        calendar=calendar,
+                        position=position,
+                        date=target_date,
+                        operator=operator,
+                        alert_level=alert_level,
+                        is_overtime=is_overtime,
+                        overtime_points=overtime_points if is_overtime else 0,
+                        is_auto_assigned=False,
+                    )
+
                 _refresh_workload_snapshots(calendar)
-                messages.success(request, "Turno asignado manualmente.")
+                message_parts = ["Turno asignado manualmente."]
+                if removed_assignment_label:
+                    message_parts.append(
+                        f"Se liberó el turno previo de {removed_assignment_label}."
+                    )
+                if removed_rest_count == 1:
+                    message_parts.append(
+                        "Se eliminó 1 descanso que se superponía con la nueva asignación."
+                    )
+                elif removed_rest_count > 1:
+                    message_parts.append(
+                        f"Se eliminaron {removed_rest_count} descansos que se superponían con la nueva asignación."
+                    )
+                messages.success(request, " ".join(message_parts))
             else:
                 messages.error(request, form.errors.as_text())
         elif action == "regenerate":

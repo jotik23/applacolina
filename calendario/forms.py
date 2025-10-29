@@ -12,6 +12,7 @@ from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
     OperatorRestPeriod,
+    RestPeriodStatus,
     PositionDefinition,
     ShiftAssignment,
     ShiftCalendar,
@@ -122,11 +123,20 @@ class BaseAssignmentForm(forms.Form):
         *,
         exclude_assignment: ShiftAssignment | None = None,
         allow_override: bool = False,
-    ) -> tuple[AssignmentAlertLevel, bool, int]:
+        reset_conflicts: bool = False,
+    ) -> tuple[
+        AssignmentAlertLevel,
+        bool,
+        int,
+        ShiftAssignment | None,
+        list[OperatorRestPeriod],
+    ]:
         alert_level = AssignmentAlertLevel.NONE
         is_overtime = False
         overtime_points = 0
         lacks_authorization = False
+        conflicting_assignment: ShiftAssignment | None = None
+        conflicting_rest_periods: list[OperatorRestPeriod] = []
 
         if not position.is_active_on(target_date):
             raise forms.ValidationError("La posición no está vigente para la fecha seleccionada.")
@@ -142,26 +152,43 @@ class BaseAssignmentForm(forms.Form):
         if allow_override and lacks_authorization:
             alert_level = AssignmentAlertLevel.WARN
 
-        conflict = (
-            ShiftAssignment.objects.filter(
-                calendar=self.calendar,
-                date=target_date,
-                operator=operator,
-            )
-            .exclude(pk=getattr(exclude_assignment, "pk", None))
-            .exists()
-        )
-        if conflict:
+        conflict_qs = ShiftAssignment.objects.filter(
+            calendar=self.calendar,
+            date=target_date,
+            operator=operator,
+        ).exclude(pk=getattr(exclude_assignment, "pk", None))
+        if reset_conflicts:
+            conflicting_assignment = conflict_qs.select_related("position").first()
+            conflict = bool(conflicting_assignment)
+        else:
+            conflict = conflict_qs.exists()
+
+        if conflict and not reset_conflicts:
             raise forms.ValidationError(
                 "El operario ya tiene un turno asignado en esta fecha dentro del calendario. "
                 "Debes liberar ese turno antes de reasignarlo."
+            )
+
+        if reset_conflicts:
+            conflicting_rest_periods = list(
+                OperatorRestPeriod.objects.filter(
+                    operator=operator,
+                    start_date__lte=target_date,
+                    end_date__gte=target_date,
+                ).exclude(status=RestPeriodStatus.CANCELLED)
             )
 
         if is_overtime:
             policy = resolve_overload_policy(position.category)
             overtime_points = policy.overtime_points
 
-        return alert_level, is_overtime, overtime_points
+        return (
+            alert_level,
+            is_overtime,
+            overtime_points,
+            conflicting_assignment,
+            conflicting_rest_periods,
+        )
 
 
 class AssignmentUpdateForm(BaseAssignmentForm):
@@ -185,12 +212,19 @@ class AssignmentUpdateForm(BaseAssignmentForm):
 
         operator = self._get_operator(operator_id, target_date=assignment.date)
         allow_override = bool(cleaned_data.get("force_override"))
-        alert_level, is_overtime, overtime_points = self._resolve_assignment_outcome(
+        (
+            alert_level,
+            is_overtime,
+            overtime_points,
+            conflicting_assignment,
+            conflicting_rest_periods,
+        ) = self._resolve_assignment_outcome(
             operator,
             assignment.position,
             assignment.date,
             exclude_assignment=assignment,
             allow_override=allow_override,
+            reset_conflicts=True,
         )
 
         cleaned_data["assignment"] = assignment
@@ -198,6 +232,8 @@ class AssignmentUpdateForm(BaseAssignmentForm):
         cleaned_data["alert_level"] = alert_level
         cleaned_data["is_overtime"] = is_overtime
         cleaned_data["overtime_points"] = overtime_points
+        cleaned_data["conflicting_assignment"] = conflicting_assignment
+        cleaned_data["conflicting_rest_periods"] = conflicting_rest_periods
         return cleaned_data
 
 
@@ -232,11 +268,18 @@ class AssignmentCreateForm(BaseAssignmentForm):
 
         operator = self._get_operator(operator_id, target_date=target_date)
         allow_override = bool(cleaned_data.get("force_override"))
-        alert_level, is_overtime, overtime_points = self._resolve_assignment_outcome(
+        (
+            alert_level,
+            is_overtime,
+            overtime_points,
+            conflicting_assignment,
+            conflicting_rest_periods,
+        ) = self._resolve_assignment_outcome(
             operator,
             position,
             target_date,
             allow_override=allow_override,
+            reset_conflicts=True,
         )
 
         cleaned_data["position"] = position
@@ -245,6 +288,8 @@ class AssignmentCreateForm(BaseAssignmentForm):
         cleaned_data["target_date"] = target_date
         cleaned_data["is_overtime"] = is_overtime
         cleaned_data["overtime_points"] = overtime_points
+        cleaned_data["conflicting_assignment"] = conflicting_assignment
+        cleaned_data["conflicting_rest_periods"] = conflicting_rest_periods
         return cleaned_data
 
 

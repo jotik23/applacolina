@@ -165,7 +165,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertIsNotNone(operator_summary["upcoming"])
         self.assertEqual(operator_summary["upcoming"]["start"], next_rest_start.isoformat())
 
-    def test_update_assignment_rejects_manual_override_with_conflict(self) -> None:
+    def test_update_assignment_resets_conflicting_assignment(self) -> None:
         url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
         response = self.client.post(
             url,
@@ -180,16 +180,17 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         self.assertRedirects(response, url)
 
         self.assignment_primary.refresh_from_db()
-        self.assertEqual(self.assignment_primary.operator, self.operator_initial)
+        self.assertEqual(self.assignment_primary.operator, self.operator_conflict)
         self.assertEqual(self.assignment_primary.alert_level, AssignmentAlertLevel.NONE)
         self.assertFalse(self.assignment_primary.is_overtime)
         self.assertEqual(self.assignment_primary.overtime_points, 0)
-        self.assertTrue(self.assignment_primary.is_auto_assigned)
+        self.assertFalse(self.assignment_primary.is_auto_assigned)
+
+        conflict_exists = ShiftAssignment.objects.filter(pk=self.assignment_conflict.pk).exists()
+        self.assertFalse(conflict_exists)
 
         messages = list(get_messages(response.wsgi_request))
-        self.assertTrue(
-            any("ya tiene un turno asignado" in message.message for message in messages)
-        )
+        self.assertTrue(any("Se liberó el turno previo" in message.message for message in messages))
 
         detail_response = self.client.get(url)
         self.assertEqual(detail_response.status_code, 200)
@@ -205,6 +206,41 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         )
         self.assertIsNotNone(primary_cell)
         self.assertIsNone(primary_cell["overtime_message"])
+        self.assertEqual(primary_cell["operator"]["id"], self.operator_conflict.pk)
+
+    def test_update_assignment_removes_overlapping_rest_period(self) -> None:
+        rest_period = OperatorRestPeriod.objects.create(
+            operator=self.operator_manual,
+            start_date=self.calendar.start_date,
+            end_date=self.calendar.start_date,
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+            calendar=self.calendar,
+        )
+
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        response = self.client.post(
+            url,
+            data={
+                "action": "update-assignment",
+                "assignment_id": self.assignment_primary.pk,
+                "operator_id": self.operator_manual.pk,
+                "force_override": "1",
+            },
+        )
+
+        self.assertRedirects(response, url)
+
+        with self.assertRaises(OperatorRestPeriod.DoesNotExist):
+            rest_period.refresh_from_db()
+
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(
+            any("Se eliminó 1 descanso" in message.message for message in messages)
+        )
+
+        self.assignment_primary.refresh_from_db()
+        self.assertEqual(self.assignment_primary.operator, self.operator_manual)
 
     def test_create_assignment_accepts_manual_override_without_suggestion(self) -> None:
         url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
@@ -258,6 +294,72 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             matching_cell["skill_gap_message"],
             "Operario sin sugerencia registrada. Asignación manual confirmada.",
         )
+
+    def test_create_assignment_resets_conflicting_assignment(self) -> None:
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        target_date = self.calendar.start_date + timedelta(days=1)
+
+        existing_assignment = ShiftAssignment.objects.create(
+            calendar=self.calendar,
+            position=self.position_primary,
+            date=target_date,
+            operator=self.operator_conflict,
+            alert_level=AssignmentAlertLevel.NONE,
+            is_auto_assigned=True,
+        )
+
+        response = self.client.post(
+            url,
+            data={
+                "action": "create-assignment",
+                "position_id": self.position_secondary.pk,
+                "date": target_date.isoformat(),
+                "operator_id": self.operator_conflict.pk,
+            },
+        )
+
+        self.assertRedirects(response, url)
+        self.assertFalse(ShiftAssignment.objects.filter(pk=existing_assignment.pk).exists())
+
+        created_assignment = ShiftAssignment.objects.get(
+            calendar=self.calendar,
+            position=self.position_secondary,
+            date=target_date,
+        )
+        self.assertEqual(created_assignment.operator, self.operator_conflict)
+        self.assertFalse(created_assignment.is_auto_assigned)
+
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(any("Se liberó el turno previo" in message.message for message in messages))
+
+    def test_create_assignment_removes_overlapping_rest_period(self) -> None:
+        url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
+        target_date = self.calendar.start_date + timedelta(days=1)
+
+        rest_period = OperatorRestPeriod.objects.create(
+            operator=self.operator_manual,
+            start_date=target_date,
+            end_date=target_date,
+            status=RestPeriodStatus.APPROVED,
+            source=RestPeriodSource.MANUAL,
+        )
+
+        response = self.client.post(
+            url,
+            data={
+                "action": "create-assignment",
+                "position_id": self.position_secondary.pk,
+                "date": target_date.isoformat(),
+                "operator_id": self.operator_manual.pk,
+            },
+        )
+
+        self.assertRedirects(response, url)
+        with self.assertRaises(OperatorRestPeriod.DoesNotExist):
+            rest_period.refresh_from_db()
+
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(any("Se eliminó 1 descanso" in message.message for message in messages))
 
     def test_unassigned_cell_lists_emergency_candidates(self) -> None:
         url = reverse("calendario:calendar-detail", args=[self.calendar.pk])
