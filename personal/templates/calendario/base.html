@@ -22,36 +22,236 @@
     </script>
   </head>
   <body class="min-h-full bg-slate-100 text-slate-800">
-    <header class="bg-white shadow-sm">
-      <div class="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-4 text-sm sm:px-6 lg:px-8">
-        <div class="flex items-center gap-6">
-          <a href="{% url 'personal:dashboard' %}" class="text-lg font-semibold text-slate-900">La Colina - Granjas Pecuarias</a>
-          <nav class="hidden items-center gap-4 text-slate-600 md:flex">
-            <a href="{% url 'personal:dashboard' %}" class="rounded px-3 py-1 hover:bg-slate-100">Inicio</a>
-            <a href="{% url 'personal:dashboard' %}#listado" class="rounded px-3 py-1 hover:bg-slate-100">Calendario</a>
-            <a href="{% url 'task_manager:index' %}" class="rounded px-3 py-1 hover:bg-slate-100">Gestor de tareas</a>
-            <a href="{% url 'production:index' %}" class="rounded px-3 py-1 hover:bg-slate-100">Produccion avicola</a>
-          </nav>
-        </div>
-        <div class="flex items-center space-x-4 text-sm text-slate-500">
-          {% if request.user.is_authenticated %}
-            {% with full_name=request.user.get_full_name %}
-              <span>
-                {% if full_name %}
-                  {{ full_name }}
+    {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" %}
+      <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+        <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <div class="flex h-16 items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white md:hidden"
+                data-mobile-nav-toggle
+                aria-controls="mobile-navigation"
+                aria-expanded="false"
+              >
+                <span class="sr-only">Abrir navegación</span>
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.75h16.5M3.75 12h16.5M3.75 18.25h16.5" />
+                </svg>
+              </button>
+              <a href="{% url 'personal:dashboard' %}" class="flex flex-col">
+                <span class="text-sm font-semibold tracking-tight text-slate-900 sm:text-base">Granjas La Colina</span>
+                <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Sistema de Gestión</span>
+              </a>
+              {% if resolver_match %}
+                {% with current_namespace=resolver_match.namespace current_url=resolver_match.url_name %}
+                  <nav class="hidden items-center gap-1 md:flex">
+                    <a
+                      href="{% url 'personal:dashboard' %}"
+                      class="rounded-full px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 {% if current_namespace == 'personal' and current_url != 'configurator' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100 hover:text-slate-900{% endif %}"
+                    >
+                      Calendarios
+                    </a>
+                    <a
+                      href="{% url 'personal:configurator' %}"
+                      class="rounded-full px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 {% if current_namespace == 'personal' and current_url == 'configurator' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100 hover:text-slate-900{% endif %}"
+                    >
+                      Configurar
+                    </a>
+                    <a
+                      href="{% url 'personal:dashboard' %}#listado"
+                      class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                    >
+                      Historial
+                    </a>
+                  </nav>
+                {% endwith %}
+              {% else %}
+                <nav class="hidden items-center gap-1 md:flex">
+                  <a href="{% url 'personal:dashboard' %}" class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Calendarios</a>
+                  <a href="{% url 'personal:configurator' %}" class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Configurar</a>
+                  <a href="{% url 'personal:dashboard' %}#listado" class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Historial</a>
+                </nav>
+              {% endif %}
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="hidden items-center gap-2 lg:flex" aria-label="Accesos rápidos">
+                <a
+                  href="{% url 'task_manager:index' %}"
+                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                >
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.5 3A1.5 1.5 0 003 4.5v11A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0015.5 3h-11zm2 3.5a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5A.75.75 0 016.5 6.5zm0 3.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75zm0 3.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Tareas</span>
+                </a>
+                <a
+                  href="{% url 'production:index' %}"
+                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                >
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
+                  </svg>
+                  <span>Producción</span>
+                </a>
+                <a
+                  href="{% url 'admin:index' %}"
+                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                >
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M10.82 2.577a.75.75 0 00-1.64 0l-.247 1.357a.38.38 0 01-.278.3l-1.31.31a.75.75 0 00-.332 1.262l1.003.93a.38.38 0 01.11.36l-.225 1.36a.75.75 0 001.13.787l1.16-.66a.38.38 0 01.37 0l1.16.66a.75.75 0 001.13-.788l-.224-1.36a.38.38 0 01.11-.36l1.003-.93a.75.75 0 00-.332-1.262l-1.31-.31a.38.38 0 01-.278-.3l-.247-1.357zM4.5 9.5a.75.75 0 00-.75.75v4c0 1.243 1.007 2.25 2.25 2.25h8a2.25 2.25 0 002.25-2.25v-4a.75.75 0 00-1.5 0v4c0 .414-.336.75-.75.75h-8a.75.75 0 01-.75-.75v-4A.75.75 0 004.5 9.5z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Configuración</span>
+                </a>
+              </div>
+              <a
+                href="{% url 'personal:configurator' %}"
+                class="hidden sm:inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M10 3a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 0110 3z" />
+                </svg>
+                <span>Nuevo calendario</span>
+              </a>
+              <div class="flex items-center gap-2 text-xs font-medium text-slate-500">
+                {% if request.user.is_authenticated %}
+                  <div class="hidden text-right sm:block">
+                    <p class="text-sm font-semibold text-slate-900">{{ user_label }}</p>
+                    <p class="text-[11px] uppercase tracking-wide text-slate-400">Sesión activa</p>
+                  </div>
+                  <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white sm:h-10 sm:w-10">
+                    {{ user_label|slice:":1"|upper }}
+                  </span>
+                  <a
+                    href="{% url 'portal:logout' %}"
+                    class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  >
+                    Cerrar sesión
+                  </a>
                 {% else %}
-                  {{ request.user.username|default:"Invitado" }}
+                  <a
+                    href="{% url 'portal:login' %}"
+                    class="inline-flex items-center gap-2 rounded-full border border-brand px-4 py-2 text-xs font-semibold text-brand transition hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path
+                        fill-rule="evenodd"
+                        d="M10 1.75A3.25 3.25 0 006.75 5v2.482a4.5 4.5 0 101.5 0V5A1.75 1.75 0 0110 3.25h.25a1.75 1.75 0 011.75 1.75v2.5a.75.75 0 001.5 0v-2.5A3.25 3.25 0 0010.25 1.75H10zM6 12a3 3 0 106 0 3 3 0 00-6 0z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                    <span>Iniciar sesión</span>
+                  </a>
                 {% endif %}
-              </span>
-            {% endwith %}
-            <a href="{% url 'portal:logout' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Cerrar sesión</a>
-          {% else %}
-            <span>Invitado</span>
-            <a href="{% url 'portal:login' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Iniciar sesión</a>
-          {% endif %}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </header>
+        <div class="hidden border-t border-slate-200 bg-white/95 shadow-sm md:hidden" data-mobile-nav id="mobile-navigation">
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Menú</span>
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              data-mobile-nav-close
+              data-mobile-nav-focus
+            >
+              <span class="sr-only">Cerrar navegación</span>
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.22 5.22a.75.75 0 011.06 0L10 8.94l3.72-3.72a.75.75 0 111.06 1.06L11.06 10l3.72 3.72a.75.75 0 11-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 11-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 010-1.06z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          <nav class="space-y-1 px-4 pb-4 text-sm font-medium text-slate-600">
+            <a href="{% url 'personal:dashboard' %}" class="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-slate-100" data-mobile-nav-close>
+              <span>Calendarios</span>
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M7.22 14.78a.75.75 0 01-.073-.977l.073-.084L10.94 10 7.22 6.28a.75.75 0 111.133-.976l.073.084 4 4a.75.75 0 01.073.977l-.073.084-4 4a.75.75 0 01-1.06 0z" clip-rule="evenodd" />
+              </svg>
+            </a>
+            <a href="{% url 'personal:configurator' %}" class="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-slate-100" data-mobile-nav-close>
+              <span>Configurar</span>
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M7 10a3 3 0 016 0v1h1a2 2 0 012 2v3.25a.75.75 0 01-1.5 0V13a.5.5 0 00-.5-.5H5a.5.5 0 00-.5.5v3.25a.75.75 0 01-1.5 0V13a2 2 0 012-2h1v-1zm3-1.5A1.5 1.5 0 008.5 10v1h3v-1A1.5 1.5 0 0010 8.5z" clip-rule="evenodd" />
+              </svg>
+            </a>
+            <a href="{% url 'personal:dashboard' %}#listado" class="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-slate-100" data-mobile-nav-close>
+              <span>Historial</span>
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M9.25 3a.75.75 0 01.75.75V5h4.5A1.75 1.75 0 0116.25 6.75v8.5A1.75 1.75 0 0114.5 17H5.5A1.75 1.75 0 013.75 15.25V5.75A1.75 1.75 0 015.5 4H8.5V3.75A.75.75 0 019.25 3zM8.5 5H5.5a.25.25 0 00-.25.25v10c0 .138.112.25.25.25h9a.25.25 0 00.25-.25V6.75a.25.25 0 00-.25-.25H9.25a.75.75 0 01-.75-.75V5z" />
+              </svg>
+            </a>
+          </nav>
+          <div class="border-t border-slate-100 px-4 py-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Accesos rápidos</p>
+            <div class="mt-3 grid gap-2 text-sm">
+              <a href="{% url 'task_manager:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+                <span>Gestor de tareas</span>
+                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.5 3A1.5 1.5 0 003 4.5v11A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0015.5 3h-11zm2 3.5a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5A.75.75 0 016.5 6.5zm0 3.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75zm0 3.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </a>
+              <a href="{% url 'production:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+                <span>Producción avícola</span>
+                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
+                </svg>
+              </a>
+              <a href="{% url 'admin:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+                <span>Administración</span>
+                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path
+                    fill-rule="evenodd"
+                    d="M10.82 2.577a.75.75 0 00-1.64 0l-.247 1.357a.38.38 0 01-.278.3l-1.31.31a.75.75 0 00-.332 1.262l1.003.93a.38.38 0 01.11.36l-.225 1.36a.75.75 0 001.13.787l1.16-.66a.38.38 0 01.37 0l1.16.66a.75.75 0 001.13-.788l-.224-1.36a.38.38 0 01.11-.36l1.003-.93a.75.75 0 00-.332-1.262l-1.31-.31a.38.38 0 01-.278-.3l-.247-1.357zM4.5 9.5a.75.75 0 00-.75.75v4c0 1.243 1.007 2.25 2.25 2.25h8a2.25 2.25 0 002.25-2.25v-4a.75.75 0 00-1.5 0v4c0 .414-.336.75-.75.75h-8a.75.75 0 01-.75-.75v-4A.75.75 0 004.5 9.5z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </a>
+            </div>
+          </div>
+          <div class="border-t border-slate-100 px-4 py-4">
+            {% if request.user.is_authenticated %}
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sesión</p>
+              <p class="mt-1 text-sm font-semibold text-slate-900">{{ user_label }}</p>
+              <a
+                href="{% url 'portal:logout' %}"
+                class="mt-3 inline-flex w-full items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+                data-mobile-nav-close
+              >
+                Cerrar sesión
+              </a>
+            {% else %}
+              <a
+                href="{% url 'portal:login' %}"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-full border border-brand px-4 py-2 text-xs font-semibold text-brand transition hover:bg-brand hover:text-white"
+                data-mobile-nav-close
+              >
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 1.75A3.25 3.25 0 006.75 5v2.482a4.5 4.5 0 101.5 0V5A1.75 1.75 0 0110 3.25h.25a1.75 1.75 0 011.75 1.75v2.5a.75.75 0 001.5 0v-2.5A3.25 3.25 0 0010.25 1.75H10zM6 12a3 3 0 106 0 3 3 0 00-6 0z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <span>Iniciar sesión</span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </header>
+    {% endwith %}
 
     {% if messages %}
       <div class="mx-auto mt-4 w-full max-w-4xl px-4 sm:px-6 lg:px-8">
@@ -103,6 +303,8 @@
 
         var current = null;
         var currentConfirmation = null;
+        var mobileNav = null;
+        var mobileNavToggle = null;
 
         function focusFirst(target) {
           if (!target) {
@@ -271,19 +473,85 @@
           });
         }
 
+        function openMobileNav() {
+          if (!mobileNav || !mobileNavToggle) {
+            return;
+          }
+          mobileNav.classList.remove('hidden');
+          mobileNavToggle.setAttribute('aria-expanded', 'true');
+          focusFirst(mobileNav);
+        }
+
+        function closeMobileNav(focusToggle) {
+          if (!mobileNav || !mobileNavToggle) {
+            return;
+          }
+          if (!mobileNav.classList.contains('hidden')) {
+            mobileNav.classList.add('hidden');
+            mobileNavToggle.setAttribute('aria-expanded', 'false');
+            if (focusToggle && typeof mobileNavToggle.focus === 'function') {
+              mobileNavToggle.focus();
+            }
+          }
+        }
+
         document.addEventListener('keydown', function (event) {
-          if (event.key === 'Escape' && current) {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          if (current) {
             hide(current);
             return;
           }
-          if (event.key === 'Escape' && currentConfirmation) {
+          if (currentConfirmation) {
             hideConfirmation(currentConfirmation);
+            return;
+          }
+          if (mobileNav && !mobileNav.classList.contains('hidden')) {
+            closeMobileNav(true);
           }
         });
 
         document.addEventListener('DOMContentLoaded', function () {
           toArray(document.querySelectorAll('[data-double-confirm]')).forEach(attach);
           toArray(document.querySelectorAll('[data-confirmation]')).forEach(attachConfirmation);
+          mobileNav = document.querySelector('[data-mobile-nav]');
+          mobileNavToggle = document.querySelector('[data-mobile-nav-toggle]');
+
+          if (mobileNav && mobileNavToggle) {
+            mobileNavToggle.addEventListener('click', function () {
+              if (mobileNav.classList.contains('hidden')) {
+                openMobileNav();
+              } else {
+                closeMobileNav(false);
+              }
+            });
+
+            toArray(mobileNav.querySelectorAll('[data-mobile-nav-close]')).forEach(function (element) {
+              element.addEventListener('click', function () {
+                closeMobileNav(true);
+              });
+            });
+
+            toArray(mobileNav.querySelectorAll('a[href]')).forEach(function (link) {
+              link.addEventListener('click', function () {
+                closeMobileNav(false);
+              });
+            });
+          }
+        });
+
+        document.addEventListener('click', function (event) {
+          if (!mobileNav || !mobileNavToggle) {
+            return;
+          }
+          if (mobileNav.classList.contains('hidden')) {
+            return;
+          }
+          if (mobileNav.contains(event.target) || mobileNavToggle.contains(event.target)) {
+            return;
+          }
+          closeMobileNav(false);
         });
       })();
     </script>
