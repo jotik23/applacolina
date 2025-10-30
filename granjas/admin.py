@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.forms import BaseInlineFormSet
 
+from production.models import ProductionRecord
+
 from .models import (
     BirdBatch,
     BirdBatchRoomAllocation,
@@ -57,6 +59,13 @@ class BirdBatchRoomAllocationInline(admin.TabularInline):
     formset = BirdBatchRoomAllocationInlineFormSet
 
 
+class ProductionRecordInline(admin.TabularInline):
+    model = ProductionRecord
+    extra = 1
+    fields = ("date", "production", "consumption", "mortality", "discard")
+    ordering = ("-date",)
+
+
 @admin.register(Farm)
 class FarmAdmin(admin.ModelAdmin):
     inlines = (ChickenHouseInline,)
@@ -93,7 +102,7 @@ class ChickenHouseAdmin(admin.ModelAdmin):
 
 @admin.register(BirdBatch)
 class BirdBatchAdmin(admin.ModelAdmin):
-    inlines = (BirdBatchRoomAllocationInline,)
+    inlines = (BirdBatchRoomAllocationInline, ProductionRecordInline)
     list_display = ("id", "farm", "status", "birth_date", "initial_quantity", "breed")
     search_fields = ("breed", "farm__name")
     list_filter = ("status", "farm")

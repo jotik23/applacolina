@@ -31,7 +31,7 @@ class ChickenHouse(models.Model):
         unique_together = ("farm", "name")
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.farm.name})"
+        return f"{self.farm.name} - {self.name}"
 
 
 class Room(models.Model):
@@ -51,7 +51,9 @@ class Room(models.Model):
         unique_together = ("chicken_house", "name")
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.chicken_house.name})"
+        farm_name = self.chicken_house.farm.name
+        chicken_house_name = self.chicken_house.name
+        return f"{farm_name} - {chicken_house_name} - {self.name}"
 
 
 class BirdBatch(models.Model):

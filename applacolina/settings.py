@@ -84,11 +84,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     'whitenoise.runserver_nostatic',
     'calendario.apps.CalendarioConfig',
     'users',
     'granjas.apps.GranjasConfig',
     'task_manager.apps.TaskManagerConfig',
+    'production.apps.ProductionConfig',
 ]
 
 MIDDLEWARE = [
