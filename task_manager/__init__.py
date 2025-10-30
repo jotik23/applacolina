@@ -1,0 +1,2 @@
+"""Task manager app configuration."""
+

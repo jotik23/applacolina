@@ -25,5 +25,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('users.urls', namespace='portal')),
     path('calendario/', include('calendario.urls', namespace='calendario')),
+    path('task-manager/', include('task_manager.urls', namespace='task_manager')),
     path('api/', include('calendario.api_urls', namespace='calendario-api')),
 ]

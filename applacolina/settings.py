@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'calendario.apps.CalendarioConfig',
     'users',
     'granjas.apps.GranjasConfig',
+    'task_manager.apps.TaskManagerConfig',
 ]
 
 MIDDLEWARE = [
