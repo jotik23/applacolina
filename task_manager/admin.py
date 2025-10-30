@@ -3,7 +3,7 @@ from django.contrib import admin
 
 from personal.models import DayOfWeek
 
-from .models import TaskCategory, TaskDefinition, TaskStatus
+from .models import TaskAssignment, TaskCategory, TaskDefinition, TaskStatus
 
 
 class TaskDefinitionAdminForm(forms.ModelForm):
@@ -97,6 +97,51 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
                     "rooms",
                 )
             },
+        ),
+        (
+            "Trazabilidad",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+
+@admin.register(TaskAssignment)
+class TaskAssignmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "task_definition",
+        "collaborator",
+        "due_date",
+        "completed_on",
+        "production_record",
+    )
+    list_filter = (
+        "task_definition__category",
+        "task_definition__status",
+        "due_date",
+        "completed_on",
+    )
+    search_fields = (
+        "task_definition__name",
+        "collaborator__nombres",
+        "collaborator__apellidos",
+    )
+    date_hierarchy = "due_date"
+    autocomplete_fields = ("task_definition", "collaborator", "production_record")
+    readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "task_definition",
+                    "collaborator",
+                    "due_date",
+                )
+            },
+        ),
+        (
+            "Ejecución",
+            {"fields": ("completed_on", "production_record")},
         ),
         (
             "Trazabilidad",

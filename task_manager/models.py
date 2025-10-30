@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from granjas.models import ChickenHouse, Farm, Room
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
+from production.models import ProductionRecord
 
 
 class TaskStatus(models.Model):
@@ -162,3 +163,43 @@ class TaskDefinition(models.Model):
                 raise ValidationError(
                     {"scheduled_for": _("Las tareas recurrentes no deben tener fecha puntual.")}
                 )
+
+
+class TaskAssignment(models.Model):
+    task_definition = models.ForeignKey(
+        TaskDefinition,
+        on_delete=models.PROTECT,
+        related_name="assignments",
+        verbose_name=_("Definición de tarea"),
+    )
+    collaborator = models.ForeignKey(
+        UserProfile,
+        on_delete=models.PROTECT,
+        related_name="task_assignments",
+        verbose_name=_("Colaborador"),
+    )
+    due_date = models.DateField(_("Fecha programada"))
+    completed_on = models.DateField(
+        _("Fecha de finalización"),
+        null=True,
+        blank=True,
+    )
+    production_record = models.OneToOneField(
+        ProductionRecord,
+        on_delete=models.SET_NULL,
+        related_name="task_assignment",
+        verbose_name=_("Registro de producción"),
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(_("Creado en"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Actualizado en"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Asignación de tarea")
+        verbose_name_plural = _("Asignaciones de tareas")
+        ordering = ("due_date", "task_definition__name")
+        unique_together = ("task_definition", "collaborator", "due_date")
+
+    def __str__(self) -> str:
+        return f"{self.task_definition} · {self.collaborator} · {self.due_date:%Y-%m-%d}"
