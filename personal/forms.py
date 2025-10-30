@@ -27,6 +27,15 @@ from .models import (
 from production.models import Room
 
 
+FIELD_INPUT_CLASSES = (
+    "mt-2 block w-full rounded-xl border border-slate-200/80 bg-white/95 px-3 py-2 text-sm "
+    "shadow-sm transition duration-150 focus:border-brand focus:outline-none focus:ring-2 "
+    "focus:ring-brand/40 placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+)
+DATE_INPUT_CLASSES = FIELD_INPUT_CLASSES + " cursor-pointer"
+TEXTAREA_CLASSES = FIELD_INPUT_CLASSES + " min-h-[120px] resize-y"
+
+
 class CalendarGenerationForm(forms.Form):
     name = forms.CharField(
         label="Nombre",
@@ -34,7 +43,7 @@ class CalendarGenerationForm(forms.Form):
         required=False,
         widget=forms.TextInput(
             attrs={
-                "class": "mt-1 block w-full rounded border border-slate-200 bg-white focus:border-amber-500 focus:ring-amber-500",
+                "class": FIELD_INPUT_CLASSES,
                 "placeholder": "Semana 42 - Colina",
             }
         ),
@@ -44,7 +53,7 @@ class CalendarGenerationForm(forms.Form):
         widget=forms.DateInput(
             attrs={
                 "type": "date",
-                "class": "mt-1 block w-full rounded border border-slate-200 bg-white focus:border-amber-500 focus:ring-amber-500",
+                "class": DATE_INPUT_CLASSES,
             }
         ),
     )
@@ -53,7 +62,7 @@ class CalendarGenerationForm(forms.Form):
         widget=forms.DateInput(
             attrs={
                 "type": "date",
-                "class": "mt-1 block w-full rounded border border-slate-200 bg-white focus:border-amber-500 focus:ring-amber-500",
+                "class": DATE_INPUT_CLASSES,
             }
         ),
     )
@@ -63,7 +72,7 @@ class CalendarGenerationForm(forms.Form):
         widget=forms.Textarea(
             attrs={
                 "rows": 3,
-                "class": "mt-1 block w-full rounded border border-slate-200 bg-white focus:border-amber-500 focus:ring-amber-500",
+                "class": TEXTAREA_CLASSES,
                 "placeholder": "Observaciones generales o eventos programados",
             }
         ),

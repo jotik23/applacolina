@@ -21,7 +21,12 @@
       }
     </script>
   </head>
-  <body class="min-h-full bg-slate-100 text-slate-800">
+  <body
+    class="min-h-full bg-slate-100 text-slate-800"
+    data-calendar-list-url="{% url 'personal-api:calendar-list' %}"
+    data-calendar-detail-template="{% url 'personal:calendar-detail' 0 %}"
+    data-calendar-create-url="{% url 'personal:calendar-create' %}"
+  >
     {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" %}
       <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
         <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
@@ -43,36 +48,6 @@
                 <span class="text-sm font-semibold tracking-tight text-slate-900 sm:text-base">Granjas La Colina</span>
                 <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Sistema de Gestión</span>
               </a>
-              {% if resolver_match %}
-                {% with current_namespace=resolver_match.namespace current_url=resolver_match.url_name %}
-                  <nav class="hidden items-center gap-1 md:flex">
-                    <a
-                      href="{% url 'personal:dashboard' %}"
-                      class="rounded-full px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 {% if current_namespace == 'personal' and current_url != 'configurator' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100 hover:text-slate-900{% endif %}"
-                    >
-                      Calendarios
-                    </a>
-                    <a
-                      href="{% url 'personal:configurator' %}"
-                      class="rounded-full px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 {% if current_namespace == 'personal' and current_url == 'configurator' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100 hover:text-slate-900{% endif %}"
-                    >
-                      Configurar
-                    </a>
-                    <a
-                      href="{% url 'personal:dashboard' %}#listado"
-                      class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
-                    >
-                      Historial
-                    </a>
-                  </nav>
-                {% endwith %}
-              {% else %}
-                <nav class="hidden items-center gap-1 md:flex">
-                  <a href="{% url 'personal:dashboard' %}" class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Calendarios</a>
-                  <a href="{% url 'personal:configurator' %}" class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Configurar</a>
-                  <a href="{% url 'personal:dashboard' %}#listado" class="rounded-full px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Historial</a>
-                </nav>
-              {% endif %}
             </div>
             <div class="flex items-center gap-3">
               <div class="hidden items-center gap-2 lg:flex" aria-label="Accesos rápidos">
@@ -98,6 +73,82 @@
                   </svg>
                   <span>Producción</span>
                 </a>
+                <div
+                  class="relative inline-flex"
+                  data-calendar-menu
+                >
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                    data-calendar-menu-trigger
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path
+                        fill-rule="evenodd"
+                        d="M6 2a.75.75 0 011.5 0v1h5V2a.75.75 0 011.5 0v1h.75A2.25 2.25 0 0115 5.25v10A2.75 2.75 0 0112.25 18h-4.5A2.75 2.75 0 015 15.25v-10A2.25 2.25 0 017.25 3H8.5V2a.75.75 0 011.5 0v1zM5.5 6v3.5h9V6h-9zm0 5v4.25c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V11h-9z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                    <span>Manejo de Personal</span>
+                    <svg class="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.208l3.71-3.978a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0l-4.24-4.54a.75.75 0 01.02-1.06z" />
+                    </svg>
+                    <span class="sr-only">Abrir menú de manejo de personal</span>
+                  </button>
+                  <div
+                    class="invisible absolute right-0 top-full z-30 mt-2 w-80 max-w-xs translate-y-1 rounded-2xl border border-slate-200 bg-white p-4 text-sm opacity-0 shadow-lg shadow-slate-900/10 transition duration-150 ease-out"
+                    data-calendar-menu-panel
+                    role="menu"
+                    aria-label="Manejo de personal"
+                  >
+                    <div class="space-y-4">
+                      <div class="space-y-2">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Manejo de personal</p>
+                        <div class="grid gap-2">
+                          <button
+                            type="button"
+                            class="inline-flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                            data-calendar-menu-current
+                          >
+                            <span class="flex flex-col text-left">
+                              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gestionar</span>
+                              <span class="text-sm font-semibold text-slate-700" data-calendar-menu-label>Calendario vigente</span>
+                            </span>
+                            <svg class="h-4 w-4 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L13.586 11H4a1 1 0 110-2h9.586l-3.293-3.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                          </button>
+                          <a
+                            href="{% url 'personal:configurator' %}?step=positions"
+                            class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                          >
+                            <span class="flex flex-col text-left">
+                              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gestionar</span>
+                              <span class="text-sm font-semibold text-slate-700">Puestos de trabajo</span>
+                            </span>
+                            <svg class="h-4 w-4 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path fill-rule="evenodd" d="M7.293 5.293a1 1 0 011.414 0L12.414 9l-3.707 3.707a1 1 0 01-1.414-1.414L9.586 10 7.293 7.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                          </a>
+                          <a
+                            href="{% url 'personal:configurator' %}?step=collaborators"
+                            class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                          >
+                            <span class="flex flex-col text-left">
+                              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gestionar</span>
+                              <span class="text-sm font-semibold text-slate-700">Colaboradores</span>
+                            </span>
+                            <svg class="h-4 w-4 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path fill-rule="evenodd" d="M7.293 5.293a1 1 0 011.414 0L12.414 9l-3.707 3.707a1 1 0 01-1.414-1.414L9.586 10 7.293 7.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <a
                   href="{% url 'admin:index' %}"
                   class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
@@ -112,15 +163,72 @@
                   <span>Configuración</span>
                 </a>
               </div>
-              <a
-                href="{% url 'personal:configurator' %}"
-                class="hidden sm:inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path d="M10 3a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 0110 3z" />
-                </svg>
-                <span>Nuevo calendario</span>
-              </a>
+              <div class="relative hidden sm:inline-flex" data-quick-create>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  data-quick-create-trigger
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M10 3a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 0110 3z" />
+                  </svg>
+                  <span>Nuevo</span>
+                  <svg class="h-3 w-3 text-white/80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.977a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0l-4.24-4.54a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <div
+                  class="invisible absolute right-0 top-full z-30 mt-3 w-64 -translate-y-2 text-sm opacity-0 transition duration-200 ease-out"
+                  data-quick-create-panel
+                >
+                  <div
+                    class="pointer-events-none absolute right-10 -top-2 h-4 w-4 rotate-45 rounded-sm bg-white shadow-lg shadow-slate-900/10 ring-1 ring-brand/10"
+                    aria-hidden="true"
+                  ></div>
+                  <div class="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xl shadow-slate-900/10 ring-1 ring-brand/10">
+                    <div class="bg-gradient-to-r from-brand/10 via-white to-transparent px-4 pb-3 pt-4">
+                      <p class="text-[10px] font-semibold uppercase tracking-[0.35em] text-brand">Crear</p>
+                      <p class="mt-1 text-xs text-slate-500">
+                        Accede rápidamente a las acciones más usadas sin salir de la vista actual.
+                      </p>
+                    </div>
+                    <div class="px-4 pb-4 pt-3">
+                      <div class="grid gap-2 text-sm font-medium text-slate-600">
+                        <button
+                          type="button"
+                          class="inline-flex w-full items-center justify-between rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 transition hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                          data-calendar-create-open
+                        >
+                          <span class="flex items-center gap-2">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-brand">
+                              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path
+                                  fill-rule="evenodd"
+                                  d="M5.5 2A1.5 1.5 0 004 3.5V5h12V3.5A1.5 1.5 0 0014.5 2h-9zM16 6H4v10.5A1.5 1.5 0 005.5 18h9a1.5 1.5 0 001.5-1.5V6z"
+                                  clip-rule="evenodd"
+                                />
+                              </svg>
+                            </span>
+                            <span class="flex flex-col text-left leading-tight">
+                              Calendario
+                              <span class="text-[11px] font-normal text-slate-400">Configura un nuevo calendario operativo</span>
+                            </span>
+                          </span>
+                          <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                              fill-rule="evenodd"
+                              d="M7.293 5.293a1 1 0 011.414 0L12.414 9l-3.707 3.707a1 1 0 01-1.414-1.414L9.586 10 7.293 7.707a1 1 0 010-1.414z"
+                              clip-rule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center gap-2 text-xs font-medium text-slate-500">
                 {% if request.user.is_authenticated %}
                   <div class="hidden text-right sm:block">
@@ -170,25 +278,184 @@
               </svg>
             </button>
           </div>
-          <nav class="space-y-1 px-4 pb-4 text-sm font-medium text-slate-600">
-            <a href="{% url 'personal:dashboard' %}" class="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-slate-100" data-mobile-nav-close>
-              <span>Calendarios</span>
-              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M7.22 14.78a.75.75 0 01-.073-.977l.073-.084L10.94 10 7.22 6.28a.75.75 0 111.133-.976l.073.084 4 4a.75.75 0 01.073.977l-.073.084-4 4a.75.75 0 01-1.06 0z" clip-rule="evenodd" />
-              </svg>
-            </a>
-            <a href="{% url 'personal:configurator' %}" class="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-slate-100" data-mobile-nav-close>
-              <span>Configurar</span>
-              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M7 10a3 3 0 016 0v1h1a2 2 0 012 2v3.25a.75.75 0 01-1.5 0V13a.5.5 0 00-.5-.5H5a.5.5 0 00-.5.5v3.25a.75.75 0 01-1.5 0V13a2 2 0 012-2h1v-1zm3-1.5A1.5 1.5 0 008.5 10v1h3v-1A1.5 1.5 0 0010 8.5z" clip-rule="evenodd" />
-              </svg>
-            </a>
-            <a href="{% url 'personal:dashboard' %}#listado" class="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-slate-100" data-mobile-nav-close>
-              <span>Historial</span>
-              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path d="M9.25 3a.75.75 0 01.75.75V5h4.5A1.75 1.75 0 0116.25 6.75v8.5A1.75 1.75 0 0114.5 17H5.5A1.75 1.75 0 013.75 15.25V5.75A1.75 1.75 0 015.5 4H8.5V3.75A.75.75 0 019.25 3zM8.5 5H5.5a.25.25 0 00-.25.25v10c0 .138.112.25.25.25h9a.25.25 0 00.25-.25V6.75a.25.25 0 00-.25-.25H9.25a.75.75 0 01-.75-.75V5z" />
-              </svg>
-            </a>
+          <nav class="space-y-3 px-4 pb-6 text-sm text-slate-700">
+            <div
+              class="relative rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+              data-calendar-navigator
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Calendario operativo</p>
+                  <p class="text-sm font-semibold text-slate-900" data-calendar-picker-label>Seleccionando…</p>
+                  <p class="text-xs text-slate-500" data-calendar-picker-range>Sin rango definido</p>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-calendar-picker-trigger
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                >
+                  <span>Elegir</span>
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.208l3.71-3.978a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0l-4.24-4.54a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <div class="mt-3 grid gap-2 text-xs font-semibold text-slate-600">
+                <button
+                  type="button"
+                  class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-calendar-nav="prev"
+                >
+                  <span>Calendario anterior</span>
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M12.78 4.22a.75.75 0 010 1.06L8.06 10l4.72 4.72a.75.75 0 01-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-calendar-nav="next"
+                >
+                  <span>Calendario siguiente</span>
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M7.22 4.22a.75.75 0 011.06 0l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 01-1.06-1.06L11.94 10 7.22 6.28a.75.75 0 010-1.06z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <div
+                class="invisible absolute left-0 top-full z-30 mt-2 w-full max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white opacity-0 shadow-lg shadow-slate-900/10 transition duration-150 ease-out"
+                data-calendar-picker-panel
+              >
+                <div class="border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+                  <label class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-500 focus-within:ring-2 focus-within:ring-brand focus-within:ring-offset-2 focus-within:ring-offset-white">
+                    <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 014.384 8.776l3.17 3.17a.75.75 0 11-1.06 1.06l-3.17-3.17A5.5 5.5 0 119 3.5zm0 1.5a4 4 0 100 8 4 4 0 000-8z" clip-rule="evenodd" />
+                    </svg>
+                    <input
+                      type="search"
+                      class="flex-1 border-0 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                      placeholder="Filtrar por nombre o fecha…"
+                      data-calendar-picker-search
+                    />
+                  </label>
+                </div>
+                <div class="max-h-64 overflow-y-auto" data-calendar-picker-list>
+                  <div class="px-4 py-3 text-xs text-slate-400">Cargando calendarios…</div>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Configurar</p>
+              <div class="mt-2 grid gap-2 text-sm font-semibold text-slate-700">
+                <a
+                  href="{% url 'personal:configurator' %}?step=positions"
+                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-mobile-nav-close
+                >
+                  Posiciones
+                  <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0L17 8.586V15a2 2 0 01-2 2h-3.586a2 2 0 01-1.414-.586l-5.707-5.707a1 1 0 010-1.414l5.707-5.707zM5 13.586L10.414 19H5a2 2 0 01-2-2v-3.414a1 1 0 011.707-.707L5 13.586z" clip-rule="evenodd" />
+                  </svg>
+                </a>
+                <a
+                  href="{% url 'personal:configurator' %}?step=rules"
+                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-mobile-nav-close
+                >
+                  Calendarios
+                  <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M5.5 2A1.5 1.5 0 004 3.5V5h12V3.5A1.5 1.5 0 0014.5 2h-9zM16 6H4v10.5A1.5 1.5 0 005.5 18h9a1.5 1.5 0 001.5-1.5V6z" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Crear</p>
+              <div class="mt-2 grid gap-2 text-sm font-semibold text-slate-700">
+                <button
+                  type="button"
+                  class="inline-flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-calendar-create-open
+                  data-mobile-nav-close
+                >
+                  Calendario
+                  <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M10 3a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 0110 3z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Accesos rápidos</p>
+              <div class="mt-2 grid gap-2 text-sm font-semibold text-slate-700">
+                <a
+                  href="{% url 'task_manager:index' %}"
+                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-mobile-nav-close
+                >
+                  Tareas
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.5 3A1.5 1.5 0 003 4.5v11A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0015.5 3h-11zm2 3.5a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5A.75.75 0 016.5 6.5zm0 3.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75zm0 3.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </a>
+                <a
+                  href="{% url 'production:index' %}"
+                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-mobile-nav-close
+                >
+                  Producción
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
+                  </svg>
+                </a>
+                <a
+                  href="{% url 'admin:index' %}"
+                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-mobile-nav-close
+                >
+                  Administración
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M10.82 2.577a.75.75 0 00-1.64 0l-.247 1.357a.38.38 0 01-.278.3l-1.31.31a.75.75 0 00-.332 1.262l1.003.93a.38.38 0 01.11.36l-.225 1.36a.75.75 0 001.13.787l1.16-.66a.38.38 0 01.37 0l1.16.66a.75.75 0 001.13-.788l-.224-1.36a.38.38 0 01.11-.36l1.003-.93a.75.75 0 00-.332-1.262l-1.31-.31a.38.38 0 01-.278-.3l-.247-1.357zM4.5 9.5a.75.75 0 00-.75.75v4c0 1.243 1.007 2.25 2.25 2.25h8a2.25 2.25 0 002.25-2.25v-4a.75.75 0 00-1.5 0v4c0 .414-.336.75-.75.75h-8a.75.75 0 01-.75-.75v-4A.75.75 0 004.5 9.5z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <div class="grid gap-2">
+              <a
+                href="{% url 'personal:configurator' %}?step=positions"
+                class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                data-mobile-nav-close
+              >
+                <span>Configurar posiciones</span>
+                <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0L17 8.586V15a2 2 0 01-2 2h-3.586a2 2 0 01-1.414-.586l-5.707-5.707a1 1 0 010-1.414l5.707-5.707zM5 13.586L10.414 19H5a2 2 0 01-2-2v-3.414a1 1 0 011.707-.707L5 13.586z" clip-rule="evenodd" />
+                </svg>
+              </a>
+              <a
+                href="{% url 'personal:configurator' %}?step=collaborators"
+                class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                data-mobile-nav-close
+              >
+                <span>Configurar colaboradores</span>
+                <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path
+                    fill-rule="evenodd"
+                    d="M4 5a3 3 0 016 0v.316c.626.237 1.2.622 1.664 1.151A2.75 2.75 0 0114.75 5h.5A2.75 2.75 0 0118 7.75v.5a2.75 2.75 0 01-2.75 2.75H14v2.25A2.75 2.75 0 0111.25 16H6.75A2.75 2.75 0 014 13.25V5zm6.5.75a1.5 1.5 0 10-3 0V6.5h3V5.75zM5.5 7v6.25c0 .69.56 1.25 1.25 1.25h4.5c.69 0 1.25-.56 1.25-1.25V7H5.5zm7-1.25c0-.69.56-1.25 1.25-1.25h.5c.69 0 1.25.56 1.25 1.25v.5c0 .69-.56 1.25-1.25 1.25h-.5a1.25 1.25 0 01-1.25-1.25v-.5z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </a>
+            </div>
           </nav>
           <div class="border-t border-slate-100 px-4 py-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Accesos rápidos</p>
@@ -207,6 +474,16 @@
                 <span>Producción avícola</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
+                </svg>
+              </a>
+              <a href="{% url 'personal:dashboard' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+                <span>Calendarios</span>
+                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path
+                    fill-rule="evenodd"
+                    d="M6 2a.75.75 0 011.5 0v1h5V2a.75.75 0 011.5 0v1h.75A2.25 2.25 0 0115 5.25v10A2.75 2.75 0 0112.25 18h-4.5A2.75 2.75 0 015 15.25v-10A2.25 2.25 0 017.25 3H8.5V2a.75.75 0 011.5 0v1zM5.5 6v3.5h9V6h-9zm0 5v4.25c0 .69.56 1.25 1.25 1.25h6.5c.69 0 1.25-.56 1.25-1.25V11h-9z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               </a>
               <a href="{% url 'admin:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
@@ -289,6 +566,119 @@
       {% block content %}{% endblock %}
     </main>
 
+    {% if calendar_generation_form %}
+      <div class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" data-calendar-create>
+        <div class="absolute inset-0 bg-slate-900/40 transition-opacity" data-calendar-create-backdrop></div>
+        <div class="absolute inset-y-0 right-0 flex max-w-full pl-10">
+          <section class="pointer-events-auto w-screen max-w-xl">
+            <div class="flex h-full flex-col overflow-hidden rounded-l-3xl bg-white/95 shadow-2xl ring-1 ring-slate-200/70 backdrop-blur-sm">
+              <header class="relative flex items-center justify-between gap-6 border-b border-transparent bg-gradient-to-r from-brand/15 via-white to-white px-7 py-6 shadow-sm">
+                <div class="flex items-start gap-4">
+                  <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 text-brand shadow ring-1 ring-brand/20">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M7 2a1 1 0 00-1 1v1H5a3 3 0 00-3 3v12a3 3 0 003 3h14a3 3 0 003-3V7a3 3 0 00-3-3h-1V3a1 1 0 10-2 0v1H8V3a1 1 0 00-1-1zm12 6H5v11a1 1 0 001 1h12a1 1 0 001-1zM9 12h2a1 1 0 010 2H9a1 1 0 010-2zm4 0h2a1 1 0 010 2h-2a1 1 0 010-2z" />
+                    </svg>
+                  </span>
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-brand/80">Generador de turnos</p>
+                    <h2 class="mt-1 text-2xl font-semibold text-slate-900">Nuevo calendario</h2>
+                    <p class="mt-2 text-sm text-slate-600">Selecciona el rango de fechas y anota detalles relevantes para el turno.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-calendar-create-close
+                >
+                  <span class="sr-only">Cerrar panel de creación de calendario</span>
+                  <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.22 5.22a.75.75 0 011.06 0L10 8.94l3.72-3.72a.75.75 0 111.06 1.06L11.06 10l3.72 3.72a.75.75 0 11-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 11-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 010-1.06z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </header>
+              <form method="post" class="flex h-full flex-col bg-gradient-to-b from-white via-white to-slate-50" data-calendar-create-form>
+                {% csrf_token %}
+                <div class="flex-1 overflow-y-auto px-7 py-6">
+                  <div class="space-y-6">
+                    <div class="rounded-2xl border border-slate-200/70 bg-white/90 p-6 shadow-sm backdrop-blur">
+                      <div class="grid grid-cols-1 gap-5">
+                        <div>
+                          <label class="text-sm font-semibold text-slate-700" for="{{ calendar_generation_form.name.id_for_label }}">{{ calendar_generation_form.name.label }}</label>
+                          {{ calendar_generation_form.name }}
+                          <p class="mt-1 hidden text-xs text-red-600" data-field-error="name"></p>
+                        </div>
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                          <div>
+                            <label class="text-sm font-semibold text-slate-700" for="{{ calendar_generation_form.start_date.id_for_label }}">{{ calendar_generation_form.start_date.label }}</label>
+                            {{ calendar_generation_form.start_date }}
+                            <p class="mt-1 hidden text-xs text-red-600" data-field-error="start_date"></p>
+                          </div>
+                          <div>
+                            <label class="text-sm font-semibold text-slate-700" for="{{ calendar_generation_form.end_date.id_for_label }}">{{ calendar_generation_form.end_date.label }}</label>
+                            {{ calendar_generation_form.end_date }}
+                            <p class="mt-1 hidden text-xs text-red-600" data-field-error="end_date"></p>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="text-sm font-semibold text-slate-700" for="{{ calendar_generation_form.notes.id_for_label }}">{{ calendar_generation_form.notes.label }}</label>
+                          {{ calendar_generation_form.notes }}
+                          <p class="mt-1 hidden text-xs text-red-600" data-field-error="notes"></p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" data-field-error="__all__"></div>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between gap-6 border-t border-slate-100 bg-white/90 px-7 py-4 backdrop-blur">
+                  <p class="text-xs text-slate-500" ></p>
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                      data-calendar-create-close
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-brand-dark hover:to-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                      data-calendar-create-submit
+                    >
+                      <svg class="hidden h-4 w-4 animate-spin text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-calendar-create-spinner>
+                        <circle cx="12" cy="12" r="10" class="stroke-white/30" />
+                        <path d="M4 12a8 8 0 018-8" class="stroke-white" stroke-linecap="round" />
+                      </svg>
+                      <span data-calendar-create-submit-label>Generar borrador</span>
+                    </button>
+                  </div>
+                </div>
+                {% if calendar_generation_recent_calendars %}
+                  <div class="border-t border-slate-100 bg-slate-50/80 px-7 py-5 backdrop-blur-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Últimos calendarios creados</p>
+                    <ul class="mt-4 max-h-52 space-y-3 overflow-y-auto pr-1">
+                      {% for calendar in calendar_generation_recent_calendars %}
+                        <li class="rounded-2xl border border-slate-200/70 bg-white/90 px-4 py-3 shadow-sm transition hover:border-brand/40 hover:shadow-md">
+                          <p class="text-sm font-semibold text-slate-900">
+                            {{ calendar.display_name }}
+                          </p>
+                          <p class="text-xs text-slate-500">
+                            {{ calendar.start_date|date:"d M Y" }} → {{ calendar.end_date|date:"d M Y" }}
+                          </p>
+                          <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide {% if calendar.status == 'approved' %}text-emerald-600{% elif calendar.status == 'modified' %}text-amber-600{% else %}text-slate-500{% endif %}">
+                            {{ calendar.status_label }}
+                          </p>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                {% endif %}
+              </form>
+            </div>
+          </section>
+        </div>
+      </div>
+    {% endif %}
+
     <footer class="border-t border-slate-200 bg-white/70 py-6">
       <div class="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-xs text-slate-500 sm:flex-row sm:px-6 lg:px-8">
         <span>Calendario operativo · La Colina</span>
@@ -305,6 +695,432 @@
         var currentConfirmation = null;
         var mobileNav = null;
         var mobileNavToggle = null;
+        var calendarMenus = [];
+        var activeCalendarMenu = null;
+        var quickCreateMenus = [];
+        var activeQuickCreate = null;
+        var calendarNavigators = [];
+        var activeCalendarPicker = null;
+        var calendarCreatePanel = null;
+        var calendarCreateForm = null;
+        var calendarCreateTriggers = [];
+        var calendarCreateCloseButtons = [];
+        var calendarCreateBackdrop = null;
+        var calendarCreateStatus = null;
+        var calendarCreateSpinner = null;
+        var calendarCreateSubmitLabel = null;
+        var calendarCreateSubmitButton = null;
+        var calendarCreateUrl = null;
+        var calendarCreateLastTrigger = null;
+        var calendarDetailTemplate = null;
+
+        var CalendarNavigation = (function () {
+          try {
+          function safeDateFormatter(locale, options) {
+            if (typeof Intl === 'undefined' || !Intl.DateTimeFormat) {
+              return null;
+            }
+            try {
+              return new Intl.DateTimeFormat(locale, options);
+            } catch (error) {
+              try {
+                return new Intl.DateTimeFormat(undefined, options);
+              } catch (_error) {
+                return null;
+              }
+            }
+          }
+
+          var fetchPromise = null;
+          var cache = null;
+          var listeners = [];
+          var body = typeof document !== 'undefined' ? document.body : null;
+          var listUrl = body ? body.dataset.calendarListUrl || null : null;
+          var detailTemplate = body ? body.dataset.calendarDetailTemplate || null : null;
+          if (!calendarDetailTemplate) {
+            calendarDetailTemplate = detailTemplate;
+          }
+          if (!calendarCreateUrl) {
+            calendarCreateUrl = body ? body.dataset.calendarCreateUrl || null : null;
+          }
+          var longFormatter = safeDateFormatter('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+          var shortFormatter = safeDateFormatter('es-CO', { day: '2-digit', month: 'short' });
+          var statusMeta = {
+            draft: { label: 'Borrador', classes: 'border border-slate-200 bg-slate-100 text-slate-600' },
+            approved: { label: 'Aprobado', classes: 'border border-emerald-200 bg-emerald-100 text-emerald-700' },
+            modified: { label: 'Modificado', classes: 'border border-amber-200 bg-amber-100 text-amber-700' },
+          };
+
+          function toDate(reference) {
+            var date = reference instanceof Date ? new Date(reference.getTime()) : new Date();
+            if (Number.isNaN(date.getTime())) {
+              date = new Date();
+            }
+            date.setHours(0, 0, 0, 0);
+            return date;
+          }
+
+          function parseDate(value) {
+            if (!value || typeof value !== 'string') {
+              return null;
+            }
+            var parts = value.split('-');
+            if (parts.length !== 3) {
+              return null;
+            }
+            var year = Number(parts[0]);
+            var monthIndex = Number(parts[1]) - 1;
+            var day = Number(parts[2]);
+            if (Number.isNaN(year) || Number.isNaN(monthIndex) || Number.isNaN(day)) {
+              return null;
+            }
+            var parsed = new Date(year, monthIndex, day);
+            if (Number.isNaN(parsed.getTime())) {
+              return null;
+            }
+            parsed.setHours(0, 0, 0, 0);
+            return parsed;
+          }
+
+          function formatDate(date, fallback) {
+            if (date && longFormatter) {
+              return longFormatter.format(date);
+            }
+            return fallback || '';
+          }
+
+          function formatRange(calendar) {
+            if (!calendar) {
+              return '';
+            }
+            var startLabel = formatDate(calendar.start, calendar.startDate);
+            var endLabel = formatDate(calendar.end, calendar.endDate);
+            if (startLabel && endLabel) {
+              return startLabel + ' \u2192 ' + endLabel;
+            }
+            return startLabel || endLabel || '';
+          }
+
+          function formatRangeShort(calendar) {
+            if (!calendar) {
+              return '';
+            }
+            var startLabel = calendar.start && shortFormatter ? shortFormatter.format(calendar.start) : (calendar.startDate || '');
+            var endLabel = calendar.end && shortFormatter ? shortFormatter.format(calendar.end) : (calendar.endDate || '');
+            if (startLabel && endLabel) {
+              return startLabel + ' \u2192 ' + endLabel;
+            }
+            return startLabel || endLabel || '';
+          }
+
+          function compareCalendars(a, b) {
+            if (a.start && b.start && a.start.getTime() !== b.start.getTime()) {
+              return a.start.getTime() - b.start.getTime();
+            }
+            if (a.start && !b.start) {
+              return -1;
+            }
+            if (!a.start && b.start) {
+              return 1;
+            }
+            if (a.end && b.end && a.end.getTime() !== b.end.getTime()) {
+              return a.end.getTime() - b.end.getTime();
+            }
+            return a.id - b.id;
+          }
+
+          function prepareCalendars(results) {
+            if (!Array.isArray(results)) {
+              return [];
+            }
+            return results
+              .map(function (item) {
+                var startDateRaw = item && item.start_date ? String(item.start_date) : '';
+                var endDateRaw = item && item.end_date ? String(item.end_date) : '';
+                var nameRaw = item && item.name ? String(item.name) : 'Sin título';
+                var statusRaw = item && item.status ? String(item.status) : '';
+                var idRaw = item && item.id;
+                var id = Number(idRaw);
+                var start = parseDate(startDateRaw);
+                var end = parseDate(endDateRaw);
+                return {
+                  id: id,
+                  name: nameRaw || 'Sin título',
+                  start: start,
+                  end: end,
+                  startDate: startDateRaw,
+                  endDate: endDateRaw,
+                  status: statusRaw,
+                };
+              })
+              .filter(function (item) {
+                return Number.isFinite(item.id);
+              })
+              .sort(compareCalendars);
+          }
+
+          function notify(calendars) {
+            var pending = listeners.splice(0, listeners.length);
+            pending.forEach(function (callback) {
+              try {
+                callback(calendars);
+              } catch (error) {
+                console.error(error);
+              }
+            });
+          }
+
+          function ensureFetch() {
+            if (fetchPromise) {
+              return fetchPromise;
+            }
+            if (!listUrl) {
+              cache = { calendars: [] };
+              notify(cache.calendars);
+              return Promise.resolve(cache.calendars);
+            }
+            fetchPromise = fetch(listUrl, { credentials: 'same-origin' })
+              .then(function (response) {
+                if (!response.ok) {
+                  throw new Error('Respuesta no válida');
+                }
+                return response.json();
+              })
+              .then(function (payload) {
+                var results = payload && payload.results ? payload.results : [];
+                var calendars = prepareCalendars(results);
+                cache = { calendars: calendars };
+                notify(calendars);
+                return calendars;
+              })
+              .catch(function (error) {
+                console.error('No se pudo cargar el listado de calendarios.', error);
+                cache = { calendars: [] };
+                notify(cache.calendars);
+                return cache.calendars;
+              });
+            return fetchPromise;
+          }
+
+          function ready(callback) {
+            if (typeof callback !== 'function') {
+              return;
+            }
+            if (cache) {
+              callback(cache.calendars);
+              return;
+            }
+            listeners.push(callback);
+            ensureFetch();
+          }
+
+          function refresh() {
+            cache = null;
+            fetchPromise = null;
+            ensureFetch();
+          }
+
+          function getCalendars() {
+            if (!cache) {
+              return null;
+            }
+            return cache.calendars;
+          }
+
+          function buildDetailUrl(id) {
+            if (!detailTemplate) {
+              return null;
+            }
+            var numericId = Number(id);
+            if (!Number.isFinite(numericId)) {
+              return null;
+            }
+            var stringId = String(numericId);
+            if (detailTemplate.endsWith('/0/')) {
+              return detailTemplate.slice(0, -2) + stringId + '/';
+            }
+            if (detailTemplate.endsWith('/0')) {
+              return detailTemplate.slice(0, -1) + stringId;
+            }
+            var lastIndex = detailTemplate.lastIndexOf('0');
+            if (lastIndex >= 0) {
+              return detailTemplate.slice(0, lastIndex) + stringId + detailTemplate.slice(lastIndex + 1);
+            }
+            return detailTemplate.replace(/0$/, stringId) || detailTemplate + stringId + '/';
+          }
+
+          function findActive(calendars, referenceDate) {
+            if (!Array.isArray(calendars) || !calendars.length) {
+              return null;
+            }
+            var target = toDate(referenceDate);
+            var targetTime = target.getTime();
+            for (var index = 0; index < calendars.length; index += 1) {
+              var calendar = calendars[index];
+              if (!calendar.start || !calendar.end) {
+                continue;
+              }
+              var startTime = calendar.start.getTime();
+              var endTime = calendar.end.getTime();
+              if (startTime <= targetTime && targetTime <= endTime) {
+                return calendar;
+              }
+            }
+            return null;
+          }
+
+          function findMostRelevant(calendars, referenceDate) {
+            if (!Array.isArray(calendars) || !calendars.length) {
+              return null;
+            }
+            var target = toDate(referenceDate);
+            var targetTime = target.getTime();
+            var before = null;
+            var after = null;
+            for (var index = 0; index < calendars.length; index += 1) {
+              var calendar = calendars[index];
+              if (calendar.start && calendar.start.getTime() <= targetTime) {
+                before = calendar;
+              } else if (!after) {
+                after = calendar;
+              }
+            }
+            return before || after || calendars[calendars.length - 1] || null;
+          }
+
+          function findNeighbors(calendars, calendarId) {
+            if (!Array.isArray(calendars) || !calendars.length) {
+              return { previous: null, current: null, next: null };
+            }
+            var id = Number(calendarId);
+            if (!Number.isFinite(id)) {
+              return { previous: null, current: null, next: null };
+            }
+            var index = calendars.findIndex(function (calendar) {
+              return calendar.id === id;
+            });
+            if (index === -1) {
+              return { previous: null, current: null, next: null };
+            }
+            return {
+              previous: index > 0 ? calendars[index - 1] : null,
+              current: calendars[index],
+              next: index < calendars.length - 1 ? calendars[index + 1] : null,
+            };
+          }
+
+          function getContextId() {
+            var bodyEl = typeof document !== 'undefined' ? document.body : null;
+            if (!bodyEl) {
+              return null;
+            }
+            var raw = bodyEl.dataset ? bodyEl.dataset.calendarCurrentId : null;
+            if (!raw) {
+              return null;
+            }
+            var parsed = Number(raw);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+
+          function getContextCalendar(calendars, referenceDate) {
+            if (!Array.isArray(calendars) || !calendars.length) {
+              return null;
+            }
+            var contextId = getContextId();
+            if (contextId !== null) {
+              var match = calendars.find(function (calendar) {
+                return calendar.id === contextId;
+              });
+              if (match) {
+                return match;
+              }
+            }
+            return findMostRelevant(calendars, referenceDate);
+          }
+
+          function getStatusStyles(status) {
+            return statusMeta[status] || { label: status ? status : 'Sin estado', classes: 'border border-slate-200 bg-slate-200 text-slate-700' };
+          }
+
+          var api = {
+            ready: ready,
+            refresh: refresh,
+            getCalendars: getCalendars,
+            buildDetailUrl: buildDetailUrl,
+            findActive: findActive,
+            findMostRelevant: findMostRelevant,
+            findNeighbors: findNeighbors,
+            getContextId: getContextId,
+            getContextCalendar: getContextCalendar,
+            formatRange: formatRange,
+            formatRangeShort: formatRangeShort,
+            getStatusStyles: getStatusStyles,
+            toDate: toDate,
+          };
+
+          if (typeof window !== 'undefined') {
+            window.CalendarNavigation = api;
+          }
+
+          return api;
+          } catch (error) {
+            console.error('No fue posible inicializar la navegación de calendarios.', error);
+            var noop = function () {};
+            var dateToMidnight = function (value) {
+              var date = value instanceof Date ? new Date(value.getTime()) : new Date();
+              if (Number.isNaN(date.getTime())) {
+                date = new Date();
+              }
+              date.setHours(0, 0, 0, 0);
+              return date;
+            };
+            var fallbackApi = {
+              ready: function (callback) {
+                if (typeof callback === 'function') {
+                  callback([]);
+                }
+              },
+              refresh: noop,
+              getCalendars: function () {
+                return [];
+              },
+              buildDetailUrl: function () {
+                return null;
+              },
+              findActive: function () {
+                return null;
+              },
+              findMostRelevant: function () {
+                return null;
+              },
+              findNeighbors: function () {
+                return { previous: null, current: null, next: null };
+              },
+              getContextId: function () {
+                return null;
+              },
+              getContextCalendar: function () {
+                return null;
+              },
+              formatRange: function () {
+                return '';
+              },
+              formatRangeShort: function () {
+                return '';
+              },
+              getStatusStyles: function (status) {
+                return status
+                  ? { label: status, classes: 'border border-slate-200 bg-slate-200 text-slate-700' }
+                  : { label: 'Sin estado', classes: 'border border-slate-200 bg-slate-200 text-slate-700' };
+              },
+              toDate: dateToMidnight,
+            };
+            if (typeof window !== 'undefined') {
+              window.CalendarNavigation = fallbackApi;
+            }
+            return fallbackApi;
+          }
+        })();
 
         function focusFirst(target) {
           if (!target) {
@@ -314,6 +1130,813 @@
             target.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
           if (focusable && typeof focusable.focus === 'function') {
             focusable.focus();
+          }
+        }
+
+        function setButtonDisabled(button, disabled) {
+          if (!button) {
+            return;
+          }
+          if (disabled) {
+            button.setAttribute('disabled', 'disabled');
+            button.classList.add('cursor-not-allowed', 'opacity-50');
+          } else {
+            button.removeAttribute('disabled');
+            button.classList.remove('cursor-not-allowed', 'opacity-50');
+          }
+        }
+
+        function closeCalendarMenu(data, focusTrigger) {
+          if (!data || !data.panel || !data.trigger) {
+            return;
+          }
+          data.panel.classList.add('opacity-0', 'invisible');
+          data.panel.classList.remove('opacity-100');
+          data.trigger.setAttribute('aria-expanded', 'false');
+          if (focusTrigger && typeof data.trigger.focus === 'function') {
+            data.trigger.focus();
+          }
+          if (activeCalendarMenu === data) {
+            activeCalendarMenu = null;
+          }
+        }
+
+        function openCalendarMenu(data) {
+          if (!data || !data.panel || !data.trigger) {
+            return;
+          }
+          if (activeCalendarMenu && activeCalendarMenu !== data) {
+            closeCalendarMenu(activeCalendarMenu, false);
+          }
+          data.panel.classList.remove('invisible', 'opacity-0');
+          data.panel.classList.add('opacity-100');
+          data.trigger.setAttribute('aria-expanded', 'true');
+          activeCalendarMenu = data;
+          focusFirst(data.panel);
+        }
+
+        function toggleCalendarMenu(data) {
+          if (!data || !data.panel) {
+            return;
+          }
+          var isHidden = data.panel.classList.contains('invisible') || data.panel.classList.contains('opacity-0');
+          if (isHidden) {
+            openCalendarMenu(data);
+          } else {
+            closeCalendarMenu(data, false);
+          }
+        }
+
+        function closeQuickCreate(data, focusTrigger) {
+          if (!data || !data.panel || !data.trigger) {
+            return;
+          }
+          data.panel.classList.add('opacity-0', 'invisible');
+          data.panel.classList.remove('opacity-100', 'translate-y-0');
+          data.panel.classList.add('-translate-y-2');
+          data.trigger.setAttribute('aria-expanded', 'false');
+          data.trigger.classList.remove('bg-brand-dark', 'ring-2', 'ring-brand/30', 'ring-offset-2', 'ring-offset-white');
+          if (focusTrigger && typeof data.trigger.focus === 'function') {
+            data.trigger.focus();
+          }
+          if (activeQuickCreate === data) {
+            activeQuickCreate = null;
+          }
+        }
+
+        function openQuickCreate(data) {
+          if (!data || !data.panel || !data.trigger) {
+            return;
+          }
+          if (activeQuickCreate && activeQuickCreate !== data) {
+            closeQuickCreate(activeQuickCreate, false);
+          }
+          data.panel.classList.remove('invisible', 'opacity-0');
+          data.panel.classList.add('opacity-100', 'translate-y-0');
+          data.panel.classList.remove('-translate-y-2');
+          data.trigger.setAttribute('aria-expanded', 'true');
+          data.trigger.classList.add(
+            'bg-brand-dark',
+            'ring-2',
+            'ring-brand/30',
+            'ring-offset-2',
+            'ring-offset-white'
+          );
+          activeQuickCreate = data;
+          focusFirst(data.panel);
+        }
+
+        function toggleQuickCreate(data) {
+          if (!data || !data.panel) {
+            return;
+          }
+          var isHidden = data.panel.classList.contains('invisible') || data.panel.classList.contains('opacity-0');
+          if (isHidden) {
+            openQuickCreate(data);
+          } else {
+            closeQuickCreate(data, false);
+          }
+        }
+
+        function setCalendarCreateStatus(message, isError) {
+          if (!calendarCreateStatus) {
+            return;
+          }
+          calendarCreateStatus.textContent = message || '';
+          if (isError) {
+            calendarCreateStatus.classList.remove('text-slate-500');
+            calendarCreateStatus.classList.add('text-red-600');
+          } else {
+            calendarCreateStatus.classList.remove('text-red-600');
+            calendarCreateStatus.classList.add('text-slate-500');
+          }
+        }
+
+        function setCalendarCreateLoading(isLoading) {
+          if (calendarCreateSubmitButton) {
+            calendarCreateSubmitButton.disabled = Boolean(isLoading);
+          }
+          if (calendarCreateSpinner) {
+            calendarCreateSpinner.classList.toggle('hidden', !isLoading);
+          }
+          if (calendarCreateSubmitLabel) {
+            calendarCreateSubmitLabel.textContent = isLoading ? 'Generando…' : 'Generar borrador';
+          }
+        }
+
+        function clearCalendarCreateErrors() {
+          if (!calendarCreateForm) {
+            return;
+          }
+          toArray(calendarCreateForm.querySelectorAll('[data-field-error]')).forEach(function (errorEl) {
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+          });
+          toArray(calendarCreateForm.querySelectorAll('.border-red-500, .ring-red-500')).forEach(function (input) {
+            input.classList.remove('border-red-500', 'ring-red-500');
+          });
+        }
+
+        function markFieldError(fieldName, messages) {
+          if (!calendarCreateForm || !fieldName) {
+            return;
+          }
+          var errorEl = calendarCreateForm.querySelector('[data-field-error="' + fieldName + '"]');
+          if (errorEl) {
+            errorEl.textContent = Array.isArray(messages) ? messages.join(' ') : String(messages || '');
+            if (errorEl.textContent.trim()) {
+              errorEl.classList.remove('hidden');
+            } else {
+              errorEl.classList.add('hidden');
+            }
+          }
+          if (fieldName !== '__all__') {
+            var inputEl = calendarCreateForm.querySelector('[name="' + fieldName + '"]');
+            if (inputEl) {
+              inputEl.classList.add('border-red-500', 'ring-red-500');
+            }
+          }
+        }
+
+        function showCalendarCreateErrors(errors) {
+          if (!errors) {
+            return;
+          }
+          Object.keys(errors).forEach(function (key) {
+            markFieldError(key, errors[key]);
+          });
+        }
+
+        function closeCalendarCreate(focusTrigger) {
+          if (!calendarCreatePanel) {
+            return;
+          }
+          calendarCreatePanel.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+          setCalendarCreateLoading(false);
+          if (focusTrigger && calendarCreateLastTrigger && typeof calendarCreateLastTrigger.focus === 'function') {
+            calendarCreateLastTrigger.focus();
+          }
+          calendarCreateLastTrigger = null;
+        }
+
+        function openCalendarCreate(trigger) {
+          if (!calendarCreatePanel) {
+            return;
+          }
+          if (activeQuickCreate) {
+            closeQuickCreate(activeQuickCreate, false);
+          }
+          calendarCreateLastTrigger = trigger || null;
+          calendarCreatePanel.classList.remove('hidden');
+          document.body.classList.add('overflow-hidden');
+          setCalendarCreateLoading(false);
+          clearCalendarCreateErrors();
+          setCalendarCreateStatus('', false);
+          if (calendarCreateForm) {
+            calendarCreateForm.reset();
+            var firstInput = calendarCreateForm.querySelector('input:not([type="hidden"]), textarea, select');
+            if (firstInput && typeof firstInput.focus === 'function') {
+              firstInput.focus();
+            } else {
+              focusFirst(calendarCreatePanel);
+            }
+          } else {
+            focusFirst(calendarCreatePanel);
+          }
+        }
+
+        function handleCalendarCreateSubmit(event) {
+          if (!calendarCreateForm || !calendarCreateUrl) {
+            return;
+          }
+          event.preventDefault();
+          clearCalendarCreateErrors();
+          setCalendarCreateStatus('', false);
+          setCalendarCreateLoading(true);
+
+          var formData = new FormData(calendarCreateForm);
+          fetch(calendarCreateUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+          })
+            .then(function (response) {
+              if (response.status === 400) {
+                return response.json().then(function (payload) {
+                  throw { type: 'validation', payload: payload };
+                });
+              }
+              if (!response.ok) {
+                throw new Error('No se pudo generar el calendario.');
+              }
+              return response.json();
+            })
+            .then(function (payload) {
+              setCalendarCreateStatus('Redirigiendo al nuevo calendario…', false);
+              var redirectUrl = payload && payload.redirect_url ? String(payload.redirect_url) : null;
+              if (redirectUrl) {
+                window.location.assign(redirectUrl);
+                return;
+              }
+              if (payload && payload.calendar && payload.calendar.id) {
+                var template = calendarDetailTemplate || '';
+                if (template) {
+                  if (template.indexOf('/0/') !== -1) {
+                    window.location.assign(template.replace('/0/', '/' + payload.calendar.id + '/'));
+                    return;
+                  }
+                  var fallback = template.replace(/0\/?$/, payload.calendar.id + '/');
+                  window.location.assign(fallback);
+                  return;
+                }
+              }
+              window.location.reload();
+            })
+            .catch(function (error) {
+              setCalendarCreateLoading(false);
+              if (error && error.type === 'validation' && error.payload) {
+                var errors = error.payload.errors || {};
+                showCalendarCreateErrors(errors);
+                if (errors.__all__) {
+                  setCalendarCreateStatus(errors.__all__.join(' '), true);
+                } else {
+                  setCalendarCreateStatus('Revisa los campos resaltados.', true);
+                }
+                return;
+              }
+              console.error(error);
+              setCalendarCreateStatus('No fue posible generar el calendario. Intenta nuevamente.', true);
+            });
+        }
+
+        function setupCalendarCreate() {
+          calendarCreatePanel = document.querySelector('[data-calendar-create]');
+          if (!calendarCreatePanel) {
+            return;
+          }
+          calendarCreateForm = calendarCreatePanel.querySelector('[data-calendar-create-form]');
+          calendarCreateBackdrop = calendarCreatePanel.querySelector('[data-calendar-create-backdrop]');
+          calendarCreateStatus = calendarCreatePanel.querySelector('[data-calendar-create-status]');
+          calendarCreateSpinner = calendarCreatePanel.querySelector('[data-calendar-create-spinner]');
+          calendarCreateSubmitLabel = calendarCreatePanel.querySelector('[data-calendar-create-submit-label]');
+          calendarCreateSubmitButton = calendarCreatePanel.querySelector('[data-calendar-create-submit]');
+          calendarCreateTriggers = toArray(document.querySelectorAll('[data-calendar-create-open]'));
+          calendarCreateCloseButtons = toArray(calendarCreatePanel.querySelectorAll('[data-calendar-create-close]'));
+
+          calendarCreateTriggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function (event) {
+              event.preventDefault();
+              openCalendarCreate(trigger);
+            });
+          });
+
+          calendarCreateCloseButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              closeCalendarCreate(true);
+            });
+          });
+
+          if (calendarCreateBackdrop) {
+            calendarCreateBackdrop.addEventListener('click', function (event) {
+              if (event.target === calendarCreateBackdrop) {
+                closeCalendarCreate(false);
+              }
+            });
+          }
+
+          if (calendarCreateForm) {
+            calendarCreateForm.addEventListener('submit', handleCalendarCreateSubmit);
+          }
+        }
+
+        function closeCalendarPicker(data, focusTrigger) {
+          if (!data || !data.panel || !data.trigger) {
+            return;
+          }
+          data.panel.classList.add('opacity-0', 'invisible');
+          data.panel.classList.remove('opacity-100');
+          data.trigger.setAttribute('aria-expanded', 'false');
+          if (focusTrigger && typeof data.trigger.focus === 'function') {
+            data.trigger.focus();
+          }
+          if (activeCalendarPicker === data) {
+            activeCalendarPicker = null;
+          }
+        }
+
+        function openCalendarPicker(data) {
+          if (!data || !data.panel || !data.trigger) {
+            return;
+          }
+          if (activeCalendarPicker && activeCalendarPicker !== data) {
+            closeCalendarPicker(activeCalendarPicker, false);
+          }
+          data.panel.classList.remove('invisible', 'opacity-0');
+          data.panel.classList.add('opacity-100');
+          data.trigger.setAttribute('aria-expanded', 'true');
+          activeCalendarPicker = data;
+          focusFirst(data.panel);
+        }
+
+        function toggleCalendarPicker(data) {
+          if (!data || !data.panel) {
+            return;
+          }
+          var isHidden = data.panel.classList.contains('invisible') || data.panel.classList.contains('opacity-0');
+          if (isHidden) {
+            openCalendarPicker(data);
+          } else {
+            closeCalendarPicker(data, false);
+          }
+        }
+
+        function navigateToCalendar(target) {
+          if (!target) {
+            return;
+          }
+          var calendars = CalendarNavigation.getCalendars() || [];
+          var calendar = null;
+          if (typeof target === 'object' && target !== null) {
+            calendar = target;
+          } else {
+            var id = Number(target);
+            if (Number.isFinite(id)) {
+              calendar = calendars.find(function (item) {
+                return item.id === id;
+              }) || null;
+            }
+          }
+          if (!calendar) {
+            return;
+          }
+          var url = CalendarNavigation.buildDetailUrl(calendar.id);
+          if (url) {
+            if (mobileNav && !mobileNav.classList.contains('hidden')) {
+              closeMobileNav(false);
+            }
+            window.location.href = url;
+          }
+        }
+
+        function renderCalendarMenuList(data, calendars, contextCalendar, activeCalendar) {
+          if (!data || !data.list) {
+            return;
+          }
+          var list = data.list;
+          list.innerHTML = '';
+          if (!Array.isArray(calendars) || !calendars.length) {
+            var emptyMessage = document.createElement('div');
+            emptyMessage.className = 'px-3 py-2 text-xs text-slate-400';
+            emptyMessage.textContent = 'Aún no se han registrado calendarios.';
+            list.appendChild(emptyMessage);
+            return;
+          }
+          var sorted = calendars.slice().sort(function (a, b) {
+            var aTime = a.start ? a.start.getTime() : 0;
+            var bTime = b.start ? b.start.getTime() : 0;
+            if (aTime !== bTime) {
+              return bTime - aTime;
+            }
+            return b.id - a.id;
+          });
+          sorted.forEach(function (calendar) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'flex w-full flex-col gap-1 border-b border-slate-100 px-3 py-2 text-left transition hover:bg-slate-50 last:border-b-0';
+            if (contextCalendar && calendar.id === contextCalendar.id) {
+              button.classList.add('bg-slate-100/60');
+            } else if (activeCalendar && calendar.id === activeCalendar.id) {
+              button.classList.add('ring-1', 'ring-brand/30');
+            }
+
+            var header = document.createElement('div');
+            header.className = 'flex items-center justify-between gap-2';
+
+            var title = document.createElement('span');
+            title.className = 'text-sm font-semibold text-slate-800 truncate';
+            title.textContent = calendar.name || 'Sin título';
+
+            var meta = CalendarNavigation.getStatusStyles(calendar.status);
+            var badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ' + meta.classes;
+            badge.textContent = meta.label;
+
+            header.appendChild(title);
+            header.appendChild(badge);
+
+            var range = document.createElement('span');
+            range.className = 'text-xs text-slate-500';
+            range.textContent = CalendarNavigation.formatRangeShort(calendar);
+
+            button.appendChild(header);
+            button.appendChild(range);
+
+            button.addEventListener('click', function () {
+              closeCalendarMenu(data, false);
+              navigateToCalendar(calendar);
+            });
+
+            list.appendChild(button);
+          });
+        }
+
+        function updateCalendarMenu(data, calendars) {
+          if (!data) {
+            return;
+          }
+          var allCalendars = Array.isArray(calendars) ? calendars : (CalendarNavigation.getCalendars() || []);
+          var referenceDate = CalendarNavigation.toDate(new Date());
+          var activeCalendar = CalendarNavigation.findActive(allCalendars, referenceDate);
+          var contextCalendar = CalendarNavigation.getContextCalendar(allCalendars, referenceDate);
+          var targetForLink = activeCalendar || contextCalendar;
+          var fallbackUrl = data.link ? data.link.getAttribute('data-calendar-fallback-url') : null;
+          if (data.link) {
+            var url = targetForLink ? CalendarNavigation.buildDetailUrl(targetForLink.id) : null;
+            if (url) {
+              data.link.href = url;
+            } else if (fallbackUrl) {
+              data.link.href = fallbackUrl;
+            }
+            if (targetForLink) {
+              data.link.title = CalendarNavigation.formatRange(targetForLink);
+            } else {
+              data.link.removeAttribute('title');
+            }
+          }
+
+          if (data.currentButton) {
+            if (activeCalendar) {
+              setButtonDisabled(data.currentButton, false);
+              if (data.currentLabel) {
+                data.currentLabel.textContent = 'Calendario vigente';
+              }
+              data.currentButton.dataset.calendarId = String(activeCalendar.id);
+            } else {
+              setButtonDisabled(data.currentButton, true);
+              if (data.currentLabel) {
+                data.currentLabel.textContent = 'Sin calendario vigente';
+              }
+              delete data.currentButton.dataset.calendarId;
+            }
+          }
+
+          var neighbors = contextCalendar ? CalendarNavigation.findNeighbors(allCalendars, contextCalendar.id) : { previous: null, next: null, current: null };
+          if (data.prevButton) {
+            if (neighbors.previous) {
+              setButtonDisabled(data.prevButton, false);
+              data.prevButton.dataset.calendarId = String(neighbors.previous.id);
+            } else {
+              setButtonDisabled(data.prevButton, true);
+              delete data.prevButton.dataset.calendarId;
+            }
+          }
+          if (data.nextButton) {
+            if (neighbors.next) {
+              setButtonDisabled(data.nextButton, false);
+              data.nextButton.dataset.calendarId = String(neighbors.next.id);
+            } else {
+              setButtonDisabled(data.nextButton, true);
+              delete data.nextButton.dataset.calendarId;
+            }
+          }
+
+          renderCalendarMenuList(data, allCalendars, contextCalendar, activeCalendar);
+        }
+
+        function setupCalendarMenus() {
+          calendarMenus = toArray(document.querySelectorAll('[data-calendar-menu]')).map(function (element) {
+            var menuData = {
+              element: element,
+              link: element.querySelector('[data-calendar-current-link]'),
+              trigger: element.querySelector('[data-calendar-menu-trigger]'),
+              panel: element.querySelector('[data-calendar-menu-panel]'),
+              currentButton: element.querySelector('[data-calendar-menu-current]'),
+              currentLabel: null,
+              prevButton: element.querySelector('[data-calendar-menu-prev]'),
+              nextButton: element.querySelector('[data-calendar-menu-next]'),
+              list: element.querySelector('[data-calendar-menu-list]'),
+              listAll: element.querySelector('[data-calendar-menu-listall]'),
+            };
+            if (menuData.currentButton) {
+              menuData.currentLabel = menuData.currentButton.querySelector('[data-calendar-menu-label]') || menuData.currentButton.querySelector('span');
+            }
+            if (menuData.trigger && menuData.panel) {
+              menuData.trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                toggleCalendarMenu(menuData);
+              });
+            }
+            if (menuData.currentButton) {
+              menuData.currentButton.addEventListener('click', function () {
+                var id = menuData.currentButton.dataset.calendarId;
+                if (!id) {
+                  return;
+                }
+                closeCalendarMenu(menuData, false);
+                navigateToCalendar(Number(id));
+              });
+            }
+            if (menuData.prevButton) {
+              menuData.prevButton.addEventListener('click', function () {
+                var id = menuData.prevButton.dataset.calendarId;
+                if (!id) {
+                  return;
+                }
+                closeCalendarMenu(menuData, false);
+                navigateToCalendar(Number(id));
+              });
+            }
+            if (menuData.nextButton) {
+              menuData.nextButton.addEventListener('click', function () {
+                var id = menuData.nextButton.dataset.calendarId;
+                if (!id) {
+                  return;
+                }
+                closeCalendarMenu(menuData, false);
+                navigateToCalendar(Number(id));
+              });
+            }
+            if (menuData.listAll) {
+              menuData.listAll.addEventListener('click', function () {
+                closeCalendarMenu(menuData, false);
+              });
+            }
+            return menuData;
+          });
+
+          CalendarNavigation.ready(function (calendars) {
+            calendarMenus.forEach(function (menuData) {
+              updateCalendarMenu(menuData, calendars);
+            });
+          });
+
+          var existing = CalendarNavigation.getCalendars();
+          if (existing) {
+            calendarMenus.forEach(function (menuData) {
+              updateCalendarMenu(menuData, existing);
+            });
+          }
+        }
+
+        function setupQuickCreateMenus() {
+          quickCreateMenus = toArray(document.querySelectorAll('[data-quick-create]')).map(function (element) {
+            var menu = {
+              element: element,
+              trigger: element.querySelector('[data-quick-create-trigger]'),
+              panel: element.querySelector('[data-quick-create-panel]'),
+            };
+            if (menu.trigger && menu.panel) {
+              menu.trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                toggleQuickCreate(menu);
+              });
+              toArray(menu.panel.querySelectorAll('a[href], button')).forEach(function (action) {
+                action.addEventListener('click', function () {
+                  closeQuickCreate(menu, false);
+                });
+              });
+            }
+            return menu;
+          });
+        }
+
+        function renderCalendarPickerList(navigatorData) {
+          if (!navigatorData || !navigatorData.pickerList) {
+            return;
+          }
+          var listEl = navigatorData.pickerList;
+          var calendars = Array.isArray(navigatorData.calendars) ? navigatorData.calendars : [];
+          var filterValue = (navigatorData.filterQuery || '').trim().toLowerCase();
+          var filtered = !filterValue
+            ? calendars
+            : calendars.filter(function (calendar) {
+              var name = (calendar.name || '').toLowerCase();
+              var range = CalendarNavigation.formatRange(calendar).toLowerCase();
+              return name.indexOf(filterValue) !== -1 || range.indexOf(filterValue) !== -1;
+            });
+          listEl.innerHTML = '';
+          if (!filtered.length) {
+            var empty = document.createElement('div');
+            empty.className = 'px-4 py-3 text-xs text-slate-400';
+            empty.textContent = filterValue ? 'No hay coincidencias con el filtro ingresado.' : 'Aún no se han registrado calendarios.';
+            listEl.appendChild(empty);
+            return;
+          }
+          filtered.forEach(function (calendar) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'flex w-full flex-col gap-1 border-b border-slate-100 px-4 py-2 text-left transition hover:bg-slate-50 last:border-b-0';
+            if (navigatorData.currentCalendar && calendar.id === navigatorData.currentCalendar.id) {
+              button.classList.add('bg-slate-100/60');
+            }
+            var header = document.createElement('div');
+            header.className = 'flex items-center justify-between gap-2';
+
+            var title = document.createElement('span');
+            title.className = 'text-sm font-semibold text-slate-800';
+            title.textContent = calendar.name || 'Sin título';
+
+            var statusMeta = CalendarNavigation.getStatusStyles(calendar.status);
+            var badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ' + statusMeta.classes;
+            badge.textContent = statusMeta.label;
+
+            header.appendChild(title);
+            header.appendChild(badge);
+
+            var range = document.createElement('span');
+            range.className = 'text-xs text-slate-500';
+            range.textContent = CalendarNavigation.formatRangeShort(calendar);
+
+            button.appendChild(header);
+            button.appendChild(range);
+
+            button.addEventListener('click', function () {
+              closeCalendarPicker(navigatorData, false);
+              navigateToCalendar(calendar);
+            });
+
+            listEl.appendChild(button);
+          });
+        }
+
+        function updateCalendarNavigator(navigatorData, calendars) {
+          if (!navigatorData) {
+            return;
+          }
+          navigatorData.calendars = Array.isArray(calendars) ? calendars : (CalendarNavigation.getCalendars() || []);
+          var available = navigatorData.calendars;
+          var referenceDate = CalendarNavigation.toDate(new Date());
+          var explicitId = Number(navigatorData.element.dataset.currentCalendarId);
+          var current = Number.isFinite(explicitId)
+            ? available.find(function (calendar) {
+              return calendar.id === explicitId;
+            })
+            : null;
+          if (!current) {
+            current = CalendarNavigation.getContextCalendar(available, referenceDate);
+          }
+          navigatorData.currentCalendar = current || null;
+          if (navigatorData.element && current) {
+            navigatorData.element.dataset.currentCalendarId = String(current.id);
+          }
+          if (navigatorData.pickerLabel) {
+            navigatorData.pickerLabel.textContent = current ? (current.name || 'Sin título') : 'Sin calendario seleccionado';
+          }
+          if (navigatorData.pickerRange) {
+            navigatorData.pickerRange.textContent = current ? CalendarNavigation.formatRange(current) : 'Define un calendario para navegar';
+          }
+
+          if (navigatorData.pickerSearch) {
+            navigatorData.filterQuery = navigatorData.pickerSearch.value || '';
+          }
+
+          var neighbors = current ? CalendarNavigation.findNeighbors(available, current.id) : { previous: null, next: null };
+
+          if (navigatorData.prevButton) {
+            if (neighbors.previous) {
+              setButtonDisabled(navigatorData.prevButton, false);
+              navigatorData.prevButton.dataset.calendarId = String(neighbors.previous.id);
+            } else {
+              setButtonDisabled(navigatorData.prevButton, true);
+              delete navigatorData.prevButton.dataset.calendarId;
+            }
+          }
+
+          if (navigatorData.nextButton) {
+            if (neighbors.next) {
+              setButtonDisabled(navigatorData.nextButton, false);
+              navigatorData.nextButton.dataset.calendarId = String(neighbors.next.id);
+            } else {
+              setButtonDisabled(navigatorData.nextButton, true);
+              delete navigatorData.nextButton.dataset.calendarId;
+            }
+          }
+
+          renderCalendarPickerList(navigatorData);
+        }
+
+        function setupCalendarNavigators() {
+          calendarNavigators = toArray(document.querySelectorAll('[data-calendar-navigator]')).map(function (element) {
+            var picker = element.querySelector('[data-calendar-picker]');
+            var navigatorData = {
+              element: element,
+              prevButton: element.querySelector('[data-calendar-nav="prev"]'),
+              nextButton: element.querySelector('[data-calendar-nav="next"]'),
+              listLink: element.querySelector('[data-calendar-nav-list]'),
+              picker: picker,
+              trigger: picker
+                ? picker.querySelector('[data-calendar-picker-trigger]')
+                : element.querySelector('[data-calendar-picker-trigger]'),
+              panel: picker
+                ? picker.querySelector('[data-calendar-picker-panel]')
+                : element.querySelector('[data-calendar-picker-panel]'),
+              pickerSearch: picker
+                ? picker.querySelector('[data-calendar-picker-search]')
+                : element.querySelector('[data-calendar-picker-search]'),
+              pickerList: picker
+                ? picker.querySelector('[data-calendar-picker-list]')
+                : element.querySelector('[data-calendar-picker-list]'),
+              pickerLabel: picker
+                ? picker.querySelector('[data-calendar-picker-label]')
+                : element.querySelector('[data-calendar-picker-label]'),
+              pickerRange: picker
+                ? picker.querySelector('[data-calendar-picker-range]')
+                : element.querySelector('[data-calendar-picker-range]'),
+              filterQuery: '',
+              calendars: [],
+              currentCalendar: null,
+            };
+
+            if (navigatorData.prevButton) {
+              navigatorData.prevButton.addEventListener('click', function () {
+                var id = navigatorData.prevButton.dataset.calendarId;
+                if (!id) {
+                  return;
+                }
+                navigateToCalendar(Number(id));
+              });
+            }
+
+            if (navigatorData.nextButton) {
+              navigatorData.nextButton.addEventListener('click', function () {
+                var id = navigatorData.nextButton.dataset.calendarId;
+                if (!id) {
+                  return;
+                }
+                navigateToCalendar(Number(id));
+              });
+            }
+
+            if (navigatorData.trigger && navigatorData.panel) {
+              navigatorData.trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                toggleCalendarPicker(navigatorData);
+              });
+            }
+
+            if (navigatorData.pickerSearch) {
+              navigatorData.pickerSearch.addEventListener('input', function () {
+                navigatorData.filterQuery = navigatorData.pickerSearch.value || '';
+                renderCalendarPickerList(navigatorData);
+              });
+            }
+
+            return navigatorData;
+          });
+
+          CalendarNavigation.ready(function (calendars) {
+            calendarNavigators.forEach(function (navigatorData) {
+              updateCalendarNavigator(navigatorData, calendars);
+            });
+          });
+
+          var existing = CalendarNavigation.getCalendars();
+          if (existing) {
+            calendarNavigators.forEach(function (navigatorData) {
+              updateCalendarNavigator(navigatorData, existing);
+            });
           }
         }
 
@@ -507,6 +2130,22 @@
             hideConfirmation(currentConfirmation);
             return;
           }
+          if (calendarCreatePanel && !calendarCreatePanel.classList.contains('hidden')) {
+            closeCalendarCreate(true);
+            return;
+          }
+          if (activeCalendarMenu) {
+            closeCalendarMenu(activeCalendarMenu, true);
+            return;
+          }
+          if (activeQuickCreate) {
+            closeQuickCreate(activeQuickCreate, true);
+            return;
+          }
+          if (activeCalendarPicker) {
+            closeCalendarPicker(activeCalendarPicker, true);
+            return;
+          }
           if (mobileNav && !mobileNav.classList.contains('hidden')) {
             closeMobileNav(true);
           }
@@ -517,6 +2156,10 @@
           toArray(document.querySelectorAll('[data-confirmation]')).forEach(attachConfirmation);
           mobileNav = document.querySelector('[data-mobile-nav]');
           mobileNavToggle = document.querySelector('[data-mobile-nav-toggle]');
+          setupCalendarMenus();
+          setupQuickCreateMenus();
+          setupCalendarNavigators();
+          setupCalendarCreate();
 
           if (mobileNav && mobileNavToggle) {
             mobileNavToggle.addEventListener('click', function () {
@@ -542,13 +2185,23 @@
         });
 
         document.addEventListener('click', function (event) {
+          var target = event.target;
+          if (activeCalendarMenu && activeCalendarMenu.element && !activeCalendarMenu.element.contains(target)) {
+            closeCalendarMenu(activeCalendarMenu, false);
+          }
+          if (activeQuickCreate && activeQuickCreate.element && !activeQuickCreate.element.contains(target)) {
+            closeQuickCreate(activeQuickCreate, false);
+          }
+          if (activeCalendarPicker && activeCalendarPicker.element && !activeCalendarPicker.element.contains(target)) {
+            closeCalendarPicker(activeCalendarPicker, false);
+          }
           if (!mobileNav || !mobileNavToggle) {
             return;
           }
           if (mobileNav.classList.contains('hidden')) {
             return;
           }
-          if (mobileNav.contains(event.target) || mobileNavToggle.contains(event.target)) {
+          if (mobileNav.contains(target) || mobileNavToggle.contains(target)) {
             return;
           }
           closeMobileNav(false);

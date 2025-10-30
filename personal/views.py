@@ -80,6 +80,37 @@ def _date_range(start: date, end: date) -> List[date]:
     return [start + timedelta(days=offset) for offset in range(days + 1)]
 
 
+def _resolve_calendar_home_url(*, exclude_ids: Iterable[int] | None = None) -> str:
+    queryset = ShiftCalendar.objects.order_by("-start_date", "-created_at")
+    if exclude_ids:
+        queryset = queryset.exclude(pk__in=list(exclude_ids))
+
+    next_calendar = queryset.first()
+    if next_calendar:
+        return reverse("personal:calendar-detail", args=[next_calendar.pk])
+
+    return reverse("personal:configurator")
+
+
+def _recent_calendars_payload(*, limit: int = 3, exclude_ids: Iterable[int] | None = None) -> list[dict[str, Any]]:
+    queryset = ShiftCalendar.objects.order_by("-start_date", "-created_at")
+    if exclude_ids:
+        queryset = queryset.exclude(pk__in=list(exclude_ids))
+    recent_calendars = list(queryset[:limit])
+
+    return [
+        {
+            "id": calendar.id,
+            "display_name": calendar.name or f"Calendario {calendar.start_date:%d/%m/%Y}",
+            "start_date": calendar.start_date,
+            "end_date": calendar.end_date,
+            "status": calendar.status,
+            "status_label": calendar.get_status_display(),
+        }
+        for calendar in recent_calendars
+    ]
+
+
 REST_CELL_STATE_REST = "rest"
 REST_CELL_STATE_UNASSIGNED = "unassigned"
 REST_CELL_STATE_ASSIGNED = "assigned"
@@ -1448,60 +1479,28 @@ class CalendarConfiguratorView(LoginRequiredMixin, View):
                 "alert_choices": _choice_payload(AssignmentAlertLevel.choices),
                 "shift_type_choices": _choice_payload(ShiftType.choices),
                 "status_choices": _choice_payload(CalendarStatus.choices),
+                "calendar_generation_form": CalendarGenerationForm(),
+                "calendar_home_url": _resolve_calendar_home_url(),
+                "calendar_generation_recent_calendars": _recent_calendars_payload(),
             },
         )
 
 
 class CalendarDashboardView(LoginRequiredMixin, View):
-    template_name = "calendario/dashboard.html"
-
-    @staticmethod
-    def _get_calendars() -> List[ShiftCalendar]:
-        queryset = ShiftCalendar.objects.select_related(
-            "created_by",
-            "approved_by",
-            "base_calendar",
-        ).order_by("-start_date", "-created_at")
-        return list(queryset)
-
-    @staticmethod
-    def _status_totals(calendars: Iterable[ShiftCalendar]) -> dict[str, int]:
-        totals = {status: 0 for status, _ in CalendarStatus.choices}
-        for calendar in calendars:
-            totals[calendar.status] = totals.get(calendar.status, 0) + 1
-        return totals
+    http_method_names = ["get"]
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-        form = CalendarGenerationForm()
-        calendars = self._get_calendars()
-        status_totals = self._status_totals(calendars)
+        return redirect(_resolve_calendar_home_url())
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "form": form,
-                "calendars": calendars,
-                "status_totals": status_totals,
-            },
-        )
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
+class CalendarCreateView(LoginRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         form = CalendarGenerationForm(request.POST)
-        calendars = self._get_calendars()
-        status_totals = self._status_totals(calendars)
-
         if not form.is_valid():
-            messages.error(request, "No fue posible generar el personal. Revisa los datos ingresados.")
-            return render(
-                request,
-                self.template_name,
-                {
-                    "form": form,
-                    "calendars": calendars,
-                    "status_totals": status_totals,
-                },
-            )
+            errors = {field: [str(error) for error in error_list] for field, error_list in form.errors.items()}
+            return JsonResponse({"success": False, "errors": errors}, status=400)
 
         calendar = ShiftCalendar.objects.create(
             name=form.cleaned_data.get("name", ""),
@@ -1524,7 +1523,21 @@ class CalendarDashboardView(LoginRequiredMixin, View):
         else:
             messages.success(request, "Calendario generado exitosamente.")
 
-        return redirect(reverse("personal:calendar-detail", args=[calendar.id]))
+        redirect_url = reverse("personal:calendar-detail", args=[calendar.id])
+        return JsonResponse(
+            {
+                "success": True,
+                "redirect_url": redirect_url,
+                "calendar": {
+                    "id": calendar.id,
+                    "name": calendar.name,
+                    "start_date": calendar.start_date.isoformat(),
+                    "end_date": calendar.end_date.isoformat(),
+                },
+                "gaps": gaps,
+            },
+            status=201,
+        )
 
 class CalendarDetailView(LoginRequiredMixin, View):
     template_name = "calendario/calendar_detail.html"
@@ -1556,6 +1569,9 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 "can_override": can_override,
                 "has_manual_choices": has_manual_choices,
                 "position_groups": position_groups,
+                "calendar_generation_form": CalendarGenerationForm(),
+                "calendar_home_url": _resolve_calendar_home_url(exclude_ids=[calendar.id]),
+                "calendar_generation_recent_calendars": _recent_calendars_payload(exclude_ids=[calendar.id]),
             },
         )
 
@@ -1733,7 +1749,8 @@ class CalendarDeleteView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> Any:
         calendar = get_object_or_404(ShiftCalendar, pk=pk)
-        redirect_url = request.POST.get("next") or reverse("personal:dashboard")
+        fallback_url = _resolve_calendar_home_url(exclude_ids=[calendar.pk])
+        redirect_url = request.POST.get("next") or fallback_url
 
         calendar_label = calendar.name or f"Calendario {calendar.start_date} -> {calendar.end_date}"
 
@@ -1744,9 +1761,9 @@ class CalendarDeleteView(LoginRequiredMixin, View):
                 request,
                 "No es posible eliminar este calendario porque tiene modificaciones asociadas.",
             )
-        else:
-            messages.success(request, f'Se eliminó el calendario "{calendar_label}".')
+            return redirect(reverse("personal:calendar-detail", args=[calendar.pk]))
 
+        messages.success(request, f'Se eliminó el calendario "{calendar_label}".')
         return redirect(redirect_url)
 
 

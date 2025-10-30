@@ -14,7 +14,7 @@
       data-assignments-url-template="{% url 'personal-api:calendar-assignments' 0 %}"
       data-eligible-url-template="{% url 'personal-api:calendar-eligible-operators' 0 %}"
       data-calendar-detail-url-template="{% url 'personal:calendar-detail' 0 %}"
-      data-dashboard-url="{% url 'personal:dashboard' %}"
+      data-dashboard-url="{{ calendar_home_url }}"
       data-positions-url="{% url 'personal-api:calendar-positions' %}"
       data-position-detail-url-template="{% url 'personal-api:calendar-position-detail' 0 %}"
       data-position-reorder-url="{% url 'personal-api:calendar-position-reorder' %}"
@@ -88,7 +88,7 @@
                 </div>
                 <div class="flex flex-wrap gap-2" id="calendar-actions" hidden>
                   <a id="open-calendar-detail" href="#" class="inline-flex items-center gap-2 rounded border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/10">Abrir detalle de calendario</a>
-                  <a href="{% url 'personal:dashboard' %}" class="inline-flex items-center gap-2 rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver al panel</a>
+                  <a href="{{ calendar_home_url }}" class="inline-flex items-center gap-2 rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Ir al calendario</a>
                 </div>
               </div>
             </div>
@@ -101,7 +101,7 @@
 
         <section data-step-index="1" class="rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
           <header class="flex flex-col gap-1">
-            <h2 class="text-xl font-semibold text-slate-900">1. Posiciones vigentes</h2>
+            <h2 class="text-xl font-semibold text-slate-900">1. Puestos de trabajo vigentes</h2>
             <p class="text-sm text-slate-600">El generador intentará asignar primero las posiciones que estén más arriba en esta lista. Si necesitas prioridades o turnos asegurados, ordénalas al inicio.</p>
           </header>
 

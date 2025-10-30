@@ -36,7 +36,7 @@ class CalendarDeleteViewTests(TestCase):
             created_by=self.user,
         )
 
-        next_url = reverse("personal:dashboard")
+        next_url = reverse("personal:configurator")
         response = self.client.post(
             reverse("personal:calendar-delete", args=[calendar.pk]),
             data={"next": next_url},
@@ -67,7 +67,7 @@ class CalendarDeleteViewTests(TestCase):
 
         response = self.client.post(reverse("personal:calendar-delete", args=[base_calendar.pk]))
 
-        self.assertRedirects(response, reverse("personal:dashboard"))
+        self.assertRedirects(response, reverse("personal:calendar-detail", args=[base_calendar.pk]))
         self.assertTrue(ShiftCalendar.objects.filter(pk=base_calendar.pk).exists())
 
         messages = list(get_messages(response.wsgi_request))
@@ -109,7 +109,7 @@ class CalendarDeleteViewTests(TestCase):
 
         response = self.client.post(reverse("personal:calendar-delete", args=[calendar.pk]))
 
-        self.assertRedirects(response, reverse("personal:dashboard"))
+        self.assertRedirects(response, reverse("personal:configurator"))
         self.assertFalse(ShiftCalendar.objects.filter(pk=calendar.pk).exists())
         self.assertFalse(OperatorRestPeriod.objects.filter(pk=period_calendar.pk).exists())
 
