@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
     replaces = [('calendario', '0002_positiondefinition_rooms')]
 
     dependencies = [
-        ("granjas", "0001_initial"),
+        ("production", "0001_initial"),
         ("personal", "0001_initial"),
     ]
 
@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
             field=models.ManyToManyField(
                 blank=True,
                 related_name="position_definitions",
-                to="granjas.room",
+                to="production.room",
                 verbose_name="Salones",
             ),
         ),

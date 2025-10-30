@@ -19,7 +19,7 @@ from personal.models import (
     ShiftCalendar,
     ShiftType,
 )
-from granjas.models import Farm
+from production.models import Farm
 from personal.models import UserProfile
 
 

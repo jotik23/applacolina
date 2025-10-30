@@ -8,7 +8,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from granjas.models import ChickenHouse, Farm, Room
+from production.models import ChickenHouse, Farm, Room
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
 from production.models import ProductionRecord
 

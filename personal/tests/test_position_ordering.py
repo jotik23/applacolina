@@ -12,7 +12,7 @@ from personal.models import (
     PositionDefinition,
     ShiftType,
 )
-from granjas.models import Farm
+from production.models import Farm
 from personal.models import UserProfile
 
 

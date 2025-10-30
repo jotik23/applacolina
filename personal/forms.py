@@ -24,7 +24,7 @@ from .models import (
     UserProfile,
     resolve_overload_policy,
 )
-from granjas.models import Room
+from production.models import Room
 
 
 class CalendarGenerationForm(forms.Form):

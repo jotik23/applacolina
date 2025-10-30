@@ -148,21 +148,21 @@
     }
   },
   {
-    "model": "granjas.farm",
+    "model": "production.farm",
     "pk": 1,
     "fields": {
       "name": "Colina 1"
     }
   },
   {
-    "model": "granjas.farm",
+    "model": "production.farm",
     "pk": 2,
     "fields": {
       "name": "Colina 2"
     }
   },
   {
-    "model": "granjas.chickenhouse",
+    "model": "production.chickenhouse",
     "pk": 1,
     "fields": {
       "farm": 1,

@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('auth', '0012_alter_user_first_name_max_length'),
-        ('granjas', '0002_alter_birdbatch_options_and_more'),
+        ('production', '0001_initial'),
     ]
 
     operations = [
@@ -107,9 +107,9 @@ class Migration(migrations.Migration):
                 ('valid_until', models.DateField(blank=True, null=True, verbose_name='Válido hasta')),
                 ('is_active', models.BooleanField(default=True, verbose_name='Activo')),
                 ('notes', models.TextField(blank=True, verbose_name='Notas')),
-                ('chicken_house', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='position_definitions', to='granjas.chickenhouse', verbose_name='Galpón')),
-                ('farm', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='position_definitions', to='granjas.farm', verbose_name='Granja')),
-                ('room', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='position_definitions', to='granjas.room', verbose_name='Salón')),
+                ('chicken_house', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='position_definitions', to='production.chickenhouse', verbose_name='Galpón')),
+                ('farm', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='position_definitions', to='production.farm', verbose_name='Granja')),
+                ('room', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='position_definitions', to='production.room', verbose_name='Salón')),
             ],
             options={
                 'verbose_name': 'Definición de posición',
@@ -238,7 +238,7 @@ class Migration(migrations.Migration):
                 ('preference_weight', models.PositiveSmallIntegerField(default=1, validators=[django.core.validators.MinValueValidator(1)], verbose_name='Nivel de preferencia')),
                 ('is_primary', models.BooleanField(default=False, verbose_name='Preferencia principal')),
                 ('notes', models.TextField(blank=True, verbose_name='Notas')),
-                ('farm', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='operator_preferences', to='granjas.farm', verbose_name='Granja')),
+                ('farm', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='operator_preferences', to='production.farm', verbose_name='Granja')),
                 ('operator', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='farm_preferences', to=settings.AUTH_USER_MODEL, verbose_name='Operario')),
             ],
             options={

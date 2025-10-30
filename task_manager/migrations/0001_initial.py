@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('granjas', '0002_alter_birdbatch_options_and_more'),
+        ('production', '0001_initial'),
         ('personal', '0019_backfill_assignment_alerts'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -58,11 +58,11 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Creado en')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Actualizado en')),
                 ('category', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='task_definitions', to='task_manager.taskcategory', verbose_name='Categoría')),
-                ('chicken_houses', models.ManyToManyField(blank=True, related_name='task_definitions', to='granjas.chickenhouse', verbose_name='Galpones')),
+                ('chicken_houses', models.ManyToManyField(blank=True, related_name='task_definitions', to='production.chickenhouse', verbose_name='Galpones')),
                 ('collaborator', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='task_definitions', to=settings.AUTH_USER_MODEL, verbose_name='Colaborador asignado')),
-                ('farms', models.ManyToManyField(blank=True, related_name='task_definitions', to='granjas.farm', verbose_name='Granjas')),
+                ('farms', models.ManyToManyField(blank=True, related_name='task_definitions', to='production.farm', verbose_name='Granjas')),
                 ('position', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='task_definitions', to='personal.positiondefinition', verbose_name='Posición asignada')),
-                ('rooms', models.ManyToManyField(blank=True, related_name='task_definitions', to='granjas.room', verbose_name='Salones')),
+                ('rooms', models.ManyToManyField(blank=True, related_name='task_definitions', to='production.room', verbose_name='Salones')),
                 ('status', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='task_definitions', to='task_manager.taskstatus', verbose_name='Estado')),
             ],
             options={

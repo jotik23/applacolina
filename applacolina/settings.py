@@ -87,7 +87,6 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'whitenoise.runserver_nostatic',
     'personal.apps.PersonalConfig',
-    'granjas.apps.GranjasConfig',
     'task_manager.apps.TaskManagerConfig',
     'production.apps.ProductionConfig',
 ]

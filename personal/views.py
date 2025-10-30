@@ -46,7 +46,7 @@ from .models import (
     resolve_overload_policy,
 )
 from .services import CalendarScheduler, SchedulerOptions, sync_calendar_rest_periods
-from granjas.models import ChickenHouse, Farm, Room
+from production.models import ChickenHouse, Farm, Room
 
 
 class CalendarPortalView(LoginView):

@@ -22,7 +22,7 @@ from personal.models import (
 )
 REST_CELL_STATE_REST = "rest"
 REST_CELL_STATE_UNASSIGNED = "unassigned"
-from granjas.models import Farm
+from production.models import Farm
 from personal.models import UserProfile
 
 

@@ -16,7 +16,7 @@ from django.db.models import Max
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from granjas.models import ChickenHouse, Farm, Room
+from production.models import ChickenHouse, Farm, Room
 
 COLOMBIA_TZ_NAME = "America/Bogota"
 

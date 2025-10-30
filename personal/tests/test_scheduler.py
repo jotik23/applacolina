@@ -20,7 +20,7 @@ from personal.models import (
     AssignmentDecision,
 )
 from personal.services import CalendarScheduler
-from granjas.models import Farm
+from production.models import Farm
 from personal.models import UserProfile
 
 
