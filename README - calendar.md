@@ -12,7 +12,7 @@ Objetivos:
 
 
 Datos:
-- Colaboradores: Basado en el modelo de datos de la app users. UserProfile represente un colaborador. Estos colaboradores tiene un rol asignado (por ejemplo galponero), lo cual representa el cargo a alto nivel pero no indica puntualmente a que granja o lote de aves está asignado. 
+- Colaboradores: Basado en el modelo de datos de la app personal. UserProfile representa un colaborador. Estos colaboradores tienen un rol asignado (por ejemplo galponero), lo cual representa el cargo a alto nivel pero no indica puntualmente a qué granja o lote de aves está asignado. 
 - Debe ser posible configurar dese el panel administrativo django las diferentes posiciones relevantes en el calendario. Estas varían según el número de lotes activos, las tareas complementarias realizadas en la granja y/o las necesidades de contratación de personal. Significa que las posiciones disponibles tienen un periodo de vigencia. 
 
 Para que esto suceda de forma realista, debe ser posible definir/configurar de forma simple pero flexible todos las posiciones disponibles, el periodo de tiempo vigente de cada uno de ellos (cambian en el tiempo), los operarios habilitados tipificados por rol y posiciones que pueden desempeñar, el grado de complejidad del rol, así como la marca de los operarios rankeados para manejar ese nivel de complejidad, los turnos de descanso semanal/quincenal permitidos por rol, los días de la semana preferibles para asignación de descansos, los días adicionales de sobrecargo/continuidad en el rol para poder lograr el match de turnos/descansos más viable y justo para todos (cuando alguien tiene que trabajar días adicionales en promedio de equidad). 
@@ -108,4 +108,4 @@ Implementación inicial (módulo calendario):
 - Documentación de entidades y flujo de datos disponible en `calendario/docs/entities.md` para apoyar el diseño de formularios HTML/Tailwind.
 - Interfaz de usuarios (HTML + Tailwind) con panel de generación/listado (`/calendario/`) y vista de detalle con tabla dinámica, alertas y acción de aprobación.
 - Edición rápida en la vista de detalle: formularios embebidos permiten reasignar turnos o cubrir huecos. La validación comprueba complejidad y disponibilidad diaria, pero no recalcula automáticamente reglas de descanso ni sobrecargas (el supervisor debe confirmar manualmente estas excepciones).
-- Fixtures de prueba (`calendario/fixtures/initial_calendario.json`) con roles, operarios, posiciones y un calendario de ejemplo. Las credenciales preconfiguradas usan la contraseña `calendario123` y sirven únicamente para entornos de desarrollo.
+- Fixtures de prueba (`personal/fixtures/initial_calendario.json`) con roles, operarios, posiciones y un calendario de ejemplo. Las credenciales preconfiguradas usan la contraseña `calendario123` y sirven únicamente para entornos de desarrollo.

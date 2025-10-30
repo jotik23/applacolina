@@ -1,7 +1,7 @@
 # Proyecto `applacolina` – Apuntes para agentes
 
 ## Contexto general
-- Aplicación Django ubicada en `applacolina/` con múltiples apps (`calendario`, `granjas`, `users`, etc.).
+- Aplicación Django ubicada en `applacolina/` con múltiples apps (`personal`, `granjas`, etc.).
 - El repositorio incluye un `docker-compose.yml` que define dos servicios:
   - `web`: construye la imagen a partir del `Dockerfile`, monta el repositorio en `/app`, y al iniciar ejecuta `python manage.py migrate` seguido de `runserver`.
   - `db`: contenedor `postgres:15-alpine`, credenciales leídas desde `.env`, y expone `5432`.

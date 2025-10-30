@@ -1,0 +1,291 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Calendario operativo{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                DEFAULT: '#f59e0b',
+                dark: '#d97706'
+              }
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="min-h-full bg-slate-100 text-slate-800">
+    <header class="bg-white shadow-sm">
+      <div class="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-4 text-sm sm:px-6 lg:px-8">
+        <div class="flex items-center gap-6">
+          <a href="{% url 'personal:dashboard' %}" class="text-lg font-semibold text-slate-900">La Colina - Granjas Pecuarias</a>
+          <nav class="hidden items-center gap-4 text-slate-600 md:flex">
+            <a href="{% url 'personal:dashboard' %}" class="rounded px-3 py-1 hover:bg-slate-100">Inicio</a>
+            <a href="{% url 'personal:dashboard' %}#listado" class="rounded px-3 py-1 hover:bg-slate-100">Calendario</a>
+            <a href="{% url 'task_manager:index' %}" class="rounded px-3 py-1 hover:bg-slate-100">Gestor de tareas</a>
+            <a href="{% url 'production:index' %}" class="rounded px-3 py-1 hover:bg-slate-100">Produccion avicola</a>
+          </nav>
+        </div>
+        <div class="flex items-center space-x-4 text-sm text-slate-500">
+          {% if request.user.is_authenticated %}
+            {% with full_name=request.user.get_full_name %}
+              <span>
+                {% if full_name %}
+                  {{ full_name }}
+                {% else %}
+                  {{ request.user.username|default:"Invitado" }}
+                {% endif %}
+              </span>
+            {% endwith %}
+            <a href="{% url 'portal:logout' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Cerrar sesión</a>
+          {% else %}
+            <span>Invitado</span>
+            <a href="{% url 'portal:login' %}" class="rounded border border-slate-200 px-3 py-1 text-xs font-semibold hover:border-brand hover:text-brand">Iniciar sesión</a>
+          {% endif %}
+        </div>
+      </div>
+    </header>
+
+    {% if messages %}
+      <div class="mx-auto mt-4 w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+        <div class="space-y-3">
+          {% for message in messages %}
+            {% if message.level_tag == 'success' %}
+              {% with bg='bg-emerald-100' text='text-emerald-800' border='border-emerald-200' %}
+                <div class="rounded border {{ border }} {{ bg }} px-4 py-3 text-sm font-medium {{ text }}">
+                  {{ message }}
+                </div>
+              {% endwith %}
+            {% elif message.level_tag == 'warning' %}
+              {% with bg='bg-amber-100' text='text-amber-800' border='border-amber-200' %}
+                <div class="rounded border {{ border }} {{ bg }} px-4 py-3 text-sm font-medium {{ text }}">
+                  {{ message }}
+                </div>
+              {% endwith %}
+            {% elif message.level_tag == 'error' %}
+              {% with bg='bg-red-100' text='text-red-800' border='border-red-200' %}
+                <div class="rounded border {{ border }} {{ bg }} px-4 py-3 text-sm font-medium {{ text }}">
+                  {{ message }}
+                </div>
+              {% endwith %}
+            {% else %}
+              <div class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                {{ message }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <main class="mx-auto mt-6 max-w-[3000px] px-3 pb-16 sm:px-4 lg:px-6">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/70 py-6">
+      <div class="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-xs text-slate-500 sm:flex-row sm:px-6 lg:px-8">
+        <span>Calendario operativo · La Colina</span>
+        <span>Diseñado para monitorear turnos, descansos y sobrecargas de manera justa.</span>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        function toArray(collection) {
+          return Array.prototype.slice.call(collection);
+        }
+
+        var current = null;
+        var currentConfirmation = null;
+
+        function focusFirst(target) {
+          if (!target) {
+            return;
+          }
+          var focusable = target.querySelector('[data-double-confirm-focus]') ||
+            target.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          if (focusable && typeof focusable.focus === 'function') {
+            focusable.focus();
+          }
+        }
+
+        function hide(data) {
+          if (!data) {
+            return;
+          }
+          if (data.panel) {
+            data.panel.classList.add('hidden');
+          }
+          if (data.finalStage) {
+            data.finalStage.classList.add('hidden');
+          }
+          if (data.trigger) {
+            data.trigger.classList.remove('hidden');
+            data.trigger.focus();
+          }
+          if (current === data) {
+            current = null;
+          }
+        }
+
+        function hideConfirmation(data) {
+          if (!data) {
+            return;
+          }
+          if (data.overlay) {
+            data.overlay.classList.add('hidden');
+          }
+          var focusTarget = data.lastActive || data.trigger;
+          if (focusTarget && typeof focusTarget.focus === 'function') {
+            focusTarget.focus();
+          }
+          if (currentConfirmation === data) {
+            currentConfirmation = null;
+          }
+        }
+
+        function attach(component) {
+          if (component.dataset.doubleConfirmBound === 'true') {
+            return;
+          }
+          component.dataset.doubleConfirmBound = 'true';
+
+          var trigger = component.querySelector('[data-double-confirm-trigger]');
+          var panel = component.querySelector('[data-double-confirm-panel]');
+          var finalStage = component.querySelector('[data-double-confirm-final]');
+          var continueButton = panel ? panel.querySelector('[data-double-confirm-continue]') : null;
+          var cancelButtons = toArray(component.querySelectorAll('[data-double-confirm-cancel]'));
+          var overlays = toArray(component.querySelectorAll('[data-double-confirm-panel], [data-double-confirm-final]'));
+
+          if (!trigger || !panel || !finalStage) {
+            return;
+          }
+
+          var data = {
+            trigger: trigger,
+            panel: panel,
+            finalStage: finalStage,
+          };
+          component.__doubleConfirm = data;
+
+          trigger.addEventListener('click', function () {
+            if (current && current !== data) {
+              hide(current);
+            }
+            trigger.classList.add('hidden');
+            panel.classList.remove('hidden');
+            focusFirst(panel);
+            current = data;
+          });
+
+          cancelButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              hide(data);
+            });
+          });
+
+          if (continueButton) {
+            continueButton.addEventListener('click', function () {
+              panel.classList.add('hidden');
+              finalStage.classList.remove('hidden');
+              focusFirst(finalStage);
+              current = data;
+            });
+          }
+
+          overlays.forEach(function (overlay) {
+            overlay.addEventListener('click', function (event) {
+              if (event.target === overlay) {
+                hide(data);
+              }
+            });
+          });
+        }
+
+        function attachConfirmation(form) {
+          if (form.dataset.confirmationBound === 'true') {
+            return;
+          }
+
+          var overlay = form.querySelector('[data-confirmation-overlay]');
+          var confirmButton = overlay ? overlay.querySelector('[data-confirmation-confirm]') : null;
+
+          if (!overlay || !confirmButton) {
+            return;
+          }
+
+          form.dataset.confirmationBound = 'true';
+
+          var trigger = form.querySelector('[data-confirmation-trigger]');
+          var cancelButtons = toArray(form.querySelectorAll('[data-confirmation-cancel]'));
+
+          var data = {
+            form: form,
+            overlay: overlay,
+            trigger: trigger,
+            lastActive: null,
+          };
+
+          function open() {
+            if (currentConfirmation && currentConfirmation !== data) {
+              hideConfirmation(currentConfirmation);
+            }
+            data.lastActive = document.activeElement;
+            overlay.classList.remove('hidden');
+            focusFirst(overlay);
+            currentConfirmation = data;
+          }
+
+          form.addEventListener('submit', function (event) {
+            if (form.__confirmationSubmitting) {
+              form.__confirmationSubmitting = false;
+              return;
+            }
+            event.preventDefault();
+            open();
+          });
+
+          confirmButton.addEventListener('click', function () {
+            hideConfirmation(data);
+            form.__confirmationSubmitting = true;
+            form.submit();
+            form.__confirmationSubmitting = false;
+          });
+
+          cancelButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              hideConfirmation(data);
+            });
+          });
+
+          overlay.addEventListener('click', function (event) {
+            if (event.target === overlay) {
+              hideConfirmation(data);
+            }
+          });
+        }
+
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && current) {
+            hide(current);
+            return;
+          }
+          if (event.key === 'Escape' && currentConfirmation) {
+            hideConfirmation(currentConfirmation);
+          }
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+          toArray(document.querySelectorAll('[data-double-confirm]')).forEach(attach);
+          toArray(document.querySelectorAll('[data-confirmation]')).forEach(attachConfirmation);
+        });
+      })();
+    </script>
+  </body>
+</html>

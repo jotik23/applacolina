@@ -86,8 +86,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     'whitenoise.runserver_nostatic',
-    'calendario.apps.CalendarioConfig',
-    'users',
+    'personal.apps.PersonalConfig',
     'granjas.apps.GranjasConfig',
     'task_manager.apps.TaskManagerConfig',
     'production.apps.ProductionConfig',
@@ -218,7 +217,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'portal:login'
-LOGIN_REDIRECT_URL = 'calendario:dashboard'
+LOGIN_REDIRECT_URL = 'personal:dashboard'
 LOGOUT_REDIRECT_URL = 'portal:login'
 
-AUTH_USER_MODEL = 'users.UserProfile'
+AUTH_USER_MODEL = 'personal.UserProfile'

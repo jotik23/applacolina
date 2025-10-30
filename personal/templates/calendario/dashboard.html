@@ -1,0 +1,172 @@
+{% extends 'calendario/base.html' %}
+
+{% block title %}Calendarios operativos{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+  <section class="col-span-2 space-y-6">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+      <h2 class="text-lg font-semibold text-slate-900">Generar nuevo calendario</h2>
+      <p class="mt-1 text-sm text-slate-500">Planifica uno o dos semanas según las necesidades operativas. Se validará que no existan solapamientos con calendarios existentes.</p>
+
+      <form method="post" class="mt-6 space-y-4">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label class="text-sm font-medium text-slate-700">{{ form.name.label }}</label>
+            {{ form.name }}
+            {% if form.name.errors %}
+              <p class="mt-1 text-xs text-red-600">{{ form.name.errors|striptags }}</p>
+            {% endif %}
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-700">{{ form.start_date.label }}</label>
+            {{ form.start_date }}
+            {% if form.start_date.errors %}
+              <p class="mt-1 text-xs text-red-600">{{ form.start_date.errors|striptags }}</p>
+            {% endif %}
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-700">{{ form.end_date.label }}</label>
+            {{ form.end_date }}
+            {% if form.end_date.errors %}
+              <p class="mt-1 text-xs text-red-600">{{ form.end_date.errors|striptags }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-700">{{ form.notes.label }}</label>
+          {{ form.notes }}
+          {% if form.notes.errors %}
+            <p class="mt-1 text-xs text-red-600">{{ form.notes.errors|striptags }}</p>
+          {% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ form.non_field_errors|striptags }}
+          </div>
+        {% endif %}
+
+        <div class="flex justify-end">
+          <button type="submit" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">Generar borrador</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="listado" class="relative rounded-xl bg-white shadow-sm">
+      <header class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900">Calendarios recientes</h2>
+          <p class="text-sm text-slate-500">Filtra por estado y accede al detalle para gestionar alertas.</p>
+        </div>
+      </header>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-100 text-sm">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="px-6 py-3 text-left font-medium text-slate-600">Nombre</th>
+              <th class="px-6 py-3 text-left font-medium text-slate-600">Rango</th>
+              <th class="px-6 py-3 text-left font-medium text-slate-600">Estado</th>
+              <th class="px-6 py-3 text-left font-medium text-slate-600">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for calendar in calendars %}
+              <tr class="bg-white hover:bg-slate-50">
+                <td class="px-6 py-4 font-medium text-slate-900">{{ calendar.name|default:"Sin título" }}</td>
+                <td class="px-6 py-4 text-slate-600">{{ calendar.start_date }} → {{ calendar.end_date }}</td>
+                <td class="px-6 py-4">
+                  {% if calendar.status == 'draft' %}
+                    <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">Borrador</span>
+                  {% elif calendar.status == 'approved' %}
+                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Aprobado</span>
+                  {% elif calendar.status == 'modified' %}
+                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Modificado</span>
+                  {% else %}
+                    <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">{{ calendar.get_status_display }}</span>
+                  {% endif %}
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <div class="flex flex-wrap justify-end gap-2">
+                    <a href="{% url 'personal:calendar-detail' calendar.pk %}" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-brand hover:text-brand">Ver detalle</a>
+                    <div class="relative" data-double-confirm>
+                      <button type="button" class="inline-flex items-center rounded border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:border-red-300 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200" data-double-confirm-trigger>Eliminar</button>
+                      <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-panel>
+                        <div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+                          <p class="font-semibold text-slate-900">¿Eliminar calendario?</p>
+                          <p class="mt-1 text-xs text-slate-500">Se eliminarán las asignaciones asociadas.</p>
+                          <div class="mt-3 flex justify-end gap-2">
+                            <button type="button" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel data-double-confirm-focus>Cancelar</button>
+                            <button type="button" class="inline-flex items-center rounded bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400" data-double-confirm-continue>Confirmar</button>
+                          </div>
+                        </div>
+                      </div>
+                      <form method="post" action="{% url 'personal:calendar-delete' calendar.pk %}" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-final>
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                        <div class="w-full max-w-sm rounded-lg border border-red-200 bg-white p-4 text-left shadow-lg">
+                          <p class="text-sm font-semibold text-red-700">Confirmación final</p>
+                          <p class="mt-1 text-xs text-slate-500">Esta acción es irreversible.</p>
+                          <div class="mt-3 flex justify-end gap-2">
+                            <button type="button" class="inline-flex items-center rounded border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel>Cancelar</button>
+                            <button type="submit" class="inline-flex items-center rounded bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300" data-double-confirm-final-submit data-double-confirm-focus>Eliminar calendario</button>
+                          </div>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="px-6 py-6 text-center text-sm text-slate-500">Aún no hay calendarios generados.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <aside class="space-y-6">
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+      <h3 class="text-base font-semibold text-slate-900">Resumen por estado</h3>
+      <dl class="mt-4 space-y-3 text-sm">
+        <div class="flex items-center justify-between">
+          <dt class="text-slate-500">Borrador</dt>
+          <dd class="font-semibold text-slate-800">{{ status_totals.draft }}</dd>
+        </div>
+        <div class="flex items-center justify-between">
+          <dt class="text-slate-500">Aprobado</dt>
+          <dd class="font-semibold text-slate-800">{{ status_totals.approved }}</dd>
+        </div>
+        <div class="flex items-center justify-between">
+          <dt class="text-slate-500">Modificado</dt>
+          <dd class="font-semibold text-slate-800">{{ status_totals.modified }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="rounded-xl bg-white p-6 shadow-sm">
+      <h3 class="text-base font-semibold text-slate-900">Guía rápida</h3>
+      <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
+        <li>Genera calendarios semanales o quincenales según la disponibilidad de personal.</li>
+        <li>Revisa alertas amarillas o rojas en el detalle para justificar excepciones.</li>
+        <li>Aprueba el calendario cuando esté confirmado para bloquear solapamientos.</li>
+      </ul>
+    </div>
+
+    <div class="rounded-xl bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm ring-1 ring-inset ring-slate-100">
+      <h3 class="text-base font-semibold text-slate-900">Configura tu calendario</h3>
+      <p class="mt-1 text-sm text-slate-600">Ajusta posiciones, colaboradores antes de generar un nuevo borrador.</p>
+      <div class="mt-4 flex flex-col gap-2">
+        <a href="{% url 'personal:configurator' %}?step=positions" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-white">Posiciones</a>
+        <a href="{% url 'personal:configurator' %}?step=collaborators" class="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-white">Colaboradores</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
