@@ -2,11 +2,26 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.auth.admin import GroupAdmin
+from django.contrib.auth.models import Group
 from django.db.models import Q, QuerySet
 
 from . import models
 from .forms import UserChangeForm, UserCreationForm
-from .models import UserProfile
+from .models import UserGroup, UserProfile
+
+
+try:
+    admin.site.unregister(Group)
+except admin.sites.NotRegistered:  # pragma: no cover - defensive
+    pass
+
+
+@admin.register(UserGroup)
+class UserGroupAdmin(GroupAdmin):
+    """Expose auth groups under the personal module."""
+
+    pass
 
 
 class PositionCategoryAdminForm(forms.ModelForm):

@@ -6,7 +6,7 @@ import django.db.models.deletion
 import django.utils.timezone
 from django.conf import settings
 from django.db import migrations, models
-import personal.user_models
+import personal.models
 
 
 class Migration(migrations.Migration):
@@ -75,7 +75,7 @@ class Migration(migrations.Migration):
                 'db_table': 'users_userprofile',
             },
             managers=[
-                ('objects', personal.user_models.UserProfileManager()),
+                ('objects', personal.models.UserProfileManager()),
             ],
         ),
         migrations.CreateModel(
