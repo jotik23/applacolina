@@ -120,3 +120,10 @@ class ProductionRecordAdmin(admin.ModelAdmin):
     list_filter = ("bird_batch", "date")
     search_fields = ("bird_batch__id", "bird_batch__farm__name", "date")
     ordering = ("-date",)
+
+
+@admin.register(Room)
+class RoomAdmin(admin.ModelAdmin):
+    list_display = ("name", "chicken_house", "area_m2")
+    list_filter = ("chicken_house__farm", "chicken_house")
+    search_fields = ("name", "chicken_house__name", "chicken_house__farm__name")
