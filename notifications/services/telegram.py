@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+try:  # pragma: no cover - handled gracefully at runtime
+    import httpx  # type: ignore[import]
+except ImportError:  # pragma: no cover - fallback when dependency missing
+    httpx = None  # type: ignore[assignment]
+
 from django.utils import timezone
 
 from ..models import (
@@ -29,6 +33,11 @@ class TelegramAPIClient:
         self.timeout = timeout
 
     def _request(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if httpx is None:
+            raise TelegramNotificationError(
+                "La librería httpx no está disponible en el entorno. "
+                "Ejecuta `pip install httpx` o reconstruye la imagen de Docker."
+            )
         url = f"{self.bot.api_base_url}/{method}"
         response = httpx.post(url, json=payload, timeout=self.timeout)
         response.raise_for_status()
@@ -93,9 +102,10 @@ class TelegramNotificationSender:
 
         dispatch.mark_processing()
         client = TelegramAPIClient(chat_link.bot, timeout=self.timeout)
+        transport_error = httpx.HTTPError if httpx else Exception
         try:
             response = client.send_message(message_payload)
-        except httpx.HTTPError as exc:
+        except transport_error as exc:
             dispatch.mark_failed(str(exc))
             raise TelegramNotificationError("Error de transporte al enviar la notificación.") from exc
         except TelegramNotificationError as exc:
@@ -109,4 +119,3 @@ class TelegramNotificationSender:
 
     def __call__(self, dispatch: NotificationDispatch) -> dict[str, Any]:
         return self.send_dispatch(dispatch)
-

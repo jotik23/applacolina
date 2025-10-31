@@ -27,5 +27,6 @@ urlpatterns = [
     path('calendario/', include('personal.urls', namespace='personal')),
     path('task-manager/', include('task_manager.urls', namespace='task_manager')),
     path('produccion-avicola/', include('production.urls', namespace='production')),
+    path('notificaciones/', include('notifications.urls', namespace='notifications')),
     path('api/', include('personal.api_urls', namespace='personal-api')),
 ]
