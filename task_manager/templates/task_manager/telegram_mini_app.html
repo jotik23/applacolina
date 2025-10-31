@@ -172,6 +172,7 @@
     </main>
 
     {{ telegram_mini_app|json_script:"tm-mini-app-config" }}
+    {% if telegram_integration_enabled %}
     <script>
       (function () {
         const dataScript = document.getElementById('tm-mini-app-config');
@@ -278,5 +279,6 @@
         }
       })();
     </script>
+    {% endif %}
   </body>
 </html>
