@@ -909,10 +909,10 @@ def build_responsible_filter_groups() -> Sequence[FilterOptionGroup]:
     groups: list[FilterOptionGroup] = []
 
     generic_options = [
-        FilterOption("all", _("Todos los responsables")),
-        FilterOption("collaborator", _("Con colaborador asignado")),
-        FilterOption("position", _("Con posición sugerida")),
-        FilterOption("unassigned", _("Sin responsable definido")),
+        FilterOption("all", _("Todos")),
+        FilterOption("collaborator", _("Con responsable")),
+        FilterOption("position", _("Con posición")),
+        FilterOption("unassigned", _("Sin responsable")),
     ]
     groups.append(
         FilterOptionGroup(

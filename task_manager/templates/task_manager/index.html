@@ -261,80 +261,98 @@
         <article id="tm-tareas" data-tm-panel="tareas" class="hidden space-y-10">
           <section class="space-y-6">
             <header class="flex flex-wrap items-center justify-between gap-4">
-              <a
-                href="{{ task_definition_clear_filters_url }}"
-                class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand {% if not task_definition_filters_applied %}pointer-events-none opacity-50{% endif %}"
-                {% if not task_definition_filters_applied %}aria-disabled="true" tabindex="-1"{% endif %}
-              >
-                Limpiar filtros
-              </a>
-            </header>
-            {% if task_definition_filters_applied %}
-              <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-                <span class="text-[0.68rem] uppercase tracking-[0.2em] text-slate-400">Filtros activos</span>
-                {% for filter in task_definition_active_filters %}
-                  <a
-                    href="{{ filter.remove_url }}"
-                    class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
-                  >
-                    <span>{{ filter.label }}:</span>
-                    <span class="text-slate-900">{{ filter.display_value }}</span>
-                    <span aria-hidden="true" class="text-slate-400">&times;</span>
-                    <span class="sr-only">Quitar filtro {{ filter.label }}</span>
-                  </a>
-                {% endfor %}
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900">Tareas</h2>
+                <p class="text-sm text-slate-500">Administra plantillas y reglas de recurrencia por posición o colaborador sugerido.</p>
               </div>
-            {% endif %}
+            </header>
             <form method="get" class="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white/80 p-5 text-sm text-slate-600 shadow-sm backdrop-blur" data-task-definition-filter-form>
               <input type="hidden" name="tm_tab" value="tareas" />
               {% if request.GET.tm_task %}
                 <input type="hidden" name="tm_task" value="{{ request.GET.tm_task }}" />
               {% endif %}
-              <div class="flex flex-wrap items-start gap-5">
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filtrar por estado</legend>
-                  {% with config=task_manager_status_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="status" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+              <section class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4" aria-labelledby="tm-task-filters-heading">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="tm-badge-neutral">Filtros</span>
+                    <span id="tm-task-filters-heading" class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">Combina criterios para refinar la lista</span>
+                  </div>
+                  <a
+                    href="{{ task_definition_clear_filters_url }}"
+                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand {% if not task_definition_filters_applied %}pointer-events-none opacity-60{% endif %}"
+                    {% if not task_definition_filters_applied %}aria-disabled="true" tabindex="-1"{% endif %}
+                  >
+                    Limpiar filtros
+                  </a>
+                </div>
+                {% if task_definition_filters_applied %}
+                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                    {% for filter in task_definition_active_filters %}
+                      <a
+                        href="{{ filter.remove_url }}"
+                        class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
+                      >
+                        <span>{{ filter.label }}:</span>
+                        <span class="text-slate-900">{{ filter.display_value }}</span>
+                        <span aria-hidden="true" class="text-slate-400">&times;</span>
+                        <span class="sr-only">Quitar filtro {{ filter.label }}</span>
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <p class="text-[0.72rem] font-medium text-slate-400">Sin filtros activos. Usa los selectores para refinar la lista.</p>
+                {% endif %}
+                <div class="grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-6">
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</legend>
+                    {% with config=task_manager_status_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="status" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filtrar por Categoría</legend>
-                  {% with config=task_manager_category_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="category" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Categoría</legend>
+                    {% with config=task_manager_category_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="category" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filtrar por Lugar</legend>
-                  {% with config=task_manager_scope_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="scope" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cobertura</legend>
+                    {% with config=task_manager_scope_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="scope" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filtrar por planificación</legend>
-                  {% with config=task_manager_task_type_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="task_type" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Tipo de planificación</legend>
+                    {% with config=task_manager_task_type_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="task_type" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filtrar por Responsable</legend>
-                  {% with config=task_manager_responsible_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Responsable sugerido</legend>
+                    {% with config=task_manager_responsible_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filtrar por Fecha Creación</legend>
-                  {% with config=task_manager_created_window_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="created_window" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
-              </div>
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fecha de creación</legend>
+                    {% with config=task_manager_created_window_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="created_window" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
+                </div>
+              </section>
 
               <div class="border-t border-dashed border-slate-200/70"></div>
+
+              <div class="flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <span class="tm-badge-neutral">Agrupación</span>
+                <span>Organiza la tabla por tus prioridades</span>
+              </div>
 
               <div class="flex flex-wrap items-start gap-5">
                 <fieldset class="min-w-[220px] flex-1 space-y-3">
