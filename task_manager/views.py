@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from typing import Iterable, Optional, Sequence
 
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -140,6 +141,26 @@ class TaskDefinitionUpdateView(LoginRequiredMixin, View):
 
 
 task_definition_update_view = TaskDefinitionUpdateView.as_view()
+
+
+class TaskDefinitionDeleteView(LoginRequiredMixin, View):
+    """Delete an existing task definition after confirmation."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, pk: int, *args, **kwargs):
+        task_definition = get_object_or_404(TaskDefinition, pk=pk)
+        task_name = task_definition.name
+        task_definition.delete()
+        messages.success(
+            request,
+            _('La definición de tarea "%(name)s" se eliminó correctamente.') % {"name": task_name},
+        )
+        redirect_url = f"{reverse('task_manager:index')}#tm-definiciones"
+        return redirect(redirect_url)
+
+
+task_definition_delete_view = TaskDefinitionDeleteView.as_view()
 
 
 @dataclass(frozen=True)
