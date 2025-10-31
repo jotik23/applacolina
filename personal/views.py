@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from itertools import cycle
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional
@@ -885,6 +885,336 @@ def _calculate_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     return stats
 
 
+ISSUE_STYLE_MAP: dict[str, dict[str, str]] = {
+    "critical": {
+        "indicator_class": "bg-red-500",
+        "badge_class": "border border-red-200 bg-red-50 text-red-700",
+        "label": "Crítico",
+    },
+    "warning": {
+        "indicator_class": "bg-amber-400",
+        "badge_class": "border border-amber-200 bg-amber-50 text-amber-700",
+        "label": "Advertencia",
+    },
+    "info": {
+        "indicator_class": "bg-sky-400",
+        "badge_class": "border border-sky-200 bg-sky-50 text-sky-700",
+        "label": "Seguimiento",
+    },
+}
+
+
+def _identify_calendar_issues(
+    date_columns: Iterable[date],
+    rows: Iterable[dict[str, Any]],
+    rest_rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    calendar_days = list(date_columns)
+    if not calendar_days:
+        return []
+
+    operator_metrics: dict[int, dict[str, Any]] = {}
+
+    def _ensure_entry(operator_id: int) -> dict[str, Any]:
+        entry = operator_metrics.get(operator_id)
+        if entry is None:
+            entry = {
+                "name": "",
+                "work_days": {},  # date -> count of assignments
+                "rest_days": set(),
+                "unassigned_days": set(),
+                "categories": {},
+                "overtime_days": set(),
+                "skill_gaps": [],
+            }
+            operator_metrics[operator_id] = entry
+        return entry
+
+    for row in rows:
+        position: Optional[PositionDefinition] = row.get("position")
+        category = getattr(position, "category", None)
+        category_payload: Optional[dict[str, Any]] = None
+        if category and category.id is not None:
+            category_payload = {
+                "id": category.id,
+                "name": category.display_name,
+                "rest_max": category.rest_max_consecutive_days,
+                "rest_monthly": category.rest_monthly_days,
+                "rest_post": category.rest_post_shift_days,
+            }
+
+        for cell in row.get("cells", []):
+            assignment: Optional[ShiftAssignment] = cell.get("assignment")
+            if not assignment or not assignment.operator_id:
+                continue
+
+            operator_id = assignment.operator_id
+            entry = _ensure_entry(operator_id)
+            operator = getattr(assignment, "operator", None)
+            if not entry["name"]:
+                entry["name"] = _operator_display_name(operator) or f"Operador #{operator_id}"
+
+            day: date = cell.get("date")
+            if not isinstance(day, date):
+                continue
+
+            current_count = entry["work_days"].get(day, 0)
+            entry["work_days"][day] = current_count + 1
+
+            if cell.get("is_overtime") or getattr(assignment, "is_overtime", False):
+                entry["overtime_days"].add(day)
+
+            skill_gap_message = cell.get("skill_gap_message")
+            if skill_gap_message:
+                entry["skill_gaps"].append(
+                    {
+                        "message": skill_gap_message,
+                        "position": position.name if position and position.name else getattr(position, "code", ""),
+                        "date": day,
+                        "is_manual": not assignment.is_auto_assigned,
+                    }
+                )
+
+            if category_payload:
+                entry["categories"].setdefault(category_payload["id"], category_payload)
+
+    for rest_row in rest_rows:
+        operator_id = rest_row.get("operator_id")
+        for cell in rest_row.get("cells", []):
+            cell_operator_id = cell.get("operator_id") or operator_id
+            if not cell_operator_id:
+                continue
+
+            entry = _ensure_entry(cell_operator_id)
+            if not entry["name"]:
+                entry["name"] = cell.get("name") or rest_row.get("slot") or f"Operador #{cell_operator_id}"
+
+            raw_date = cell.get("date")
+            if isinstance(raw_date, date):
+                cell_date = raw_date
+            elif isinstance(raw_date, str):
+                try:
+                    cell_date = date.fromisoformat(raw_date)
+                except ValueError:
+                    continue
+            else:
+                continue
+
+            state = cell.get("state")
+            if state == REST_CELL_STATE_REST:
+                entry["rest_days"].add(cell_date)
+            elif state == REST_CELL_STATE_ASSIGNED:
+                entry["work_days"][cell_date] = max(entry["work_days"].get(cell_date, 0), cell.get("assignment_count", 1))
+            elif state == REST_CELL_STATE_UNASSIGNED:
+                entry["unassigned_days"].add(cell_date)
+
+    severity_weight = {"critical": 3, "warning": 2, "info": 1}
+    issues: list[dict[str, Any]] = []
+
+    for operator_id, data in operator_metrics.items():
+        name = data.get("name") or f"Operador #{operator_id}"
+        work_days: dict[date, int] = data.get("work_days", {})
+        if not work_days:
+            continue
+
+        categories = list(data.get("categories", {}).values())
+        primary_category = None
+        if categories:
+            primary_category = min(
+                categories,
+                key=lambda item: (
+                    item.get("rest_max") if item.get("rest_max") is not None else float("inf"),
+                    item.get("rest_monthly") if item.get("rest_monthly") is not None else float("inf"),
+                ),
+            )
+
+        rest_max_limit = primary_category.get("rest_max") if primary_category else None
+        rest_monthly_limit = primary_category.get("rest_monthly") if primary_category else None
+        category_name = primary_category.get("name") if primary_category else None
+
+        work_day_set = set(work_days.keys())
+
+        max_streak = 0
+        max_streak_end: Optional[date] = None
+        current_streak = 0
+
+        for day in calendar_days:
+            if day in work_day_set:
+                current_streak += 1
+                if current_streak > max_streak:
+                    max_streak = current_streak
+                    max_streak_end = day
+            else:
+                current_streak = 0
+
+        if max_streak_end and max_streak:
+            streak_start = max_streak_end - timedelta(days=max_streak - 1)
+            limit_label = f"{rest_max_limit} días" if rest_max_limit else "sin dato de límite"
+            if rest_max_limit and max_streak > rest_max_limit:
+                issues.append(
+                    {
+                        "severity": "critical",
+                        "title": f"{name} acumula {max_streak} días consecutivos de turno",
+                        "detail": (
+                            f"Periodo {streak_start:%d/%m} → {max_streak_end:%d/%m}. "
+                            f"Límite de {category_name or 'categoría desconocida'}: {limit_label}."
+                        ),
+                        "score": max_streak - rest_max_limit,
+                    }
+                )
+            elif rest_max_limit and max_streak == rest_max_limit and max_streak >= 2:
+                issues.append(
+                    {
+                        "severity": "warning",
+                        "title": f"{name} está al límite de días consecutivos permitidos",
+                        "detail": (
+                            f"{max_streak} días consecutivos del {streak_start:%d/%m} al {max_streak_end:%d/%m}. "
+                            f"Verifica descansos para {category_name or 'la categoría'}."
+                        ),
+                        "score": max_streak,
+                    }
+                )
+            elif not rest_max_limit and max_streak >= 6:
+                issues.append(
+                    {
+                        "severity": "info",
+                        "title": f"{name} suma {max_streak} días seguidos de turno",
+                        "detail": (
+                            f"Sin dato de límite configurado para evaluar descansos. "
+                            f"Periodo {streak_start:%d/%m} → {max_streak_end:%d/%m}."
+                        ),
+                        "score": max_streak,
+                    }
+                )
+
+        rest_days: set[date] = data.get("rest_days", set())
+        unassigned_days: set[date] = data.get("unassigned_days", set())
+
+        expected_rest_span = None
+        if primary_category:
+            rest_post_config = primary_category.get("rest_post")
+            if rest_post_config is not None:
+                expected_rest_span = max(1, int(rest_post_config) or 1)
+        if expected_rest_span is None:
+            expected_rest_span = 1
+
+        if rest_days:
+            max_rest_streak = 0
+            max_rest_end: Optional[date] = None
+            current_rest_streak = 0
+            for day in calendar_days:
+                if day in rest_days:
+                    current_rest_streak += 1
+                    if current_rest_streak > max_rest_streak:
+                        max_rest_streak = current_rest_streak
+                        max_rest_end = day
+                else:
+                    current_rest_streak = 0
+
+            if max_rest_end and max_rest_streak > expected_rest_span:
+                rest_streak_start = max_rest_end - timedelta(days=max_rest_streak - 1)
+                extra_days = max_rest_streak - expected_rest_span
+                severity = "warning" if extra_days >= 2 else "info"
+                issues.append(
+                    {
+                        "severity": severity,
+                        "title": f"{name} acumula {max_rest_streak} días de descanso seguidos",
+                        "detail": (
+                            f"Periodo {rest_streak_start:%d/%m} → {max_rest_end:%d/%m}. "
+                            f"Configuración esperada: {expected_rest_span} día(s) para "
+                            f"{category_name or 'la categoría asignada'}."
+                        ),
+                        "score": extra_days,
+                    }
+                )
+
+        if rest_days and rest_monthly_limit:
+            rest_by_month: Counter = Counter((day.year, day.month) for day in rest_days)
+            for (year, month), count in rest_by_month.items():
+                if count > rest_monthly_limit:
+                    issues.append(
+                        {
+                            "severity": "warning",
+                            "title": f"{name} supera descansos previstos en {year}-{month:02d}",
+                            "detail": (
+                                f"{count} descansos frente a un límite de {rest_monthly_limit} "
+                                f"para {category_name or 'la categoría asignada'}."
+                            ),
+                            "score": count - rest_monthly_limit,
+                        }
+                    )
+                    break
+
+        if unassigned_days:
+            max_idle_streak = 0
+            max_idle_end: Optional[date] = None
+            current_idle_streak = 0
+            for day in calendar_days:
+                if day in work_day_set or day in rest_days:
+                    current_idle_streak = 0
+                    continue
+                if day in unassigned_days:
+                    current_idle_streak += 1
+                    if current_idle_streak > max_idle_streak:
+                        max_idle_streak = current_idle_streak
+                        max_idle_end = day
+                else:
+                    current_idle_streak = 0
+
+            if max_idle_end and max_idle_streak >= 2:
+                idle_start = max_idle_end - timedelta(days=max_idle_streak - 1)
+                severity = "warning" if max_idle_streak >= 4 else "info"
+                issues.append(
+                    {
+                        "severity": severity,
+                        "title": f"{name} lleva {max_idle_streak} días sin asignación",
+                        "detail": (
+                            f"Periodo {idle_start:%d/%m} → {max_idle_end:%d/%m}. "
+                            "Verifica disponibilidad o reasigna turnos."
+                        ),
+                        "score": max_idle_streak,
+                    }
+                )
+
+        overtime_days: set[date] = data.get("overtime_days", set())
+        if overtime_days:
+            ordered_overtime = sorted(overtime_days)
+            first_overtime = ordered_overtime[0]
+            issues.append(
+                {
+                    "severity": "warning",
+                    "title": f"{name} tiene {len(overtime_days)} días marcados como sobrecarga",
+                    "detail": (
+                        f"Revisa compensaciones. Primer día detectado: {first_overtime:%d/%m/%Y}."
+                    ),
+                    "score": len(overtime_days),
+                }
+            )
+
+    def _issue_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+        severity = item.get("severity", "info")
+        score = item.get("score", 0)
+        label = item.get("title", "")
+        return (-severity_weight.get(severity, 1), -score, label.lower())
+
+    issues.sort(key=_issue_sort_key)
+
+    result: list[dict[str, Any]] = []
+    for issue in issues[:6]:
+        styles = ISSUE_STYLE_MAP.get(issue.get("severity", "info"), ISSUE_STYLE_MAP["info"]).copy()
+        sanitized = {key: value for key, value in issue.items() if key not in {"score"}}
+        sanitized.update(
+            {
+                "indicator_class": styles.get("indicator_class", "bg-slate-400"),
+                "badge_class": styles.get("badge_class", "border border-slate-200 bg-slate-100 text-slate-600"),
+                "severity_label": styles.get("label", "Seguimiento"),
+            }
+        )
+        result.append(sanitized)
+
+    return result
+
+
 CLASSIFIER_CATEGORY_CODES: set[str] = {
     PositionCategoryCode.CLASIFICADOR_DIA,
     PositionCategoryCode.CLASIFICADOR_NOCHE,
@@ -1549,6 +1879,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
         )
         date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
+        assignment_issues = _identify_calendar_issues(date_columns, rows, rest_rows)
         can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
         has_manual_choices = any(
             cell.get("choices")
@@ -1564,6 +1895,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 "date_columns": date_columns,
                 "rows": rows,
                 "stats": stats,
+                "assignment_issues": assignment_issues,
                 "rest_rows": rest_rows,
                 "rest_summary": rest_summary,
                 "can_override": can_override,
@@ -2310,6 +2642,7 @@ class CalendarSummaryView(LoginRequiredMixin, View):
 
         date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
+        assignment_issues = _identify_calendar_issues(date_columns, rows, rest_rows)
 
         response_payload = {
             "calendar": {
@@ -2364,6 +2697,7 @@ class CalendarSummaryView(LoginRequiredMixin, View):
             "position_groups": position_groups,
             "rest_summary": rest_summary,
             "stats": stats,
+            "issues": assignment_issues,
         }
 
         return JsonResponse(response_payload)

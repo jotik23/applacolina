@@ -238,17 +238,17 @@
       ></div>
 
       <div class="flex flex-col gap-6">
-        <div class="grid gap-4 md:grid-cols-2" data-assignments-sidebar>
-          <div class="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-sm text-slate-700 shadow-sm" data-rest-panel>
-            <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch" data-assignments-sidebar>
+          <div class="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-sm text-slate-700 shadow-sm lg:basis-1/5 lg:max-w-sm" data-rest-panel>
+            <div class="flex h-full flex-col gap-4">
               <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
+                <div class="min-w-0">
                   <span class="text-xs uppercase tracking-wide text-indigo-600">Descansos del colaborador</span>
                   <p class="mt-1 text-sm font-semibold text-slate-900" data-rest-operator-title>Selecciona un colaborador para ver sus descansos.</p>
                   <p class="text-xs text-slate-500" data-rest-employment></p>
                 </div>
               </div>
-              <dl class="grid gap-3 text-sm sm:grid-cols-3">
+              <dl class="grid gap-4 text-sm">
                 <div>
                   <dt class="text-xs uppercase tracking-wide text-slate-500">Último descanso</dt>
                   <dd class="mt-1 font-medium text-slate-900" data-rest-recent>Sin registro</dd>
@@ -264,30 +264,39 @@
               </dl>
             </div>
           </div>
-
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados</h3>
-            <ul class="mt-3 space-y-3">
-              <li class="flex items-center gap-3">
-                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400"></span>
-                 <b>{{ stats.total_assignments }}</b>
-                <span>asignaciones dentro de reglas </span>
-              </li>
-              <li class="flex items-center gap-3">
-                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-amber-400"></span>
-                 <b>{{ stats.warn }}</b>
-                <span>advertencias: requieren seguimiento puntual.</span>
-              </li>
-              <li class="flex items-center gap-3">
-                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-red-500"></span>
-                 <b>{{ stats.critical }}</b>
-                <span>críticos: requieren intervención inmediata.</span>
-              </li>
-              <li class="flex items-center gap-3">
-                <span class="inline-flex h-3.5 w-3.5 rounded-full bg-slate-900"></span>
-                 <b>{{ stats.overtime }}</b>
-                <span>sobrecargas: activar compensaciones.</span>
-              </li>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 lg:basis-4/5 lg:flex-1">
+            {% with assignment_issues|default_if_none:""|length as issue_count %}
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados y alertas</h3>
+                {% if issue_count %}
+                  <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {{ issue_count }} alerta{{ issue_count|pluralize:"s" }}
+                  </span>
+                {% endif %}
+              </div>
+            {% endwith %}
+            <ul class="mt-3 grid max-h-60 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+              {% if assignment_issues %}
+                {% for issue in assignment_issues %}
+                  <li class="flex flex-col gap-2 rounded-xl border border-white bg-white/70 p-3 shadow-sm xl:flex-row xl:items-start xl:gap-3">
+                    <div class="flex items-center gap-2 xl:flex-none">
+                      <span class="inline-flex h-2.5 w-2.5 flex-none rounded-full {{ issue.indicator_class }}"></span>
+                      <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide {{ issue.badge_class }}">{{ issue.severity_label }}</span>
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-slate-900">{{ issue.title }}</p>
+                      {% if issue.detail %}
+                        <p class="mt-1 text-xs text-slate-500 leading-4">{{ issue.detail }}</p>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endfor %}
+              {% else %}
+                <li class="col-span-full flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm text-emerald-700">
+                  <span class="inline-flex h-2.5 w-2.5 flex-none rounded-full bg-emerald-500"></span>
+                  <span>No se detectan incumplimientos de reglas en este calendario.</span>
+                </li>
+              {% endif %}
             </ul>
           </div>
         </div>
@@ -352,9 +361,16 @@
                                       <input type="hidden" name="assignment_id" value="{{ cell.assignment.id }}" />
                                       <input type="hidden" name="force_override" value="1" />
                                       <div class="flex flex-col gap-3">
-                                        <div class="flex items-center justify-between gap-3">
-                                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Colaborador asignado</p>
-                                          <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if cell.alert == 'critical' %}border border-red-200 bg-red-50 text-red-700{% elif cell.alert == 'warn' %}border border-amber-200 bg-amber-50 text-amber-700{% else %}border border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
+                                        <div class="flex items-start gap-3">
+                                          <div class="flex flex-1 flex-wrap items-center gap-2">
+                                            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Colaborador asignado</p>
+                                            {% if cell.alert or cell.skill_gap_message or cell.is_overtime %}
+                                              <div class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                                {% include 'calendario/partials/assignment_alert_icons.html' with cell=cell %}
+                                              </div>
+                                            {% endif %}
+                                          </div>
+                                          <span class="ml-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if cell.alert == 'critical' %}border border-red-200 bg-red-50 text-red-700{% elif cell.alert == 'warn' %}border border-amber-200 bg-amber-50 text-amber-700{% else %}border border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
                                             <span class="h-2.5 w-2.5 rounded-full {% if cell.alert == 'critical' %}bg-red-500{% elif cell.alert == 'warn' %}bg-amber-400{% else %}bg-emerald-400{% endif %}"></span>
                                           </span>
                                         </div>
@@ -381,18 +397,15 @@
                                           </button>
                                         </div>
                                       </div>
-                                      <div class="flex flex-wrap items-center gap-2">
-                                        <div class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
-                                          {% include 'calendario/partials/assignment_alert_icons.html' with cell=cell %}
-                                          {% if not cell.alert and not cell.skill_gap_message and not cell.is_overtime %}
-                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Sin alertas registradas</span>
-                                          {% endif %}
-                                        </div>
+                                      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                        {% if not cell.alert and not cell.skill_gap_message and not cell.is_overtime %}
+                                          <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Sin alertas registradas</span>
+                                        {% endif %}
                                       </div>
                                     </form>
                                   {% else %}
                                     <div class="flex flex-col gap-3">
-                                      <div class="flex items-start justify-between gap-3">
+                                      <div class="flex items-start gap-3">
                                         <div class="min-w-0">
                                           <p class="truncate text-sm font-semibold text-slate-900">{{ cell.assignment.operator.get_full_name }}</p>
                                           {% with role=cell.assignment.operator.roles.first %}
@@ -401,17 +414,19 @@
                                             {% endif %}
                                           {% endwith %}
                                         </div>
-                                        <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if cell.alert == 'critical' %}border border-red-200 bg-red-50 text-red-700{% elif cell.alert == 'warn' %}border border-amber-200 bg-amber-50 text-amber-700{% else %}border border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
+                                        {% if cell.alert or cell.skill_gap_message or cell.is_overtime %}
+                                          <div class="flex flex-shrink-0 flex-wrap items-center gap-1 text-xs text-slate-500">
+                                            {% include 'calendario/partials/assignment_alert_icons.html' with cell=cell %}
+                                          </div>
+                                        {% endif %}
+                                        <span class="ml-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if cell.alert == 'critical' %}border border-red-200 bg-red-50 text-red-700{% elif cell.alert == 'warn' %}border border-amber-200 bg-amber-50 text-amber-700{% else %}border border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
                                           <span class="h-2.5 w-2.5 rounded-full {% if cell.alert == 'critical' %}bg-red-500{% elif cell.alert == 'warn' %}bg-amber-400{% else %}bg-emerald-400{% endif %}"></span>
                                         </span>
                                       </div>
-                                      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                                        <div class="flex flex-wrap items-center gap-1">
-                                          {% include 'calendario/partials/assignment_alert_icons.html' with cell=cell %}
-                                          {% if not cell.alert and not cell.skill_gap_message and not cell.is_overtime %}
-                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Sin alertas registradas</span>
-                                          {% endif %}
-                                        </div>
+                                      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                        {% if not cell.alert and not cell.skill_gap_message and not cell.is_overtime %}
+                                          <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Sin alertas registradas</span>
+                                        {% endif %}
                                       </div>
                                     </div>
                                   {% endif %}
