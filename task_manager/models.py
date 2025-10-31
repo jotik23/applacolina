@@ -45,6 +45,23 @@ class TaskDefinition(models.Model):
         ONE_TIME = "one_time", _("Única")
         RECURRING = "recurring", _("Recurrente")
 
+    class EvidenceRequirement(models.TextChoices):
+        NONE = "none", _("Sin evidencia")
+        PHOTO = "photo", _("Fotografía obligatoria")
+        VIDEO = "video", _("Video obligatorio")
+        PHOTO_OR_VIDEO = "photo_or_video", _("Foto o video obligatorio")
+
+    class RecordFormat(models.TextChoices):
+        NONE = "none", _("No requiere formato")
+        PRODUCTION_RECORD = "production_record", _("Registro de producción")
+
+    RECURRENCE_ARRAY_FIELDS: tuple[str, ...] = (
+        "weekly_days",
+        "fortnight_days",
+        "month_days",
+        "monthly_week_days",
+    )
+
     name = models.CharField(_("Tarea"), max_length=200)
     description = models.TextField(_("Descripción"), blank=True)
     status = models.ForeignKey(
@@ -63,7 +80,9 @@ class TaskDefinition(models.Model):
         _("Tipo"),
         max_length=16,
         choices=TaskType.choices,
-        default=TaskType.ONE_TIME,
+        blank=True,
+        null=True,
+        default=None,
     )
     scheduled_for = models.DateField(
         _("Fecha programada"),
@@ -77,6 +96,24 @@ class TaskDefinition(models.Model):
         blank=True,
         verbose_name=_("Días de la semana"),
         help_text=_("Seleccione los días de la semana para tareas recurrentes semanales."),
+    )
+    fortnight_days = ArrayField(
+        models.PositiveSmallIntegerField(),
+        default=list,
+        blank=True,
+        verbose_name=_("Días de quincena"),
+        help_text=_(
+            "Seleccione los días específicos dentro de la quincena (1-31) cuando aplique."
+        ),
+    )
+    monthly_week_days = ArrayField(
+        models.PositiveSmallIntegerField(),
+        default=list,
+        blank=True,
+        verbose_name=_("Semanas del mes"),
+        help_text=_(
+            "Defina la semana del mes en la que se debe ejecutar (1 a 5) cuando aplique."
+        ),
     )
     month_days = ArrayField(
         models.PositiveSmallIntegerField(
@@ -104,6 +141,22 @@ class TaskDefinition(models.Model):
         verbose_name=_("Colaborador asignado"),
         null=True,
         blank=True,
+    )
+    evidence_requirement = models.CharField(
+        _("Requisito de evidencia"),
+        max_length=20,
+        choices=EvidenceRequirement.choices,
+        default=EvidenceRequirement.NONE,
+        help_text=_(
+            "Define si la tarea exige evidencia multimedia (foto o video) al finalizar."
+        ),
+    )
+    record_format = models.CharField(
+        _("Formato de registro"),
+        max_length=32,
+        choices=RecordFormat.choices,
+        default=RecordFormat.NONE,
+        help_text=_("Selecciona el formato de registro obligatorio para cerrar la tarea."),
     )
     farms = models.ManyToManyField(
         Farm,
@@ -136,13 +189,34 @@ class TaskDefinition(models.Model):
 
     def clean(self) -> None:
         super().clean()
+        self._normalize_recurrence_arrays()
         self._validate_schedule_configuration()
 
+    def _normalize_recurrence_arrays(self) -> None:
+        for field_name in self.RECURRENCE_ARRAY_FIELDS:
+            values = getattr(self, field_name) or []
+            sanitized_values: list[int] = []
+            for value in values:
+                if value is None:
+                    continue
+                sanitized_values.append(int(value))
+            setattr(self, field_name, sorted(set(sanitized_values)))
+
     def _validate_schedule_configuration(self) -> None:
+        if not self.task_type:
+            self.task_type = None
+            self.scheduled_for = self.scheduled_for or None
+            self._clear_recurrence_arrays()
+            return
+
         if self.task_type == self.TaskType.ONE_TIME:
             if not self.scheduled_for:
                 raise ValidationError({"scheduled_for": _("Debe establecer la fecha programada.")})
-            if self.weekly_days or self.month_days:
+            has_recurrence_values = any(
+                getattr(self, field_name) for field_name in self.RECURRENCE_ARRAY_FIELDS
+            )
+            self._clear_recurrence_arrays()
+            if has_recurrence_values:
                 raise ValidationError(
                     _("Las configuraciones recurrentes solo aplican a tareas recurrentes.")
                 )
@@ -150,8 +224,8 @@ class TaskDefinition(models.Model):
 
         if self.task_type == self.TaskType.RECURRING:
             recurrence_fields: list[tuple[str, Iterable[int]]] = [
-                ("weekly_days", self.weekly_days or []),
-                ("month_days", self.month_days or []),
+                (field_name, getattr(self, field_name) or [])
+                for field_name in self.RECURRENCE_ARRAY_FIELDS
             ]
 
             if not any(values for _, values in recurrence_fields):
@@ -163,6 +237,11 @@ class TaskDefinition(models.Model):
                 raise ValidationError(
                     {"scheduled_for": _("Las tareas recurrentes no deben tener fecha puntual.")}
                 )
+            return
+
+    def _clear_recurrence_arrays(self) -> None:
+        for field_name in self.RECURRENCE_ARRAY_FIELDS:
+            setattr(self, field_name, [])
 
 
 class TaskAssignment(models.Model):

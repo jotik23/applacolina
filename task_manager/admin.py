@@ -51,12 +51,16 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
         "category",
         "position",
         "collaborator",
+        "evidence_requirement",
+        "record_format",
     )
     list_filter = (
         "task_type",
         "status",
         "category",
         "position__farm",
+        "evidence_requirement",
+        "record_format",
     )
     search_fields = ("name", "description")
     filter_horizontal = ("farms", "chicken_houses", "rooms")
@@ -95,6 +99,15 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
                     "farms",
                     "chicken_houses",
                     "rooms",
+                )
+            },
+        ),
+        (
+            "Requisitos",
+            {
+                "fields": (
+                    "evidence_requirement",
+                    "record_format",
                 )
             },
         ),

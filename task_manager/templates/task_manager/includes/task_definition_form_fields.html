@@ -1,117 +1,283 @@
-{% with task_form_top_margin|default:"mt-6" as top_margin %}
-<div class="{{ top_margin }} grid gap-5 sm:grid-cols-2">
-  <label class="text-sm font-medium text-slate-700">
-    Nombre de la tarea
-    <input
-      type="text"
-      class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-      placeholder="Ej. Sanitizar equipos de pesaje"
-    />
-  </label>
-  <label class="text-sm font-medium text-slate-700">
-    Categoría
-    <select class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-      <option>Seleccione</option>
-      <option>Bioseguridad</option>
-      <option>Mantenimiento</option>
-      <option>Producción</option>
-      <option>Documentación</option>
-    </select>
-  </label>
-  <label class="text-sm font-medium text-slate-700 sm:col-span-2">
-    Descripción
-    <textarea
-      rows="3"
-      class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-      placeholder="Detalla la rutina, estándares y protocolos a cumplir."
-    ></textarea>
-  </label>
-  <div class="sm:col-span-2">
-    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Recurrencia</p>
-    <div class="mt-2 grid gap-3 sm:grid-cols-3">
-      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-        Única
-        <input type="radio" name="task_type" class="border-slate-300 text-brand focus:ring-brand" />
-      </label>
-      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-        Semanal
-        <input type="radio" name="task_type" class="border-slate-300 text-brand focus:ring-brand" checked />
-      </label>
-      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-        Mensual
-        <input type="radio" name="task_type" class="border-slate-300 text-brand focus:ring-brand" />
-      </label>
-    </div>
-  </div>
-  <div class="sm:col-span-2">
-    <label class="text-sm font-medium text-slate-700">
-      Días / Fechas
-      <input
-        type="text"
-        class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-        placeholder="Lunes, Miércoles, Viernes · 1 y 15"
-      />
-    </label>
-    <p class="mt-1 text-xs text-slate-500">El sistema validará que las configuraciones sean coherentes con el tipo de tarea.</p>
-  </div>
-  <label class="text-sm font-medium text-slate-700">
-    Posición prioritaria
-    <select class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-      <option>Seleccione</option>
-      <option>Auxiliar Operativo</option>
-      <option>Líder de turno</option>
-      <option>Supervisor Bioseguridad</option>
-      <option>Coordinador Producción</option>
-    </select>
-  </label>
-  <label class="text-sm font-medium text-slate-700">
-    Colaborador sugerido
-    <select class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-      <option>Automático según posición</option>
-      <option>Diana Bustos</option>
-      <option>Jhon Vergara</option>
-      <option>María Perdomo</option>
-    </select>
-  </label>
-  <div class="sm:col-span-2">
-    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Requisitos adicionales</p>
-    <div class="mt-3 space-y-3">
-      <label class="flex items-center gap-3 text-sm text-slate-700">
-        <input type="checkbox" class="rounded border-slate-300 text-brand focus:ring-brand" checked />
-        Requiere foto de evidencia
-      </label>
-      <label class="flex items-center gap-3 text-sm text-slate-700">
-        <input type="checkbox" class="rounded border-slate-300 text-brand focus:ring-brand" />
-        Solicitar nota de cierre
-      </label>
-      <label class="flex items-center gap-3 text-sm text-slate-700">
-        <input type="checkbox" class="rounded border-slate-300 text-brand focus:ring-brand" />
-        Bloquear postergación superior a 24h
-      </label>
-    </div>
-  </div>
-{% endwith %}
-{% with task_form_footer_margin|default:"mt-6" as footer_margin %}
-<div class="{{ footer_margin }} flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
-  <button
-    type="button"
-    class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand hover:text-brand"
-  >
-    Guardar borrador
-  </button>
-  <div class="flex flex-wrap gap-2">
-    <button
-      type="button"
-      class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand hover:text-brand"
-    >
-      Cancelar
-    </button>
-    <button
-      type="button"
-      class="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark"
-    >
-      Continuar a asignación
-    </button>
-  </div>
-</div>
+{% with task_form=form|default:task_definition_form %}
+  {% if task_form %}
+    {% with top_margin=task_form_top_margin|default:"mt-6" footer_margin=task_form_footer_margin|default:"mt-6" %}
+      <div class="{{ top_margin }} space-y-6" data-task-definition-form-fields>
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div class="sm:col-span-2">
+            <label for="{{ task_form.name.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.name.label }}
+            </label>
+            {{ task_form.name }}
+            {% if task_form.name.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.name.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.name.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="name">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.category.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.category.label }}
+            </label>
+            {{ task_form.category }}
+            {% if task_form.category.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.category.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.category.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="category">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.status.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.status.label }}
+            </label>
+            {{ task_form.status }}
+            {% if task_form.status.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.status.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.status.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="status">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div class="sm:col-span-2">
+            <label for="{{ task_form.description.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.description.label }}
+            </label>
+            {{ task_form.description }}
+            {% if task_form.description.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.description.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.description.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="description">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div class="sm:col-span-2">
+            <label for="{{ task_form.task_type.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.task_type.label }}
+            </label>
+            <div class="mt-1" data-task-type-options>
+              {{ task_form.task_type }}
+            </div>
+            {% if task_form.task_type.help_text %}
+              <p class="mt-2 text-xs text-slate-500">{{ task_form.task_type.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.task_type.errors %}
+              <p class="mt-2 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="task_type">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div class="sm:col-span-2" data-task-type-section="one_time">
+            <label for="{{ task_form.scheduled_for.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.scheduled_for.label }}
+            </label>
+            {{ task_form.scheduled_for }}
+            {% if task_form.scheduled_for.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.scheduled_for.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.scheduled_for.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="scheduled_for">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div class="sm:col-span-2" data-task-type-section="recurring">
+            <label for="{{ task_form.weekly_days.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.weekly_days.label }}
+            </label>
+            {{ task_form.weekly_days }}
+            {% if task_form.weekly_days.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.weekly_days.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.weekly_days.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="weekly_days">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div class="sm:col-span-2" data-task-type-section="recurring">
+            <label for="{{ task_form.month_days.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.month_days.label }}
+            </label>
+            {{ task_form.month_days }}
+            {% if task_form.month_days.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.month_days.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.month_days.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="month_days">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.position.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.position.label }}
+            </label>
+            {{ task_form.position }}
+            {% if task_form.position.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.position.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.position.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="position">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.collaborator.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.collaborator.label }}
+            </label>
+            {{ task_form.collaborator }}
+            {% if task_form.collaborator.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.collaborator.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.collaborator.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="collaborator">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.farms.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.farms.label }}
+            </label>
+            {{ task_form.farms }}
+            {% if task_form.farms.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.farms.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.farms.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="farms">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.chicken_houses.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.chicken_houses.label }}
+            </label>
+            {{ task_form.chicken_houses }}
+            {% if task_form.chicken_houses.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.chicken_houses.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.chicken_houses.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="chicken_houses">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.rooms.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.rooms.label }}
+            </label>
+            {{ task_form.rooms }}
+            {% if task_form.rooms.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.rooms.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.rooms.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="rooms">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.evidence_requirement.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.evidence_requirement.label }}
+            </label>
+            {{ task_form.evidence_requirement }}
+            {% if task_form.evidence_requirement.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.evidence_requirement.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.evidence_requirement.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="evidence_requirement">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div>
+            <label for="{{ task_form.record_format.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.record_format.label }}
+            </label>
+            {{ task_form.record_format }}
+            {% if task_form.record_format.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.record_format.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.record_format.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="record_format">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+        </div>
+
+        <div class="{{ footer_margin }} flex flex-col gap-4 border-t border-slate-100 pt-4 text-sm">
+          <p class="text-xs text-slate-500">
+            Ajusta la recurrencia y las ubicaciones; el generador validará conflictos de fechas y vigencia de posiciones.
+          </p>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+              data-task-create-close
+            >
+              Cancelar
+            </button>
+            <div class="flex items-center gap-3">
+              <p class="text-xs font-semibold text-slate-500 hidden" data-task-create-status></p>
+              <button
+                type="submit"
+                class="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                data-task-create-submit
+              >
+                <svg
+                  class="hidden h-4 w-4 animate-spin text-white"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  data-task-create-spinner
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
+                </svg>
+                <span data-task-create-submit-label>Crear tarea</span>
+              </button>
+            </div>
+          </div>
+          <p class="mt-2 text-xs text-rose-600 hidden" data-task-field-error="__all__"></p>
+        </div>
+      </div>
+    {% endwith %}
+  {% endif %}
 {% endwith %}

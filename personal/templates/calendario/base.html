@@ -26,6 +26,7 @@
     data-calendar-list-url="{% url 'personal-api:calendar-list' %}"
     data-calendar-detail-template="{% url 'personal:calendar-detail' 0 %}"
     data-calendar-create-url="{% url 'personal:calendar-create' %}"
+    data-task-highlight-id="{{ task_definition_highlight_id|default:'' }}"
   >
     {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" %}
       <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
@@ -744,7 +745,7 @@
                 </span>
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-wide text-brand/80">Gestor de tareas</p>
-                  <h2 class="mt-1 text-2xl font-semibold text-slate-900">Nueva Tarea</h2>
+                  <h2 class="mt-1 text-2xl font-semibold text-slate-900" data-task-create-title>Nueva Tarea</h2>
                 </div>
               </div>
               <button
@@ -763,6 +764,8 @@
               action="{{ task_definition_create_url }}"
               class="flex h-full flex-col bg-gradient-to-b from-white via-white to-slate-50"
               data-task-create-form
+              data-task-detail-url-template="{{ task_definition_detail_url_template }}"
+              data-task-update-url-template="{{ task_definition_update_url_template }}"
               novalidate
             >
               {% csrf_token %}
@@ -828,6 +831,15 @@
         var taskCreateSubmitButton = null;
         var taskCreateSubmitLabel = null;
         var taskCreateSubmitDefaultLabel = '';
+        var taskCreateTitle = null;
+        var taskCreateDefaultTitle = '';
+        var taskCreateDefaultAction = '';
+        var taskCreateMode = 'create';
+        var taskCreateActiveId = null;
+        var taskDefinitionDetailUrlTemplate = '';
+        var taskDefinitionUpdateUrlTemplate = '';
+        var taskDefinitionEditButtons = [];
+        var taskCreateSubmitEditLabel = 'Guardar cambios';
 
         var CalendarNavigation = (function () {
           try {
@@ -1643,15 +1655,273 @@
             taskCreateSpinner.classList.toggle('hidden', !loading);
           }
           if (taskCreateSubmitLabel) {
-            taskCreateSubmitLabel.textContent = loading
-              ? 'Guardando…'
-              : (taskCreateSubmitDefaultLabel || 'Crear tarea');
+            if (loading) {
+              taskCreateSubmitLabel.textContent = 'Guardando…';
+            } else {
+              var defaultLabel = taskCreateMode === 'edit'
+                ? taskCreateSubmitEditLabel
+                : (taskCreateSubmitDefaultLabel || 'Crear tarea');
+              taskCreateSubmitLabel.textContent = defaultLabel;
+            }
           }
         }
 
-        function getCurrentTaskTypeValue() {
+        function setTaskCreateFormDisabled(disabled) {
+          if (!taskCreateForm) {
+            return;
+          }
+          var isDisabled = !!disabled;
+          var fields = toArray(taskCreateForm.querySelectorAll('input, select, textarea'));
+          fields.forEach(function (field) {
+            if (isDisabled) {
+              if (!field.hasAttribute('data-task-disabled-stash')) {
+                field.setAttribute('data-task-disabled-stash', field.disabled ? '1' : '0');
+              }
+              field.disabled = true;
+            } else if (field.hasAttribute('data-task-disabled-stash')) {
+              var previous = field.getAttribute('data-task-disabled-stash') === '1';
+              field.disabled = previous;
+              field.removeAttribute('data-task-disabled-stash');
+            }
+          });
+          if (taskCreateSubmitButton) {
+            if (isDisabled) {
+              if (!taskCreateSubmitButton.hasAttribute('data-task-disabled-stash')) {
+                taskCreateSubmitButton.setAttribute(
+                  'data-task-disabled-stash',
+                  taskCreateSubmitButton.disabled ? '1' : '0'
+                );
+              }
+              taskCreateSubmitButton.disabled = true;
+            } else if (taskCreateSubmitButton.hasAttribute('data-task-disabled-stash')) {
+              var previousState = taskCreateSubmitButton.getAttribute('data-task-disabled-stash') === '1';
+              taskCreateSubmitButton.disabled = previousState;
+              taskCreateSubmitButton.removeAttribute('data-task-disabled-stash');
+            }
+          }
+          taskCreateForm.classList.toggle('pointer-events-none', isDisabled);
+          taskCreateForm.classList.toggle('opacity-60', isDisabled);
+        }
+
+        function setTaskCreateMode(mode, options) {
+          if (!taskCreatePanel) {
+            return;
+          }
+          var nextMode = mode === 'edit' ? 'edit' : 'create';
+          taskCreateMode = nextMode;
+          taskCreatePanel.setAttribute('data-task-create-mode', taskCreateMode);
+
+          if (taskCreateForm && taskCreateDefaultAction) {
+            taskCreateForm.setAttribute('action', taskCreateDefaultAction);
+          }
+          taskCreateActiveId = null;
+
+          if (taskCreateSubmitLabel) {
+            var labelText = nextMode === 'edit'
+              ? taskCreateSubmitEditLabel
+              : (taskCreateSubmitDefaultLabel || 'Crear tarea');
+            taskCreateSubmitLabel.textContent = labelText;
+          }
+
+          if (taskCreateTitle) {
+            if (nextMode === 'edit') {
+              var optionName = options && options.name ? String(options.name).trim() : '';
+              taskCreateTitle.textContent = optionName ? 'Editar: ' + optionName : 'Editar tarea';
+            } else {
+              taskCreateTitle.textContent = taskCreateDefaultTitle || 'Nueva Tarea';
+            }
+          }
+
+          if (nextMode === 'edit' && options) {
+            if (options.updateUrl && taskCreateForm) {
+              taskCreateForm.setAttribute('action', options.updateUrl);
+            }
+            if (options.id) {
+              taskCreateActiveId = String(options.id);
+            }
+          }
+        }
+
+        function fillTaskCreateForm(data) {
+          if (!taskCreateForm || !data) {
+            return;
+          }
+
+          var singleValueFields = [
+            'name',
+            'description',
+            'status',
+            'category',
+            'task_type',
+            'scheduled_for',
+            'position',
+            'collaborator',
+            'evidence_requirement',
+            'record_format',
+          ];
+
+          singleValueFields.forEach(function (fieldName) {
+            var field = taskCreateForm.querySelector('[name=\"' + fieldName + '\"]');
+            if (!field) {
+              return;
+            }
+            var value = data[fieldName];
+            var normalized = value === null || typeof value === 'undefined' ? '' : String(value);
+            if (field.tagName && field.tagName.toUpperCase() === 'SELECT') {
+              field.value = normalized;
+            } else if (field.type === 'date') {
+              field.value = normalized;
+            } else {
+              field.value = normalized;
+            }
+          });
+
+          var multiValueFields = ['weekly_days', 'month_days', 'farms', 'chicken_houses', 'rooms'];
+          multiValueFields.forEach(function (fieldName) {
+            var field = taskCreateForm.querySelector('[name=\"' + fieldName + '\"]');
+            if (!field || !field.options) {
+              return;
+            }
+            var values = data[fieldName];
+            var normalizedValues = Array.isArray(values)
+              ? values.map(function (value) {
+                  return String(value);
+                })
+              : [];
+            toArray(field.options).forEach(function (option) {
+              option.selected = normalizedValues.indexOf(option.value) !== -1;
+            });
+          });
+
+          if (taskCreateMode === 'edit' && taskCreateTitle) {
+            var displayName = data.name ? String(data.name).trim() : '';
+            taskCreateTitle.textContent = displayName ? 'Editar: ' + displayName : 'Editar tarea';
+          }
+
+          updateTaskTypeSections();
+        }
+
+        function resolveTaskUrl(template, id) {
+          if (!template) {
+            return null;
+          }
+          var stringId = id !== undefined && id !== null ? String(id) : '';
+          if (template.indexOf('__ID__') !== -1) {
+            return stringId ? template.replace('__ID__', stringId) : template;
+          }
+          if (!stringId) {
+            return template;
+          }
+          if (template.indexOf('/0/') !== -1) {
+            return template.replace('/0/', '/' + stringId + '/');
+          }
+          if (template.endsWith('/0')) {
+            return template.slice(0, -1) + stringId;
+          }
+          return template.replace(/0(?=[^0]*$)/, stringId);
+        }
+
+        function handleTaskDefinitionEdit(button) {
+          if (!button) {
+            return;
+          }
+          var id = button.getAttribute('data-task-definition-id');
+          var name = button.getAttribute('data-task-definition-name') || '';
+          var detailUrl = button.getAttribute('data-task-definition-detail-url') || '';
+          var updateUrl = button.getAttribute('data-task-definition-update-url') || '';
+          if (!detailUrl && taskDefinitionDetailUrlTemplate) {
+            detailUrl = resolveTaskUrl(taskDefinitionDetailUrlTemplate, id);
+          }
+          if (!updateUrl && taskDefinitionUpdateUrlTemplate) {
+            updateUrl = resolveTaskUrl(taskDefinitionUpdateUrlTemplate, id);
+          }
+          if (!detailUrl || !updateUrl) {
+            return;
+          }
+
+          setTaskCreateMode('edit', {
+            id: id,
+            name: name,
+            updateUrl: updateUrl,
+          });
+          openTaskCreate(button);
+          clearTaskCreateErrors();
+          setTaskCreateStatus('Cargando datos de la tarea…', false);
+          setTaskCreateLoading(false);
+          setTaskCreateFormDisabled(true);
+
+          fetch(detailUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error('No fue posible obtener los datos de la tarea.');
+              }
+              return response.json();
+            })
+            .then(function (payload) {
+              setTaskCreateFormDisabled(false);
+              setTaskCreateStatus('', false);
+              fillTaskCreateForm(payload || {});
+            })
+            .catch(function (error) {
+              console.error(error);
+              setTaskCreateStatus('No fue posible cargar los datos de la tarea.', true);
+            });
+        }
+
+function setupTaskDefinitionActions() {
+          taskDefinitionEditButtons = toArray(
+            document.querySelectorAll('[data-task-action=\"edit\"][data-task-definition-id]')
+          );
+          if (!taskDefinitionEditButtons.length) {
+            return;
+          }
+          taskDefinitionEditButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+              event.preventDefault();
+              handleTaskDefinitionEdit(button);
+            });
+          });
+        }
+
+        function highlightTaskDefinitionRow(taskId) {
+          if (!taskId) {
+            return;
+          }
+          var selector = '[data-task-definition-row=\"' + String(taskId).trim() + '\"]';
+          var row = document.querySelector(selector);
+          if (!row) {
+            return;
+          }
+          row.classList.add('tm-task-row-highlight');
+          window.setTimeout(function () {
+            try {
+              row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch (_error) {
+              row.scrollIntoView();
+            }
+          }, 60);
+          window.setTimeout(function () {
+            row.classList.remove('tm-task-row-highlight');
+          }, 3600);
+        }
+
+function getCurrentTaskTypeValue() {
           if (!taskCreateForm) {
             return null;
+          }
+          var field = taskCreateForm.querySelector('[name="task_type"]');
+          if (!field) {
+            return null;
+          }
+          if (field.tagName && field.tagName.toUpperCase() === 'SELECT') {
+            var selectedValue = field.value;
+            return selectedValue ? String(selectedValue) : null;
           }
           var checked = taskCreateForm.querySelector('[name="task_type"]:checked');
           return checked ? String(checked.value) : null;
@@ -1682,16 +1952,18 @@
           });
 
           var typeLabels = toArray(taskCreateForm.querySelectorAll('[data-task-type-options] label'));
-          typeLabels.forEach(function (label) {
-            var input = label.querySelector('input[name="task_type"]');
-            if (input && input.checked) {
-              label.classList.add('border-brand', 'bg-brand/10', 'text-brand');
-              label.classList.remove('text-slate-700');
-            } else {
-              label.classList.remove('border-brand', 'bg-brand/10', 'text-brand');
-              label.classList.add('text-slate-700');
-            }
-          });
+          if (typeLabels.length) {
+            typeLabels.forEach(function (label) {
+              var input = label.querySelector('input[name="task_type"]');
+              if (input && input.checked) {
+                label.classList.add('border-brand', 'bg-brand/10', 'text-brand');
+                label.classList.remove('text-slate-700');
+              } else {
+                label.classList.remove('border-brand', 'bg-brand/10', 'text-brand');
+                label.classList.add('text-slate-700');
+              }
+            });
+          }
         }
 
         function handleTaskCreateSubmit(event) {
@@ -1723,7 +1995,7 @@
                 });
               }
               if (!response.ok) {
-                throw new Error('No fue posible crear la tarea.');
+                throw new Error('No fue posible guardar la tarea.');
               }
               return response.json();
             })
@@ -1731,18 +2003,11 @@
               setTaskCreateLoading(false);
               var redirectUrl = payload && payload.redirect_url ? String(payload.redirect_url) : null;
               if (redirectUrl) {
-                setTaskCreateStatus('Tarea creada. Redirigiendo…', false);
+                closeTaskCreate(false);
                 window.location.assign(redirectUrl);
                 return;
               }
-              setTaskCreateStatus('Tarea registrada correctamente.', false);
-              if (typeof taskCreateForm.reset === 'function') {
-                taskCreateForm.reset();
-              }
-              updateTaskTypeSections();
-              setTimeout(function () {
-                closeTaskCreate(false);
-              }, 800);
+              closeTaskCreate(false);
             })
             .catch(function (error) {
               setTaskCreateLoading(false);
@@ -1759,7 +2024,7 @@
                 return;
               }
               console.error(error);
-              setTaskCreateStatus('No fue posible crear la tarea. Intenta nuevamente.', true);
+              setTaskCreateStatus('No fue posible guardar la tarea. Intenta nuevamente.', true);
             });
         }
 
@@ -1771,7 +2036,9 @@
           document.body.classList.remove('overflow-hidden');
           setTaskCreateLoading(false);
           setTaskCreateStatus('', false);
+          setTaskCreateFormDisabled(false);
           clearTaskCreateErrors();
+          setTaskCreateMode('create');
           if (focusTrigger && taskCreateLastTrigger && typeof taskCreateLastTrigger.focus === 'function') {
             taskCreateLastTrigger.focus();
           }
@@ -1794,6 +2061,7 @@
           setTaskCreateLoading(false);
           clearTaskCreateErrors();
           setTaskCreateStatus('', false);
+          setTaskCreateFormDisabled(false);
           if (taskCreateForm && typeof taskCreateForm.reset === 'function') {
             taskCreateForm.reset();
           }
@@ -1828,10 +2096,21 @@
           taskCreateSubmitDefaultLabel = taskCreateSubmitLabel
             ? String(taskCreateSubmitLabel.textContent || '').trim()
             : taskCreateSubmitDefaultLabel;
+          taskCreateTitle = taskCreatePanel.querySelector('[data-task-create-title]');
+          taskCreateDefaultTitle = taskCreateTitle ? String(taskCreateTitle.textContent || '').trim() : '';
+          taskCreateDefaultAction = taskCreateForm ? taskCreateForm.getAttribute('action') || '' : '';
+          taskDefinitionDetailUrlTemplate = taskCreateForm
+            ? taskCreateForm.getAttribute('data-task-detail-url-template') || ''
+            : '';
+          taskDefinitionUpdateUrlTemplate = taskCreateForm
+            ? taskCreateForm.getAttribute('data-task-update-url-template') || ''
+            : '';
+          setTaskCreateMode('create');
 
           taskCreateTriggers.forEach(function (trigger) {
             trigger.addEventListener('click', function (event) {
               event.preventDefault();
+              setTaskCreateMode('create');
               openTaskCreate(trigger);
             });
           });
@@ -1852,7 +2131,7 @@
 
           if (taskCreateForm) {
             taskCreateForm.addEventListener('submit', handleTaskCreateSubmit);
-            var taskTypeInputs = toArray(taskCreateForm.querySelectorAll('input[name="task_type"]'));
+            var taskTypeInputs = toArray(taskCreateForm.querySelectorAll('[name="task_type"]'));
             taskTypeInputs.forEach(function (input) {
               input.addEventListener('change', function () {
                 updateTaskTypeSections();
@@ -2580,6 +2859,21 @@
           setupCalendarNavigators();
           setupCalendarCreate();
           setupTaskCreate();
+          setupTaskDefinitionActions();
+          var taskHighlightId = document.body ? document.body.getAttribute('data-task-highlight-id') : '';
+          if (taskHighlightId) {
+            highlightTaskDefinitionRow(taskHighlightId);
+            document.body.setAttribute('data-task-highlight-id', '');
+            if (window.history && typeof window.history.replaceState === 'function') {
+              try {
+                var url = new URL(window.location.href);
+                url.searchParams.delete('tm_task');
+                window.history.replaceState({}, document.title, url.toString());
+              } catch (_error) {
+                // ignore cleanup failures silently
+              }
+            }
+          }
 
           if (mobileNav && mobileNavToggle) {
             mobileNavToggle.addEventListener('click', function () {
