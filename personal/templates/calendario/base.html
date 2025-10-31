@@ -1882,6 +1882,10 @@ function setupTaskDefinitionActions() {
             return;
           }
           taskDefinitionEditButtons.forEach(function (button) {
+            if (button.dataset.taskActionBound === 'true') {
+              return;
+            }
+            button.dataset.taskActionBound = 'true';
             button.addEventListener('click', function (event) {
               event.preventDefault();
               handleTaskDefinitionEdit(button);
@@ -1891,12 +1895,12 @@ function setupTaskDefinitionActions() {
 
         function highlightTaskDefinitionRow(taskId) {
           if (!taskId) {
-            return;
+            return false;
           }
           var selector = '[data-task-definition-row=\"' + String(taskId).trim() + '\"]';
           var row = document.querySelector(selector);
           if (!row) {
-            return;
+            return false;
           }
           row.classList.add('tm-task-row-highlight');
           window.setTimeout(function () {
@@ -1909,6 +1913,7 @@ function setupTaskDefinitionActions() {
           window.setTimeout(function () {
             row.classList.remove('tm-task-row-highlight');
           }, 3600);
+          return true;
         }
 
 function getCurrentTaskTypeValue() {
@@ -2862,8 +2867,10 @@ function getCurrentTaskTypeValue() {
           setupTaskDefinitionActions();
           var taskHighlightId = document.body ? document.body.getAttribute('data-task-highlight-id') : '';
           if (taskHighlightId) {
-            highlightTaskDefinitionRow(taskHighlightId);
-            document.body.setAttribute('data-task-highlight-id', '');
+            var highlightApplied = highlightTaskDefinitionRow(taskHighlightId);
+            if (highlightApplied) {
+              document.body.setAttribute('data-task-highlight-id', '');
+            }
             if (window.history && typeof window.history.replaceState === 'function') {
               try {
                 var url = new URL(window.location.href);

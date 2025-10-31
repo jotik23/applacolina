@@ -3,507 +3,429 @@
 {% block title %}Gestor de tareas{% endblock %}
 
 {% block content %}
-  <div class="space-y-10">
-    <section class="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-      <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div class="max-w-3xl space-y-3">
-          <span class="inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand">
-            Módulo de operaciones
-          </span>
-          <h1 class="text-3xl font-semibold text-slate-900 sm:text-4xl">Gestor integral de tareas</h1>
-          <p class="text-base text-slate-600">
-            Administra la definición, asignación y seguimiento de tareas operativas. Estandariza procesos, visualiza pendientes por granja y galpón, impulsa el cumplimiento diario y ofrece a los
-            operarios una bandeja clara de responsabilidades.
-          </p>
-          <div class="flex flex-wrap gap-3 pt-2">
-            <a href="#tm-definiciones" class="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">
-              Crear definición de tarea
-              <span aria-hidden="true">→</span>
-            </a>
-            <a href="#tm-asignaciones" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand hover:text-brand">
-              Planear asignaciones
-            </a>
-            <a href="#tm-operario" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand hover:text-brand">
-              Vista operario
-            </a>
-          </div>
-        </div>
-        <aside class="flex grow flex-col gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-6 text-sm text-slate-700">
-          <div class="flex items-center justify-between">
-            <span class="font-semibold text-slate-500">Definiciones activas</span>
-            <span class="text-xl font-bold text-slate-900" data-tm-placeholder="definitions-count">38</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="font-semibold text-slate-500">Tareas hoy</span>
-            <span class="text-xl font-bold text-slate-900" data-tm-placeholder="today-tasks">124</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="font-semibold text-slate-500">Cumplimiento semanal</span>
-            <span class="text-xl font-bold text-emerald-600" data-tm-placeholder="weekly-compliance">92%</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="font-semibold text-slate-500">Alertas de riesgo</span>
-            <span class="text-xl font-bold text-rose-600" data-tm-placeholder="risk-alerts">6</span>
-          </div>
-          <div class="rounded-lg border border-dashed border-brand/40 bg-brand/5 p-4 text-sm text-slate-600">
-            Visualiza las métricas clave del día y profundiza desde el tablero de seguimiento.
-          </div>
-        </aside>
-      </div>
-    </section>
+  <style>
+    [data-task-description] {
+      display: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
 
+    .tm-description-popover {
+      position: absolute;
+      z-index: 70;
+      display: none;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background-color: #fff;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18), 0 4px 12px rgba(15, 23, 42, 0.1);
+      padding: 1rem 1.25rem;
+      color: rgb(71, 85, 105);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      max-width: 90vw;
+      white-space: pre-wrap;
+      word-break: break-word;
+      transform-origin: top center;
+    }
+
+    .tm-description-popover::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: var(--tm-popover-arrow-left, 56px);
+      width: 12px;
+      height: 12px;
+      background: #fff;
+      border-left: 1px solid rgba(148, 163, 184, 0.35);
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
+      transform: rotate(45deg);
+      box-shadow: -2px -2px 6px rgba(15, 23, 42, 0.08);
+    }
+
+    .tm-description-popover p:not(:last-child) {
+      margin-bottom: 0.75rem;
+    }
+
+    .tm-description-popover[data-placement='top']::before {
+      top: auto;
+      bottom: -6px;
+      border-top: none;
+      border-left: none;
+      border-right: 1px solid rgba(148, 163, 184, 0.35);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 2px 2px 6px rgba(15, 23, 42, 0.08);
+    }
+
+    .tm-filter-picker {
+      position: relative;
+      width: 100%;
+    }
+
+    .tm-filter-picker[data-open='true'] {
+      z-index: 80;
+    }
+
+    .tm-filter-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background-color: rgba(255, 255, 255, 0.96);
+      padding: 0.65rem 0.95rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: rgb(71, 85, 105);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      transition: border-color 150ms ease, box-shadow 150ms ease, color 150ms ease;
+      cursor: pointer;
+    }
+
+    .tm-filter-trigger:hover,
+    .tm-filter-trigger[data-hover='true'] {
+      border-color: rgba(59, 130, 246, 0.45);
+      color: rgb(15, 23, 42);
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+    }
+
+    .tm-filter-trigger:focus-visible {
+      outline: none;
+      border-color: rgba(59, 130, 246, 0.55);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
+
+    .tm-filter-trigger-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.2rem;
+    }
+
+    .tm-filter-trigger-label {
+      color: inherit;
+      font-weight: 600;
+    }
+
+    .tm-filter-trigger-description {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(100, 116, 139, 0.75);
+    }
+
+    .tm-filter-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 0.55rem);
+      z-index: 60;
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background-color: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18), 0 6px 16px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(6px);
+      overflow: hidden;
+    }
+
+    .tm-filter-search {
+      padding: 0.55rem 0.85rem 0.4rem;
+      background-color: rgba(241, 245, 249, 0.65);
+      border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+    }
+
+    .tm-filter-search-field {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-radius: 0.85rem;
+      border: 1px solid rgba(203, 213, 225, 0.6);
+      background-color: #fff;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.8rem;
+      color: rgba(71, 85, 105, 0.9);
+    }
+
+    .tm-filter-search-field:focus-within {
+      border-color: rgba(59, 130, 246, 0.45);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+    }
+
+    .tm-filter-search-input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-size: 0.8rem;
+      color: inherit;
+    }
+
+    .tm-filter-options {
+      max-height: 18rem;
+      overflow-y: auto;
+      padding: 0.4rem 0.5rem 0.6rem;
+    }
+
+    .tm-filter-group {
+      padding: 0.45rem 0.35rem;
+    }
+
+    .tm-filter-group-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(100, 116, 139, 0.75);
+      padding: 0 0.7rem 0.35rem;
+    }
+
+    .tm-filter-options-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.25rem;
+    }
+
+    .tm-filter-option {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.15rem;
+      border: 0;
+      border-radius: 0.85rem;
+      padding: 0.55rem 0.85rem;
+      background: transparent;
+      color: rgb(71, 85, 105);
+      font-size: 0.9rem;
+      font-weight: 500;
+      text-align: left;
+      transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+      cursor: pointer;
+    }
+
+    .tm-filter-option:hover,
+    .tm-filter-option:focus-visible {
+      outline: none;
+      background-color: rgba(59, 130, 246, 0.08);
+      color: rgb(30, 64, 175);
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+    }
+
+    .tm-filter-option.is-selected {
+      background-color: rgba(59, 130, 246, 0.12);
+      color: rgb(30, 64, 175);
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.14);
+    }
+
+    .tm-filter-option-label {
+      font-weight: 600;
+    }
+
+    .tm-filter-option-description {
+      font-size: 0.75rem;
+      color: rgba(100, 116, 139, 0.75);
+    }
+
+    .tm-filter-empty {
+      padding: 0.9rem 1.1rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(148, 163, 184, 0.8);
+    }
+
+    .tm-filter-chevron-rotated {
+      transform: rotate(180deg);
+    }
+
+    @media (max-width: 640px) {
+      .tm-filter-panel {
+        max-width: min(100vw - 2rem, 22rem);
+      }
+    }
+  </style>
+  <div class="space-y-10">
     <section data-tm-tabs class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <nav class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
-        <button data-tm-tab="panel" class="tab-button rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Panel general</button>
-        <button data-tm-tab="definiciones" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Definiciones de tareas</button>
-        <button data-tm-tab="asignaciones" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Asignaciones diarias</button>
-        <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Seguimiento &amp; análisis</button>
-        <button data-tm-tab="operario" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Vista operario</button>
+        <button data-tm-tab="tareas" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Tareas</button>
+        <button data-tm-tab="asignaciones" class="tab-button rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="true">Asignaciones diarias</button>
+        <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Seguimiento &amp; análisis</button>
+        <button data-tm-tab="operario" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Vista operario</button>
       </nav>
 
       <div class="space-y-12">
-        <article data-tm-panel="panel" class="space-y-10">
-          <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr),24rem]">
-            <section class="space-y-6">
-              <header class="flex items-center justify-between">
-                <div>
-                  <h2 class="text-lg font-semibold text-slate-900">Estado general</h2>
-                  <p class="text-sm text-slate-500">Resumen de cumplimiento, incidencias y backlog por granja.</p>
-                </div>
-                <button type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand">
-                  Exportar reporte
-                </button>
-              </header>
-              <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-5">
-                  <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <span>Backlog crítico</span>
-                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">12%</span>
-                  </div>
-                  <p class="mt-2 text-2xl font-bold text-rose-600">18 tareas</p>
-                  <p class="mt-1 text-sm text-slate-600">Sin responsable asignado o con evidencia incompleta.</p>
-                </div>
-                <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-5">
-                  <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <span>Cumplimiento semanal</span>
-                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">+4 pp</span>
-                  </div>
-                  <p class="mt-2 text-2xl font-bold text-emerald-600">92%</p>
-                  <p class="mt-1 text-sm text-slate-600">En comparación con la semana anterior.</p>
-                </div>
-                <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-5 sm:col-span-2 xl:col-span-1">
-                  <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <span>Alertas de evidencias</span>
-                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Revisión</span>
-                  </div>
-                  <p class="mt-2 text-2xl font-bold text-amber-600">27 registros</p>
-                  <p class="mt-1 text-sm text-slate-600">Solicitan verificación ocular o requieren fotografía adicional.</p>
-                </div>
-                <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-5">
-                  <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <span>Tareas reactivadas</span>
-                    <span class="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">Pull de mejora</span>
-                  </div>
-                  <p class="mt-2 text-2xl font-bold text-blue-600">6 esta semana</p>
-                  <p class="mt-1 text-sm text-slate-600">Duplicadas con indicaciones adicionales desde seguimiento.</p>
-                </div>
+        <article id="tm-tareas" data-tm-panel="tareas" class="hidden space-y-10">
+          <section class="space-y-6">
+            <header class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900">Tareas</h2>
+                <p class="text-sm text-slate-500">Administra plantillas y reglas de recurrencia por posición o colaborador sugerido.</p>
+              </div>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+              >
+                Limpiar filtros
+              </button>
+            </header>
+            <form class="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white/80 p-5 text-sm text-slate-600 shadow-sm backdrop-blur">
+              <div class="flex flex-wrap items-start gap-5">
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</legend>
+                  {% with config=task_manager_status_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="status" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
+
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Categoría</legend>
+                  {% with config=task_manager_category_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="category" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
+
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Lugar</legend>
+                  {% with config=task_manager_scope_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="scope" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
+
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Tipo de planificación</legend>
+                  {% with config=task_manager_task_type_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="task_type" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
+
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Responsable sugerido</legend>
+                  {% with config=task_manager_responsible_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
+
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Creado en</legend>
+                  {% with config=task_manager_created_window_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="created_window" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
               </div>
 
-              <section class="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
-                <header class="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 class="text-base font-semibold text-slate-900">Agenda operativa</h3>
-                    <p class="text-sm text-slate-500">Visualiza los focos por franjas horarias y turnos.</p>
-                  </div>
-                  <div class="flex items-center gap-2 text-xs text-slate-500">
-                    <button type="button" class="rounded-full border border-slate-200 px-3 py-1 font-semibold hover:border-brand hover:text-brand">Hoy</button>
-                    <button type="button" class="rounded-full border border-slate-200 px-3 py-1 font-semibold hover:border-brand hover:text-brand">Semana</button>
-                    <button type="button" class="rounded-full border border-slate-200 px-3 py-1 font-semibold hover:border-brand hover:text-brand">Mes</button>
-                  </div>
-                </header>
-                <div class="mt-6 grid gap-4 md:grid-cols-2">
-                  <div class="rounded-lg border border-slate-100 bg-slate-50/60 p-4">
-                    <h4 class="text-sm font-semibold text-slate-800">Mañana · Turno A</h4>
-                    <ul class="mt-3 space-y-2 text-sm text-slate-600">
-                      <li class="flex items-start justify-between rounded-lg bg-white/90 p-3 leading-snug shadow-sm">
-                        <div>
-                          <p class="font-semibold text-slate-800">Aplicar protocolo de bioseguridad</p>
-                          <p class="text-xs text-slate-500">Granja El Guadual · Galpón 4</p>
-                        </div>
-                        <span class="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">Prioridad Alta</span>
-                      </li>
-                      <li class="flex items-start justify-between rounded-lg bg-white/90 p-3 leading-snug shadow-sm">
-                        <div>
-                          <p class="font-semibold text-slate-800">Verificar inventario de alimento</p>
-                          <p class="text-xs text-slate-500">Proceso general · Almacén</p>
-                        </div>
-                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Al día</span>
-                      </li>
-                    </ul>
-                  </div>
-                  <div class="rounded-lg border border-slate-100 bg-slate-50/60 p-4">
-                    <h4 class="text-sm font-semibold text-slate-800">Tarde · Turno B</h4>
-                    <ul class="mt-3 space-y-2 text-sm text-slate-600">
-                      <li class="flex items-start justify-between rounded-lg bg-white/90 p-3 leading-snug shadow-sm">
-                        <div>
-                          <p class="font-semibold text-slate-800">Limpieza profunda · Sala Incubación</p>
-                          <p class="text-xs text-slate-500">Granja Altamira · Salón 2</p>
-                        </div>
-                        <span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">Retraso</span>
-                      </li>
-                      <li class="flex items-start justify-between rounded-lg bg-white/90 p-3 leading-snug shadow-sm">
-                        <div>
-                          <p class="font-semibold text-slate-800">Reporte semanal de mortalidad</p>
-                          <p class="text-xs text-slate-500">Proceso general · Indicadores</p>
-                        </div>
-                        <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Requiere evidencia</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </section>
-            </section>
+              <div class="border-t border-dashed border-slate-200/70"></div>
 
-            <aside class="flex flex-col gap-5 rounded-xl border border-slate-100 bg-slate-50/40 p-5">
-              <header>
-                <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Alertas rápidas</h3>
-                <p class="mt-1 text-sm text-slate-500">Identifica dónde actuar antes de que impacte la operación.</p>
-              </header>
-              <ul class="space-y-4 text-sm text-slate-600">
-                <li class="rounded-lg border border-rose-200 bg-white/90 p-4 shadow-sm">
-                  <div class="flex items-center justify-between">
-                    <span class="font-semibold text-rose-600">3 tareas sin responsable</span>
-                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">Crítico</span>
-                  </div>
-                  <p class="mt-2 text-xs text-slate-500">Granja La Rivera · Bioseguridad</p>
-                  <button type="button" class="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-rose-600 hover:text-rose-700">
-                    Revisar y asignar
-                    <span aria-hidden="true">→</span>
-                  </button>
-                </li>
-                <li class="rounded-lg border border-amber-200 bg-white/90 p-4 shadow-sm">
-                  <div class="flex items-center justify-between">
-                    <span class="font-semibold text-amber-600">Evidencias pendientes</span>
-                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">12 casos</span>
-                  </div>
-                  <p class="mt-2 text-xs text-slate-500">Validación requerida antes de cierre semanal.</p>
-                  <button type="button" class="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-amber-600 hover:text-amber-700">
-                    Abrir bandeja de revisión
-                    <span aria-hidden="true">→</span>
-                  </button>
-                </li>
-                <li class="rounded-lg border border-emerald-200 bg-white/90 p-4 shadow-sm">
-                  <div class="flex items-center justify-between">
-                    <span class="font-semibold text-emerald-600">Sugerencias de operarios</span>
-                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">8 nuevas</span>
-                  </div>
-                  <p class="mt-2 text-xs text-slate-500">Agrega valor a la operación incorporando sus propuestas.</p>
-                  <button type="button" class="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700">
-                    Gestionar sugerencias
-                    <span aria-hidden="true">→</span>
-                  </button>
-                </li>
-              </ul>
-            </aside>
-          </div>
-        </article>
+              <div class="flex flex-wrap items-start gap-5">
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agrupar rápidamente</legend>
+                  {% with config=task_manager_group_primary_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="group_primary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
 
-        <article id="tm-definiciones" data-tm-panel="definiciones" class="hidden space-y-10">
-          <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
-            <aside class="w-full rounded-xl border border-slate-100 bg-slate-50/40 p-5 lg:max-w-xs">
-              <div class="flex items-center justify-between">
-                <h2 class="text-base font-semibold text-slate-900">Filtros rápidos</h2>
-                <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 hover:border-brand hover:text-brand">Limpiar</button>
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agrupación secundaria</legend>
+                  {% with config=task_manager_group_secondary_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="group_secondary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </fieldset>
+
+                <fieldset class="min-w-[220px] flex-1 space-y-3">
+                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agrupaciones sugeridas</legend>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                      data-group-preset="status-responsible"
+                    >
+                      Estado → Responsable
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                      data-group-preset="category-scope"
+                    >
+                      Categoría → Lugar
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                      data-group-preset="scope-task_type"
+                    >
+                      Lugar → Tipo de planificación
+                    </button>
+                  </div>
+                </fieldset>
               </div>
-              <form class="mt-5 space-y-5 text-sm text-slate-600">
-                <fieldset class="space-y-2">
-                  <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ámbito</legend>
-                  <label class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span>General</span>
-                    <input type="checkbox" name="scope_general" class="rounded border-slate-300 text-brand focus:ring-brand" checked />
-                  </label>
-                  <label class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span>Por granja</span>
-                    <input type="checkbox" name="scope_farm" class="rounded border-slate-300 text-brand focus:ring-brand" checked />
-                  </label>
-                  <label class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span>Por galpón</span>
-                    <input type="checkbox" name="scope_house" class="rounded border-slate-300 text-brand focus:ring-brand" />
-                  </label>
-                  <label class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span>Por salón</span>
-                    <input type="checkbox" name="scope_room" class="rounded border-slate-300 text-brand focus:ring-brand" />
-                  </label>
-                </fieldset>
+            </form>
 
-                <fieldset class="space-y-2">
-                  <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Categoría</legend>
-                  <select class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                    <option>Todas</option>
-                    <option>Bioseguridad</option>
-                    <option>Alimentación</option>
-                    <option>Mantenimiento</option>
-                    <option>Documentación</option>
-                  </select>
-                </fieldset>
-
-                <fieldset class="space-y-2">
-                  <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo</legend>
-                  <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <input type="radio" name="period" value="all" class="border-slate-300 text-brand focus:ring-brand" checked />
-                    <span>Todo</span>
-                  </label>
-                  <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <input type="radio" name="period" value="weekly" class="border-slate-300 text-brand focus:ring-brand" />
-                    <span>Semanal</span>
-                  </label>
-                  <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <input type="radio" name="period" value="monthly" class="border-slate-300 text-brand focus:ring-brand" />
-                    <span>Mensual</span>
-                  </label>
-                </fieldset>
-                <fieldset class="space-y-2">
-                  <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ordenar por</legend>
-                  <select class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                    <option>Prioridad (definida)</option>
-                    <option>Fecha de creación</option>
-                    <option>Más asignadas</option>
-                    <option>Menor cumplimiento</option>
-                  </select>
-                </fieldset>
-              </form>
-            </aside>
-
-            <section class="flex-1 space-y-6">
-              <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 class="text-lg font-semibold text-slate-900">Definiciones de tareas</h2>
-                  <p class="text-sm text-slate-500">Administra plantillas y reglas de recurrencia por posición o colaborador sugerido.</p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 hover:border-brand hover:text-brand">Acciones masivas</button>
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 hover:border-brand hover:text-brand">Duplicar</button>
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 hover:border-brand hover:text-brand">Descartar</button>
-                  <button
-                    type="button"
-                    class="rounded-full border border-brand bg-brand px-3 py-1 text-white hover:bg-brand-dark"
-                    data-task-create-open
-                  >
-                    Nueva definición
-                  </button>
-                </div>
-              </header>
-              <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <table class="min-w-full divide-y divide-slate-200 text-sm leading-6 sm:text-[0.95rem]">
+                  <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                     <tr>
-                      <th scope="col" class="px-4 py-3 text-left font-semibold">Definición</th>
-                      <th scope="col" class="px-4 py-3 text-left font-semibold">Ámbito</th>
-                      <th scope="col" class="px-4 py-3 text-left font-semibold">Programación</th>
-                      <th scope="col" class="px-4 py-3 text-left font-semibold">Responsable sugerido</th>
-                      <th scope="col" class="px-4 py-3 text-left font-semibold">Controles</th>
+                      <th scope="col" class="px-5 py-4 text-left">Tarea</th>
+                      <th scope="col" class="px-5 py-4 text-left">Lugar</th>
+                      <th scope="col" class="px-5 py-4 text-left">Programación</th>
+                      <th scope="col" class="px-5 py-4 text-left">Responsable sugerido</th>
+                      <th scope="col" class="px-5 py-4 text-left">Controles</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-slate-100 text-slate-700">
-                    {% for row in task_definition_rows %}
-                      <tr
-                        id="task-definition-{{ row.id }}"
-                        data-task-definition-row="{{ row.id }}"
-                        class="align-top transition hover:bg-slate-50/70 {% if row.is_one_time %}bg-rose-50/70 hover:bg-rose-100{% else %}odd:bg-slate-50/40 even:bg-white{% endif %}"
-                      >
-                        <td class="px-4 py-4 align-top">
-                          <div class="flex flex-col gap-2">
-                            <div class="flex items-start justify-between gap-3">
-                              <div>
-                                <p class="text-sm font-semibold text-slate-900">{{ row.name }}</p>
-                                {% if row.description %}
-                                  <p class="mt-1 text-xs text-slate-500">{{ row.description }}</p>
-                                {% endif %}
-                              </div>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-1.5 text-xs">
-                              <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-semibold {% if row.status_is_active %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-100 text-slate-500{% endif %}">
-                                <span class="h-1.5 w-1.5 rounded-full {% if row.status_is_active %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
-                                {{ row.status_label }}
-                              </span>
-                              <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 font-semibold text-slate-600">
-                                {{ row.category_label }}
-                              </span>
-                              <span class="text-xs font-medium text-slate-400">Creada {{ row.created_on_display }}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td class="px-4 py-4 align-top">
-                          <div class="flex flex-col gap-1.5 text-xs text-slate-600">
-                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold {% if row.scope_level == 'general' %}border border-slate-200 bg-slate-50 text-slate-600{% elif row.scope_level == 'farm' %}border border-emerald-200 bg-emerald-50 text-emerald-700{% elif row.scope_level == 'house' %}border border-sky-200 bg-sky-50 text-sky-700{% else %}border border-purple-200 bg-purple-50 text-purple-700{% endif %}">
-                              {{ row.scope_badge_label }}
-                            </span>
-                            <p class="leading-relaxed text-slate-600">{{ row.scope_label }}</p>
-                          </div>
-                        </td>
-                        <td class="px-4 py-4 align-top text-xs text-slate-600" title="{{ row.schedule_summary }}">
-                          <div class="flex flex-col gap-1.5">
-                            <span class="text-xs font-semibold text-slate-800">{{ row.task_type_label }}</span>
-                            <span class="text-xs {% if row.is_one_time %}text-rose-600{% else %}text-slate-500{% endif %}">
-                              {{ row.schedule_detail }}
-                            </span>
-                          </div>
-                        </td>
-                        <td class="px-4 py-4 align-top">
-                          <div class="space-y-1 text-xs text-slate-600">
-                            <p class="font-semibold text-slate-900">{{ row.responsible_main }}</p>
-                            {% if row.responsible_secondary %}
-                              <p class="text-slate-500">{{ row.responsible_secondary }}</p>
-                            {% endif %}
-                          </div>
-                        </td>
-                        <td class="px-4 py-4 align-top">
-                          <div class="flex flex-col gap-3 text-xs text-slate-600">
-                            <div class="flex flex-wrap items-center gap-2">
-                              <span class="inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 font-semibold {% if row.has_evidence_requirement %}border border-amber-200 bg-amber-50 text-amber-600{% else %}border border-slate-200 bg-slate-50 text-slate-500{% endif %}">
-                                <span class="h-1.5 w-1.5 rounded-full {% if row.has_evidence_requirement %}bg-amber-400{% else %}bg-slate-400{% endif %}"></span>
-                                {{ row.evidence_label }}
-                              </span>
-                              {% if row.requires_record_format %}
-                                <span class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-semibold text-blue-600">
-                                  <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
-                                  {{ row.record_label }}
-                                </span>
-                              {% else %}
-                                <span class="text-slate-400">{{ row.record_label }}</span>
-                              {% endif %}
-                            </div>
-                            <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3 text-xs font-semibold">
-                              <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-brand hover:text-brand"
-                                data-task-action="edit"
-                                data-task-definition-id="{{ row.id }}"
-                                data-task-definition-detail-url="{{ row.detail_url }}"
-                                data-task-definition-update-url="{{ row.update_url }}"
-                                data-task-definition-name="{{ row.name|escape }}"
-                              >
-                                Editar
-                              </button>
-                              <form method="post" action="{% url 'task_manager:definition-delete' row.id %}" class="contents" data-confirmation>
-                                {% csrf_token %}
-                                <button
-                                  type="submit"
-                                  class="inline-flex items-center gap-1.5 rounded-full border border-rose-200 px-2.5 py-1 text-rose-600 transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
-                                  data-confirmation-trigger
-                                >
-                                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M8.75 3a2 2 0 00-1.997 1.85l-.143 1.287H5a.75.75 0 000 1.5h.56l.69 7.416A2.25 2.25 0 008.491 17h3.018a2.25 2.25 0 002.24-1.947L14.44 7.637H15a.75.75 0 000-1.5h-1.61l-.143-1.287A2 2 0 0011.25 3h-2.5zm-.248 1.35a.5.5 0 01.498-.45h2.5a.5.5 0 01.499.45l.112 1.012H8.39l.112-1.012zm-.74 2.512a.75.75 0 011.496.076l-.257 5.318a.75.75 0 11-1.498-.075l.259-5.319zm4.477.076a.75.75 0 10-1.497.076l.26 5.318a.75.75 0 101.496-.075l-.259-5.319z" clip-rule="evenodd" />
-                                  </svg>
-                                  <span class="hidden sm:inline">Eliminar</span>
-                                  <span class="sr-only sm:hidden">Eliminar {{ row.name }}</span>
-                                </button>
-                                <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
-                                  <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
-                                    <p class="font-semibold text-slate-900">¿Eliminar esta definición de tarea?</p>
-                                    <p class="mt-1 text-xs text-slate-500">
-                                      "{{ row.name }}" se eliminará y no estará disponible para nuevas asignaciones.
-                                    </p>
-                                    <div class="mt-3 flex justify-end gap-2">
-                                      <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
-                                      <button type="button" class="inline-flex items-center rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-1" data-confirmation-confirm>Eliminar</button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </form>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    {% empty %}
-                      <tr>
+                  <tbody
+                    class="divide-y divide-slate-100 text-slate-700"
+                    data-task-definition-list
+                    data-fetch-url="{% url 'task_manager:definition-rows' %}"
+                    data-querystring="{{ task_definition_querystring }}"
+                    data-current-page="{{ task_definition_page_obj.number }}"
+                    data-next-page="{% if task_definition_page_obj.has_next %}{{ task_definition_page_obj.next_page_number }}{% endif %}"
+                    data-has-next="{{ task_definition_page_obj.has_next|yesno:'true,false' }}"
+                    data-total-count="{{ task_definition_total_count }}"
+                    data-start-index="{{ task_definition_page_start }}"
+                    data-end-index="{{ task_definition_page_end }}"
+                    data-page-size="{{ task_definition_paginator.per_page }}"
+                  >
+                    {% if task_definition_rows %}
+                      {% include "task_manager/includes/task_definition_rows.html" with rows=task_definition_rows %}
+                    {% else %}
+                      <tr data-task-definition-empty>
                         <td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">
-                          Aún no has creado definiciones de tareas. Usa el botón “Nueva definición” para comenzar.
+                          Aún no has creado tareas.
                         </td>
                       </tr>
-                    {% endfor %}
+                    {% endif %}
                   </tbody>
                 </table>
+                <div class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/80 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:text-sm">
+                  <p
+                    data-task-definition-summary
+                    data-total-count="{{ task_definition_total_count }}"
+                    data-summary-start="{{ task_definition_page_start }}"
+                    data-summary-end="{{ task_definition_page_end }}"
+                  >
+                    {% if task_definition_total_count %}
+                      Mostrando <span data-task-summary-start>{{ task_definition_page_start }}</span>&ndash;<span data-task-summary-end>{{ task_definition_page_end }}</span> de <span data-task-summary-total>{{ task_definition_total_count }}</span> tareas.
+                    {% else %}
+                      No hay tareas para mostrar.
+                    {% endif %}
+                  </p>
+                  <span class="hidden items-center gap-2 text-xs font-semibold text-slate-500 sm:inline-flex" data-task-definition-loader>
+                    <svg class="h-4 w-4 animate-spin text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle class="opacity-25" cx="12" cy="12" r="10"></circle>
+                      <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke-linecap="round"></path>
+                    </svg>
+                    Cargando más tareas…
+                  </span>
+                </div>
+                <div data-task-definition-sentinel class="h-1 w-full"></div>
               </div>
             </section>
           </div>
-
-          <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 class="text-base font-semibold text-slate-900">Plantillas destacadas</h3>
-                <p class="text-sm text-slate-500">Inspírate con configuraciones listas para adaptar según tu operación.</p>
-              </div>
-              <div class="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                <span>Curaduría semanal</span>
-              </div>
-            </header>
-            <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <header class="flex items-start justify-between">
-                  <div>
-                    <h4 class="text-sm font-semibold text-slate-900">Checklist de apertura</h4>
-                    <p class="text-xs text-slate-500">Se ejecuta al inicio de cada turno para verificar condiciones.</p>
-                  </div>
-                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">96% cumplimiento</span>
-                </header>
-                <ul class="mt-3 space-y-1 text-xs text-slate-500">
-                  <li>Turno diurno · Auxiliar Operativo</li>
-                  <li>Sin evidencia fotográfica obligatoria</li>
-                  <li>Recurrencia diaria · Prioridad media</li>
-                </ul>
-                <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-slate-600 hover:border-brand hover:text-brand">Ver detalles</button>
-                  <button type="button" class="rounded-full border border-brand bg-brand px-3 py-1 text-white hover:bg-brand-dark">Usar como base</button>
-                </div>
-              </article>
-              <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <header class="flex items-start justify-between">
-                  <div>
-                    <h4 class="text-sm font-semibold text-slate-900">Control fitosanitario semanal</h4>
-                    <p class="text-xs text-slate-500">Integra monitoreo con captura obligatoria de evidencia.</p>
-                  </div>
-                  <span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">Bajo cumplimiento</span>
-                </header>
-                <ul class="mt-3 space-y-1 text-xs text-slate-500">
-                  <li>Granja Altamira · Galpón 2</li>
-                  <li>Requiere foto y nota de cierre</li>
-                  <li>Recurrencia semanal · Prioridad alta</li>
-                </ul>
-                <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-slate-600 hover:border-brand hover:text-brand">Reasignar</button>
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-slate-600 hover:border-brand hover:text-brand">Ver historial</button>
-                </div>
-              </article>
-              <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <header class="flex items-start justify-between">
-                  <div>
-                    <h4 class="text-sm font-semibold text-slate-900">Bioseguridad avanzada</h4>
-                    <p class="text-xs text-slate-500">Secuencia de tareas con rotación día/noche y descansos programados.</p>
-                  </div>
-                  <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">En piloto</span>
-                </header>
-                <ul class="mt-3 space-y-1 text-xs text-slate-500">
-                  <li>Turnos mixtos · Supervisor Bioseguridad</li>
-                  <li>Incluye descansos automáticos en racha</li>
-                  <li>Recurrencia semanal · Prioridad alta</li>
-                </ul>
-                <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-slate-600 hover:border-brand hover:text-brand">Analizar reglas</button>
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-slate-600 hover:border-brand hover:text-brand">Compartir</button>
-                </div>
-              </article>
-            </div>
-            <div class="mt-6 rounded-lg border border-dashed border-slate-300 bg-white/80 p-4 text-xs text-slate-500">
-              <p class="font-semibold text-slate-600">Recordatorio:</p>
-              <p class="mt-1">
-                Las reglas de recurrencia deben validar solapamientos con otros calendarios operativos. El sistema sugerirá reasignaciones cuando detecte conflicto de fechas o posiciones inactivas.
-              </p>
-            </div>
-          </section>
         </article>
 
-        <article id="tm-asignaciones" data-tm-panel="asignaciones" class="hidden space-y-8">
+        <article id="tm-asignaciones" data-tm-panel="asignaciones" class="space-y-8">
           <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-lg font-semibold text-slate-900">Planificador de asignaciones</h2>
@@ -524,24 +446,24 @@
                   <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semana</span>
                   <input type="date" class="rounded border border-slate-200 px-2 py-1 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" value="2025-11-03" />
                 </label>
-                <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                  <option>Todas las granjas</option>
-                  <option>El Guadual</option>
-                  <option>La Rivera</option>
-                  <option>Altamira</option>
-                </select>
-                <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                  <option>Todos los galpones</option>
-                  <option>Galpón 1</option>
-                  <option>Galpón 2</option>
-                  <option>Galpón 3</option>
-                </select>
-                <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                  <option>Todos los estados</option>
-                  <option>Asignadas</option>
-                  <option>Sin responsable</option>
-                  <option>Con observaciones</option>
-                </select>
+                <div class="min-w-[220px]">
+                  <span class="mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-400">Granja</span>
+                  {% with config=task_manager_assignment_farm_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="assignment_farm" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </div>
+                <div class="min-w-[220px]">
+                  <span class="mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-400">Galpón</span>
+                  {% with config=task_manager_assignment_house_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="assignment_house" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </div>
+                <div class="min-w-[220px]">
+                  <span class="mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</span>
+                  {% with config=task_manager_assignment_state_filter %}
+                    {% include "task_manager/includes/filter_picker.html" with name="assignment_state" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                  {% endwith %}
+                </div>
               </div>
               <div class="flex items-center gap-2 text-xs text-slate-500">
                 <button type="button" class="rounded-full border border-slate-200 px-3 py-1 font-semibold hover:border-brand hover:text-brand">Turno diurno</button>
@@ -838,14 +760,14 @@
                   <p class="text-3xl font-bold text-slate-900">78% en curso</p>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-slate-500">
-                  <label class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
+                  <div class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
                     <span>Periodo</span>
-                    <select class="rounded border border-slate-200 bg-transparent px-2 py-1 text-xs focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                      <option>Semana actual</option>
-                      <option>Mes actual</option>
-                      <option>Últimos 90 días</option>
-                    </select>
-                  </label>
+                    <div class="min-w-[180px]">
+                      {% with config=task_manager_followup_period_filter %}
+                        {% include "task_manager/includes/filter_picker.html" with name="followup_period" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                      {% endwith %}
+                    </div>
+                  </div>
                 </div>
               </header>
 
@@ -1052,14 +974,14 @@
                   <p class="text-sm text-slate-500">Resalta tareas recurrentes, únicas por vencer y aquellas vencidas.</p>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-slate-500">
-                  <label class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
+                  <div class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
                     Vista
-                    <select class="rounded border border-slate-200 bg-transparent px-2 py-1 text-xs focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                      <option>Prioridad</option>
-                      <option>Horario</option>
-                      <option>Estado</option>
-                    </select>
-                  </label>
+                    <div class="min-w-[160px]">
+                      {% with config=task_manager_today_view_filter %}
+                        {% include "task_manager/includes/filter_picker.html" with name="today_view" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled %}
+                      {% endwith %}
+                    </div>
+                  </div>
                   <button type="button" class="rounded-full border border-slate-200 px-3 py-1 font-semibold hover:border-brand hover:text-brand">Histórico</button>
                   <button type="button" class="rounded-full bg-brand px-3 py-1 text-sm font-semibold text-white hover:bg-brand-dark">Reportar nueva tarea</button>
                 </div>
@@ -1338,6 +1260,752 @@
   </style>
 
   <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var initializeFilterPickers = function () {
+        var pickers = Array.prototype.slice.call(document.querySelectorAll('[data-filter-picker]'));
+        if (!pickers.length) {
+          return;
+        }
+
+        var activePicker = null;
+        var panelRegistry = new WeakMap();
+        var panelOrigins = new WeakMap();
+
+        var getPanel = function (picker) {
+          return panelRegistry.get(picker) || null;
+        };
+
+        var storePanelOrigin = function (panel) {
+          if (!panel || panelOrigins.has(panel)) {
+            return;
+          }
+          panelOrigins.set(panel, {
+            parent: panel.parentNode,
+            nextSibling: panel.nextSibling,
+          });
+        };
+
+        var restorePanelOrigin = function (panel) {
+          if (!panel) {
+            return;
+          }
+          var origin = panelOrigins.get(panel);
+          if (origin && origin.parent) {
+            if (panel.parentNode !== origin.parent) {
+              if (origin.nextSibling && origin.nextSibling.parentNode === origin.parent) {
+                origin.parent.insertBefore(panel, origin.nextSibling);
+              } else {
+                origin.parent.appendChild(panel);
+              }
+            }
+          }
+          panel.style.position = '';
+          panel.style.left = '';
+          panel.style.top = '';
+          panel.style.width = '';
+          panel.style.maxHeight = '';
+          panel.style.zIndex = '';
+        };
+
+        var positionPanel = function (picker) {
+          var panel = getPanel(picker);
+          var trigger = picker.querySelector('[data-filter-trigger]');
+          if (!panel || !trigger) {
+            return;
+          }
+          storePanelOrigin(panel);
+          if (panel.parentNode !== document.body) {
+            document.body.appendChild(panel);
+          }
+          panel.style.maxHeight = '';
+          var rect = trigger.getBoundingClientRect();
+          var viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+          var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+          var gap = 8;
+          var left = rect.left;
+          if (left + rect.width > viewportWidth - 16) {
+            left = Math.max(16, viewportWidth - rect.width - 16);
+          }
+          panel.style.position = 'fixed';
+          panel.style.width = rect.width + 'px';
+          panel.style.left = left + 'px';
+          var panelHeight = panel.offsetHeight || 0;
+          var top = rect.bottom + gap;
+          if (panelHeight && top + panelHeight > viewportHeight - 16) {
+            var altTop = rect.top - gap - panelHeight;
+            if (altTop >= 16) {
+              top = altTop;
+            } else {
+              top = Math.max(16, top);
+            }
+          }
+          panel.style.top = top + 'px';
+          var availableHeight = viewportHeight - top - 16;
+          if (availableHeight > 0) {
+            panel.style.maxHeight = availableHeight + 'px';
+          }
+          panel.style.zIndex = '1200';
+        };
+
+        var closePicker = function (picker, options) {
+          if (!picker) {
+            return;
+          }
+          var panel = getPanel(picker);
+          var trigger = picker.querySelector('[data-filter-trigger]');
+          var chevron = picker.querySelector('[data-filter-chevron]');
+          if (panel) {
+            panel.classList.add('hidden');
+            restorePanelOrigin(panel);
+          }
+          picker.setAttribute('data-open', 'false');
+          if (trigger) {
+            trigger.setAttribute('aria-expanded', 'false');
+          }
+          if (chevron) {
+            chevron.classList.remove('tm-filter-chevron-rotated');
+          }
+          if (options && options.focusTrigger && trigger) {
+            trigger.focus();
+          }
+          if (activePicker === picker) {
+            activePicker = null;
+          }
+        };
+
+        var filterOptions = function (picker, term) {
+          var panel = getPanel(picker);
+          if (!panel) {
+            return;
+          }
+          var normalized = (term || '').trim().toLowerCase();
+          var groups = Array.prototype.slice.call(panel.querySelectorAll('[data-filter-group]'));
+          var hasVisible = false;
+
+          groups.forEach(function (group) {
+            var groupVisible = false;
+            var buttons = Array.prototype.slice.call(group.querySelectorAll('[data-filter-option]'));
+            buttons.forEach(function (button) {
+              var wrapper = button.parentElement;
+              if (!wrapper) {
+                return;
+              }
+              var searchable = (button.getAttribute('data-search-text') || '').toLowerCase();
+              var match = !normalized || searchable.indexOf(normalized) !== -1;
+              wrapper.classList.toggle('hidden', !match);
+              if (match) {
+                groupVisible = true;
+                hasVisible = true;
+              }
+            });
+            group.classList.toggle('hidden', !groupVisible);
+          });
+
+          var emptyState = panel.querySelector('[data-filter-empty]');
+          if (emptyState) {
+            emptyState.classList.toggle('hidden', hasVisible);
+          }
+        };
+
+        var highlightOption = function (picker, optionButton) {
+          var panel = getPanel(picker);
+          var root = panel || picker;
+          var buttons = Array.prototype.slice.call(root.querySelectorAll('[data-filter-option]'));
+          buttons.forEach(function (button) {
+            if (button === optionButton) {
+              button.classList.add('is-selected');
+              button.setAttribute('aria-selected', 'true');
+            } else {
+              button.classList.remove('is-selected');
+              button.setAttribute('aria-selected', 'false');
+            }
+          });
+        };
+
+        var applySelection = function (picker, optionButton, silent) {
+          if (!optionButton) {
+            return;
+          }
+          var hidden = picker.querySelector('[data-filter-value]');
+          var labelEl = picker.querySelector('[data-filter-current-label]');
+          var descriptionEl = picker.querySelector('[data-filter-current-description]');
+          var value = optionButton.getAttribute('data-value') || '';
+          var label = optionButton.getAttribute('data-label') || optionButton.textContent.trim();
+          var description = optionButton.getAttribute('data-description') || '';
+
+          if (hidden) {
+            hidden.value = value;
+          }
+          if (labelEl) {
+            labelEl.textContent = label;
+          }
+          if (descriptionEl) {
+            if (description) {
+              descriptionEl.textContent = description;
+              descriptionEl.classList.remove('hidden');
+            } else {
+              descriptionEl.textContent = '';
+              descriptionEl.classList.add('hidden');
+            }
+          }
+
+          highlightOption(picker, optionButton);
+          picker.setAttribute('data-selected-value', value);
+          picker.setAttribute('data-selected-label', label);
+
+          if (!silent) {
+            closePicker(picker, { focusTrigger: true });
+          }
+        };
+
+        var openPicker = function (picker) {
+          if (activePicker && activePicker !== picker) {
+            closePicker(activePicker);
+          }
+          var panel = getPanel(picker);
+          var trigger = picker.querySelector('[data-filter-trigger]');
+          var chevron = picker.querySelector('[data-filter-chevron]');
+          var searchInput = panel ? panel.querySelector('[data-filter-search]') : null;
+
+          if (panel) {
+            panel.classList.remove('hidden');
+            positionPanel(picker);
+          }
+          picker.setAttribute('data-open', 'true');
+          if (trigger) {
+            trigger.setAttribute('aria-expanded', 'true');
+          }
+          if (chevron) {
+            chevron.classList.add('tm-filter-chevron-rotated');
+          }
+
+          if (searchInput) {
+            searchInput.value = '';
+            filterOptions(picker, '');
+            window.requestAnimationFrame(function () {
+              searchInput.focus();
+            });
+          } else {
+            filterOptions(picker, '');
+            var selected = panel ? panel.querySelector('[data-filter-option].is-selected') : null;
+            if (selected && selected.scrollIntoView) {
+              selected.scrollIntoView({ block: 'nearest' });
+            }
+          }
+
+          activePicker = picker;
+        };
+
+        pickers.forEach(function (picker, index) {
+          if (!picker.id) {
+            picker.id = 'tm-filter-picker-' + index;
+          }
+          var trigger = picker.querySelector('[data-filter-trigger]');
+          var panel = picker.querySelector('[data-filter-panel]');
+          if (panel) {
+            panelRegistry.set(picker, panel);
+            storePanelOrigin(panel);
+          }
+          var searchInput = panel ? panel.querySelector('[data-filter-search]') : null;
+          var optionButtons = Array.prototype.slice.call((panel || picker).querySelectorAll('[data-filter-option]'));
+          var defaultValue = picker.getAttribute('data-filter-default-value') || '';
+          var initialButton =
+            optionButtons.find(function (button) {
+              return button.getAttribute('data-value') === defaultValue;
+            }) ||
+            optionButtons.find(function (button) {
+              return button.classList.contains('is-selected');
+            }) ||
+            optionButtons[0];
+
+          if (initialButton) {
+            applySelection(picker, initialButton, true);
+          }
+
+          if (trigger) {
+            trigger.addEventListener('click', function (event) {
+              event.preventDefault();
+              var isOpen = picker.getAttribute('data-open') === 'true';
+              if (isOpen) {
+                closePicker(picker);
+              } else {
+                openPicker(picker);
+              }
+            });
+          }
+
+          if (panel) {
+            panel.addEventListener('click', function (event) {
+              event.stopPropagation();
+            });
+          }
+
+          optionButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+              event.preventDefault();
+              applySelection(picker, button, false);
+            });
+          });
+
+          if (searchInput) {
+            searchInput.addEventListener('input', function () {
+              filterOptions(picker, searchInput.value);
+            });
+          }
+        });
+
+        document.addEventListener('click', function (event) {
+          if (!activePicker) {
+            return;
+          }
+          if (activePicker.contains(event.target)) {
+            return;
+          }
+          var activePanel = getPanel(activePicker);
+          if (activePanel && activePanel.contains(event.target)) {
+            return;
+          }
+          closePicker(activePicker);
+        });
+
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && activePicker) {
+            closePicker(activePicker, { focusTrigger: true });
+          }
+        });
+
+        window.addEventListener(
+          'scroll',
+          function (event) {
+            if (!activePicker) {
+              return;
+            }
+            var panel = getPanel(activePicker);
+            if (panel && event && event.target && panel.contains(event.target)) {
+              return;
+            }
+            closePicker(activePicker);
+          },
+          true
+        );
+
+        window.addEventListener('resize', function () {
+          if (activePicker) {
+            positionPanel(activePicker);
+          }
+        });
+      };
+
+      initializeFilterPickers();
+      var popover = document.createElement('div');
+      popover.setAttribute('data-task-description-popover', '');
+      popover.setAttribute('role', 'tooltip');
+      popover.className = 'tm-description-popover';
+      document.body.appendChild(popover);
+
+      var activeToggle = null;
+      var activeDesc = null;
+      var activeIcon = null;
+
+      var closePopover = function () {
+        if (activeDesc) {
+          activeDesc.setAttribute('data-state', 'collapsed');
+        }
+        if (activeToggle) {
+          activeToggle.setAttribute('aria-expanded', 'false');
+        }
+        if (activeIcon) {
+          activeIcon.classList.remove('rotate-180');
+        }
+        popover.style.display = 'none';
+        popover.style.visibility = '';
+        popover.innerHTML = '';
+        activeToggle = null;
+        activeDesc = null;
+        activeIcon = null;
+      };
+
+      window.addEventListener(
+        'scroll',
+        function () {
+          if (popover.style.display === 'block') {
+            closePopover();
+          }
+        },
+        true
+      );
+
+      window.addEventListener('resize', function () {
+        if (popover.style.display === 'block') {
+          closePopover();
+        }
+      });
+
+      var initializeTaskDescriptionToggles = function (root) {
+        var scope = root || document;
+        var descriptions = scope.querySelectorAll('[data-task-description]');
+        descriptions.forEach(function (desc) {
+          if (desc.getAttribute('data-description-bound') === 'true') {
+            return;
+          }
+          var toggleSelector = '[data-task-description-toggle][data-target="' + desc.id + '"]';
+          var toggle = (scope === document ? document : scope).querySelector(toggleSelector);
+          if (!toggle) {
+            toggle = document.querySelector(toggleSelector);
+          }
+          if (!toggle) {
+            return;
+          }
+          if (!desc.textContent || !desc.textContent.trim()) {
+            return;
+          }
+          var toggleText = toggle.querySelector('[data-toggle-text]');
+          var toggleIcon = toggle.querySelector('[data-toggle-icon]');
+          var row = toggle.closest('tr');
+
+          toggle.classList.remove('hidden');
+          toggle.setAttribute('aria-expanded', 'false');
+          if (toggleText) {
+            toggleText.textContent = 'Descripción';
+          }
+          desc.setAttribute('data-state', 'collapsed');
+          desc.setAttribute('data-description-bound', 'true');
+
+          var showPopover = function () {
+            if (activeToggle === toggle) {
+              return;
+            }
+            closePopover();
+            activeToggle = toggle;
+            activeDesc = desc;
+            activeIcon = toggleIcon;
+            toggle.setAttribute('aria-expanded', 'true');
+            desc.setAttribute('data-state', 'expanded');
+            if (toggleIcon) {
+              toggleIcon.classList.add('rotate-180');
+            }
+
+            popover.innerHTML = desc.innerHTML;
+            popover.style.display = 'block';
+            popover.style.visibility = 'hidden';
+            popover.style.width = '';
+            popover.style.setProperty('--tm-popover-arrow-left', '56px');
+            popover.setAttribute('data-placement', 'bottom');
+
+            var referenceRect = row ? row.getBoundingClientRect() : toggle.getBoundingClientRect();
+            var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+            var scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+            var viewportWidth = document.documentElement.clientWidth;
+            var maxWidth = Math.min(referenceRect.width, viewportWidth - 32);
+            popover.style.width = maxWidth + 'px';
+
+            var left = referenceRect.left + scrollX;
+            var viewportLeft = scrollX + 16;
+            if (left < viewportLeft) {
+              left = viewportLeft;
+            }
+            var rightBoundary = scrollX + viewportWidth - 16;
+            if (left + maxWidth > rightBoundary) {
+              left = Math.max(viewportLeft, rightBoundary - maxWidth);
+            }
+            popover.style.left = left + 'px';
+
+            var top = referenceRect.bottom + scrollY + 6;
+            popover.style.top = top + 'px';
+            popover.style.visibility = 'visible';
+
+            var popRect = popover.getBoundingClientRect();
+            if (popRect.bottom > window.innerHeight - 16) {
+              var alternateTop = referenceRect.top + scrollY - popRect.height - 12;
+              if (alternateTop > scrollY + 16) {
+                popover.style.top = alternateTop + 'px';
+                popover.setAttribute('data-placement', 'top');
+              }
+            }
+            popRect = popover.getBoundingClientRect();
+            var toggleRect = toggle.getBoundingClientRect();
+            var arrowLeft = toggleRect.left + toggleRect.width / 2 - popRect.left;
+            arrowLeft = Math.max(12, Math.min(popRect.width - 24, arrowLeft));
+            popover.style.setProperty('--tm-popover-arrow-left', arrowLeft + 'px');
+          };
+
+          toggle.addEventListener('click', function (event) {
+            event.preventDefault();
+            if (activeToggle === toggle && popover.style.display === 'block') {
+              closePopover();
+            } else {
+              showPopover();
+            }
+          });
+
+          toggle.addEventListener('blur', function () {
+            if (activeToggle === toggle) {
+              closePopover();
+            }
+          });
+        });
+      };
+
+      initializeTaskDescriptionToggles(document);
+      window.tmInitializeTaskDescriptions = initializeTaskDescriptionToggles;
+
+      var setupTaskDefinitionAutoload = function () {
+        var list = document.querySelector('[data-task-definition-list]');
+        var sentinel = document.querySelector('[data-task-definition-sentinel]');
+        if (!list || !sentinel) {
+          return;
+        }
+        var fetchUrl = list.getAttribute('data-fetch-url');
+        if (!fetchUrl) {
+          return;
+        }
+
+        var loader = document.querySelector('[data-task-definition-loader]');
+        var summary = document.querySelector('[data-task-definition-summary]');
+        var summaryStart = summary ? summary.querySelector('[data-task-summary-start]') : null;
+        var summaryEnd = summary ? summary.querySelector('[data-task-summary-end]') : null;
+        var summaryTotal = summary ? summary.querySelector('[data-task-summary-total]') : null;
+
+        var baseQuery = list.getAttribute('data-querystring') || '';
+        if (baseQuery && baseQuery.charAt(0) === '?') {
+          baseQuery = baseQuery.slice(1);
+        }
+
+        var parseIntAttr = function (element, attribute) {
+          if (!element) {
+            return 0;
+          }
+          var raw = element.getAttribute(attribute);
+          if (!raw) {
+            return 0;
+          }
+          var value = parseInt(raw, 10);
+          return Number.isNaN(value) ? 0 : value;
+        };
+
+        var toggleLoader = function (show) {
+          if (!loader) {
+            return;
+          }
+          if (show) {
+            loader.classList.remove('hidden');
+          } else {
+            loader.classList.add('hidden');
+          }
+        };
+
+        var hasNext = list.getAttribute('data-has-next') === 'true';
+        var nextPage = parseIntAttr(list, 'data-next-page');
+        var currentPage = parseIntAttr(list, 'data-current-page') || 1;
+        if (!nextPage && hasNext) {
+          nextPage = currentPage + 1;
+        }
+        var isLoading = false;
+
+        var updateSummary = function (payload) {
+          if (!summary) {
+            return;
+          }
+          var total = typeof payload.count === 'number' ? payload.count : parseIntAttr(summary, 'data-total-count');
+          var startIndex = parseIntAttr(summary, 'data-summary-start');
+          var endIndex = parseIntAttr(summary, 'data-summary-end');
+
+          if (typeof payload.start_index === 'number' && payload.start_index > 0) {
+            if (!startIndex || payload.start_index < startIndex) {
+              startIndex = payload.start_index;
+            }
+          }
+
+          if (typeof payload.end_index === 'number' && payload.end_index > 0) {
+            if (!endIndex || payload.end_index > endIndex) {
+              endIndex = payload.end_index;
+            }
+          }
+
+          summary.setAttribute('data-total-count', String(total));
+          summary.setAttribute('data-summary-start', String(startIndex || 0));
+          summary.setAttribute('data-summary-end', String(endIndex || 0));
+
+          if (summaryStart) {
+            summaryStart.textContent = startIndex ? String(startIndex) : '0';
+          }
+          if (summaryEnd) {
+            summaryEnd.textContent = endIndex ? String(endIndex) : '0';
+          }
+          if (summaryTotal) {
+            summaryTotal.textContent = String(total || 0);
+          }
+        };
+
+        var refreshHighlight = function () {
+          if (typeof highlightTaskDefinitionRow !== 'function' || !document.body) {
+            return;
+          }
+          var highlightId = document.body.getAttribute('data-task-highlight-id');
+          if (!highlightId) {
+            return;
+          }
+          var applied = highlightTaskDefinitionRow(highlightId);
+          if (applied) {
+            document.body.setAttribute('data-task-highlight-id', '');
+          }
+        };
+
+        var rebindNewRows = function (rows) {
+          if (!rows || !rows.length) {
+            return;
+          }
+          rows.forEach(function (row) {
+            if (typeof window.tmInitializeTaskDescriptions === 'function') {
+              window.tmInitializeTaskDescriptions(row);
+            }
+            if (typeof attachConfirmation === 'function') {
+              var confirmationForms = row.querySelectorAll('[data-confirmation]');
+              Array.prototype.forEach.call(confirmationForms, function (form) {
+                attachConfirmation(form);
+              });
+            }
+          });
+          if (typeof setupTaskDefinitionActions === 'function') {
+            setupTaskDefinitionActions();
+          }
+        };
+
+        var buildRequestUrl = function (page) {
+          var params = baseQuery ? new URLSearchParams(baseQuery) : new URLSearchParams();
+          params.set('page', String(page));
+          return fetchUrl + '?' + params.toString();
+        };
+
+        var observer = new IntersectionObserver(
+          function (entries) {
+            if (!entries || !entries.length) {
+              return;
+            }
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) {
+                return;
+              }
+              if (isLoading || !hasNext || !nextPage) {
+                return;
+              }
+              fetchNext();
+            });
+          },
+          {
+            root: null,
+            rootMargin: '0px 0px 320px 0px',
+            threshold: 0,
+          }
+        );
+
+        var fetchNext = function () {
+          if (isLoading || !hasNext || !nextPage) {
+            return;
+          }
+          isLoading = true;
+          toggleLoader(true);
+          var requestUrl = buildRequestUrl(nextPage);
+          var finalize = function () {
+            isLoading = false;
+            toggleLoader(false);
+          };
+
+          fetch(requestUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error('No fue posible cargar más tareas.');
+              }
+              return response.json();
+            })
+            .then(function (payload) {
+              if (payload && payload.rows_html) {
+                var wrapper = document.createElement('tbody');
+                wrapper.innerHTML = payload.rows_html;
+                var newRows = Array.prototype.slice.call(wrapper.children);
+                if (newRows.length) {
+                  var emptyRow = list.querySelector('[data-task-definition-empty]');
+                  if (emptyRow) {
+                    emptyRow.remove();
+                  }
+                  newRows.forEach(function (row) {
+                    list.appendChild(row);
+                  });
+                  rebindNewRows(newRows);
+                }
+              }
+
+              if (payload && typeof payload.page === 'number') {
+                list.setAttribute('data-current-page', String(payload.page));
+              }
+              if (payload && typeof payload.start_index === 'number') {
+                var currentStart = parseIntAttr(list, 'data-start-index');
+                if (!currentStart || payload.start_index < currentStart) {
+                  currentStart = payload.start_index;
+                }
+                list.setAttribute('data-start-index', String(currentStart));
+              }
+              if (payload && typeof payload.end_index === 'number') {
+                list.setAttribute('data-end-index', String(payload.end_index));
+              }
+              if (payload && typeof payload.count === 'number') {
+                list.setAttribute('data-total-count', String(payload.count));
+              }
+
+              hasNext = !!(payload && payload.has_next);
+              nextPage = payload && payload.next_page ? payload.next_page : null;
+              list.setAttribute('data-has-next', hasNext ? 'true' : 'false');
+              list.setAttribute('data-next-page', nextPage ? String(nextPage) : '');
+
+              updateSummary(payload || {});
+              refreshHighlight();
+
+              if (!hasNext && observer) {
+                observer.unobserve(sentinel);
+              }
+            })
+            .catch(function (error) {
+              console.error(error);
+            })
+            .then(finalize, finalize);
+        };
+
+        if (hasNext) {
+          observer.observe(sentinel);
+        }
+
+        refreshHighlight();
+      };
+
+      setupTaskDefinitionAutoload();
+
+      document.addEventListener('click', function (event) {
+        if (popover.style.display !== 'block') {
+          return;
+        }
+        if (popover.contains(event.target)) {
+          return;
+        }
+        if (activeToggle && activeToggle.contains(event.target)) {
+          return;
+        }
+        closePopover();
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && popover.style.display === 'block') {
+          closePopover();
+        }
+      });
+    });
+  </script>
+  <script>
     (function () {
       var tabContainer = document.querySelector('[data-tm-tabs]');
       if (!tabContainer) {
@@ -1345,6 +2013,11 @@
       }
       var buttons = Array.prototype.slice.call(tabContainer.querySelectorAll('.tab-button'));
       var panels = Array.prototype.slice.call(tabContainer.querySelectorAll('[data-tm-panel]'));
+      function findButton(tabId) {
+        return buttons.find(function (button) {
+          return button.getAttribute('data-tm-tab') === tabId;
+        });
+      }
       function activate(tabId) {
         panels.forEach(function (panel) {
           var isActive = panel.getAttribute('data-tm-panel') === tabId;
@@ -1363,23 +2036,35 @@
           target.removeAttribute('tabindex');
         }
       }
+      function tryActivate(tabId) {
+        if (!tabId) {
+          return false;
+        }
+        var targetButton = findButton(tabId);
+        if (!targetButton) {
+          return false;
+        }
+        activate(tabId);
+        return true;
+      }
       buttons.forEach(function (button) {
         button.addEventListener('click', function () {
           activate(button.getAttribute('data-tm-tab'));
         });
       });
+      var params = new URLSearchParams(window.location.search);
+      var tabFromQuery = params.get('tm_tab');
+      if (tryActivate(tabFromQuery)) {
+        return;
+      }
       var hash = window.location.hash;
-      if (hash && hash.indexOf('tm-') === 1) {
-        var tabId = hash.replace('#tm-', '');
-        var targetButton = buttons.find(function (button) {
-          return button.getAttribute('data-tm-tab') === tabId;
-        });
-        if (targetButton) {
-          activate(tabId);
+      if (hash && hash.indexOf('#tm-') === 0) {
+        var tabId = hash.slice(4);
+        if (tryActivate(tabId)) {
           return;
         }
       }
-      activate('panel');
+      activate('asignaciones');
     })();
   </script>
 {% endblock %}

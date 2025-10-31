@@ -8,6 +8,41 @@
     document.body.dataset.calendarCurrentId = '{{ calendar.id }}';
   }
 </script>
+<style>
+  th[data-calendar-highlight="true"],
+  td[data-calendar-highlight="true"] {
+    position: relative;
+  }
+
+  td[data-calendar-highlight="true"]::after,
+  th[data-calendar-highlight="true"]::after {
+    content: '';
+    position: absolute;
+    inset: 0.35rem;
+    border-radius: 0.75rem;
+    background-color: rgba(79, 70, 229, 0.12);
+    pointer-events: none;
+    transition: opacity 200ms ease;
+    opacity: 1;
+    z-index: 0;
+  }
+
+  th[data-calendar-highlight="true"]::after {
+    inset: 0.25rem 0.35rem 0 0.35rem;
+    border-radius: 0.75rem 0.75rem 0 0;
+    background-color: rgba(79, 70, 229, 0.18);
+  }
+
+  td[data-calendar-highlight="true"] > *,
+  th[data-calendar-highlight="true"] > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  th[data-calendar-highlight="true"] span {
+    color: #3730a3;
+  }
+</style>
 <div class="flex flex-col gap-6">
   <section class="rounded-2xl bg-white shadow-sm">
     <div class="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -349,7 +384,12 @@
                               Posición
                             </th>
                             {% for day in date_columns %}
-                              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <th
+                                class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                data-calendar-column-header
+                                data-calendar-col-index="{{ forloop.counter0 }}"
+                                data-calendar-day="{{ day|date:'Y-m-d' }}"
+                              >
                                 <span class="block text-[11px] font-medium text-slate-400">{{ day|date:"d/M" }}</span>
                                 <span class="block text-sm font-semibold text-slate-700">{{ day|date:"l"|capfirst }}</span>
                               </th>
@@ -364,7 +404,11 @@
                           <span class="block text-xs text-slate-500">{{ row.position.get_category_display }}</span>
                         </th>
                         {% for cell in row.cells %}
-                          <td class="px-4 py-4 align-top">
+                          <td
+                            class="px-4 py-4 align-top"
+                            data-calendar-col-index="{{ forloop.counter0 }}"
+                            data-calendar-day="{{ cell.date|date:'Y-m-d' }}"
+                          >
                             {% if cell.is_position_active %}
                               {% if cell.assignment %}
                                 <div class="relative flex h-full flex-col gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-lg ring-1 {% if cell.alert == 'critical' %}ring-red-200{% elif cell.alert == 'warn' %}ring-amber-200{% else %}ring-emerald-200{% endif %} {% if cell.is_overtime %}ring-offset-2 ring-offset-slate-100{% endif %}" data-operator-card data-operator-id="{{ cell.assignment.operator_id }}" data-operator-name="{{ cell.assignment.operator.get_full_name|default:cell.assignment.operator.nombres|default:cell.assignment.operator.apellidos|escape }}">
@@ -737,6 +781,135 @@
             }
             return parsed;
           }
+
+          function padNumber(value) {
+            var number = Number(value);
+            if (Number.isNaN(number)) {
+              return '';
+            }
+            return number < 10 ? '0' + number : String(number);
+          }
+
+          function formatDateToISO(dateObject) {
+            if (!(dateObject instanceof Date) || Number.isNaN(dateObject.getTime())) {
+              return '';
+            }
+            return [dateObject.getFullYear(), padNumber(dateObject.getMonth() + 1), padNumber(dateObject.getDate())].join('-');
+          }
+
+          function parseDateValue(value) {
+            if (!value) {
+              return null;
+            }
+            var parts = value.split('-');
+            if (parts.length !== 3) {
+              return null;
+            }
+            var year = Number.parseInt(parts[0], 10);
+            var month = Number.parseInt(parts[1], 10);
+            var day = Number.parseInt(parts[2], 10);
+            if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+              return null;
+            }
+            return new Date(year, month - 1, day);
+          }
+
+          function highlightNearestCalendarColumn() {
+            if (!restScope) {
+              return;
+            }
+            var headerNodes = restScope.querySelectorAll('[data-calendar-column-header]');
+            if (!headerNodes.length) {
+              return;
+            }
+            var previousHighlights = restScope.querySelectorAll('[data-calendar-highlight]');
+            Array.prototype.forEach.call(previousHighlights, function (node) {
+              node.removeAttribute('data-calendar-highlight');
+              node.classList.remove('text-indigo-900');
+            });
+            var headers = Array.prototype.slice.call(headerNodes);
+            var today = new Date();
+            var todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            var todayTimestamp = todayDate.getTime();
+            var todayFormatted = formatDateToISO(todayDate);
+            var selectedHeader = null;
+            var selectedTimestamp = null;
+            var smallestDiff = Infinity;
+
+            headers.forEach(function (header) {
+              var dateStr = header.dataset.calendarDay || '';
+              var columnIndex = header.dataset.calendarColIndex;
+              if (!dateStr || columnIndex === undefined) {
+                return;
+              }
+              var headerDate = parseDateValue(dateStr);
+              if (!headerDate) {
+                return;
+              }
+              var headerTimestamp = headerDate.getTime();
+              if (dateStr === todayFormatted) {
+                selectedHeader = header;
+                selectedTimestamp = headerTimestamp;
+                smallestDiff = 0;
+                return;
+              }
+              var diff = Math.abs(headerTimestamp - todayTimestamp);
+              var shouldSelect = false;
+              if (diff < smallestDiff) {
+                shouldSelect = true;
+              } else if (diff === smallestDiff) {
+                var headerIsFuture = headerTimestamp >= todayTimestamp;
+                var selectedIsFuture = selectedTimestamp !== null ? selectedTimestamp >= todayTimestamp : null;
+                if (headerIsFuture && !selectedIsFuture) {
+                  shouldSelect = true;
+                } else if (headerIsFuture === selectedIsFuture) {
+                  if (selectedTimestamp === null || headerTimestamp < selectedTimestamp) {
+                    shouldSelect = true;
+                  }
+                }
+              }
+              if (shouldSelect) {
+                selectedHeader = header;
+                selectedTimestamp = headerTimestamp;
+                smallestDiff = diff;
+              }
+            });
+
+            if (!selectedHeader) {
+              return;
+            }
+            var targetIndex = selectedHeader.dataset.calendarColIndex;
+            if (targetIndex === undefined) {
+              return;
+            }
+            var columnCells = restScope.querySelectorAll('[data-calendar-col-index="' + targetIndex + '"]');
+            if (!columnCells.length) {
+              return;
+            }
+            Array.prototype.forEach.call(columnCells, function (cell) {
+              cell.setAttribute('data-calendar-highlight', 'true');
+              if (cell.tagName === 'TH') {
+                cell.classList.add('text-indigo-900');
+              }
+            });
+
+            window.requestAnimationFrame(function () {
+              if (!restScope) {
+                return;
+              }
+              var desiredScroll = selectedHeader.offsetLeft - restScope.clientWidth / 2 + selectedHeader.clientWidth / 2;
+              if (desiredScroll < 0) {
+                desiredScroll = 0;
+              }
+              if (typeof restScope.scrollTo === 'function') {
+                restScope.scrollTo({ left: desiredScroll, behavior: 'smooth' });
+              } else {
+                restScope.scrollLeft = desiredScroll;
+              }
+            });
+          }
+
+          highlightNearestCalendarColumn();
 
           function resolveRestDetailUrl(restPeriodId) {
             if (!restDetailTemplate) {

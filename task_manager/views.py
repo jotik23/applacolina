@@ -3,8 +3,11 @@ from typing import Iterable, Optional, Sequence
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
+from django.db.models import Q, QuerySet
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -12,7 +15,8 @@ from django.views import View, generic
 
 from .forms import TaskDefinitionQuickCreateForm
 from .models import TaskCategory, TaskDefinition, TaskStatus
-from personal.models import DayOfWeek
+from personal.models import DayOfWeek, PositionDefinition, UserProfile
+from production.models import ChickenHouse, Farm, Room
 
 
 class TaskManagerHomeView(generic.TemplateView):
@@ -23,24 +27,126 @@ class TaskManagerHomeView(generic.TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.setdefault("task_definition_form", TaskDefinitionQuickCreateForm())
-        context.setdefault(
-            "task_manager_categories",
-            TaskCategory.objects.filter(is_active=True).order_by("name"),
-        )
-        context.setdefault(
-            "task_manager_statuses",
-            TaskStatus.objects.filter(is_active=True).order_by("name"),
-        )
-        context.setdefault(
-            "task_definition_rows",
-            build_task_definition_rows(),
-        )
+        categories = TaskCategory.objects.filter(is_active=True).order_by("name")
+        statuses = TaskStatus.objects.filter(is_active=True).order_by("name")
+        context["task_manager_categories"] = categories
+        context["task_manager_statuses"] = statuses
         highlight_raw = self.request.GET.get("tm_task")
+        highlight_id: Optional[int] = None
         if highlight_raw is not None:
             try:
-                context["task_definition_highlight_id"] = int(highlight_raw)
+                highlight_id = int(highlight_raw)
             except (TypeError, ValueError):
-                pass
+                highlight_id = None
+
+        queryset = get_task_definition_queryset()
+        paginator = Paginator(queryset, 20)
+        page_number = self.request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+
+        if highlight_id is not None:
+            if highlight_id not in {task.pk for task in page_obj.object_list}:
+                highlight_page = locate_task_definition_page(queryset, highlight_id, paginator.per_page)
+                if highlight_page is not None and highlight_page != page_obj.number:
+                    page_obj = paginator.get_page(highlight_page)
+
+        task_rows = build_task_definition_rows(page_obj.object_list)
+        context["task_definition_rows"] = task_rows
+        context["task_definition_page_obj"] = page_obj
+        context["task_definition_paginator"] = paginator
+        context["task_definition_total_count"] = paginator.count
+
+        if highlight_id is not None:
+            context["task_definition_highlight_id"] = highlight_id
+
+        context["task_definition_page_numbers"] = build_compact_page_range(page_obj)
+
+        remaining_params = self.request.GET.copy()
+        if "page" in remaining_params:
+            remaining_params.pop("page")
+        querystring = remaining_params.urlencode()
+        context["task_definition_querystring"] = querystring
+        if querystring:
+            query_prefix = f"?{querystring}&"
+        else:
+            query_prefix = "?"
+        context["task_definition_page_query_prefix"] = query_prefix
+
+        if paginator.count:
+            start_index = (page_obj.number - 1) * paginator.per_page + 1
+            end_index = start_index + len(page_obj.object_list) - 1
+        else:
+            start_index = 0
+            end_index = 0
+        context["task_definition_page_start"] = start_index
+        context["task_definition_page_end"] = end_index
+        context["task_manager_status_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todos los estados"),
+            groups=build_status_filter_groups(statuses),
+        )
+        context["task_manager_category_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todas las categorías"),
+            groups=build_category_filter_groups(categories),
+        )
+        context["task_manager_scope_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todos los lugares"),
+            groups=build_scope_filter_groups(),
+            search_enabled=True,
+        )
+        context["task_manager_task_type_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Cualquier tipo"),
+            groups=build_task_type_filter_groups(),
+        )
+        context["task_manager_responsible_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todos los responsables"),
+            groups=build_responsible_filter_groups(),
+            search_enabled=True,
+        )
+        context["task_manager_created_window_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Cualquier fecha"),
+            groups=build_created_window_filter_groups(),
+        )
+        context["task_manager_group_primary_filter"] = FilterPickerData(
+            default_value="none",
+            default_label=_("Sin agrupación"),
+            groups=build_grouping_primary_filter_groups(),
+        )
+        context["task_manager_group_secondary_filter"] = FilterPickerData(
+            default_value="none",
+            default_label=_("No aplicar"),
+            groups=build_grouping_secondary_filter_groups(),
+        )
+        context["task_manager_assignment_farm_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todas las granjas"),
+            groups=build_assignment_farm_filter_groups(),
+        )
+        context["task_manager_assignment_house_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todos los galpones"),
+            groups=build_assignment_house_filter_groups(),
+        )
+        context["task_manager_assignment_state_filter"] = FilterPickerData(
+            default_value="all",
+            default_label=_("Todos los estados"),
+            groups=build_assignment_state_filter_groups(),
+        )
+        context["task_manager_followup_period_filter"] = FilterPickerData(
+            default_value="week",
+            default_label=_("Semana actual"),
+            groups=build_followup_period_filter_groups(),
+        )
+        context["task_manager_today_view_filter"] = FilterPickerData(
+            default_value="priority",
+            default_label=_("Prioridad"),
+            groups=build_today_view_filter_groups(),
+        )
         return context
 
 
@@ -49,7 +155,7 @@ task_manager_home_view = TaskManagerHomeView.as_view()
 
 def _task_definition_redirect_url(task_id: int) -> str:
     base_url = reverse("task_manager:index")
-    return f"{base_url}?tm_task={task_id}#tm-definiciones"
+    return f"{base_url}?tm_task={task_id}#tm-tareas"
 
 
 def serialize_task_definition(task: TaskDefinition) -> dict[str, object]:
@@ -154,13 +260,57 @@ class TaskDefinitionDeleteView(LoginRequiredMixin, View):
         task_definition.delete()
         messages.success(
             request,
-            _('La definición de tarea "%(name)s" se eliminó correctamente.') % {"name": task_name},
+            _('La tarea "%(name)s" se eliminó correctamente.') % {"name": task_name},
         )
-        redirect_url = f"{reverse('task_manager:index')}#tm-definiciones"
+        redirect_url = f"{reverse('task_manager:index')}#tm-tareas"
         return redirect(redirect_url)
 
 
 task_definition_delete_view = TaskDefinitionDeleteView.as_view()
+
+
+class TaskDefinitionListView(LoginRequiredMixin, View):
+    """Return rendered task rows for incremental loading."""
+
+    http_method_names = ["get"]
+
+    def get(self, request, *args, **kwargs):
+        if request.headers.get("X-Requested-With") != "XMLHttpRequest":
+            return JsonResponse({"detail": _("Solicitud inválida.")}, status=400)
+
+        queryset = get_task_definition_queryset()
+        paginator = Paginator(queryset, 20)
+        page_number = request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+        rows = build_task_definition_rows(page_obj.object_list)
+        rows_html = render_to_string(
+            "task_manager/includes/task_definition_rows.html",
+            {"rows": rows},
+            request=request,
+        )
+
+        if paginator.count:
+            start_index = page_obj.start_index()
+            end_index = page_obj.end_index()
+        else:
+            start_index = 0
+            end_index = 0
+
+        payload = {
+            "rows_html": rows_html,
+            "page": page_obj.number,
+            "has_next": page_obj.has_next(),
+            "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+            "count": paginator.count,
+            "page_size": paginator.per_page,
+            "start_index": start_index,
+            "end_index": end_index,
+            "rows_loaded": len(rows),
+        }
+        return JsonResponse(payload, status=200)
+
+
+task_definition_list_view = TaskDefinitionListView.as_view()
 
 
 @dataclass(frozen=True)
@@ -191,8 +341,8 @@ class TaskDefinitionRow:
     created_on_display: str
 
 
-def build_task_definition_rows() -> Sequence[TaskDefinitionRow]:
-    queryset = (
+def get_task_definition_queryset() -> QuerySet[TaskDefinition]:
+    return (
         TaskDefinition.objects.select_related(
             "status",
             "category",
@@ -205,8 +355,12 @@ def build_task_definition_rows() -> Sequence[TaskDefinitionRow]:
             "chicken_houses__farm",
             "rooms__chicken_house__farm",
         )
-        .order_by("name")
+        .order_by("name", "pk")
     )
+
+
+def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None) -> Sequence[TaskDefinitionRow]:
+    queryset = tasks if tasks is not None else get_task_definition_queryset()
 
     rows: list[TaskDefinitionRow] = []
     for task in queryset:
@@ -260,6 +414,450 @@ def build_task_definition_rows() -> Sequence[TaskDefinitionRow]:
             )
         )
     return rows
+
+
+@dataclass(frozen=True)
+class FilterOption:
+    value: str
+    label: str
+    description: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class FilterOptionGroup:
+    key: str
+    label: str
+    options: Sequence[FilterOption]
+
+
+@dataclass(frozen=True)
+class FilterPickerData:
+    default_value: str
+    default_label: str
+    groups: Sequence[FilterOptionGroup]
+    search_enabled: bool = False
+
+
+def build_scope_filter_groups() -> Sequence[FilterOptionGroup]:
+    groups: list[FilterOptionGroup] = []
+
+    generic_options = [
+        FilterOption("all", _("Todos los lugares")),
+        FilterOption("general", _("Cobertura general")),
+        FilterOption("farm", _("Granjas (cualquier)")),
+        FilterOption("house", _("Galpones (cualquier)")),
+        FilterOption("room", _("Salones (cualquier)")),
+    ]
+    groups.append(
+        FilterOptionGroup(
+            key="generic",
+            label=_("General"),
+            options=generic_options,
+        )
+    )
+
+    farms = Farm.objects.order_by("name").only("id", "name")
+    if farms:
+        farm_options = [
+            FilterOption(
+                value=f"farm:{farm.pk}",
+                label=farm.name,
+            )
+            for farm in farms
+            if farm.name
+        ]
+        if farm_options:
+            groups.append(
+                FilterOptionGroup(
+                    key="farms",
+                    label=_("Granjas específicas"),
+                    options=farm_options,
+                )
+            )
+
+    chicken_houses = (
+        ChickenHouse.objects.select_related("farm")
+        .order_by("farm__name", "name")
+        .only("id", "name", "farm__name")
+    )
+    if chicken_houses:
+        house_options = [
+            FilterOption(
+                value=f"house:{house.pk}",
+                label=house.name,
+                description=house.farm.name if house.farm else None,
+            )
+            for house in chicken_houses
+            if house.name
+        ]
+        if house_options:
+            groups.append(
+                FilterOptionGroup(
+                    key="houses",
+                    label=_("Galpones"),
+                    options=house_options,
+                )
+            )
+
+    rooms = (
+        Room.objects.select_related("chicken_house__farm")
+        .order_by("chicken_house__farm__name", "chicken_house__name", "name")
+        .only("id", "name", "chicken_house__name", "chicken_house__farm__name")
+    )
+    if rooms:
+        room_options: list[FilterOption] = []
+        for room in rooms:
+            house = room.chicken_house
+            farm = house.farm if house else None
+            description_parts: list[str] = []
+            if farm and getattr(farm, "name", ""):
+                description_parts.append(farm.name)
+            if house and getattr(house, "name", ""):
+                description_parts.append(house.name)
+            description = " · ".join(description_parts) if description_parts else None
+            room_options.append(
+                FilterOption(
+                    value=f"room:{room.pk}",
+                    label=room.name,
+                    description=description,
+                )
+            )
+        if room_options:
+            groups.append(
+                FilterOptionGroup(
+                    key="rooms",
+                    label=_("Salones"),
+                    options=room_options,
+                )
+            )
+
+    return groups
+
+
+def build_responsible_filter_groups() -> Sequence[FilterOptionGroup]:
+    groups: list[FilterOptionGroup] = []
+
+    generic_options = [
+        FilterOption("all", _("Todos los responsables")),
+        FilterOption("collaborator", _("Con colaborador asignado")),
+        FilterOption("position", _("Con posición sugerida")),
+        FilterOption("unassigned", _("Sin responsable definido")),
+    ]
+    groups.append(
+        FilterOptionGroup(
+            key="generic",
+            label=_("General"),
+            options=generic_options,
+        )
+    )
+
+    positions = (
+        PositionDefinition.objects.select_related("farm", "chicken_house")
+        .order_by("display_order", "name")
+        .only("id", "name", "farm__name", "chicken_house__name")
+    )
+    if positions:
+        position_options: list[FilterOption] = []
+        for position in positions:
+            description_parts: list[str] = []
+            if position.farm and getattr(position.farm, "name", ""):
+                description_parts.append(position.farm.name)
+            if position.chicken_house and getattr(position.chicken_house, "name", ""):
+                description_parts.append(position.chicken_house.name)
+            description = " · ".join(description_parts) if description_parts else None
+            position_options.append(
+                FilterOption(
+                    value=f"position:{position.pk}",
+                    label=position.name,
+                    description=description,
+                )
+            )
+        if position_options:
+            groups.append(
+                FilterOptionGroup(
+                    key="positions",
+                    label=_("Posiciones específicas"),
+                    options=position_options,
+                )
+            )
+
+    collaborators = (
+        UserProfile.objects.filter(is_active=True)
+        .order_by("apellidos", "nombres")
+        .only("id", "nombres", "apellidos", "cedula")
+    )
+    if collaborators:
+        collaborator_options = [
+            FilterOption(
+                value=f"collaborator:{profile.pk}",
+                label=profile.nombre_completo,
+                description=profile.cedula or None,
+            )
+            for profile in collaborators
+        ]
+        if collaborator_options:
+            groups.append(
+                FilterOptionGroup(
+                    key="collaborators",
+                    label=_("Colaboradores"),
+                    options=collaborator_options,
+                )
+            )
+
+    return groups
+
+
+def build_status_filter_groups(statuses: Iterable[TaskStatus]) -> Sequence[FilterOptionGroup]:
+    groups = [
+        FilterOptionGroup(
+            key="generic",
+            label=_("General"),
+            options=[FilterOption("all", _("Todos los estados"))],
+        )
+    ]
+    status_options = [
+        FilterOption(str(status.pk), status.name)
+        for status in statuses
+        if status.name
+    ]
+    if status_options:
+        groups.append(
+            FilterOptionGroup(
+                key="statuses",
+                label=_("Estados disponibles"),
+                options=status_options,
+            )
+        )
+    return groups
+
+
+def build_category_filter_groups(categories: Iterable[TaskCategory]) -> Sequence[FilterOptionGroup]:
+    groups = [
+        FilterOptionGroup(
+            key="generic",
+            label=_("General"),
+            options=[FilterOption("all", _("Todas las categorías"))],
+        )
+    ]
+    category_options = [
+        FilterOption(str(category.pk), category.name)
+        for category in categories
+        if category.name
+    ]
+    if category_options:
+        groups.append(
+            FilterOptionGroup(
+                key="categories",
+                label=_("Categorías activas"),
+                options=category_options,
+            )
+        )
+    return groups
+
+
+def build_task_type_filter_groups() -> Sequence[FilterOptionGroup]:
+    groups = [
+        FilterOptionGroup(
+            key="generic",
+            label=_("General"),
+            options=[FilterOption("all", _("Cualquier tipo"))],
+        )
+    ]
+    type_options = [
+        FilterOption(TaskDefinition.TaskType.RECURRING, TaskDefinition.TaskType.RECURRING.label),
+        FilterOption(TaskDefinition.TaskType.ONE_TIME, TaskDefinition.TaskType.ONE_TIME.label),
+    ]
+    groups.append(
+        FilterOptionGroup(
+            key="types",
+            label=_("Tipos disponibles"),
+            options=type_options,
+        )
+    )
+    return groups
+
+
+def build_created_window_filter_groups() -> Sequence[FilterOptionGroup]:
+    window_options = [
+        FilterOption("all", _("Cualquier fecha")),
+        FilterOption("today", _("Hoy")),
+        FilterOption("yesterday", _("Ayer")),
+        FilterOption("last_3_days", _("Últimos 3 días")),
+        FilterOption("last_7_days", _("Últimos 7 días")),
+        FilterOption("this_week", _("Esta semana")),
+        FilterOption("next_3_days", _("Próximos 3 días")),
+        FilterOption("next_7_days", _("Próximos 7 días")),
+        FilterOption("next_14_days", _("Próximas 2 semanas")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="created-window",
+            label=_("Rangos de tiempo"),
+            options=window_options,
+        )
+    ]
+
+
+def build_grouping_primary_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("none", _("Sin agrupación")),
+        FilterOption("status", _("Estado")),
+        FilterOption("category", _("Categoría")),
+        FilterOption("scope", _("Lugar")),
+        FilterOption("responsible", _("Responsable sugerido")),
+        FilterOption("task_type", _("Tipo de planificación")),
+        FilterOption("evidence", _("Requisito de evidencia")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="grouping-primary",
+            label=_("Agrupar por"),
+            options=options,
+        )
+    ]
+
+
+def build_grouping_secondary_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("none", _("No aplicar")),
+        FilterOption("status", _("Estado")),
+        FilterOption("category", _("Categoría")),
+        FilterOption("scope", _("Lugar")),
+        FilterOption("responsible", _("Responsable sugerido")),
+        FilterOption("task_type", _("Tipo de planificación")),
+        FilterOption("evidence", _("Requisito de evidencia")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="grouping-secondary",
+            label=_("Agrupación secundaria"),
+            options=options,
+        )
+    ]
+
+
+def build_assignment_farm_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("all", _("Todas las granjas")),
+        FilterOption("farm-el-guadual", "El Guadual"),
+        FilterOption("farm-la-rivera", "La Rivera"),
+        FilterOption("farm-altamira", "Altamira"),
+    ]
+    return [
+        FilterOptionGroup(
+            key="assignment-farms",
+            label=_("Filtrar por granja"),
+            options=options,
+        )
+    ]
+
+
+def build_assignment_house_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("all", _("Todos los galpones")),
+        FilterOption("house-1", _("Galpón 1")),
+        FilterOption("house-2", _("Galpón 2")),
+        FilterOption("house-3", _("Galpón 3")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="assignment-houses",
+            label=_("Filtrar por galpón"),
+            options=options,
+        )
+    ]
+
+
+def build_assignment_state_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("all", _("Todos los estados")),
+        FilterOption("assigned", _("Asignadas")),
+        FilterOption("unassigned", _("Sin responsable")),
+        FilterOption("with_notes", _("Con observaciones")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="assignment-state",
+            label=_("Estado en calendario"),
+            options=options,
+        )
+    ]
+
+
+def build_followup_period_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("week", _("Semana actual")),
+        FilterOption("month", _("Mes actual")),
+        FilterOption("quarter", _("Últimos 90 días")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="followup-period",
+            label=_("Rango temporal"),
+            options=options,
+        )
+    ]
+
+
+def build_today_view_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("priority", _("Prioridad")),
+        FilterOption("schedule", _("Horario")),
+        FilterOption("status", _("Estado")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="today-view",
+            label=_("Orden de vista"),
+            options=options,
+        )
+    ]
+
+
+def locate_task_definition_page(
+    queryset: QuerySet[TaskDefinition], task_id: int, per_page: int
+) -> Optional[int]:
+    if per_page <= 0:
+        return None
+
+    try:
+        task = queryset.get(pk=task_id)
+    except TaskDefinition.DoesNotExist:
+        return None
+
+    preceding = queryset.filter(
+        Q(name__lt=task.name) | (Q(name=task.name) & Q(pk__lt=task.pk))
+    ).count()
+    return preceding // per_page + 1
+
+
+def build_compact_page_range(page_obj, edge_count: int = 1, around_count: int = 1) -> Sequence[Optional[int]]:
+    paginator = page_obj.paginator
+    total_pages = paginator.num_pages
+    if total_pages <= 1:
+        return [page_obj.number]
+
+    current = page_obj.number
+    included: set[int] = set()
+
+    for num in range(1, edge_count + 1):
+        included.add(num)
+        included.add(total_pages - num + 1)
+
+    for num in range(current - around_count, current + around_count + 1):
+        if 1 <= num <= total_pages:
+            included.add(num)
+
+    sorted_pages = []
+    last_page = 0
+    for num in range(1, total_pages + 1):
+        if num in included:
+            if last_page and num - last_page > 1:
+                sorted_pages.append(None)
+            sorted_pages.append(num)
+            last_page = num
+
+    return sorted_pages
 
 
 def format_task_schedule(task: TaskDefinition, task_type_label: str | None = None) -> tuple[str, Sequence[str]]:

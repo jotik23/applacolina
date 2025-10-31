@@ -180,8 +180,8 @@ class TaskDefinition(models.Model):
     updated_at = models.DateTimeField(_("Actualizado en"), auto_now=True)
 
     class Meta:
-        verbose_name = _("Definición de tarea")
-        verbose_name_plural = _("Definiciones de tareas")
+        verbose_name = _("Tarea")
+        verbose_name_plural = _("Tareas")
         ordering = ("name",)
 
     def __str__(self) -> str:
@@ -249,7 +249,7 @@ class TaskAssignment(models.Model):
         TaskDefinition,
         on_delete=models.PROTECT,
         related_name="assignments",
-        verbose_name=_("Definición de tarea"),
+        verbose_name=_("Tarea"),
     )
     collaborator = models.ForeignKey(
         UserProfile,

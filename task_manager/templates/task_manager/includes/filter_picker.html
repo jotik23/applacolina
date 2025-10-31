@@ -1,0 +1,82 @@
+{% comment %}
+  Generic filter picker component. Expects the following parameters:
+  - name: form field name (string)
+  - default_value: initial value (string)
+  - default_label: label to display by default (string)
+  - groups: sequence of FilterOptionGroup with FilterOption items
+  - search_enabled: boolean to toggle search input
+{% endcomment %}
+{% load i18n %}
+<div
+  class="tm-filter-picker"
+  data-filter-picker
+  data-filter-name="{{ name }}"
+  data-filter-default-value="{{ default_value }}"
+  data-filter-default-label="{{ default_label }}"
+>
+  <input type="hidden" name="{{ name }}" value="{{ default_value }}" data-filter-value />
+  <button
+    type="button"
+    class="tm-filter-trigger"
+    data-filter-trigger
+    aria-haspopup="listbox"
+    aria-expanded="false"
+  >
+    <span class="tm-filter-trigger-text">
+      <span class="tm-filter-trigger-label" data-filter-current-label>{{ default_label }}</span>
+      <span class="tm-filter-trigger-description hidden" data-filter-current-description></span>
+    </span>
+    <svg class="h-4 w-4 flex-none text-slate-400 transition-transform duration-150" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-filter-chevron>
+      <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.21l3.71-3.98a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0L5.21 9.31a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+    </svg>
+  </button>
+  <div class="tm-filter-panel hidden" data-filter-panel>
+    {% if search_enabled %}
+      <div class="tm-filter-search">
+        <label class="tm-filter-search-field">
+          <svg class="h-4 w-4 flex-none text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 014.384 8.776l3.17 3.17a.75.75 0 11-1.06 1.06l-3.17-3.17A5.5 5.5 0 119 3.5zm0 1.5a4 4 0 100 8 4 4 0 000-8z" clip-rule="evenodd" />
+          </svg>
+          <input
+            type="search"
+            class="tm-filter-search-input"
+            placeholder="{% trans 'Buscar…' %}"
+            data-filter-search
+          />
+        </label>
+      </div>
+    {% endif %}
+    <div class="tm-filter-options" data-filter-list>
+      {% for group in groups %}
+        <div class="tm-filter-group" data-filter-group>
+          <p class="tm-filter-group-label">{{ group.label }}</p>
+          <ul class="tm-filter-options-list">
+            {% for option in group.options %}
+              {% with option_value=option.value option_label=option.label option_description=option.description %}
+                <li>
+                  <button
+                    type="button"
+                    class="tm-filter-option{% if option_value == default_value %} is-selected{% endif %}"
+                    data-filter-option
+                    data-value="{{ option_value }}"
+                    data-label="{{ option_label|escape }}"
+                    {% if option_description %}data-description="{{ option_description|escape }}"{% endif %}
+                    data-search-text="{{ option_label|lower }}{% if option_description %} {{ option_description|lower }}{% endif %}"
+                    role="option"
+                    aria-selected="{% if option_value == default_value %}true{% else %}false{% endif %}"
+                  >
+                    <span class="tm-filter-option-label">{{ option_label }}</span>
+                    {% if option_description %}
+                      <span class="tm-filter-option-description">{{ option_description }}</span>
+                    {% endif %}
+                  </button>
+                </li>
+              {% endwith %}
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+      <div class="tm-filter-empty hidden" data-filter-empty>{% trans "Sin coincidencias con ese texto." %}</div>
+    </div>
+  </div>
+</div>
