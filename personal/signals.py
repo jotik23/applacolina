@@ -37,7 +37,11 @@ def log_assignment_update(sender: type[ShiftAssignment], instance: ShiftAssignme
             change_type=AssignmentChangeLog.ChangeType.CREATED,
             previous_operator=None,
             new_operator=instance.operator,
-            details={"auto": instance.is_auto_assigned, "alert": instance.alert_level},
+            details={
+                "auto": instance.is_auto_assigned,
+                "alert": instance.alert_level,
+                "calendar_id": instance.calendar_id,
+            },
         )
         sync_calendar_rest_periods(instance.calendar)
         return
@@ -50,7 +54,11 @@ def log_assignment_update(sender: type[ShiftAssignment], instance: ShiftAssignme
             change_type=AssignmentChangeLog.ChangeType.UPDATED,
             previous_operator=previous.operator,
             new_operator=instance.operator,
-            details={"auto": instance.is_auto_assigned, "alert": instance.alert_level},
+            details={
+                "auto": instance.is_auto_assigned,
+                "alert": instance.alert_level,
+                "calendar_id": instance.calendar_id,
+            },
         )
     sync_calendar_rest_periods(instance.calendar)
 
@@ -67,6 +75,7 @@ def log_assignment_deletion(sender: type[ShiftAssignment], instance: ShiftAssign
             "auto": instance.is_auto_assigned,
             "alert": instance.alert_level,
             "assignment_id": instance.pk,
+            "calendar_id": instance.calendar_id,
         },
     )
     sync_calendar_rest_periods(instance.calendar)

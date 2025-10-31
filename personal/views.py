@@ -30,6 +30,7 @@ from .forms import (
 )
 from .models import (
     AssignmentAlertLevel,
+    AssignmentChangeLog,
     DayOfWeek,
     CalendarStatus,
     OperatorRestPeriod,
@@ -1886,6 +1887,14 @@ class CalendarDetailView(LoginRequiredMixin, View):
             for row in rows
             for cell in row.get("cells", [])
         )
+        latest_modification = (
+            AssignmentChangeLog.objects.filter(
+                Q(assignment__calendar=calendar) | Q(details__calendar_id=calendar.id)
+            )
+            .order_by("-created_at")
+            .values_list("created_at", flat=True)
+            .first()
+        )
 
         return render(
             request,
@@ -1900,6 +1909,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
                 "rest_summary": rest_summary,
                 "can_override": can_override,
                 "has_manual_choices": has_manual_choices,
+                "calendar_latest_modification": latest_modification,
                 "position_groups": position_groups,
                 "calendar_generation_form": CalendarGenerationForm(),
                 "calendar_home_url": _resolve_calendar_home_url(exclude_ids=[calendar.id]),

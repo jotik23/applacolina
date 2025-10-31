@@ -84,7 +84,7 @@
             </button>
           </div>
           <div class="flex w-full justify-center sm:flex-1">
-            <div class="relative w-full sm:min-w-[260px] sm:max-w-md lg:max-w-lg" data-calendar-picker>
+            <div class="relative w-full sm:min-w-[320px] sm:max-w-lg lg:max-w-2xl" data-calendar-picker>
               <button
                 type="button"
                 class="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-brand/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
@@ -103,6 +103,19 @@
                       <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">Modificado</span>
                     {% else %}
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{{ calendar.get_status_display|default:calendar.status }}</span>
+                    {% endif %}
+                    {% if calendar_latest_modification %}
+                      <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path
+                            fill-rule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-12.25a.75.75 0 00-1.5 0v4.5c0 .199.079.39.22.53l2.25 2.25a.75.75 0 101.06-1.06l-2.03-2.03V5.75z"
+                            clip-rule="evenodd"
+                          />
+                        </svg>
+                        Último cambio
+                        {{ calendar_latest_modification|date:"d/m/Y H:i" }}
+                      </span>
                     {% endif %}
                   </span>
                   <span class="mt-1 block text-xs text-slate-500" data-calendar-picker-range>{{ calendar.start_date }} → {{ calendar.end_date }}</span>
