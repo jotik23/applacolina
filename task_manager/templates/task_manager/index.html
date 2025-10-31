@@ -242,9 +242,133 @@
       transform: rotate(180deg);
     }
 
+    tr[data-task-group-row] > td {
+      padding: 0;
+      border-top: 1px solid rgba(226, 232, 240, 0.85);
+    }
+
+    tr[data-task-group-row]:first-child > td {
+      border-top: none;
+    }
+
+    tr[data-task-group-row][data-group-level='primary'] > td {
+      background: linear-gradient(90deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.9));
+    }
+
+    tr[data-task-group-row][data-group-level='secondary'] > td {
+      background: linear-gradient(90deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.85));
+      border-left: 2px solid rgba(59, 130, 246, 0.14);
+    }
+
+    .tm-group-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      width: 100%;
+      border: 0;
+      background: none;
+      padding: 0.7rem 1rem;
+      text-align: left;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: rgb(71, 85, 105);
+      cursor: pointer;
+      transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    }
+
+    .tm-group-toggle:hover,
+    .tm-group-toggle:focus-visible {
+      background-color: rgba(59, 130, 246, 0.08);
+      color: rgb(30, 41, 59);
+      outline: none;
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
+    }
+
+    .tm-group-toggle-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 9999px;
+      background-color: rgba(15, 23, 42, 0.08);
+      color: rgba(15, 23, 42, 0.6);
+      transition: transform 180ms ease, background-color 180ms ease, color 180ms ease;
+      flex-shrink: 0;
+    }
+
+    .tm-group-toggle-icon svg {
+      width: 0.75rem;
+      height: 0.75rem;
+      transition: transform 180ms ease;
+    }
+
+    tr[data-task-group-row][data-group-collapsed='false'] .tm-group-toggle-icon {
+      background-color: rgba(59, 130, 246, 0.14);
+      color: rgba(30, 64, 175, 0.95);
+    }
+
+    tr[data-task-group-row][data-group-collapsed='false'] .tm-group-toggle-icon svg {
+      transform: rotate(90deg);
+    }
+
+    .tm-group-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      flex: 1 1 auto;
+    }
+
+    .tm-group-dimension {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(100, 116, 139, 0.75);
+    }
+
+    .tm-group-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: rgb(15, 23, 42);
+    }
+
+    .tm-group-subtitle {
+      font-size: 0.75rem;
+      color: rgba(71, 85, 105, 0.85);
+    }
+
+    .tm-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.25rem 0.65rem;
+      border-radius: 9999px;
+      background-color: rgba(59, 130, 246, 0.12);
+      color: rgba(30, 64, 175, 0.95);
+      font-size: 0.75rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    tr[data-task-group-row][data-group-level='secondary'] .tm-group-toggle {
+      padding-left: 2.25rem;
+    }
+
     @media (max-width: 640px) {
       .tm-filter-panel {
         max-width: min(100vw - 2rem, 22rem);
+      }
+      .tm-group-toggle {
+        padding-inline: 0.75rem;
+      }
+      tr[data-task-group-row][data-group-level='secondary'] .tm-group-toggle {
+        padding-left: 1.8rem;
+      }
+      .tm-group-label {
+        font-size: 0.85rem;
+      }
+      .tm-group-count {
+        font-size: 0.7rem;
       }
     }
   </style>
@@ -349,9 +473,19 @@
 
               <div class="border-t border-dashed border-slate-200/70"></div>
 
-              <div class="flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                <span class="tm-badge-neutral">Agrupación</span>
-                <span>Organiza la tabla por tus prioridades</span>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  <span class="tm-badge-neutral">Agrupación</span>
+                  <span>Organiza la tabla por tus prioridades</span>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                  data-group-clear
+                  data-disabled-label="true"
+                >
+                  Limpiar agrupación
+                </button>
               </div>
 
               <div class="flex flex-wrap items-start gap-5">
@@ -421,6 +555,9 @@
                     data-start-index="{{ task_definition_page_start }}"
                     data-end-index="{{ task_definition_page_end }}"
                     data-page-size="{{ task_definition_paginator.per_page }}"
+                    data-group-primary="{{ task_definition_group_primary|default:'none' }}"
+                    data-group-secondary="{{ task_definition_group_secondary|default:'none' }}"
+                    data-column-count="5"
                   >
                     {% if task_definition_rows %}
                       {% include "task_manager/includes/task_definition_rows.html" with rows=task_definition_rows %}
@@ -1305,6 +1442,7 @@
         var activePicker = null;
         var panelRegistry = new WeakMap();
         var panelOrigins = new WeakMap();
+        var pickerControllers = new Map();
 
         var getPanel = function (picker) {
           return panelRegistry.get(picker) || null;
@@ -1542,6 +1680,7 @@
         };
 
         pickers.forEach(function (picker, index) {
+          var pickerName = picker.getAttribute('data-filter-name');
           if (!picker.id) {
             picker.id = 'tm-filter-picker-' + index;
           }
@@ -1566,6 +1705,50 @@
 
           if (initialButton) {
             applySelection(picker, initialButton, true);
+          }
+
+          if (pickerName) {
+            pickerControllers.set(pickerName, {
+              element: picker,
+              select: function (value, options) {
+                var targetValue = typeof value === 'string' ? value : '';
+                if (!targetValue) {
+                  targetValue = picker.getAttribute('data-filter-default-value') || '';
+                }
+                var currentValue =
+                  picker.getAttribute('data-selected-value') ||
+                  picker.getAttribute('data-filter-current-value') ||
+                  '';
+                if (currentValue === targetValue) {
+                  return false;
+                }
+                var scopePanel = getPanel(picker);
+                var root = scopePanel || picker;
+                var buttons = Array.prototype.slice.call(root.querySelectorAll('[data-filter-option]'));
+                var targetButton = buttons.find(function (button) {
+                  return button.getAttribute('data-value') === targetValue;
+                });
+                if (!targetButton) {
+                  return false;
+                }
+                var silent = true;
+                if (options && Object.prototype.hasOwnProperty.call(options, 'silent')) {
+                  silent = !!options.silent;
+                }
+                applySelection(picker, targetButton, silent);
+                if (silent) {
+                  closePicker(picker);
+                }
+                return true;
+              },
+              getValue: function () {
+                return (
+                  picker.getAttribute('data-selected-value') ||
+                  picker.getAttribute('data-filter-current-value') ||
+                  ''
+                );
+              },
+            });
           }
 
           if (trigger) {
@@ -1640,16 +1823,405 @@
             positionPanel(activePicker);
           }
         });
+
+        window.tmFilterPickers = {
+          select: function (name, value, options) {
+            if (!name) {
+              return false;
+            }
+            var controller = pickerControllers.get(String(name));
+            if (!controller) {
+              return false;
+            }
+            return controller.select(value, options);
+          },
+          getValue: function (name) {
+            if (!name) {
+              return null;
+            }
+            var controller = pickerControllers.get(String(name));
+            if (!controller) {
+              return null;
+            }
+            return controller.getValue();
+          },
+          getPicker: function (name) {
+            if (!name) {
+              return null;
+            }
+            var controller = pickerControllers.get(String(name));
+            return controller ? controller.element : null;
+          },
+        };
+      };
+
+      var setupTaskDefinitionGrouping = function () {
+        var list = document.querySelector('[data-task-definition-list]');
+        if (!list) {
+          window.tmTaskGrouping = null;
+          return null;
+        }
+
+        var GROUP_DIMENSIONS = {
+          status: { label: 'Estado', emptyLabel: 'Sin estado' },
+          category: { label: 'Categoría', emptyLabel: 'Sin categoría' },
+          scope: { label: 'Lugar', emptyLabel: 'Cobertura general' },
+          responsible: { label: 'Responsable sugerido', emptyLabel: 'Sin responsable' },
+          task_type: { label: 'Tipo de planificación', emptyLabel: 'Sin tipo definido' },
+          evidence: { label: 'Requisito de evidencia', emptyLabel: 'Sin requisito' },
+        };
+
+        var collapsedKeys = new Set();
+        var columnCount = parseInt(list.getAttribute('data-column-count') || '5', 10);
+        if (!isFinite(columnCount) || columnCount <= 0) {
+          columnCount = 5;
+        }
+
+        var readGroupValue = function (row, dimension) {
+          if (!row || !dimension) {
+            return { key: dimension + ':__none__', label: '', subtitle: '' };
+          }
+          var base = 'data-group-' + dimension.replace(/_/g, '-');
+          var key = row.getAttribute(base + '-key') || '';
+          var label = row.getAttribute(base + '-label') || '';
+          var subtitle = row.getAttribute(base + '-subtitle') || '';
+          var meta = GROUP_DIMENSIONS[dimension] || {};
+          if (!label) {
+            label = meta.emptyLabel || 'Sin datos';
+          }
+          if (!key) {
+            var slug = label
+              .toLowerCase()
+              .replace(/\s+/g, '-')
+              .replace(/[^a-z0-9\-]/g, '');
+            if (!slug) {
+              slug = 'grupo';
+            }
+            key = dimension + ':' + slug;
+          }
+          return {
+            key: key,
+            label: label,
+            subtitle: subtitle || '',
+          };
+        };
+
+        var formatCount = function (count) {
+          var value = typeof count === 'number' && !isNaN(count) ? count : 0;
+          return value === 1 ? '1 tarea' : value + ' tareas';
+        };
+
+        var createGroupHeaderRow = function (level, dimension, value, count, groupKey, parentKey) {
+          var tr = document.createElement('tr');
+          tr.setAttribute('data-task-group-row', '');
+          tr.setAttribute('data-group-level', level);
+          tr.setAttribute('data-group-key', groupKey || value.key || '');
+          tr.setAttribute('data-group-dimension', dimension);
+          tr.setAttribute('data-group-collapsed', 'false');
+          if (parentKey) {
+            tr.setAttribute('data-parent-group', parentKey);
+          }
+
+          var td = document.createElement('td');
+          td.setAttribute('colspan', String(columnCount));
+
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'tm-group-toggle';
+          button.setAttribute('data-task-group-toggle', '');
+          button.setAttribute('aria-expanded', 'true');
+          button.setAttribute('data-group-key', groupKey || value.key || '');
+
+          var icon = document.createElement('span');
+          icon.className = 'tm-group-toggle-icon';
+          icon.innerHTML =
+            '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02L12.5 9.5l-4.23 4.24a.75.75 0 11-1.08-1.04L10.19 9.5 7.23 6.27a.75.75 0 01-.02-1.04z" clip-rule="evenodd"></path></svg>';
+          button.appendChild(icon);
+
+          var text = document.createElement('span');
+          text.className = 'tm-group-text';
+
+          var dimLabel = document.createElement('span');
+          dimLabel.className = 'tm-group-dimension';
+          dimLabel.textContent = (GROUP_DIMENSIONS[dimension] && GROUP_DIMENSIONS[dimension].label) || dimension;
+          text.appendChild(dimLabel);
+
+          var valueLabel = document.createElement('span');
+          valueLabel.className = 'tm-group-label';
+          valueLabel.textContent = value.label;
+          text.appendChild(valueLabel);
+
+          if (value.subtitle) {
+            var subtitle = document.createElement('span');
+            subtitle.className = 'tm-group-subtitle';
+            subtitle.textContent = value.subtitle;
+            text.appendChild(subtitle);
+          }
+
+          button.appendChild(text);
+
+          var counter = document.createElement('span');
+          counter.className = 'tm-group-count';
+          counter.textContent = formatCount(count);
+          button.appendChild(counter);
+
+          td.appendChild(button);
+          tr.appendChild(td);
+          return tr;
+        };
+
+        var shouldBreak = function (level, nextLevel) {
+          if (level === 'primary') {
+            return nextLevel === 'primary';
+          }
+          if (level === 'secondary') {
+            return nextLevel === 'primary' || nextLevel === 'secondary';
+          }
+          return false;
+        };
+
+        var hideDescendants = function (header) {
+          if (!header) {
+            return;
+          }
+          var level = header.getAttribute('data-group-level');
+          var next = header.nextElementSibling;
+          while (next) {
+            if (next.hasAttribute('data-task-group-row')) {
+              var nextLevel = next.getAttribute('data-group-level');
+              if (shouldBreak(level, nextLevel)) {
+                break;
+              }
+              next.classList.add('hidden');
+              hideDescendants(next);
+            } else if (next.hasAttribute('data-task-definition-row')) {
+              next.classList.add('hidden');
+            }
+            next = next.nextElementSibling;
+          }
+        };
+
+        var applyAllGroupVisibility = function () {
+          var allRows = Array.prototype.slice.call(
+            list.querySelectorAll('[data-task-group-row], [data-task-definition-row]')
+          );
+          allRows.forEach(function (row) {
+            row.classList.remove('hidden');
+          });
+          var headers = Array.prototype.slice.call(list.querySelectorAll('[data-task-group-row]'));
+          headers.forEach(function (header) {
+            var key = header.getAttribute('data-group-key');
+            var collapsed = collapsedKeys.has(key);
+            header.setAttribute('data-group-collapsed', collapsed ? 'true' : 'false');
+            var toggle = header.querySelector('[data-task-group-toggle]');
+            if (toggle) {
+              toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            }
+          });
+          headers.forEach(function (header) {
+            var key = header.getAttribute('data-group-key');
+            if (collapsedKeys.has(key)) {
+              hideDescendants(header);
+            }
+          });
+        };
+
+        var clearRowState = function (row) {
+          row.classList.remove('hidden');
+          row.removeAttribute('data-parent-group');
+          row.removeAttribute('data-group-path');
+        };
+
+        var applyGrouping = function (options) {
+          var preserveState = !!(options && options.preserveState);
+          var retainedCollapsed = preserveState ? new Set(collapsedKeys) : new Set();
+          var headerRows = Array.prototype.slice.call(list.querySelectorAll('[data-task-group-row]'));
+          headerRows.forEach(function (header) {
+            header.parentNode.removeChild(header);
+          });
+
+          var rows = Array.prototype.slice.call(list.querySelectorAll('[data-task-definition-row]'));
+          if (!rows.length) {
+            collapsedKeys = new Set();
+            applyAllGroupVisibility();
+            return;
+          }
+          rows.forEach(clearRowState);
+
+          var primary = (list.getAttribute('data-group-primary') || 'none').trim() || 'none';
+          var secondary = (list.getAttribute('data-group-secondary') || 'none').trim() || 'none';
+          if (!Object.prototype.hasOwnProperty.call(GROUP_DIMENSIONS, primary)) {
+            primary = 'none';
+          }
+          if (!Object.prototype.hasOwnProperty.call(GROUP_DIMENSIONS, secondary) || secondary === primary) {
+            secondary = 'none';
+          }
+
+          var fragment = document.createDocumentFragment();
+          var validKeys = new Set();
+
+          if (primary === 'none') {
+            rows.forEach(function (row) {
+              fragment.appendChild(row);
+            });
+            list.appendChild(fragment);
+            collapsedKeys = new Set();
+            applyAllGroupVisibility();
+            return;
+          }
+
+          var primaryIndex = Object.create(null);
+          var primaryGroups = [];
+
+          rows.forEach(function (row) {
+            var primaryValue = readGroupValue(row, primary);
+            var primaryKey = primaryValue.key;
+            if (!Object.prototype.hasOwnProperty.call(primaryIndex, primaryKey)) {
+              primaryIndex[primaryKey] = {
+                key: primaryKey,
+                dimension: primary,
+                value: primaryValue,
+                rows: [],
+                secondaryIndex: Object.create(null),
+                secondaryGroups: [],
+              };
+              primaryGroups.push(primaryIndex[primaryKey]);
+            }
+            var primaryGroup = primaryIndex[primaryKey];
+            if (secondary !== 'none') {
+              var secondaryValue = readGroupValue(row, secondary);
+              var secondaryKey = secondaryValue.key;
+              if (!Object.prototype.hasOwnProperty.call(primaryGroup.secondaryIndex, secondaryKey)) {
+                primaryGroup.secondaryIndex[secondaryKey] = {
+                  key: primaryKey + '||' + secondaryKey,
+                  ownKey: secondaryKey,
+                  dimension: secondary,
+                  value: secondaryValue,
+                  rows: [],
+                };
+                primaryGroup.secondaryGroups.push(primaryGroup.secondaryIndex[secondaryKey]);
+              }
+              primaryGroup.secondaryIndex[secondaryKey].rows.push(row);
+            } else {
+              primaryGroup.rows.push(row);
+            }
+          });
+
+          var compareByLabel = function (a, b) {
+            var labelA = a && a.value && a.value.label ? String(a.value.label) : '';
+            var labelB = b && b.value && b.value.label ? String(b.value.label) : '';
+            return labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
+          };
+
+          primaryGroups.sort(compareByLabel);
+          if (secondary !== 'none') {
+            primaryGroups.forEach(function (group) {
+              group.secondaryGroups.sort(compareByLabel);
+            });
+          }
+
+          primaryGroups.forEach(function (group) {
+            var count = 0;
+            if (secondary === 'none') {
+              count = group.rows.length;
+            } else {
+              group.secondaryGroups.forEach(function (subGroup) {
+                subGroup.count = subGroup.rows.length;
+                count += subGroup.count;
+              });
+            }
+            group.count = count;
+          });
+
+          primaryGroups.forEach(function (group) {
+            validKeys.add(group.key);
+          var header = createGroupHeaderRow('primary', group.dimension, group.value, group.count, group.key, null);
+            fragment.appendChild(header);
+            if (secondary === 'none') {
+              group.rows.forEach(function (row) {
+                row.setAttribute('data-parent-group', group.key);
+                row.setAttribute('data-group-path', group.key);
+                fragment.appendChild(row);
+              });
+            } else {
+              group.secondaryGroups.forEach(function (subGroup) {
+                validKeys.add(subGroup.key);
+                var secondaryHeader = createGroupHeaderRow(
+                  'secondary',
+                  subGroup.dimension,
+                  subGroup.value,
+                  subGroup.count,
+                  subGroup.key,
+                  group.key
+                );
+                fragment.appendChild(secondaryHeader);
+                subGroup.rows.forEach(function (row) {
+                  row.setAttribute('data-parent-group', subGroup.key);
+                  row.setAttribute('data-group-path', subGroup.key);
+                  fragment.appendChild(row);
+                });
+              });
+            }
+          });
+
+          list.appendChild(fragment);
+
+          var filteredCollapsed = new Set();
+          retainedCollapsed.forEach(function (key) {
+            if (validKeys.has(key)) {
+              filteredCollapsed.add(key);
+            }
+          });
+          collapsedKeys = filteredCollapsed;
+          applyAllGroupVisibility();
+        };
+
+        list.addEventListener('click', function (event) {
+          var toggle = event.target.closest('[data-task-group-toggle]');
+          if (!toggle) {
+            return;
+          }
+          event.preventDefault();
+          var header = toggle.closest('[data-task-group-row]');
+          if (!header) {
+            return;
+          }
+          var key = header.getAttribute('data-group-key');
+          if (!key) {
+            return;
+          }
+          if (collapsedKeys.has(key)) {
+            collapsedKeys.delete(key);
+          } else {
+            collapsedKeys.add(key);
+          }
+          applyAllGroupVisibility();
+        });
+
+        var api = {
+          apply: function () {
+            collapsedKeys = new Set();
+            applyGrouping({ preserveState: false });
+          },
+          reapply: function () {
+            applyGrouping({ preserveState: true });
+          },
+        };
+
+        window.tmTaskGrouping = api;
+        applyGrouping({ preserveState: false });
+        return api;
       };
 
       initializeFilterPickers();
+      setupTaskDefinitionGrouping();
 
       var filterForm = document.querySelector('[data-task-definition-filter-form]');
-      if (filterForm) {
-        var applyTaskDefinitionFilters = function () {
-          var params = new URLSearchParams(window.location.search);
-          params.set('tm_tab', 'tareas');
-          params.delete('page');
+        if (filterForm) {
+          var applyTaskDefinitionFilters = function () {
+            var params = new URLSearchParams(window.location.search);
+            params.set('tm_tab', 'tareas');
+            params.delete('page');
           var pickers = filterForm.querySelectorAll('[data-filter-picker]');
           pickers.forEach(function (picker) {
             var name = picker.getAttribute('data-filter-name');
@@ -1675,6 +2247,87 @@
         filterForm.addEventListener('tm-filter-change', function () {
           applyTaskDefinitionFilters();
         });
+
+          var presetButtons = filterForm.querySelectorAll('[data-group-preset]');
+        var clearGroupingButton = filterForm.querySelector('[data-group-clear]');
+
+        var updateGroupingClearState = function () {
+          if (!clearGroupingButton) {
+            return;
+          }
+          var currentPrimary =
+            (window.tmFilterPickers && typeof window.tmFilterPickers.getValue === 'function'
+              ? window.tmFilterPickers.getValue('group_primary')
+              : null) || '';
+          var currentSecondary =
+            (window.tmFilterPickers && typeof window.tmFilterPickers.getValue === 'function'
+              ? window.tmFilterPickers.getValue('group_secondary')
+              : null) || '';
+          var hasGrouping =
+            (currentPrimary && currentPrimary !== 'none') || (currentSecondary && currentSecondary !== 'none');
+          clearGroupingButton.classList.toggle('pointer-events-none', !hasGrouping);
+          clearGroupingButton.classList.toggle('opacity-60', !hasGrouping);
+          clearGroupingButton.toggleAttribute('disabled', !hasGrouping);
+        };
+
+        var handleGroupingPreset = function (preset) {
+          if (!preset) {
+            return;
+          }
+          var parts = preset.split('-');
+          var primaryValue = parts[0] || 'none';
+          var secondaryValue = parts.length > 1 ? parts[1] : 'none';
+          if (secondaryValue === primaryValue) {
+            secondaryValue = 'none';
+          }
+          var filtersApi = window.tmFilterPickers;
+          if (!filtersApi || typeof filtersApi.select !== 'function') {
+            return;
+          }
+          var primaryChanged = filtersApi.select('group_primary', primaryValue, { silent: true });
+          var secondaryChanged = filtersApi.select('group_secondary', secondaryValue, { silent: true });
+          updateGroupingClearState();
+          if (primaryChanged || secondaryChanged) {
+            applyTaskDefinitionFilters();
+          }
+        };
+
+        if (presetButtons.length) {
+          presetButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+              event.preventDefault();
+              var preset = (button.getAttribute('data-group-preset') || '').trim();
+              handleGroupingPreset(preset);
+            });
+          });
+        }
+
+        if (clearGroupingButton) {
+          clearGroupingButton.addEventListener('click', function (event) {
+            event.preventDefault();
+            var filtersApi = window.tmFilterPickers;
+            if (!filtersApi || typeof filtersApi.select !== 'function') {
+              return;
+            }
+            var primaryCleared = filtersApi.select('group_primary', 'none', { silent: true });
+            var secondaryCleared = filtersApi.select('group_secondary', 'none', { silent: true });
+            updateGroupingClearState();
+            if (primaryCleared || secondaryCleared) {
+              applyTaskDefinitionFilters();
+            }
+          });
+          filterForm.addEventListener('tm-filter-change', function (event) {
+            if (!event || !event.detail) {
+              return;
+            }
+            if (event.detail.name === 'group_primary' || event.detail.name === 'group_secondary') {
+              updateGroupingClearState();
+            }
+          });
+          updateGroupingClearState();
+        }
+
+        updateGroupingClearState();
       }
 
       var popover = document.createElement('div');
@@ -1948,6 +2601,9 @@
           });
           if (typeof setupTaskDefinitionActions === 'function') {
             setupTaskDefinitionActions();
+          }
+          if (window.tmTaskGrouping && typeof window.tmTaskGrouping.reapply === 'function') {
+            window.tmTaskGrouping.reapply();
           }
         };
 

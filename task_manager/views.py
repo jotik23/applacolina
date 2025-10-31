@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views import View, generic
 
@@ -98,6 +99,10 @@ class TaskManagerHomeView(generic.TemplateView):
                 remaining_params[key] = current_value
             elif key in remaining_params:
                 remaining_params.pop(key)
+        if remaining_params.get("group_primary") in {None, "", "none"}:
+            remaining_params.pop("group_primary", None)
+        if remaining_params.get("group_secondary") in {None, "", "none"}:
+            remaining_params.pop("group_secondary", None)
         remaining_params["tm_tab"] = "tareas"
         querystring = remaining_params.urlencode()
         context["task_definition_querystring"] = querystring
@@ -111,6 +116,31 @@ class TaskManagerHomeView(generic.TemplateView):
             end_index = 0
         context["task_definition_page_start"] = start_index
         context["task_definition_page_end"] = end_index
+
+        group_primary_groups = build_grouping_primary_filter_groups()
+        raw_group_primary = (self.request.GET.get("group_primary") or "none").strip() or "none"
+        group_primary_value = (
+            raw_group_primary
+            if resolve_option_label(group_primary_groups, raw_group_primary) is not None
+            else "none"
+        )
+        group_primary_label = (
+            resolve_option_label(group_primary_groups, group_primary_value) or _("Sin agrupación")
+        )
+
+        group_secondary_groups = build_grouping_secondary_filter_groups()
+        raw_group_secondary = (self.request.GET.get("group_secondary") or "none").strip() or "none"
+        group_secondary_value = (
+            raw_group_secondary
+            if resolve_option_label(group_secondary_groups, raw_group_secondary) is not None
+            else "none"
+        )
+        if group_secondary_value == group_primary_value:
+            group_secondary_value = "none"
+        group_secondary_label = (
+            resolve_option_label(group_secondary_groups, group_secondary_value) or _("No aplicar")
+        )
+
         context["task_manager_status_filter"] = FilterPickerData(
             default_value=status_value,
             default_label=status_label,
@@ -149,6 +179,21 @@ class TaskManagerHomeView(generic.TemplateView):
             groups=created_groups,
             neutral_value=defaults.created_window,
         )
+        context["task_manager_group_primary_filter"] = FilterPickerData(
+            default_value=group_primary_value,
+            default_label=group_primary_label,
+            groups=group_primary_groups,
+            neutral_value="none",
+        )
+        context["task_manager_group_secondary_filter"] = FilterPickerData(
+            default_value=group_secondary_value,
+            default_label=group_secondary_label,
+            groups=group_secondary_groups,
+            neutral_value="none",
+        )
+        context["task_definition_group_primary"] = group_primary_value
+        context["task_definition_group_secondary"] = group_secondary_value
+
         active_filters: list[ActiveFilterChip] = []
         if filters.status != defaults.status:
             active_filters.append(
@@ -196,16 +241,6 @@ class TaskManagerHomeView(generic.TemplateView):
         context["task_definition_active_filters"] = active_filters
         context["task_definition_filters_applied"] = bool(active_filters)
         context["task_definition_clear_filters_url"] = build_clear_filters_url(self.request)
-        context["task_manager_group_primary_filter"] = FilterPickerData(
-            default_value="none",
-            default_label=_("Sin agrupación"),
-            groups=build_grouping_primary_filter_groups(),
-        )
-        context["task_manager_group_secondary_filter"] = FilterPickerData(
-            default_value="none",
-            default_label=_("No aplicar"),
-            groups=build_grouping_secondary_filter_groups(),
-        )
         context["task_manager_assignment_farm_filter"] = FilterPickerData(
             default_value="all",
             default_label=_("Todas las granjas"),
@@ -424,6 +459,19 @@ class TaskDefinitionRow:
     record_label: str
     requires_record_format: bool
     created_on_display: str
+    group_status: "TaskDefinitionGroupValue"
+    group_category: "TaskDefinitionGroupValue"
+    group_scope: "TaskDefinitionGroupValue"
+    group_responsible: "TaskDefinitionGroupValue"
+    group_task_type: "TaskDefinitionGroupValue"
+    group_evidence: "TaskDefinitionGroupValue"
+
+
+@dataclass(frozen=True)
+class TaskDefinitionGroupValue:
+    key: str
+    label: str
+    subtitle: Optional[str] = None
 
 
 TASK_FILTER_PARAM_NAMES: tuple[str, ...] = (
@@ -754,6 +802,74 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
         else:
             schedule_detail = " · ".join(schedule_segments) if schedule_segments else _("Configuración pendiente")
 
+        status_label = task.status.name if getattr(task, "status", None) and task.status.name else _("Sin estado")
+        status_key_value = (
+            f"status:{task.status_id}"
+            if task.status_id
+            else f"status:{slugify(status_label) or 'sin-estado'}"
+        )
+        group_status = TaskDefinitionGroupValue(
+            key=status_key_value,
+            label=status_label,
+        )
+
+        category_label = (
+            task.category.name
+            if getattr(task, "category", None) and task.category.name
+            else _("Sin categoría")
+        )
+        category_key_value = (
+            f"category:{task.category_id}"
+            if task.category_id
+            else f"category:{slugify(category_label) or 'sin-categoria'}"
+        )
+        group_category = TaskDefinitionGroupValue(
+            key=category_key_value,
+            label=category_label,
+        )
+
+        scope_slug = slugify(scope_label) or scope_level or "general"
+        scope_key_value = f"scope:{scope_level}:{scope_slug}"
+        scope_subtitle = scope_badge_label if scope_badge_label and scope_badge_label != scope_label else None
+        group_scope = TaskDefinitionGroupValue(
+            key=scope_key_value,
+            label=scope_label,
+            subtitle=scope_subtitle,
+        )
+
+        if task.collaborator_id:
+            responsible_key_value = f"responsible:collaborator:{task.collaborator_id}"
+            responsible_label = responsible_main
+            responsible_subtitle = responsible_secondary or None
+        elif task.position_id:
+            responsible_key_value = f"responsible:position:{task.position_id}"
+            responsible_label = responsible_main
+            responsible_subtitle = responsible_secondary or None
+        else:
+            responsible_key_value = "responsible:none"
+            responsible_label = responsible_main or _("Sin responsable asignado")
+            responsible_subtitle = responsible_secondary or None
+        group_responsible = TaskDefinitionGroupValue(
+            key=responsible_key_value,
+            label=responsible_label,
+            subtitle=responsible_subtitle,
+        )
+
+        task_type_value = task.task_type or "unspecified"
+        task_type_key = f"task_type:{task_type_value}"
+        group_task_type = TaskDefinitionGroupValue(
+            key=task_type_key,
+            label=task_type_label or _("Sin tipo definido"),
+        )
+
+        evidence_value = task.evidence_requirement or TaskDefinition.EvidenceRequirement.NONE
+        evidence_key = f"evidence:{evidence_value}"
+        evidence_group_label = evidence_label or _("Sin requisito")
+        group_evidence = TaskDefinitionGroupValue(
+            key=evidence_key,
+            label=evidence_group_label,
+        )
+
         rows.append(
             TaskDefinitionRow(
                 id=task.pk,
@@ -781,6 +897,12 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
                 record_label=record_label,
                 requires_record_format=task.record_format != TaskDefinition.RecordFormat.NONE,
                 created_on_display=date_format(task.created_at, "DATE_FORMAT"),
+                group_status=group_status,
+                group_category=group_category,
+                group_scope=group_scope,
+                group_responsible=group_responsible,
+                group_task_type=group_task_type,
+                group_evidence=group_evidence,
             )
         )
     return rows
