@@ -11,7 +11,8 @@
   class="tm-filter-picker"
   data-filter-picker
   data-filter-name="{{ name }}"
-  data-filter-default-value="{{ default_value }}"
+  data-filter-default-value="{{ neutral_value|default:default_value }}"
+  data-filter-current-value="{{ default_value }}"
   data-filter-default-label="{{ default_label }}"
 >
   <input type="hidden" name="{{ name }}" value="{{ default_value }}" data-filter-value />

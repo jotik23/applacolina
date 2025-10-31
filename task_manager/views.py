@@ -1,14 +1,16 @@
 from dataclasses import dataclass
-from typing import Iterable, Optional, Sequence
+from datetime import date, datetime, time, timedelta
+from typing import Iterable, Mapping, Optional, Sequence
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
-from django.http import JsonResponse
+from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 from django.views import View, generic
@@ -31,6 +33,30 @@ class TaskManagerHomeView(generic.TemplateView):
         statuses = TaskStatus.objects.filter(is_active=True).order_by("name")
         context["task_manager_categories"] = categories
         context["task_manager_statuses"] = statuses
+
+        filters = build_task_definition_filters(self.request.GET)
+        defaults = TaskDefinitionFilters()
+
+        status_groups = build_status_filter_groups(statuses)
+        status_value, status_label = ensure_filter_selection(filters, "status", status_groups, defaults.status)
+        category_groups = build_category_filter_groups(categories)
+        category_value, category_label = ensure_filter_selection(
+            filters, "category", category_groups, defaults.category
+        )
+        scope_groups = build_scope_filter_groups()
+        scope_value, scope_label = ensure_filter_selection(filters, "scope", scope_groups, defaults.scope)
+        task_type_groups = build_task_type_filter_groups()
+        task_type_value, task_type_label = ensure_filter_selection(
+            filters, "task_type", task_type_groups, defaults.task_type
+        )
+        responsible_groups = build_responsible_filter_groups()
+        responsible_value, responsible_label = ensure_filter_selection(
+            filters, "responsible", responsible_groups, defaults.responsible
+        )
+        created_groups = build_created_window_filter_groups()
+        created_value, created_label = ensure_filter_selection(
+            filters, "created_window", created_groups, defaults.created_window
+        )
         highlight_raw = self.request.GET.get("tm_task")
         highlight_id: Optional[int] = None
         if highlight_raw is not None:
@@ -39,7 +65,7 @@ class TaskManagerHomeView(generic.TemplateView):
             except (TypeError, ValueError):
                 highlight_id = None
 
-        queryset = get_task_definition_queryset()
+        queryset = get_task_definition_queryset(filters)
         paginator = Paginator(queryset, 20)
         page_number = self.request.GET.get("page")
         page_obj = paginator.get_page(page_number)
@@ -62,15 +88,20 @@ class TaskManagerHomeView(generic.TemplateView):
         context["task_definition_page_numbers"] = build_compact_page_range(page_obj)
 
         remaining_params = self.request.GET.copy()
+        remaining_params._mutable = True
         if "page" in remaining_params:
             remaining_params.pop("page")
+        for key in TASK_FILTER_PARAM_NAMES:
+            default_value = getattr(defaults, key)
+            current_value = getattr(filters, key)
+            if current_value and current_value != default_value:
+                remaining_params[key] = current_value
+            elif key in remaining_params:
+                remaining_params.pop(key)
+        remaining_params["tm_tab"] = "tareas"
         querystring = remaining_params.urlencode()
         context["task_definition_querystring"] = querystring
-        if querystring:
-            query_prefix = f"?{querystring}&"
-        else:
-            query_prefix = "?"
-        context["task_definition_page_query_prefix"] = query_prefix
+        context["task_definition_page_query_prefix"] = f"?{querystring}&" if querystring else "?"
 
         if paginator.count:
             start_index = (page_obj.number - 1) * paginator.per_page + 1
@@ -81,37 +112,90 @@ class TaskManagerHomeView(generic.TemplateView):
         context["task_definition_page_start"] = start_index
         context["task_definition_page_end"] = end_index
         context["task_manager_status_filter"] = FilterPickerData(
-            default_value="all",
-            default_label=_("Todos los estados"),
-            groups=build_status_filter_groups(statuses),
+            default_value=status_value,
+            default_label=status_label,
+            groups=status_groups,
+            neutral_value=defaults.status,
         )
         context["task_manager_category_filter"] = FilterPickerData(
-            default_value="all",
-            default_label=_("Todas las categorías"),
-            groups=build_category_filter_groups(categories),
+            default_value=category_value,
+            default_label=category_label,
+            groups=category_groups,
+            neutral_value=defaults.category,
         )
         context["task_manager_scope_filter"] = FilterPickerData(
-            default_value="all",
-            default_label=_("Todos los lugares"),
-            groups=build_scope_filter_groups(),
+            default_value=scope_value,
+            default_label=scope_label,
+            groups=scope_groups,
             search_enabled=True,
+            neutral_value=defaults.scope,
         )
         context["task_manager_task_type_filter"] = FilterPickerData(
-            default_value="all",
-            default_label=_("Cualquier tipo"),
-            groups=build_task_type_filter_groups(),
+            default_value=task_type_value,
+            default_label=task_type_label,
+            groups=task_type_groups,
+            neutral_value=defaults.task_type,
         )
         context["task_manager_responsible_filter"] = FilterPickerData(
-            default_value="all",
-            default_label=_("Todos los responsables"),
-            groups=build_responsible_filter_groups(),
+            default_value=responsible_value,
+            default_label=responsible_label,
+            groups=responsible_groups,
             search_enabled=True,
+            neutral_value=defaults.responsible,
         )
         context["task_manager_created_window_filter"] = FilterPickerData(
-            default_value="all",
-            default_label=_("Cualquier fecha"),
-            groups=build_created_window_filter_groups(),
+            default_value=created_value,
+            default_label=created_label,
+            groups=created_groups,
+            neutral_value=defaults.created_window,
         )
+        active_filters: list[ActiveFilterChip] = []
+        if filters.status != defaults.status:
+            active_filters.append(
+                build_active_filter_chip(self.request, "status", _("Estado"), status_label, status_value)
+            )
+        if filters.category != defaults.category:
+            active_filters.append(
+                build_active_filter_chip(self.request, "category", _("Categoría"), category_label, category_value)
+            )
+        if filters.scope != defaults.scope:
+            active_filters.append(
+                build_active_filter_chip(self.request, "scope", _("Lugar"), scope_label, scope_value)
+            )
+        if filters.task_type != defaults.task_type:
+            active_filters.append(
+                build_active_filter_chip(
+                    self.request,
+                    "task_type",
+                    _("Tipo de planificación"),
+                    task_type_label,
+                    task_type_value,
+                )
+            )
+        if filters.responsible != defaults.responsible:
+            active_filters.append(
+                build_active_filter_chip(
+                    self.request,
+                    "responsible",
+                    _("Responsable"),
+                    responsible_label,
+                    responsible_value,
+                )
+            )
+        if filters.created_window != defaults.created_window:
+            active_filters.append(
+                build_active_filter_chip(
+                    self.request,
+                    "created_window",
+                    _("Creación"),
+                    created_label,
+                    created_value,
+                )
+            )
+
+        context["task_definition_active_filters"] = active_filters
+        context["task_definition_filters_applied"] = bool(active_filters)
+        context["task_definition_clear_filters_url"] = build_clear_filters_url(self.request)
         context["task_manager_group_primary_filter"] = FilterPickerData(
             default_value="none",
             default_label=_("Sin agrupación"),
@@ -278,7 +362,8 @@ class TaskDefinitionListView(LoginRequiredMixin, View):
         if request.headers.get("X-Requested-With") != "XMLHttpRequest":
             return JsonResponse({"detail": _("Solicitud inválida.")}, status=400)
 
-        queryset = get_task_definition_queryset()
+        filters = build_task_definition_filters(request.GET)
+        queryset = get_task_definition_queryset(filters)
         paginator = Paginator(queryset, 20)
         page_number = request.GET.get("page")
         page_obj = paginator.get_page(page_number)
@@ -341,8 +426,39 @@ class TaskDefinitionRow:
     created_on_display: str
 
 
-def get_task_definition_queryset() -> QuerySet[TaskDefinition]:
-    return (
+TASK_FILTER_PARAM_NAMES: tuple[str, ...] = (
+    "status",
+    "category",
+    "scope",
+    "task_type",
+    "responsible",
+    "created_window",
+)
+
+
+@dataclass
+class TaskDefinitionFilters:
+    status: str = "all"
+    category: str = "all"
+    scope: str = "all"
+    task_type: str = "all"
+    responsible: str = "all"
+    created_window: str = "all"
+
+
+@dataclass(frozen=True)
+class ActiveFilterChip:
+    key: str
+    label: str
+    display_value: str
+    value: str
+    remove_url: str
+
+
+def get_task_definition_queryset(
+    filters: Optional[TaskDefinitionFilters] = None,
+) -> QuerySet[TaskDefinition]:
+    queryset = (
         TaskDefinition.objects.select_related(
             "status",
             "category",
@@ -357,6 +473,260 @@ def get_task_definition_queryset() -> QuerySet[TaskDefinition]:
         )
         .order_by("name", "pk")
     )
+
+    if filters is None:
+        filters = TaskDefinitionFilters()
+
+    return apply_task_definition_filters(queryset, filters)
+
+
+def build_task_definition_filters(params: Optional[Mapping[str, str] | QueryDict]) -> TaskDefinitionFilters:
+    filters = TaskDefinitionFilters()
+    if not params:
+        return filters
+
+    for key in TASK_FILTER_PARAM_NAMES:
+        raw_value = params.get(key)
+        if raw_value is None:
+            continue
+        value = str(raw_value).strip()
+        if not value:
+            continue
+        setattr(filters, key, value)
+
+    return filters
+
+
+def apply_task_definition_filters(
+    queryset: QuerySet[TaskDefinition],
+    filters: TaskDefinitionFilters,
+) -> QuerySet[TaskDefinition]:
+    needs_distinct = False
+
+    status_value = filters.status
+    status_id = _parse_positive_int(status_value)
+    if status_id is not None:
+        queryset = queryset.filter(status_id=status_id)
+
+    category_value = filters.category
+    category_id = _parse_positive_int(category_value)
+    if category_id is not None:
+        queryset = queryset.filter(category_id=category_id)
+
+    task_type_value = filters.task_type
+    if task_type_value in {TaskDefinition.TaskType.ONE_TIME, TaskDefinition.TaskType.RECURRING}:
+        queryset = queryset.filter(task_type=task_type_value)
+
+    responsible_value = filters.responsible
+    if responsible_value and responsible_value not in {"", "all"}:
+        if responsible_value == "collaborator":
+            queryset = queryset.filter(collaborator__isnull=False)
+        elif responsible_value == "position":
+            queryset = queryset.filter(position__isnull=False)
+        elif responsible_value == "unassigned":
+            queryset = queryset.filter(collaborator__isnull=True, position__isnull=True)
+        elif responsible_value.startswith("collaborator:"):
+            collaborator_id = _parse_positive_int(responsible_value.partition(":")[2])
+            if collaborator_id is not None:
+                queryset = queryset.filter(collaborator_id=collaborator_id)
+        elif responsible_value.startswith("position:"):
+            position_id = _parse_positive_int(responsible_value.partition(":")[2])
+            if position_id is not None:
+                queryset = queryset.filter(position_id=position_id)
+
+    scope_value = filters.scope
+    if scope_value and scope_value not in {"", "all"}:
+        needs_distinct = True
+        prefix, _, suffix = scope_value.partition(":")
+        scope_id = _parse_positive_int(suffix) if suffix else None
+
+        if prefix == "general":
+            queryset = queryset.filter(
+                farms__isnull=True,
+                chicken_houses__isnull=True,
+                rooms__isnull=True,
+                position__farm__isnull=True,
+                position__chicken_house__isnull=True,
+            )
+        elif prefix == "farm":
+            if scope_id is None:
+                queryset = queryset.filter(
+                    Q(farms__isnull=False)
+                    | Q(chicken_houses__farm__isnull=False)
+                    | Q(rooms__chicken_house__farm__isnull=False)
+                    | Q(position__farm__isnull=False)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(farms__pk=scope_id)
+                    | Q(chicken_houses__farm__pk=scope_id)
+                    | Q(rooms__chicken_house__farm__pk=scope_id)
+                    | Q(position__farm_id=scope_id)
+                )
+        elif prefix == "house":
+            if scope_id is None:
+                queryset = queryset.filter(
+                    Q(chicken_houses__isnull=False)
+                    | Q(rooms__chicken_house__isnull=False)
+                    | Q(position__chicken_house__isnull=False)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(chicken_houses__pk=scope_id)
+                    | Q(rooms__chicken_house__pk=scope_id)
+                    | Q(position__chicken_house_id=scope_id)
+                )
+        elif prefix == "room":
+            if scope_id is None:
+                queryset = queryset.filter(rooms__isnull=False)
+            else:
+                queryset = queryset.filter(rooms__pk=scope_id)
+        else:
+            needs_distinct = False
+
+    created_window_value = filters.created_window
+    if created_window_value and created_window_value not in {"", "all"}:
+        start_date, end_date = get_created_window_range(created_window_value)
+        if start_date is not None:
+            queryset = queryset.filter(created_at__gte=start_date)
+        if end_date is not None:
+            queryset = queryset.filter(created_at__lt=end_date)
+
+    if needs_distinct:
+        queryset = queryset.distinct()
+
+    return queryset
+
+
+def _parse_positive_int(value: Optional[str]) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    return parsed
+
+
+def get_created_window_range(window: str) -> tuple[Optional[datetime], Optional[datetime]]:
+    """Return an inclusive-exclusive datetime range for the created_at filter."""
+
+    today = timezone.localdate()
+    tz = timezone.get_current_timezone()
+
+    def start_of(day: date) -> datetime:
+        return timezone.make_aware(datetime.combine(day, time.min), tz)
+
+    def next_day(day: date) -> datetime:
+        return start_of(day + timedelta(days=1))
+
+    window = window or ""
+
+    if window == "today":
+        start = start_of(today)
+        end = next_day(today)
+        return start, end
+    if window == "yesterday":
+        day = today - timedelta(days=1)
+        return start_of(day), start_of(today)
+    if window == "last_3_days":
+        start = start_of(today - timedelta(days=2))
+        end = next_day(today)
+        return start, end
+    if window == "last_7_days":
+        start = start_of(today - timedelta(days=6))
+        end = next_day(today)
+        return start, end
+    if window == "this_week":
+        weekday = today.weekday()
+        start_day = today - timedelta(days=weekday)
+        start = start_of(start_day)
+        end = start + timedelta(days=7)
+        return start, end
+    if window == "next_3_days":
+        start_day = today + timedelta(days=1)
+        start = start_of(start_day)
+        end = start + timedelta(days=3)
+        return start, end
+    if window == "next_7_days":
+        start_day = today + timedelta(days=1)
+        start = start_of(start_day)
+        end = start + timedelta(days=7)
+        return start, end
+    if window == "next_14_days":
+        start_day = today + timedelta(days=1)
+        start = start_of(start_day)
+        end = start + timedelta(days=14)
+        return start, end
+
+    return None, None
+
+
+def resolve_option_label(groups: Sequence["FilterOptionGroup"], value: str) -> Optional[str]:
+    for group in groups:
+        for option in group.options:
+            if option.value == value:
+                return option.label
+    return None
+
+
+def ensure_filter_selection(
+    filters: TaskDefinitionFilters,
+    field_name: str,
+    groups: Sequence["FilterOptionGroup"],
+    default_value: str,
+) -> tuple[str, str]:
+    value = getattr(filters, field_name)
+    if not value:
+        value = default_value
+    label = resolve_option_label(groups, value)
+    if label is not None:
+        setattr(filters, field_name, value)
+        return value, label
+
+    setattr(filters, field_name, default_value)
+    fallback_label = resolve_option_label(groups, default_value) or ""
+    return default_value, fallback_label
+
+
+def build_active_filter_chip(
+    request,
+    key: str,
+    label: str,
+    display_value: str,
+    value: str,
+) -> ActiveFilterChip:
+    params = request.GET.copy()
+    params._mutable = True
+    if key in params:
+        params.pop(key)
+    if "page" in params:
+        params.pop("page")
+    params["tm_tab"] = "tareas"
+    remove_query = params.urlencode()
+    base_url = request.path
+    remove_url = f"{base_url}?{remove_query}#tm-tareas" if remove_query else f"{base_url}#tm-tareas"
+    return ActiveFilterChip(
+        key=key,
+        label=label,
+        display_value=display_value,
+        value=value,
+        remove_url=remove_url,
+    )
+
+
+def build_clear_filters_url(request) -> str:
+    params = request.GET.copy()
+    params._mutable = True
+    for key in TASK_FILTER_PARAM_NAMES + ("page",):
+        if key in params:
+            params.pop(key)
+    params["tm_tab"] = "tareas"
+    query = params.urlencode()
+    base_url = request.path
+    return f"{base_url}?{query}#tm-tareas" if query else f"{base_url}#tm-tareas"
 
 
 def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None) -> Sequence[TaskDefinitionRow]:
@@ -436,6 +806,7 @@ class FilterPickerData:
     default_label: str
     groups: Sequence[FilterOptionGroup]
     search_enabled: bool = False
+    neutral_value: Optional[str] = None
 
 
 def build_scope_filter_groups() -> Sequence[FilterOptionGroup]:
