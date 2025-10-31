@@ -8,6 +8,11 @@ class Migration(migrations.Migration):
 
     initial = True
 
+    replaces = [
+        ("granjas", "0001_initial"),
+        ("granjas", "0002_alter_birdbatch_options_and_more"),
+    ]
+
     dependencies = [
     ]
 

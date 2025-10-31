@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Iterable, Mapping, Optional, Sequence
@@ -5,6 +6,7 @@ from typing import Iterable, Mapping, Optional, Sequence
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
@@ -422,6 +424,76 @@ class TaskDefinitionListView(LoginRequiredMixin, View):
 task_definition_list_view = TaskDefinitionListView.as_view()
 
 
+class TaskDefinitionReorderView(LoginRequiredMixin, View):
+    """Persist manual ordering for task definitions."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        if request.headers.get("Content-Type", "").startswith("application/json"):
+            try:
+                payload = json.loads(request.body.decode("utf-8"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({"detail": _("Datos inválidos para reordenar.")}, status=400)
+        else:
+            payload = request.POST
+
+        order_payload = payload.get("order") if isinstance(payload, dict) else None
+        if not isinstance(order_payload, list) or not order_payload:
+            return JsonResponse({"detail": _("No se recibió un orden válido.")}, status=400)
+
+        assignments: list[tuple[int, int]] = []
+        seen_ids: set[int] = set()
+        for item in order_payload:
+            if not isinstance(item, dict):
+                continue
+            task_id = item.get("id")
+            order_value = item.get("order")
+            try:
+                task_id_int = int(task_id)
+                order_int = int(order_value)
+            except (TypeError, ValueError):
+                continue
+            if task_id_int in seen_ids:
+                continue
+            seen_ids.add(task_id_int)
+            assignments.append((task_id_int, order_int))
+
+        if not assignments:
+            return JsonResponse({"detail": _("No se pudo interpretar el nuevo orden.")}, status=400)
+
+        order_values = [order for _, order in assignments]
+        if len(order_values) != len(set(order_values)):
+            return JsonResponse({"detail": _("Los valores de orden no pueden repetirse.")}, status=400)
+
+        updated_count = 0
+        with transaction.atomic():
+            locked_tasks = list(
+                TaskDefinition.objects.select_for_update().filter(pk__in=[task_id for task_id, _ in assignments])
+            )
+            if len(locked_tasks) != len(assignments):
+                return JsonResponse({"detail": _("Alguna tarea indicada no existe.")}, status=400)
+
+            task_map = {task.pk: task for task in locked_tasks}
+            updated: list[TaskDefinition] = []
+            for task_id, order_value in assignments:
+                task = task_map.get(task_id)
+                if task is None:
+                    continue
+                if task.display_order != order_value:
+                    task.display_order = order_value
+                    updated.append(task)
+
+            if updated:
+                TaskDefinition.objects.bulk_update(updated, ["display_order"])
+                updated_count = len(updated)
+
+        return JsonResponse({"updated": updated_count}, status=200)
+
+
+task_definition_reorder_view = TaskDefinitionReorderView.as_view()
+
+
 @dataclass(frozen=True)
 class TaskDefinitionRow:
     id: int
@@ -448,6 +520,7 @@ class TaskDefinitionRow:
     record_label: str
     requires_record_format: bool
     created_on_display: str
+    display_order: int
     group_status: "TaskDefinitionGroupValue"
     group_category: "TaskDefinitionGroupValue"
     group_scope: "TaskDefinitionGroupValue"
@@ -508,7 +581,7 @@ def get_task_definition_queryset(
             "chicken_houses__farm",
             "rooms__chicken_house__farm",
         )
-        .order_by("name", "pk")
+        .order_by("display_order", "name", "pk")
     )
 
     if filters is None:
@@ -845,6 +918,7 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
                 record_label=record_label,
                 requires_record_format=task.record_format != TaskDefinition.RecordFormat.NONE,
                 created_on_display=date_format(task.created_at, "DATE_FORMAT"),
+                display_order=task.display_order or 0,
                 group_status=group_status,
                 group_category=group_category,
                 group_scope=group_scope,
@@ -1224,7 +1298,14 @@ def locate_task_definition_page(
         return None
 
     preceding = queryset.filter(
-        Q(name__lt=task.name) | (Q(name=task.name) & Q(pk__lt=task.pk))
+        Q(display_order__lt=task.display_order)
+        | (
+            Q(display_order=task.display_order)
+            & (
+                Q(name__lt=task.name)
+                | (Q(name=task.name) & Q(pk__lt=task.pk))
+            )
+        )
     ).count()
     return preceding // per_page + 1
 

@@ -2,6 +2,13 @@
   <tr
     id="task-definition-{{ row.id }}"
     data-task-definition-row="{{ row.id }}"
+    data-display-order="{{ row.display_order }}"
+    data-sort-name="{{ row.name|default_if_none:''|escape }}"
+    data-sort-order="{{ row.display_order }}"
+    data-sort-scope="{{ row.scope_label|default_if_none:''|escape }}"
+    data-sort-schedule="{{ row.schedule_detail|default_if_none:''|escape }}"
+    data-sort-responsible="{{ row.responsible_main|default_if_none:''|escape }}"
+    data-sort-created="{{ row.created_on_display|default_if_none:''|escape }}"
     data-group-status-key="{{ row.group_status.key }}"
     data-group-status-label="{{ row.group_status.label|escape }}"
     data-group-status-subtitle="{{ row.group_status.subtitle|default_if_none:''|escape }}"
@@ -24,47 +31,61 @@
     class="align-top transform transition hover:-translate-y-[1px] odd:bg-white even:bg-slate-50/40 hover:bg-slate-100 border-l-4 border-transparent {% if row.is_one_time %}border-rose-200 hover:bg-rose-50/70{% endif %}"
   >
     <td class="px-5 py-5 align-top">
-      <div class="flex flex-col gap-3">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div data-task-description-wrapper class="relative flex flex-col gap-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="text-base font-semibold text-slate-900 sm:text-lg">{{ row.name }}</p>
+      <div class="flex items-start gap-3">
+        <button
+          type="button"
+          class="tm-row-handle"
+          data-task-drag-handle
+          aria-label="Reordenar {{ row.name|escape }}"
+        >
+          <span class="tm-row-handle-icon" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </button>
+        <div class="flex flex-1 flex-col gap-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div data-task-description-wrapper class="relative flex flex-col gap-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="text-base font-semibold text-slate-900 sm:text-lg">{{ row.name }}</p>
+                {% if row.description %}
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/5 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand transition hover:border-brand hover:bg-brand/10 hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 hidden"
+                    data-task-description-toggle
+                    data-target="task-description-{{ row.id }}"
+                    aria-expanded="false"
+                  >
+                    <span data-toggle-text>Descripción</span>
+                    <svg class="h-3 w-3 text-brand transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-toggle-icon>
+                      <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.24 4.24a.75.75 0 01-1.08 0l-4.24-4.24a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                {% endif %}
+              </div>
               {% if row.description %}
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/5 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand transition hover:border-brand hover:bg-brand/10 hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 hidden"
-                  data-task-description-toggle
-                  data-target="task-description-{{ row.id }}"
-                  aria-expanded="false"
+                <p
+                  id="task-description-{{ row.id }}"
+                  class="hidden text-sm leading-relaxed text-slate-500 whitespace-pre-line"
+                  data-task-description
+                  data-state="collapsed"
                 >
-                  <span data-toggle-text>Descripción</span>
-                  <svg class="h-3 w-3 text-brand transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-toggle-icon>
-                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.24 4.24a.75.75 0 01-1.08 0l-4.24-4.24a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-                  </svg>
-                </button>
+                  {{ row.description|linebreaksbr }}
+                </p>
               {% endif %}
             </div>
-            {% if row.description %}
-              <p
-                id="task-description-{{ row.id }}"
-                class="hidden text-sm leading-relaxed text-slate-500 whitespace-pre-line"
-                data-task-description
-                data-state="collapsed"
-              >
-                {{ row.description|linebreaksbr }}
-              </p>
-            {% endif %}
           </div>
-        </div>
-        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold sm:text-[0.78rem]">
-          <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 {% if row.status_is_active %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-100 text-slate-500{% endif %}">
-            <span class="h-1.5 w-1.5 rounded-full {% if row.status_is_active %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
-            {{ row.status_label }}
-          </span>
-          <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-slate-600">
-            {{ row.category_label }}
-          </span>
-          <span class="text-xs font-medium text-slate-400">Creada {{ row.created_on_display }}</span>
+          <div class="flex flex-wrap items-center gap-2 text-xs font-semibold sm:text-[0.78rem]">
+            <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 {% if row.status_is_active %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-100 text-slate-500{% endif %}">
+              <span class="h-1.5 w-1.5 rounded-full {% if row.status_is_active %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
+              {{ row.status_label }}
+            </span>
+            <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-slate-600">
+              {{ row.category_label }}
+            </span>
+            <span class="text-xs font-medium text-slate-400">Creada {{ row.created_on_display }}</span>
+          </div>
         </div>
       </div>
     </td>

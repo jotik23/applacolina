@@ -161,6 +161,159 @@
       color: inherit;
     }
 
+    .tm-sort-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      width: 100%;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      color: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .tm-sort-trigger:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+      border-radius: 9999px;
+    }
+
+    .tm-sort-trigger[data-active='true'] {
+      color: rgb(15, 23, 42);
+    }
+
+    .tm-sort-icon {
+      width: 0.75rem;
+      height: 0.75rem;
+      opacity: 0;
+      transform: rotate(0deg);
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    [data-sort-state='asc'] .tm-sort-icon,
+    [data-sort-state='desc'] .tm-sort-icon {
+      opacity: 1;
+    }
+
+    [data-sort-state='desc'] .tm-sort-icon {
+      transform: rotate(180deg);
+    }
+
+    .tm-sort-trigger:hover .tm-sort-icon {
+      opacity: 1;
+    }
+
+    .tm-row-handle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      flex-shrink: 0;
+      border-radius: 9999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background-color: rgba(248, 250, 252, 0.95);
+      color: rgba(100, 116, 139, 0.9);
+      cursor: grab;
+      transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+      touch-action: none;
+    }
+
+    .tm-row-handle:hover,
+    .tm-row-handle:focus-visible {
+      border-color: rgba(59, 130, 246, 0.55);
+      background-color: rgba(59, 130, 246, 0.12);
+      color: rgb(37, 99, 235);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+    }
+
+    .tm-row-handle:active,
+    .tm-row-handle[data-dragging='true'] {
+      cursor: grabbing;
+      border-color: rgba(59, 130, 246, 0.65);
+      color: rgb(29, 78, 216);
+      background-color: rgba(59, 130, 246, 0.2);
+    }
+
+    .tm-row-handle-icon {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 0.18rem;
+    }
+
+    .tm-row-handle-icon span {
+      display: block;
+      width: 0.3rem;
+      height: 0.3rem;
+      border-radius: 9999px;
+      background-color: currentColor;
+    }
+
+    tr[data-task-definition-row] {
+      transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+    }
+
+    tr[data-task-definition-row][data-row-dragging='true'] {
+      transform: scale(1.01);
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+      background-color: rgba(59, 130, 246, 0.08);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    tr[data-task-definition-row][data-row-just-dropped='true'] {
+      animation: tmRowDropFlash 1100ms ease-out 1;
+    }
+
+    @keyframes tmRowDropFlash {
+      0% {
+        background-color: rgba(59, 130, 246, 0.2);
+        box-shadow: 0 18px 36px rgba(59, 130, 246, 0.18);
+      }
+      40% {
+        background-color: rgba(59, 130, 246, 0.1);
+        box-shadow: 0 12px 28px rgba(59, 130, 246, 0.12);
+      }
+      100% {
+        background-color: transparent;
+        box-shadow: none;
+      }
+    }
+
+    .tm-reorder-tooltip {
+      position: absolute;
+      z-index: 160;
+      padding: 0.45rem 0.75rem;
+      border-radius: 0.75rem;
+      background-color: rgb(15, 23, 42);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.24);
+      opacity: 0;
+      transform: translateY(-6px);
+      animation: tmTooltipFade 180ms ease forwards;
+    }
+
+    @keyframes tmTooltipFade {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    body.tm-no-select {
+      user-select: none;
+    }
+
     .tm-filter-options {
       max-height: 18rem;
       overflow-y: auto;
@@ -544,10 +697,54 @@
                 <table class="min-w-full divide-y divide-slate-200 text-sm leading-6 sm:text-[0.95rem]">
                   <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                     <tr>
-                      <th scope="col" class="px-5 py-4 text-left">Tarea</th>
-                      <th scope="col" class="px-5 py-4 text-left">Lugar</th>
-                      <th scope="col" class="px-5 py-4 text-left">Programación</th>
-                      <th scope="col" class="px-5 py-4 text-left">Responsable sugerido</th>
+                      <th scope="col" class="px-5 py-4 text-left" data-sort-key="name" aria-sort="none">
+                        <button type="button" class="tm-sort-trigger" data-sort-trigger>
+                          <span>Tarea</span>
+                          <svg class="tm-sort-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                              fill-rule="evenodd"
+                              d="M10 6.75a.75.75 0 01.53.22l4 4a.75.75 0 11-1.06 1.06L10 8.31l-3.47 3.72a.75.75 0 11-1.06-1.06l4-4A.75.75 0 0110 6.75z"
+                              clip-rule="evenodd"
+                            ></path>
+                          </svg>
+                        </button>
+                      </th>
+                      <th scope="col" class="px-5 py-4 text-left" data-sort-key="scope" aria-sort="none">
+                        <button type="button" class="tm-sort-trigger" data-sort-trigger>
+                          <span>Lugar</span>
+                          <svg class="tm-sort-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                              fill-rule="evenodd"
+                              d="M10 6.75a.75.75 0 01.53.22l4 4a.75.75 0 11-1.06 1.06L10 8.31l-3.47 3.72a.75.75 0 11-1.06-1.06l4-4A.75.75 0 0110 6.75z"
+                              clip-rule="evenodd"
+                            ></path>
+                          </svg>
+                        </button>
+                      </th>
+                      <th scope="col" class="px-5 py-4 text-left" data-sort-key="schedule" aria-sort="none">
+                        <button type="button" class="tm-sort-trigger" data-sort-trigger>
+                          <span>Programación</span>
+                          <svg class="tm-sort-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                              fill-rule="evenodd"
+                              d="M10 6.75a.75.75 0 01.53.22l4 4a.75.75 0 11-1.06 1.06L10 8.31l-3.47 3.72a.75.75 0 11-1.06-1.06l4-4A.75.75 0 0110 6.75z"
+                              clip-rule="evenodd"
+                            ></path>
+                          </svg>
+                        </button>
+                      </th>
+                      <th scope="col" class="px-5 py-4 text-left" data-sort-key="responsible" aria-sort="none">
+                        <button type="button" class="tm-sort-trigger" data-sort-trigger>
+                          <span>Responsable sugerido</span>
+                          <svg class="tm-sort-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                              fill-rule="evenodd"
+                              d="M10 6.75a.75.75 0 01.53.22l4 4a.75.75 0 11-1.06 1.06L10 8.31l-3.47 3.72a.75.75 0 11-1.06-1.06l4-4A.75.75 0 0110 6.75z"
+                              clip-rule="evenodd"
+                            ></path>
+                          </svg>
+                        </button>
+                      </th>
                       <th scope="col" class="px-5 py-4 text-left">Controles</th>
                     </tr>
                   </thead>
@@ -566,6 +763,11 @@
                     data-group-primary="{{ task_definition_group_primary|default:'none' }}"
                     data-group-secondary="{{ task_definition_group_secondary|default:'none' }}"
                     data-column-count="5"
+                    data-default-sort-key="order"
+                    data-default-sort-direction="asc"
+                    data-sort-key="order"
+                    data-sort-direction="asc"
+                    data-reorder-url="{% url 'task_manager:definition-reorder' %}"
                   >
                     {% if task_definition_rows %}
                       {% include "task_manager/includes/task_definition_rows.html" with rows=task_definition_rows %}
@@ -1441,6 +1643,11 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      var getCsrfToken = function () {
+        var match = document.cookie.match(/(?:^|;)\s*csrftoken=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+      };
+
       var initializeFilterPickers = function () {
         var pickers = Array.prototype.slice.call(document.querySelectorAll('[data-filter-picker]'));
         if (!pickers.length) {
@@ -2221,8 +2428,576 @@
         return api;
       };
 
+      var setupTaskDefinitionSorting = function () {
+        var list = document.querySelector('[data-task-definition-list]');
+        if (!list) {
+          window.tmTaskSorting = null;
+          return null;
+        }
+
+        var table = list.closest('table');
+        if (!table) {
+          window.tmTaskSorting = null;
+          return null;
+        }
+
+        var headers = Array.prototype.slice.call(table.querySelectorAll('thead [data-sort-key]'));
+        if (!headers.length) {
+          window.tmTaskSorting = null;
+          return null;
+        }
+
+        var DEFAULT_KEY = (list.getAttribute('data-default-sort-key') || 'name').trim() || 'name';
+        var DEFAULT_DIRECTION = (list.getAttribute('data-default-sort-direction') || 'asc').trim() === 'desc' ? 'desc' : 'asc';
+        var state = {
+          key: (list.getAttribute('data-sort-key') || DEFAULT_KEY).trim() || DEFAULT_KEY,
+          direction:
+            (list.getAttribute('data-sort-direction') || DEFAULT_DIRECTION).trim() === 'desc' ? 'desc' : 'asc',
+        };
+
+        var normalizeValue = function (value) {
+          if (value === null || value === undefined) {
+            return '';
+          }
+          return String(value).trim();
+        };
+
+        var getRowValue = function (row, key) {
+          if (!row || !key) {
+            return '';
+          }
+          var attr = row.getAttribute('data-sort-' + key);
+          if (attr !== null && attr !== undefined) {
+            return attr;
+          }
+          return '';
+        };
+
+        var compareText = function (a, b) {
+          var first = normalizeValue(a);
+          var second = normalizeValue(b);
+          return first.localeCompare(second, undefined, { sensitivity: 'base', numeric: true });
+        };
+
+        var compareRows = function (left, right, key) {
+          var result = compareText(getRowValue(left, key), getRowValue(right, key));
+          if (result !== 0) {
+            return result;
+          }
+          result = compareText(getRowValue(left, DEFAULT_KEY), getRowValue(right, DEFAULT_KEY));
+          if (result !== 0) {
+            return result;
+          }
+          var idLeft = parseInt(left.getAttribute('data-task-definition-row'), 10) || 0;
+          var idRight = parseInt(right.getAttribute('data-task-definition-row'), 10) || 0;
+          if (idLeft < idRight) {
+            return -1;
+          }
+          if (idLeft > idRight) {
+            return 1;
+          }
+          return 0;
+        };
+
+        var updateHeaderState = function () {
+          headers.forEach(function (header) {
+            var key = (header.getAttribute('data-sort-key') || '').trim();
+            var isActive = key === state.key;
+            var direction = isActive ? state.direction : 'none';
+            header.setAttribute('data-sort-state', direction);
+            header.setAttribute(
+              'aria-sort',
+              direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'
+            );
+            var trigger = header.querySelector('[data-sort-trigger]');
+            if (trigger) {
+              trigger.setAttribute('data-active', isActive ? 'true' : 'false');
+            }
+          });
+          list.setAttribute('data-sort-key', state.key);
+          list.setAttribute('data-sort-direction', state.direction);
+        };
+
+        var applySort = function () {
+          var rows = Array.prototype.slice.call(list.querySelectorAll('[data-task-definition-row]'));
+          if (!rows.length) {
+            return;
+          }
+          var activeKey = state.key || DEFAULT_KEY;
+          var direction = state.direction === 'desc' ? 'desc' : 'asc';
+          rows.sort(function (a, b) {
+            var comparison = compareRows(a, b, activeKey);
+            if (direction === 'desc') {
+              comparison = -comparison;
+            }
+            return comparison;
+          });
+          var fragment = document.createDocumentFragment();
+          rows.forEach(function (row) {
+            fragment.appendChild(row);
+          });
+          list.appendChild(fragment);
+          if (window.tmTaskGrouping && typeof window.tmTaskGrouping.reapply === 'function') {
+            window.tmTaskGrouping.reapply();
+          }
+        };
+
+        var cycleSort = function (key) {
+          if (!key) {
+            return;
+          }
+          if (state.key !== key) {
+            state.key = key;
+            state.direction = 'asc';
+          } else if (state.direction === 'asc') {
+            state.direction = 'desc';
+          } else {
+            state.key = DEFAULT_KEY;
+            state.direction = DEFAULT_DIRECTION;
+          }
+          updateHeaderState();
+          applySort();
+        };
+
+        headers.forEach(function (header) {
+          var key = (header.getAttribute('data-sort-key') || '').trim();
+          if (!key) {
+            return;
+          }
+          var trigger = header.querySelector('[data-sort-trigger]') || header;
+          trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            cycleSort(key);
+          });
+        });
+
+        updateHeaderState();
+
+        var defaultState = function () {
+          return { key: DEFAULT_KEY, direction: DEFAULT_DIRECTION };
+        };
+
+        var isDefaultState = function () {
+          return state.key === DEFAULT_KEY && state.direction === DEFAULT_DIRECTION;
+        };
+
+        var api = {
+          getState: function () {
+            return { key: state.key, direction: state.direction };
+          },
+          getDefaultState: function () {
+            return defaultState();
+          },
+          resetToDefault: function (options) {
+            state.key = DEFAULT_KEY;
+            state.direction = DEFAULT_DIRECTION;
+            updateHeaderState();
+            if (!options || !options.silent) {
+              applySort();
+            }
+          },
+          isDefaultState: function () {
+            return isDefaultState();
+          },
+          applyCurrentSort: function () {
+            updateHeaderState();
+            applySort();
+          },
+          handleRowsAppended: function () {
+            if (isDefaultState()) {
+              if (window.tmTaskGrouping && typeof window.tmTaskGrouping.reapply === 'function') {
+                window.tmTaskGrouping.reapply();
+              }
+              return;
+            }
+            updateHeaderState();
+            applySort();
+          },
+        };
+
+        window.tmTaskSorting = api;
+
+        if (!isDefaultState()) {
+          applySort();
+        }
+
+        return api;
+      };
+
+      var setupTaskDefinitionDragReorder = function () {
+        var list = document.querySelector('[data-task-definition-list]');
+        if (!list) {
+          window.tmTaskReorder = null;
+          return null;
+        }
+
+        var reorderUrl = list.getAttribute('data-reorder-url');
+        if (!reorderUrl) {
+          window.tmTaskReorder = null;
+          return null;
+        }
+
+        var tooltipNode = null;
+        var tooltipTimer = null;
+        var draggingState = null;
+
+        var destroyTooltip = function () {
+          if (tooltipTimer) {
+            window.clearTimeout(tooltipTimer);
+            tooltipTimer = null;
+          }
+          if (tooltipNode) {
+            tooltipNode.remove();
+            tooltipNode = null;
+          }
+        };
+
+        var showTooltip = function (anchor, message) {
+          if (!anchor || !message) {
+            return;
+          }
+          destroyTooltip();
+          var tooltip = document.createElement('div');
+          tooltip.className = 'tm-reorder-tooltip';
+          tooltip.textContent = message;
+          document.body.appendChild(tooltip);
+          var rect = anchor.getBoundingClientRect();
+          var top = rect.top + window.scrollY - tooltip.offsetHeight - 10;
+          if (top < window.scrollY + 12) {
+            top = rect.bottom + window.scrollY + 12;
+          }
+          var left = rect.left + window.scrollX + rect.width / 2 - tooltip.offsetWidth / 2;
+          var minLeft = window.scrollX + 12;
+          var maxLeft = window.scrollX + (document.documentElement.clientWidth || window.innerWidth) - tooltip.offsetWidth - 12;
+          if (left < minLeft) {
+            left = minLeft;
+          }
+          if (left > maxLeft) {
+            left = maxLeft;
+          }
+          tooltip.style.top = top + 'px';
+          tooltip.style.left = left + 'px';
+          tooltipNode = tooltip;
+          tooltipTimer = window.setTimeout(destroyTooltip, 2200);
+        };
+
+        var getRows = function () {
+          return Array.prototype.slice.call(list.querySelectorAll('[data-task-definition-row]'));
+        };
+
+        var isGroupingActive = function () {
+          var primary = (list.getAttribute('data-group-primary') || 'none').trim();
+          var secondary = (list.getAttribute('data-group-secondary') || 'none').trim();
+          return primary !== 'none' || secondary !== 'none';
+        };
+
+        var isSortDefault = function () {
+          if (!window.tmTaskSorting || typeof window.tmTaskSorting.isDefaultState !== 'function') {
+            return true;
+          }
+          return !!window.tmTaskSorting.isDefaultState();
+        };
+
+        var restoreOriginalOrder = function (snapshot) {
+          if (!snapshot || !snapshot.length) {
+            return;
+          }
+          var ordered = snapshot.slice().sort(function (a, b) {
+            return a.order - b.order;
+          });
+          var fragment = document.createDocumentFragment();
+          ordered.forEach(function (item) {
+            if (!item || !item.element) {
+              return;
+            }
+            item.element.setAttribute('data-display-order', String(item.order));
+            item.element.setAttribute('data-sort-order', String(item.order));
+            fragment.appendChild(item.element);
+          });
+          list.appendChild(fragment);
+        };
+
+        var markJustDropped = function (row) {
+          if (!row) {
+            return;
+          }
+          row.setAttribute('data-row-just-dropped', 'true');
+          window.setTimeout(function () {
+            row.removeAttribute('data-row-just-dropped');
+          }, 1200);
+        };
+
+        var persistOrder = function (assignments, onSuccess, onError) {
+          if (!assignments || !assignments.length) {
+            if (typeof onSuccess === 'function') {
+              onSuccess();
+            }
+            return;
+          }
+          list.setAttribute('data-reordering-active', 'true');
+          fetch(reorderUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCsrfToken(),
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+              order: assignments.map(function (item) {
+                return { id: item.id, order: item.order };
+              }),
+            }),
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error('No se pudo guardar el nuevo orden.');
+              }
+              return response.json();
+            })
+            .then(function () {
+              if (typeof onSuccess === 'function') {
+                onSuccess();
+              }
+            })
+            .catch(function (error) {
+              console.error(error);
+              if (typeof onError === 'function') {
+                onError(error);
+              }
+            })
+            .finally(function () {
+              list.removeAttribute('data-reordering-active');
+            });
+        };
+
+        var finalizeDrag = function (options) {
+          if (!draggingState) {
+            return;
+          }
+          document.removeEventListener('pointermove', onPointerMove);
+          document.removeEventListener('pointerup', onPointerUp);
+          document.removeEventListener('pointercancel', onPointerCancel);
+          if (draggingState.handle) {
+            draggingState.handle.removeAttribute('data-dragging');
+          }
+          if (draggingState.row) {
+            draggingState.row.removeAttribute('data-row-dragging');
+          }
+          document.body.classList.remove('tm-no-select');
+          destroyTooltip();
+
+          if (options && options.cancelled) {
+            restoreOriginalOrder(draggingState.startSnapshot);
+            draggingState = null;
+            return;
+          }
+
+          var rows = getRows();
+          if (!rows.length) {
+            draggingState = null;
+            return;
+          }
+
+          var orderValues = draggingState.sortedOrders;
+          if (!orderValues || orderValues.length !== rows.length) {
+            orderValues = rows
+              .map(function (row) {
+                return parseInt(row.getAttribute('data-display-order'), 10) || 0;
+              })
+              .sort(function (a, b) {
+                return a - b;
+              });
+          }
+
+          var originalOrderMap = new Map();
+          draggingState.startSnapshot.forEach(function (item) {
+            originalOrderMap.set(item.id, item.order);
+          });
+
+          var assignments = [];
+          rows.forEach(function (row, index) {
+            var id = parseInt(row.getAttribute('data-task-definition-row'), 10) || 0;
+            if (!id) {
+              return;
+            }
+            var newOrder = orderValues[index] !== undefined ? orderValues[index] : orderValues.length + index + 1;
+            var previous = originalOrderMap.get(id);
+            row.setAttribute('data-display-order', String(newOrder));
+            row.setAttribute('data-sort-order', String(newOrder));
+            if (previous !== newOrder) {
+              assignments.push({ id: id, order: newOrder, element: row, previous: previous });
+            }
+          });
+
+          if (!assignments.length) {
+            draggingState = null;
+            return;
+          }
+
+          persistOrder(
+            assignments,
+            function () {
+              assignments.forEach(function (item) {
+                markJustDropped(item.element);
+              });
+              if (window.tmTaskSorting && typeof window.tmTaskSorting.resetToDefault === 'function') {
+                window.tmTaskSorting.resetToDefault({ silent: true });
+              }
+              draggingState = null;
+            },
+            function () {
+              restoreOriginalOrder(draggingState.startSnapshot);
+              if (window.tmTaskSorting && typeof window.tmTaskSorting.applyCurrentSort === 'function') {
+                window.tmTaskSorting.applyCurrentSort();
+              }
+              if (draggingState && draggingState.handle) {
+                showTooltip(draggingState.handle, 'No se pudo guardar el nuevo orden.');
+              }
+              draggingState = null;
+            }
+          );
+        };
+
+        var onPointerMove = function (event) {
+          if (!draggingState) {
+            return;
+          }
+          event.preventDefault();
+          var target = document.elementFromPoint(event.clientX, event.clientY);
+          if (!target) {
+            return;
+          }
+          var targetRow = target.closest('[data-task-definition-row]');
+          if (!targetRow || targetRow === draggingState.row) {
+            return;
+          }
+          var rect = targetRow.getBoundingClientRect();
+          var before = event.clientY < rect.top + rect.height / 2;
+          if (before) {
+            list.insertBefore(draggingState.row, targetRow);
+          } else {
+            var next = targetRow.nextElementSibling;
+            if (next) {
+              list.insertBefore(draggingState.row, next);
+            } else {
+              list.appendChild(draggingState.row);
+            }
+          }
+        };
+
+        var onPointerUp = function (event) {
+          if (event) {
+            event.preventDefault();
+          }
+          finalizeDrag({});
+        };
+
+        var onPointerCancel = function () {
+          finalizeDrag({ cancelled: true });
+        };
+
+        var startDrag = function (handle, event) {
+          if (draggingState) {
+            return;
+          }
+          if (event.button !== 0 && event.pointerType !== 'touch') {
+            return;
+          }
+          var rows = getRows();
+          if (rows.length <= 1) {
+            showTooltip(handle, 'Agrega más tareas para reordenar.');
+            return;
+          }
+          if (isGroupingActive()) {
+            showTooltip(handle, 'Desactiva la agrupación para reordenar.');
+            return;
+          }
+          if (!isSortDefault()) {
+            showTooltip(handle, 'Restablece el orden de columnas antes de arrastrar.');
+            return;
+          }
+          var row = handle.closest('[data-task-definition-row]');
+          if (!row) {
+            return;
+          }
+          event.preventDefault();
+          destroyTooltip();
+          var snapshot = rows.map(function (item) {
+            return {
+              element: item,
+              id: parseInt(item.getAttribute('data-task-definition-row'), 10) || 0,
+              order: parseInt(item.getAttribute('data-display-order'), 10) || 0,
+            };
+          });
+          var orderValues = snapshot
+            .map(function (item) {
+              return item.order;
+            })
+            .sort(function (a, b) {
+              return a - b;
+            });
+          draggingState = {
+            row: row,
+            handle: handle,
+            startSnapshot: snapshot,
+            sortedOrders: orderValues,
+          };
+          row.setAttribute('data-row-dragging', 'true');
+          handle.setAttribute('data-dragging', 'true');
+          document.body.classList.add('tm-no-select');
+          document.addEventListener('pointermove', onPointerMove);
+          document.addEventListener('pointerup', onPointerUp);
+          document.addEventListener('pointercancel', onPointerCancel);
+        };
+
+        var bindHandle = function (handle) {
+          if (!handle || handle.getAttribute('data-reorder-bound') === 'true') {
+            return;
+          }
+          handle.setAttribute('data-reorder-bound', 'true');
+          handle.addEventListener('pointerdown', function (event) {
+            startDrag(handle, event);
+          });
+        };
+
+        var bindHandles = function (scope) {
+          var context = scope || list;
+          var handles = context.querySelectorAll('[data-task-drag-handle]');
+          Array.prototype.forEach.call(handles, function (handle) {
+            bindHandle(handle);
+          });
+        };
+
+        bindHandles(list);
+
+        var api = {
+          bindRows: function (rows) {
+            if (!rows) {
+              bindHandles(list);
+              return;
+            }
+            var collection = Array.isArray(rows) ? rows : Array.prototype.slice.call(rows);
+            collection.forEach(function (row) {
+              var handle = row.querySelector ? row.querySelector('[data-task-drag-handle]') : null;
+              if (handle) {
+                bindHandle(handle);
+              }
+            });
+          },
+          cancel: function () {
+            finalizeDrag({ cancelled: true });
+          },
+        };
+
+        window.tmTaskReorder = api;
+        return api;
+      };
+
       initializeFilterPickers();
       setupTaskDefinitionGrouping();
+      setupTaskDefinitionSorting();
+      setupTaskDefinitionDragReorder();
 
       var filterForm = document.querySelector('[data-task-definition-filter-form]');
       if (filterForm) {
@@ -2648,7 +3423,12 @@
           if (typeof setupTaskDefinitionActions === 'function') {
             setupTaskDefinitionActions();
           }
-          if (window.tmTaskGrouping && typeof window.tmTaskGrouping.reapply === 'function') {
+          if (window.tmTaskReorder && typeof window.tmTaskReorder.bindRows === 'function') {
+            window.tmTaskReorder.bindRows(rows);
+          }
+          if (window.tmTaskSorting && typeof window.tmTaskSorting.handleRowsAppended === 'function') {
+            window.tmTaskSorting.handleRowsAppended();
+          } else if (window.tmTaskGrouping && typeof window.tmTaskGrouping.reapply === 'function') {
             window.tmTaskGrouping.reapply();
           }
         };

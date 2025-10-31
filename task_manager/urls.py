@@ -5,6 +5,7 @@ from .views import (
     task_definition_delete_view,
     task_definition_detail_view,
     task_definition_list_view,
+    task_definition_reorder_view,
     task_definition_update_view,
     task_manager_home_view,
 )
@@ -18,4 +19,5 @@ urlpatterns = [
     path("definitions/<int:pk>/update/", task_definition_update_view, name="definition-update"),
     path("definitions/<int:pk>/delete/", task_definition_delete_view, name="definition-delete"),
     path("definitions/rows/", task_definition_list_view, name="definition-rows"),
+    path("definitions/reorder/", task_definition_reorder_view, name="definition-reorder"),
 ]

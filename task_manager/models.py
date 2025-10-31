@@ -64,6 +64,12 @@ class TaskDefinition(models.Model):
 
     name = models.CharField(_("Tarea"), max_length=200)
     description = models.TextField(_("Descripción"), blank=True)
+    display_order = models.PositiveIntegerField(
+        _("Orden de visualización"),
+        default=0,
+        editable=False,
+        db_index=True,
+    )
     status = models.ForeignKey(
         TaskStatus,
         on_delete=models.PROTECT,
@@ -182,10 +188,20 @@ class TaskDefinition(models.Model):
     class Meta:
         verbose_name = _("Tarea")
         verbose_name_plural = _("Tareas")
-        ordering = ("name",)
+        ordering = ("display_order", "name", "pk")
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        assign_order = self.display_order is None or self.display_order <= 0
+        if assign_order:
+            manager = type(self).objects
+            if self.pk:
+                manager = manager.exclude(pk=self.pk)
+            next_order = manager.aggregate(models.Max("display_order")).get("display_order__max") or 0
+            self.display_order = next_order + 1
+        super().save(*args, **kwargs)
 
     def clean(self) -> None:
         super().clean()
