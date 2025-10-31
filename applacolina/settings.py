@@ -77,7 +77,7 @@ SECURE_HSTS_PRELOAD = _env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
 
 # Application definition
 
-INSTALLED_APPS = [
+DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -85,12 +85,20 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+]
+
+THIRD_PARTY_APPS = [
     'whitenoise.runserver_nostatic',
+]
+
+LOCAL_APPS = [
+    'production.apps.ProductionConfig',  # Must load before apps that depend on it
     'notifications.apps.NotificationsConfig',
-    'production.apps.ProductionConfig',
     'personal.apps.PersonalConfig',
     'task_manager.apps.TaskManagerConfig',
 ]
+
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
