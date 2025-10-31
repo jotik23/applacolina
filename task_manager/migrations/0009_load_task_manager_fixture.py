@@ -6,14 +6,18 @@ from django.core.management import call_command
 from django.db import migrations
 
 
+FIXTURE_FILENAME = "task_manager_data.json"
+
+
 def load_task_manager_fixture(apps, schema_editor):
     TaskStatus = apps.get_model("task_manager", "TaskStatus")
     if TaskStatus.objects.exists():
         # Data already present; skip loading to avoid duplicate PK errors.
         return
 
-    app_config = apps.get_app_config("task_manager")
-    fixture_path = Path(app_config.path) / "fixtures" / "task_manager_data.json"
+    fixture_path = (
+        Path(__file__).resolve().parent.parent / "fixtures" / FIXTURE_FILENAME
+    )
     if not fixture_path.exists():
         raise FileNotFoundError(f"Fixture file missing: {fixture_path}")
 
