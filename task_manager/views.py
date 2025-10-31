@@ -12,6 +12,7 @@ from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
@@ -261,6 +262,126 @@ class TaskManagerHomeView(generic.TemplateView):
 
 
 task_manager_home_view = TaskManagerHomeView.as_view()
+
+
+class TaskManagerTelegramMiniAppView(generic.TemplateView):
+    """Render a trimmed operator experience for the Telegram mini app."""
+
+    template_name = "task_manager/telegram_mini_app.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        user = getattr(self.request, "user", None)
+        if getattr(user, "is_authenticated", False):
+            raw_full_name = user.get_full_name() or ""
+            raw_username = user.get_username() or ""
+        else:
+            raw_full_name = ""
+            raw_username = ""
+
+        display_name = (raw_full_name or raw_username or "Operario invitado").strip()
+        username = raw_username.strip()
+        initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+
+        tasks = [
+            {
+                "title": "Checklist apertura galpon",
+                "tone": "brand",
+                "badges": [
+                    {"label": "Recurrente", "theme": "brand"},
+                    {"label": "Prioridad media", "theme": "neutral"},
+                ],
+                "description": "Completar antes de iniciar el turno. Verifica ventilacion, bebederos y bioseguridad.",
+                "meta": [
+                    "Turno: Diurno - Posicion auxiliar operativo",
+                    "Asignada por: Supervisor bioseguridad",
+                ],
+                "actions": [
+                    {"label": "Marcar completada", "action": "complete"},
+                    {"label": "Agregar evidencia", "action": "evidence"},
+                    {"label": "Postergar", "action": "snooze"},
+                ],
+            },
+            {
+                "title": "Reporte correctivo galpon 2",
+                "tone": "critical",
+                "badges": [{"label": "Unica - Vencida", "theme": "critical"}],
+                "description": "Registrar hallazgos del recorrido nocturno y adjuntar fotografias.",
+                "meta": [
+                    "Turno: Nocturno - Posicion lider de turno",
+                    "Asignada para: 03 Nov - Vence hoy",
+                ],
+                "actions": [
+                    {"label": "Enviar evidencia", "action": "evidence"},
+                    {"label": "Agregar nota", "action": "note"},
+                    {"label": "Solicitar ayuda", "action": "assist"},
+                ],
+            },
+            {
+                "title": "Capacitacion protocolos",
+                "tone": "success",
+                "badges": [{"label": "Extra voluntaria", "theme": "success"}],
+                "description": "Participa en la sesion de actualizacion de protocolos de higiene. Suma puntos adicionales.",
+                "meta": [
+                    "Horario: 16:00 - Sala formacion",
+                    "Reportada por: Gabriela Melo",
+                ],
+                "actions": [
+                    {"label": "Acepto realizarla", "action": "accept"},
+                    {"label": "Dejar en pull", "action": "pull"},
+                ],
+            },
+            {
+                "title": "Descanso programado",
+                "tone": "neutral",
+                "badges": [{"label": "Automatico", "theme": "neutral"}],
+                "description": "Descanso compensatorio despues de 6 dias de racha. No se asignan tareas en esta franja.",
+                "meta": [
+                    "Fecha: 05 Nov - Proximo turno nocturno",
+                    "Generado automaticamente para balancear jornada",
+                ],
+                "actions": [
+                    {"label": "Ver historial", "action": "history"},
+                    {"label": "Solicitar cambio", "action": "request"},
+                ],
+            },
+        ]
+
+        context["telegram_mini_app"] = {
+            "date_label": date_format(today, "DATE_FORMAT"),
+            "user": {
+                "display_name": display_name,
+                "username": username,
+                "role": "Operario",
+                "avatar_initials": initials,
+            },
+            "tasks": tasks,
+            "current_shift": {
+                "label": "Turno nocturno - Galpon 3",
+                "position": "Posicion: Auxiliar operativo",
+                "next": "Proximo turno: 05 Nov - 22:00",
+            },
+            "scorecard": {
+                "points": 122,
+                "streak": "Racha vigente: 6 dias cumplidos",
+                "extras": "Tareas extra reportadas: 3",
+                "message": "Sigue reportando iniciativas. Cada aporte aprobado suma 15 puntos.",
+            },
+            "suggestions": [
+                "Mantenimiento preventivo ventiladores — pendiente revision del staff.",
+                "Mejora en checklist de bioseguridad — aprobado y publicado.",
+            ],
+            "history": [
+                {"label": "03 Nov", "summary": "3 tareas completadas - 1 postergada"},
+                {"label": "02 Nov", "summary": "4 tareas completadas"},
+                {"label": "01 Nov", "summary": "Descanso programado"},
+            ],
+        }
+        return context
+
+
+telegram_mini_app_view = TaskManagerTelegramMiniAppView.as_view()
 
 
 def _task_definition_redirect_url(task_id: int) -> str:

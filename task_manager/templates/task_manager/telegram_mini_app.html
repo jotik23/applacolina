@@ -1,0 +1,282 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vista operario - Telegram</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                DEFAULT: '#f59e0b',
+                dark: '#d97706'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        color-scheme: only light;
+      }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      .mini-app-blur {
+        backdrop-filter: blur(18px);
+      }
+    </style>
+  </head>
+  <body class="min-h-full bg-slate-950 text-slate-100">
+    <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 py-6">
+      <header class="rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-slate-900/50 p-5 shadow-xl shadow-black/30 mini-app-blur">
+        <div class="flex items-center gap-4">
+          <div data-telegram-avatar class="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-lg font-semibold text-slate-900">
+            {{ telegram_mini_app.user.avatar_initials }}
+          </div>
+          <div class="flex-1">
+            <h1 data-telegram-display-name class="text-base font-semibold text-white">
+              {{ telegram_mini_app.user.display_name }}
+            </h1>
+            <p data-telegram-username class="text-xs text-slate-300">
+              {% if telegram_mini_app.user.username %}@{{ telegram_mini_app.user.username }}{% else %}Sin usuario Telegram{% endif %}
+            </p>
+            <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {{ telegram_mini_app.user.role }}
+            </p>
+          </div>
+          <button type="button" class="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-brand hover:text-brand">
+            Ajustes
+          </button>
+        </div>
+        <div class="mt-4 flex items-center justify-between text-xs text-slate-300">
+          <span>Resumen del dia</span>
+          <span>{{ telegram_mini_app.date_label }}</span>
+        </div>
+      </header>
+
+      <section class="space-y-3">
+        <div class="flex items-center justify-between text-sm text-slate-300">
+          <div>
+            <h2 class="text-base font-semibold text-white">Tareas del dia</h2>
+            <p class="text-xs text-slate-400">Revisa las asignaciones actuales y los descansos planificados.</p>
+          </div>
+          <button type="button" class="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-slate-900 shadow-lg shadow-brand/30 transition hover:bg-brand-dark">
+            Reportar tarea
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          {% for task in telegram_mini_app.tasks %}
+            <article
+              class="rounded-3xl border border-white/5 bg-slate-900/80 p-4 shadow-lg shadow-black/20"
+              data-task-card
+              data-task-title="{{ task.title }}"
+            >
+              <header class="flex flex-col gap-2">
+                <div class="flex items-start justify-between gap-3">
+                  <h3 class="text-sm font-semibold text-white">{{ task.title }}</h3>
+                  <span
+                    class="h-2.5 w-2.5 rounded-full {% if task.tone == 'brand' %}bg-amber-400{% elif task.tone == 'critical' %}bg-rose-400{% elif task.tone == 'success' %}bg-emerald-400{% else %}bg-slate-400{% endif %}"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+                  {% for badge in task.badges %}
+                    <span
+                      class="rounded-full border px-2 py-0.5 {% if badge.theme == 'brand' %}border-amber-400/40 bg-amber-400/10 text-amber-100{% elif badge.theme == 'critical' %}border-rose-500/40 bg-rose-500/10 text-rose-100{% elif badge.theme == 'success' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-100{% else %}border-slate-500/40 bg-slate-500/10 text-slate-200{% endif %}"
+                    >
+                      {{ badge.label }}
+                    </span>
+                  {% endfor %}
+                </div>
+              </header>
+              <p class="mt-3 text-sm text-slate-300">
+                {{ task.description }}
+              </p>
+              <ul class="mt-3 space-y-1 text-xs text-slate-400">
+                {% for meta in task.meta %}
+                  <li>{{ meta }}</li>
+                {% endfor %}
+              </ul>
+              <div class="mt-4 flex flex-wrap gap-2">
+                {% for action in task.actions %}
+                  <button
+                    type="button"
+                    class="rounded-full px-3 py-1 text-xs font-semibold transition {% if forloop.first %}bg-brand text-slate-900 shadow shadow-brand/30 hover:bg-brand-dark{% else %}border border-white/10 text-slate-200 hover:border-brand hover:text-brand{% endif %}"
+                    data-task-action="{{ action.action }}"
+                  >
+                    {{ action.label }}
+                  </button>
+                {% endfor %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <div class="rounded-3xl border border-white/5 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
+          <h2 class="text-sm font-semibold text-white">Mi turno</h2>
+          <p class="mt-2 text-sm text-slate-300">{{ telegram_mini_app.current_shift.label }}</p>
+          <p class="mt-1 text-xs text-slate-400">{{ telegram_mini_app.current_shift.position }}</p>
+          <p class="mt-1 text-xs text-slate-400">{{ telegram_mini_app.current_shift.next }}</p>
+        </div>
+
+        <div class="rounded-3xl border border-white/5 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
+          <h2 class="text-sm font-semibold text-white">Puntaje y consistencia</h2>
+          <ul class="mt-2 space-y-1 text-xs text-slate-300">
+            <li>Total puntos: <span class="font-semibold text-white">{{ telegram_mini_app.scorecard.points }}</span></li>
+            <li>{{ telegram_mini_app.scorecard.streak }}</li>
+            <li>{{ telegram_mini_app.scorecard.extras }}</li>
+          </ul>
+          <p class="mt-3 text-xs text-slate-400">{{ telegram_mini_app.scorecard.message }}</p>
+        </div>
+
+        <div class="rounded-3xl border border-white/5 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
+          <h2 class="text-sm font-semibold text-white">Sugerencias enviadas</h2>
+          <ul class="mt-2 space-y-2 text-xs text-slate-300">
+            {% for suggestion in telegram_mini_app.suggestions %}
+              <li class="rounded-2xl border border-white/5 bg-white/5 p-3">{{ suggestion }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="rounded-3xl border border-white/5 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
+          <h2 class="text-sm font-semibold text-white">Historico rapido</h2>
+          <ul class="mt-2 space-y-2 text-xs text-slate-300">
+            {% for item in telegram_mini_app.history %}
+              <li class="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 px-3 py-2">
+                <span class="font-semibold text-white">{{ item.label }}</span>
+                <span class="text-right text-xs text-slate-300">{{ item.summary }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </section>
+
+      <footer class="sticky bottom-4 mt-auto flex justify-center">
+        <button
+          type="button"
+          class="w-full rounded-full bg-brand px-5 py-3 text-sm font-semibold text-slate-900 shadow-xl shadow-brand/40 transition hover:bg-brand-dark"
+          data-telegram-main-action
+        >
+          Revisar proxima tarea
+        </button>
+      </footer>
+    </main>
+
+    {{ telegram_mini_app|json_script:"tm-mini-app-config" }}
+    <script>
+      (function () {
+        const dataScript = document.getElementById('tm-mini-app-config');
+        let payload = null;
+        if (dataScript) {
+          try {
+            payload = JSON.parse(dataScript.textContent);
+          } catch (error) {
+            console.warn('No se pudo analizar la configuracion inicial del mini app.', error);
+          }
+        }
+
+        const telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        if (telegram) {
+          telegram.ready();
+          telegram.expand();
+
+          const user = telegram.initDataUnsafe && telegram.initDataUnsafe.user ? telegram.initDataUnsafe.user : null;
+          if (user) {
+            const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
+            const username = user.username ? '@' + user.username : '';
+
+            const nameTarget = document.querySelector('[data-telegram-display-name]');
+            const usernameTarget = document.querySelector('[data-telegram-username]');
+            const avatarTarget = document.querySelector('[data-telegram-avatar]');
+
+            if (nameTarget && fullName) {
+              nameTarget.textContent = fullName;
+            }
+            if (usernameTarget) {
+              usernameTarget.textContent = username || 'Sin usuario Telegram';
+            }
+            if (avatarTarget) {
+              const initials = (fullName || username || 'TG')
+                .split(' ')
+                .filter(Boolean)
+                .map((segment) => segment.trim()[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase();
+              avatarTarget.textContent = initials || 'TG';
+            }
+          }
+
+          const theme = telegram.themeParams || {};
+          if (theme.bg_color) {
+            document.body.style.backgroundColor = theme.bg_color;
+          }
+          if (theme.text_color) {
+            document.body.style.color = theme.text_color;
+          }
+
+          const mainButton = telegram.MainButton;
+          if (mainButton && payload && payload.tasks && payload.tasks.length) {
+            mainButton.setParams({
+              text: 'Abrir tarea principal',
+              is_visible: true,
+            });
+            mainButton.onClick(function () {
+              telegram.sendData(
+                JSON.stringify({
+                  action: 'open-task',
+                  title: payload.tasks[0].title,
+                })
+              );
+            });
+          }
+        }
+
+        const buttons = document.querySelectorAll('[data-task-action]');
+        buttons.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            const action = event.currentTarget.getAttribute('data-task-action');
+            const card = event.currentTarget.closest('[data-task-card]');
+            const title = card ? card.getAttribute('data-task-title') : '';
+            if (telegram) {
+              if (telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+                telegram.HapticFeedback.impactOccurred('soft');
+              }
+              telegram.sendData(
+                JSON.stringify({
+                  action: action,
+                  title: title,
+                })
+              );
+            } else {
+              console.info('Accion seleccionada:', action, title);
+            }
+          });
+        });
+
+        const mainAction = document.querySelector('[data-telegram-main-action]');
+        if (mainAction) {
+          mainAction.addEventListener('click', function () {
+            if (telegram && payload && payload.tasks && payload.tasks.length) {
+              telegram.sendData(
+                JSON.stringify({
+                  action: 'open-next-task',
+                  title: payload.tasks[0].title,
+                })
+              );
+            }
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
