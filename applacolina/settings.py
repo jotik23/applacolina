@@ -87,9 +87,9 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'whitenoise.runserver_nostatic',
     'notifications.apps.NotificationsConfig',
+    'production.apps.ProductionConfig',
     'personal.apps.PersonalConfig',
     'task_manager.apps.TaskManagerConfig',
-    'production.apps.ProductionConfig',
 ]
 
 MIDDLEWARE = [
