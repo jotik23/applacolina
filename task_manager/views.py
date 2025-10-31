@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from typing import Iterable, Mapping, Optional, Sequence
 
 from django.contrib import messages
@@ -10,7 +10,6 @@ from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
@@ -46,17 +45,9 @@ class TaskManagerHomeView(generic.TemplateView):
         )
         scope_groups = build_scope_filter_groups()
         scope_value, scope_label = ensure_filter_selection(filters, "scope", scope_groups, defaults.scope)
-        task_type_groups = build_task_type_filter_groups()
-        task_type_value, task_type_label = ensure_filter_selection(
-            filters, "task_type", task_type_groups, defaults.task_type
-        )
         responsible_groups = build_responsible_filter_groups()
         responsible_value, responsible_label = ensure_filter_selection(
             filters, "responsible", responsible_groups, defaults.responsible
-        )
-        created_groups = build_created_window_filter_groups()
-        created_value, created_label = ensure_filter_selection(
-            filters, "created_window", created_groups, defaults.created_window
         )
         highlight_raw = self.request.GET.get("tm_task")
         highlight_id: Optional[int] = None
@@ -141,6 +132,21 @@ class TaskManagerHomeView(generic.TemplateView):
             resolve_option_label(group_secondary_groups, group_secondary_value) or _("No aplicar")
         )
 
+        schedule_start_date = _parse_iso_date(filters.scheduled_start)
+        schedule_end_date = _parse_iso_date(filters.scheduled_end)
+        if schedule_start_date and schedule_end_date and schedule_start_date == schedule_end_date:
+            schedule_filter_label = date_format(schedule_start_date, "DATE_FORMAT")
+        elif schedule_start_date and schedule_end_date:
+            start_label = date_format(schedule_start_date, "DATE_FORMAT")
+            end_label = date_format(schedule_end_date, "DATE_FORMAT")
+            schedule_filter_label = _("%(start)s – %(end)s") % {"start": start_label, "end": end_label}
+        elif schedule_start_date:
+            schedule_filter_label = date_format(schedule_start_date, "DATE_FORMAT")
+        elif schedule_end_date:
+            schedule_filter_label = _("Hasta %(date)s") % {"date": date_format(schedule_end_date, "DATE_FORMAT")}
+        else:
+            schedule_filter_label = ""
+
         context["task_manager_status_filter"] = FilterPickerData(
             default_value=status_value,
             default_label=status_label,
@@ -160,12 +166,6 @@ class TaskManagerHomeView(generic.TemplateView):
             search_enabled=True,
             neutral_value=defaults.scope,
         )
-        context["task_manager_task_type_filter"] = FilterPickerData(
-            default_value=task_type_value,
-            default_label=task_type_label,
-            groups=task_type_groups,
-            neutral_value=defaults.task_type,
-        )
         context["task_manager_responsible_filter"] = FilterPickerData(
             default_value=responsible_value,
             default_label=responsible_label,
@@ -173,12 +173,10 @@ class TaskManagerHomeView(generic.TemplateView):
             search_enabled=True,
             neutral_value=defaults.responsible,
         )
-        context["task_manager_created_window_filter"] = FilterPickerData(
-            default_value=created_value,
-            default_label=created_label,
-            groups=created_groups,
-            neutral_value=defaults.created_window,
-        )
+        context["task_manager_schedule_filter"] = {
+            "start_value": filters.scheduled_start,
+            "end_value": filters.scheduled_end,
+        }
         context["task_manager_group_primary_filter"] = FilterPickerData(
             default_value=group_primary_value,
             default_label=group_primary_label,
@@ -207,16 +205,6 @@ class TaskManagerHomeView(generic.TemplateView):
             active_filters.append(
                 build_active_filter_chip(self.request, "scope", _("Lugar"), scope_label, scope_value)
             )
-        if filters.task_type != defaults.task_type:
-            active_filters.append(
-                build_active_filter_chip(
-                    self.request,
-                    "task_type",
-                    _("Tipo de planificación"),
-                    task_type_label,
-                    task_type_value,
-                )
-            )
         if filters.responsible != defaults.responsible:
             active_filters.append(
                 build_active_filter_chip(
@@ -227,14 +215,15 @@ class TaskManagerHomeView(generic.TemplateView):
                     responsible_value,
                 )
             )
-        if filters.created_window != defaults.created_window:
+        if schedule_filter_label:
             active_filters.append(
                 build_active_filter_chip(
                     self.request,
-                    "created_window",
-                    _("Creación"),
-                    created_label,
-                    created_value,
+                    "scheduled_range",
+                    _("Programación"),
+                    schedule_filter_label,
+                    f"{filters.scheduled_start or ''}:{filters.scheduled_end or ''}",
+                    remove_keys=("scheduled_start", "scheduled_end"),
                 )
             )
 
@@ -478,9 +467,9 @@ TASK_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "status",
     "category",
     "scope",
-    "task_type",
     "responsible",
-    "created_window",
+    "scheduled_start",
+    "scheduled_end",
 )
 
 
@@ -489,9 +478,9 @@ class TaskDefinitionFilters:
     status: str = "all"
     category: str = "all"
     scope: str = "all"
-    task_type: str = "all"
     responsible: str = "all"
-    created_window: str = "all"
+    scheduled_start: str = ""
+    scheduled_end: str = ""
 
 
 @dataclass(frozen=True)
@@ -561,10 +550,6 @@ def apply_task_definition_filters(
     if category_id is not None:
         queryset = queryset.filter(category_id=category_id)
 
-    task_type_value = filters.task_type
-    if task_type_value in {TaskDefinition.TaskType.ONE_TIME, TaskDefinition.TaskType.RECURRING}:
-        queryset = queryset.filter(task_type=task_type_value)
-
     responsible_value = filters.responsible
     if responsible_value and responsible_value not in {"", "all"}:
         if responsible_value == "collaborator":
@@ -632,13 +617,18 @@ def apply_task_definition_filters(
         else:
             needs_distinct = False
 
-    created_window_value = filters.created_window
-    if created_window_value and created_window_value not in {"", "all"}:
-        start_date, end_date = get_created_window_range(created_window_value)
-        if start_date is not None:
-            queryset = queryset.filter(created_at__gte=start_date)
-        if end_date is not None:
-            queryset = queryset.filter(created_at__lt=end_date)
+    schedule_start = _parse_iso_date(filters.scheduled_start)
+    schedule_end = _parse_iso_date(filters.scheduled_end)
+    if schedule_start and schedule_end and schedule_end < schedule_start:
+        schedule_start, schedule_end = schedule_end, schedule_start
+    filters.scheduled_start = schedule_start.isoformat() if schedule_start else ""
+    filters.scheduled_end = schedule_end.isoformat() if schedule_end else ""
+    if schedule_start and schedule_end:
+        queryset = queryset.filter(scheduled_for__gte=schedule_start, scheduled_for__lte=schedule_end)
+    elif schedule_start:
+        queryset = queryset.filter(scheduled_for=schedule_start)
+    elif schedule_end:
+        queryset = queryset.filter(scheduled_for__lte=schedule_end)
 
     if needs_distinct:
         queryset = queryset.distinct()
@@ -658,58 +648,13 @@ def _parse_positive_int(value: Optional[str]) -> Optional[int]:
     return parsed
 
 
-def get_created_window_range(window: str) -> tuple[Optional[datetime], Optional[datetime]]:
-    """Return an inclusive-exclusive datetime range for the created_at filter."""
-
-    today = timezone.localdate()
-    tz = timezone.get_current_timezone()
-
-    def start_of(day: date) -> datetime:
-        return timezone.make_aware(datetime.combine(day, time.min), tz)
-
-    def next_day(day: date) -> datetime:
-        return start_of(day + timedelta(days=1))
-
-    window = window or ""
-
-    if window == "today":
-        start = start_of(today)
-        end = next_day(today)
-        return start, end
-    if window == "yesterday":
-        day = today - timedelta(days=1)
-        return start_of(day), start_of(today)
-    if window == "last_3_days":
-        start = start_of(today - timedelta(days=2))
-        end = next_day(today)
-        return start, end
-    if window == "last_7_days":
-        start = start_of(today - timedelta(days=6))
-        end = next_day(today)
-        return start, end
-    if window == "this_week":
-        weekday = today.weekday()
-        start_day = today - timedelta(days=weekday)
-        start = start_of(start_day)
-        end = start + timedelta(days=7)
-        return start, end
-    if window == "next_3_days":
-        start_day = today + timedelta(days=1)
-        start = start_of(start_day)
-        end = start + timedelta(days=3)
-        return start, end
-    if window == "next_7_days":
-        start_day = today + timedelta(days=1)
-        start = start_of(start_day)
-        end = start + timedelta(days=7)
-        return start, end
-    if window == "next_14_days":
-        start_day = today + timedelta(days=1)
-        start = start_of(start_day)
-        end = start + timedelta(days=14)
-        return start, end
-
-    return None, None
+def _parse_iso_date(value: Optional[str]) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
 
 
 def resolve_option_label(groups: Sequence["FilterOptionGroup"], value: str) -> Optional[str]:
@@ -745,11 +690,14 @@ def build_active_filter_chip(
     label: str,
     display_value: str,
     value: str,
+    remove_keys: Optional[Sequence[str]] = None,
 ) -> ActiveFilterChip:
     params = request.GET.copy()
     params._mutable = True
-    if key in params:
-        params.pop(key)
+    keys_to_remove = list(remove_keys or [key])
+    for param_key in keys_to_remove:
+        if param_key in params:
+            params.pop(param_key)
     if "page" in params:
         params.pop("page")
     params["tm_tab"] = "tareas"
@@ -1146,49 +1094,6 @@ def build_category_filter_groups(categories: Iterable[TaskCategory]) -> Sequence
             )
         )
     return groups
-
-
-def build_task_type_filter_groups() -> Sequence[FilterOptionGroup]:
-    groups = [
-        FilterOptionGroup(
-            key="generic",
-            label=_("General"),
-            options=[FilterOption("all", _("Cualquier tipo"))],
-        )
-    ]
-    type_options = [
-        FilterOption(TaskDefinition.TaskType.RECURRING, TaskDefinition.TaskType.RECURRING.label),
-        FilterOption(TaskDefinition.TaskType.ONE_TIME, TaskDefinition.TaskType.ONE_TIME.label),
-    ]
-    groups.append(
-        FilterOptionGroup(
-            key="types",
-            label=_("Tipos disponibles"),
-            options=type_options,
-        )
-    )
-    return groups
-
-
-def build_created_window_filter_groups() -> Sequence[FilterOptionGroup]:
-    window_options = [
-        FilterOption("all", _("Cualquier fecha")),
-        FilterOption("today", _("Hoy")),
-        FilterOption("yesterday", _("Ayer")),
-        FilterOption("last_3_days", _("Últimos 3 días")),
-        FilterOption("last_7_days", _("Últimos 7 días")),
-        FilterOption("this_week", _("Esta semana")),
-        FilterOption("next_3_days", _("Próximos 3 días")),
-        FilterOption("next_7_days", _("Próximos 7 días")),
-        FilterOption("next_14_days", _("Próximas 2 semanas")),
-    ]
-    return [
-        FilterOptionGroup(
-            key="created-window",
-            label=_("Rangos de tiempo"),
-            options=window_options,
-        )
-    ]
 
 
 def build_grouping_primary_filter_groups() -> Sequence[FilterOptionGroup]:

@@ -385,10 +385,6 @@
         <article id="tm-tareas" data-tm-panel="tareas" class="hidden space-y-10">
           <section class="space-y-6">
             <header class="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 class="text-lg font-semibold text-slate-900">Tareas</h2>
-                <p class="text-sm text-slate-500">Administra plantillas y reglas de recurrencia por posición o colaborador sugerido.</p>
-              </div>
             </header>
             <form method="get" class="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white/80 p-5 text-sm text-slate-600 shadow-sm backdrop-blur" data-task-definition-filter-form>
               <input type="hidden" name="tm_tab" value="tareas" />
@@ -449,13 +445,6 @@
                   </fieldset>
 
                   <fieldset class="space-y-3">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Tipo de planificación</legend>
-                    {% with config=task_manager_task_type_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="task_type" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3">
                     <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Responsable sugerido</legend>
                     {% with config=task_manager_responsible_filter %}
                       {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
@@ -463,10 +452,29 @@
                   </fieldset>
 
                   <fieldset class="space-y-3">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fecha de creación</legend>
-                    {% with config=task_manager_created_window_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="created_window" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fecha programada</legend>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        <span class="whitespace-nowrap">Desde</span>
+                        <input
+                          type="date"
+                          name="scheduled_start"
+                          value="{{ task_manager_schedule_filter.start_value }}"
+                          class="flex-1 h-11 rounded-full border border-slate-200 bg-white px-3 text-sm font-normal uppercase tracking-normal text-slate-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                          data-schedule-filter-start
+                        />
+                      </label>
+                      <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        <span class="whitespace-nowrap">Hasta</span>
+                        <input
+                          type="date"
+                          name="scheduled_end"
+                          value="{{ task_manager_schedule_filter.end_value }}"
+                          class="flex-1 h-11 rounded-full border border-slate-200 bg-white px-3 text-sm font-normal uppercase tracking-normal text-slate-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                          data-schedule-filter-end
+                        />
+                      </label>
+                    </div>
                   </fieldset>
                 </div>
               </section>
@@ -2217,11 +2225,12 @@
       setupTaskDefinitionGrouping();
 
       var filterForm = document.querySelector('[data-task-definition-filter-form]');
-        if (filterForm) {
-          var applyTaskDefinitionFilters = function () {
-            var params = new URLSearchParams(window.location.search);
-            params.set('tm_tab', 'tareas');
-            params.delete('page');
+      if (filterForm) {
+        var applyTaskDefinitionFilters = function () {
+          var params = new URLSearchParams(window.location.search);
+          params.set('tm_tab', 'tareas');
+          params.delete('page');
+
           var pickers = filterForm.querySelectorAll('[data-filter-picker]');
           pickers.forEach(function (picker) {
             var name = picker.getAttribute('data-filter-name');
@@ -2239,6 +2248,34 @@
               params.set(name, selectedValue);
             }
           });
+
+          var scheduleStartInput = filterForm.querySelector('[data-schedule-filter-start]');
+          var scheduleEndInput = filterForm.querySelector('[data-schedule-filter-end]');
+          var scheduleStartValue = '';
+          var scheduleEndValue = '';
+
+          if (scheduleStartInput) {
+            scheduleStartValue = (scheduleStartInput.value || '').trim();
+            if (scheduleStartValue) {
+              params.set('scheduled_start', scheduleStartValue);
+            } else {
+              params.delete('scheduled_start');
+            }
+          } else {
+            params.delete('scheduled_start');
+          }
+
+          if (scheduleEndInput) {
+            scheduleEndValue = (scheduleEndInput.value || '').trim();
+            if (scheduleEndValue) {
+              params.set('scheduled_end', scheduleEndValue);
+            } else {
+              params.delete('scheduled_end');
+            }
+          } else {
+            params.delete('scheduled_end');
+          }
+
           var query = params.toString();
           var target = window.location.pathname + (query ? '?' + query : '') + '#tm-tareas';
           window.location.assign(target);
@@ -2248,7 +2285,16 @@
           applyTaskDefinitionFilters();
         });
 
-          var presetButtons = filterForm.querySelectorAll('[data-group-preset]');
+        var scheduleInputs = filterForm.querySelectorAll('[data-schedule-filter-start], [data-schedule-filter-end]');
+        if (scheduleInputs.length) {
+          scheduleInputs.forEach(function (input) {
+            input.addEventListener('change', function () {
+              applyTaskDefinitionFilters();
+            });
+          });
+        }
+
+        var presetButtons = filterForm.querySelectorAll('[data-group-preset]');
         var clearGroupingButton = filterForm.querySelector('[data-group-clear]');
 
         var updateGroupingClearState = function () {
