@@ -1,0 +1,117 @@
+{% with task_form_top_margin|default:"mt-6" as top_margin %}
+<div class="{{ top_margin }} grid gap-5 sm:grid-cols-2">
+  <label class="text-sm font-medium text-slate-700">
+    Nombre de la tarea
+    <input
+      type="text"
+      class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+      placeholder="Ej. Sanitizar equipos de pesaje"
+    />
+  </label>
+  <label class="text-sm font-medium text-slate-700">
+    Categoría
+    <select class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
+      <option>Seleccione</option>
+      <option>Bioseguridad</option>
+      <option>Mantenimiento</option>
+      <option>Producción</option>
+      <option>Documentación</option>
+    </select>
+  </label>
+  <label class="text-sm font-medium text-slate-700 sm:col-span-2">
+    Descripción
+    <textarea
+      rows="3"
+      class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+      placeholder="Detalla la rutina, estándares y protocolos a cumplir."
+    ></textarea>
+  </label>
+  <div class="sm:col-span-2">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Recurrencia</p>
+    <div class="mt-2 grid gap-3 sm:grid-cols-3">
+      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+        Única
+        <input type="radio" name="task_type" class="border-slate-300 text-brand focus:ring-brand" />
+      </label>
+      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+        Semanal
+        <input type="radio" name="task_type" class="border-slate-300 text-brand focus:ring-brand" checked />
+      </label>
+      <label class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+        Mensual
+        <input type="radio" name="task_type" class="border-slate-300 text-brand focus:ring-brand" />
+      </label>
+    </div>
+  </div>
+  <div class="sm:col-span-2">
+    <label class="text-sm font-medium text-slate-700">
+      Días / Fechas
+      <input
+        type="text"
+        class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+        placeholder="Lunes, Miércoles, Viernes · 1 y 15"
+      />
+    </label>
+    <p class="mt-1 text-xs text-slate-500">El sistema validará que las configuraciones sean coherentes con el tipo de tarea.</p>
+  </div>
+  <label class="text-sm font-medium text-slate-700">
+    Posición prioritaria
+    <select class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
+      <option>Seleccione</option>
+      <option>Auxiliar Operativo</option>
+      <option>Líder de turno</option>
+      <option>Supervisor Bioseguridad</option>
+      <option>Coordinador Producción</option>
+    </select>
+  </label>
+  <label class="text-sm font-medium text-slate-700">
+    Colaborador sugerido
+    <select class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
+      <option>Automático según posición</option>
+      <option>Diana Bustos</option>
+      <option>Jhon Vergara</option>
+      <option>María Perdomo</option>
+    </select>
+  </label>
+  <div class="sm:col-span-2">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Requisitos adicionales</p>
+    <div class="mt-3 space-y-3">
+      <label class="flex items-center gap-3 text-sm text-slate-700">
+        <input type="checkbox" class="rounded border-slate-300 text-brand focus:ring-brand" checked />
+        Requiere foto de evidencia
+      </label>
+      <label class="flex items-center gap-3 text-sm text-slate-700">
+        <input type="checkbox" class="rounded border-slate-300 text-brand focus:ring-brand" />
+        Solicitar nota de cierre
+      </label>
+      <label class="flex items-center gap-3 text-sm text-slate-700">
+        <input type="checkbox" class="rounded border-slate-300 text-brand focus:ring-brand" />
+        Bloquear postergación superior a 24h
+      </label>
+    </div>
+  </div>
+{% endwith %}
+{% with task_form_footer_margin|default:"mt-6" as footer_margin %}
+<div class="{{ footer_margin }} flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+  <button
+    type="button"
+    class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand hover:text-brand"
+  >
+    Guardar borrador
+  </button>
+  <div class="flex flex-wrap gap-2">
+    <button
+      type="button"
+      class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand hover:text-brand"
+    >
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark"
+    >
+      Continuar a asignación
+    </button>
+  </div>
+</div>
+{% endwith %}

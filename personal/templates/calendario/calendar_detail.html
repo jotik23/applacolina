@@ -11,116 +11,17 @@
 <div class="flex flex-col gap-6">
   <section class="rounded-2xl bg-white shadow-sm">
     <div class="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div class="space-y-2">
-          <h1 class="flex flex-wrap items-center gap-3 text-2xl font-semibold text-slate-900">
-            <span>{{ calendar.name|default:"Calendario sin título" }}</span>
-            {% if calendar.status == 'draft' %}
-              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">Borrador</span>
-            {% elif calendar.status == 'approved' %}
-              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Aprobado</span>
-            {% elif calendar.status == 'modified' %}
-              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Modificado</span>
-            {% endif %}
-          </h1>
-          <p class="text-sm text-slate-500">{{ calendar.start_date }} → {{ calendar.end_date }}</p>
-          <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            {% if calendar.base_calendar %}
-              <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 font-medium text-slate-600">Modifica: #{{ calendar.base_calendar_id }}</span>
-            {% endif %}
-          </div>
-        </div>
-        <div class="flex flex-wrap items-center justify-end gap-3">
-          {% if calendar.status != 'approved' %}
-            <form method="post" class="contents" data-confirmation>
-              {% csrf_token %}
-              <input type="hidden" name="action" value="approve" />
-              <button type="submit" class="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2" data-confirmation-trigger>
-                Aprobar calendario
-              </button>
-              <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
-                <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
-                  <p class="font-semibold text-slate-900">¿Aprobar este calendario?</p>
-                  <p class="mt-1 text-xs text-slate-500">Se publicará para uso operativo.</p>
-                  <div class="mt-3 flex justify-end gap-2">
-                    <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
-                    <button type="button" class="inline-flex items-center rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1" data-confirmation-confirm>Aprobar</button>
-                  </div>
-                </div>
-              </div>
-            </form>
-            <form method="post" class="contents" data-confirmation>
-              {% csrf_token %}
-              <input type="hidden" name="action" value="regenerate" />
-              <button type="submit" class="inline-flex items-center rounded-full border border-amber-300 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 hover:border-amber-400 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-200" data-confirmation-trigger>
-                Regenerar calendario
-              </button>
-              <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
-                <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
-                  <p class="font-semibold text-slate-900">¿Regenerar este calendario?</p>
-                  <p class="mt-1 text-xs text-slate-500">Se reemplazarán las asignaciones actuales por una nueva versión sugerida.</p>
-                  <div class="mt-3 flex justify-end gap-2">
-                    <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
-                    <button type="button" class="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1" data-confirmation-confirm>Regenerar</button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          {% else %}
-            <div class="flex flex-col items-start gap-2 text-sm font-medium text-slate-500 md:flex-row md:items-center">
-              <span>
-                {% if calendar.approved_by %}
-                  Aprobado por {{ calendar.approved_by.get_full_name|default:calendar.approved_by }} el {{ calendar.approved_at|date:"d/m/Y H:i" }}
-                {% else %}
-                  Aprobado el {{ calendar.approved_at|date:"d/m/Y H:i" }}
-                {% endif %}
-              </span>
-              <form method="post" class="contents">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="mark-modified" />
-                <button type="submit" class="inline-flex items-center rounded-full border border-slate-300 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">
-                  Marcar como modificada
-                </button>
-              </form>
-            </div>
-          {% endif %}
-          <div class="relative" data-double-confirm>
-            <button type="button" class="inline-flex items-center rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-red-600 hover:border-red-300 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200" data-double-confirm-trigger>Eliminar calendario</button>
-            <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-panel>
-              <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
-                <p class="font-semibold text-slate-900">¿Eliminar este calendario?</p>
-                <p class="mt-1 text-xs text-slate-500">Se eliminarán todas las asignaciones relacionadas.</p>
-                <div class="mt-3 flex justify-end gap-2">
-                  <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel data-double-confirm-focus>Cancelar</button>
-                  <button type="button" class="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400" data-double-confirm-continue>Confirmar</button>
-                </div>
-              </div>
-            </div>
-            <form method="post" action="{% url 'personal:calendar-delete' calendar.pk %}" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-final>
-              {% csrf_token %}
-              <input type="hidden" name="next" value="{{ calendar_home_url }}" />
-              <div class="w-full max-w-sm rounded-xl border border-red-200 bg-white p-4 text-left shadow-lg">
-                <p class="text-sm font-semibold text-red-700">Confirmación final</p>
-                <p class="mt-1 text-xs text-slate-500">Esta acción es irreversible.</p>
-                <div class="mt-3 flex justify-end gap-2">
-                  <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel>Cancelar</button>
-                  <button type="submit" class="inline-flex items-center rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300" data-double-confirm-final-submit data-double-confirm-focus>Eliminar definitivamente</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      <div
-        class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4"
-        data-calendar-navigator
-        data-current-calendar-id="{{ calendar.id }}"
-      >
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
+      <div class="flex flex-col gap-4 lg:gap-6">
+        <h1 class="sr-only">Detalle calendario {{ calendar.name|default:"sin título" }}</h1>
+        <div
+          class="flex w-full flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:gap-4 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0"
+          data-calendar-navigator
+          data-current-calendar-id="{{ calendar.id }}"
+        >
+          <div class="flex w-full justify-center gap-2 sm:w-auto sm:justify-start">
             <button
               type="button"
-              class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+              class="inline-flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 sm:w-auto"
               data-calendar-nav="prev"
             >
               <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -134,7 +35,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+              class="inline-flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 sm:w-auto"
               data-calendar-nav="next"
             >
               <span>Siguiente</span>
@@ -147,54 +48,167 @@
               </svg>
             </button>
           </div>
-        </div>
-        <div class="relative" data-calendar-picker>
-          <button
-            type="button"
-            class="flex w-full items-center justify-between gap-3 rounded-xl border border-white/70 bg-white px-4 py-3 text-left shadow-sm transition hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-            data-calendar-picker-trigger
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            <div class="flex flex-col">
-              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Calendario visible</span>
-              <span class="text-sm font-semibold text-slate-800" data-calendar-picker-label>{{ calendar.name|default:"Calendario sin título" }}</span>
-              <span class="text-xs text-slate-500" data-calendar-picker-range>{{ calendar.start_date }} → {{ calendar.end_date }}</span>
-            </div>
-            <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path
-                fill-rule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 11.208l3.71-3.978a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0l-4.24-4.54a.75.75 0 01.02-1.06z"
-                clip-rule="evenodd"
-              />
-            </svg>
-          </button>
-          <div
-            class="invisible absolute left-0 top-full z-30 mt-2 w-full max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white opacity-0 shadow-lg shadow-slate-900/10 transition duration-150 ease-out"
-            data-calendar-picker-panel
-          >
-            <div class="border-b border-slate-100 bg-slate-50/70 px-4 py-3">
-              <label class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-500 focus-within:ring-2 focus-within:ring-brand focus-within:ring-offset-2 focus-within:ring-offset-white">
-                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <div class="flex w-full justify-center sm:flex-1">
+            <div class="relative w-full sm:min-w-[260px] sm:max-w-md lg:max-w-lg" data-calendar-picker>
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-brand/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                data-calendar-picker-trigger
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                <div class="min-w-0 flex-1">
+                  <span class="flex items-center gap-2 text-xl font-semibold leading-tight text-slate-900">
+                    <span class="truncate" data-calendar-picker-label>{{ calendar.name|default:"Calendario sin título" }}</span>
+                    {% if calendar.status == 'draft' %}
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Borrador</span>
+                    {% elif calendar.status == 'approved' %}
+                      <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Aprobado</span>
+                    {% elif calendar.status == 'modified' %}
+                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">Modificado</span>
+                    {% else %}
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{{ calendar.get_status_display|default:calendar.status }}</span>
+                    {% endif %}
+                  </span>
+                  <span class="mt-1 block text-xs text-slate-500" data-calendar-picker-range>{{ calendar.start_date }} → {{ calendar.end_date }}</span>
+                </div>
+                <svg class="h-4 w-4 flex-none text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path
                     fill-rule="evenodd"
-                    d="M9 3.5a5.5 5.5 0 014.384 8.776l3.17 3.17a.75.75 0 11-1.06 1.06l-3.17-3.17A5.5 5.5 0 119 3.5zm0 1.5a4 4 0 100 8 4 4 0 000-8z"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.208l3.71-3.978a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0l-4.24-4.54a.75.75 0 01.02-1.06z"
                     clip-rule="evenodd"
                   />
                 </svg>
-                <input
-                  type="search"
-                  class="flex-1 border-0 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-                  placeholder="Filtrar por nombre o fecha…"
-                  data-calendar-picker-search
-                />
-              </label>
-            </div>
-            <div class="max-h-64 overflow-y-auto" data-calendar-picker-list>
-              <div class="px-4 py-3 text-xs text-slate-400">Cargando calendarios…</div>
+              </button>
+              <div
+                class="invisible absolute left-0 top-full z-30 mt-2 w-full max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white opacity-0 shadow-lg shadow-slate-900/10 transition duration-150 ease-out"
+                data-calendar-picker-panel
+              >
+                <div class="border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+                  <label class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs text-slate-500 focus-within:ring-2 focus-within:ring-brand focus-within:ring-offset-2 focus-within:ring-offset-white">
+                    <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path
+                        fill-rule="evenodd"
+                        d="M9 3.5a5.5 5.5 0 014.384 8.776l3.17 3.17a.75.75 0 11-1.06 1.06l-3.17-3.17A5.5 5.5 0 119 3.5zm0 1.5a4 4 0 100 8 4 4 0 000-8z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                    <input
+                      type="search"
+                      class="flex-1 border-0 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                      placeholder="Filtrar por nombre o fecha…"
+                      data-calendar-picker-search
+                    />
+                  </label>
+                </div>
+                <div class="max-h-64 overflow-y-auto" data-calendar-picker-list>
+                  <div class="px-4 py-3 text-xs text-slate-400">Cargando calendarios…</div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+          <div class="flex w-full flex-col items-center gap-2 sm:w-52 sm:flex-none sm:items-end sm:ml-auto">
+            {% if calendar.status != 'approved' %}
+              <form method="post" class="w-full" data-confirmation>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve" />
+                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2" data-confirmation-trigger>
+                  Aprobar calendario
+                </button>
+                <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
+                  <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+                    <p class="font-semibold text-slate-900">¿Aprobar este calendario?</p>
+                    <p class="mt-1 text-xs text-slate-500">Se publicará para uso operativo.</p>
+                    <div class="mt-3 flex justify-end gap-2">
+                      <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
+                      <button type="button" class="inline-flex items-center rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1" data-confirmation-confirm>Aprobar</button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            {% else %}
+              <div class="flex w-full flex-col gap-1 text-xs items-center sm:items-end">
+                <div class="flex flex-col items-start gap-2 text-sm font-medium text-slate-500 sm:items-end">
+                  <span class="w-full text-center sm:text-right">
+                    {% if calendar.approved_by %}
+                      Aprobado por {{ calendar.approved_by.get_full_name|default:calendar.approved_by }} el {{ calendar.approved_at|date:"d/m/Y H:i" }}
+                    {% else %}
+                      Aprobado el {{ calendar.approved_at|date:"d/m/Y H:i" }}
+                    {% endif %}
+                  </span>
+                  <form method="post" class="contents">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="mark-modified" />
+                    <button type="submit" class="inline-flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
+                      <span>Marcar modificada</span>
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 11-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            {% endif %}
+            <div class="flex w-full justify-end gap-2 text-xs">
+              {% if calendar.status != 'approved' %}
+                <form method="post" class="contents" data-confirmation>
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="regenerate" />
+                  <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 hover:border-amber-300 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-1" data-confirmation-trigger>
+                    <span>Regenerar</span>
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M3.172 7.172a4 4 0 015.656 0l.172.172.172-.172a4 4 0 115.656 5.656l-5.15 5.15a.75.75 0 01-1.06 0l-5.15-5.15a4 4 0 010-5.656z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                  <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
+                    <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+                      <p class="font-semibold text-slate-900">¿Regenerar este calendario?</p>
+                      <p class="mt-1 text-xs text-slate-500">Se reemplazarán las asignaciones actuales por una nueva versión sugerida.</p>
+                      <div class="mt-3 flex justify-end gap-2">
+                        <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
+                        <button type="button" class="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1" data-confirmation-confirm>Regenerar</button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              {% endif %}
+              <div class="relative" data-double-confirm>
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-600 hover:border-red-300 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-1" data-double-confirm-trigger>
+                  <span>Eliminar</span>
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M6.28 5.22a.75.75 0 011.06 0L10 7.939l2.66-2.72a.75.75 0 111.08 1.04L11.09 9l2.65 2.74a.75.75 0 11-1.08 1.04L10 10.06l-2.66 2.72a.75.75 0 11-1.08-1.04L8.91 9 6.25 6.26a.75.75 0 010-1.04z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-panel>
+                  <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+                    <p class="font-semibold text-slate-900">¿Eliminar este calendario?</p>
+                    <p class="mt-1 text-xs text-slate-500">Se eliminarán todas las asignaciones relacionadas.</p>
+                    <div class="mt-3 flex justify-end gap-2">
+                      <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel data-double-confirm-focus>Cancelar</button>
+                      <button type="button" class="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400" data-double-confirm-continue>Confirmar</button>
+                    </div>
+                  </div>
+                </div>
+                <form method="post" action="{% url 'personal:calendar-delete' calendar.pk %}" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-double-confirm-final>
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ calendar_home_url }}" />
+                  <div class="w-full max-w-sm rounded-xl border border-red-200 bg-white p-4 text-left shadow-lg">
+                    <p class="text-sm font-semibold text-red-700">Confirmación final</p>
+                    <p class="mt-1 text-xs text-slate-500">Esta acción es irreversible.</p>
+                    <div class="mt-3 flex justify-end gap-2">
+                      <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-double-confirm-cancel>Cancelar</button>
+                      <button type="submit" class="inline-flex items-center rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300" data-double-confirm-final-submit data-double-confirm-focus>Eliminar definitivamente</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% if calendar.base_calendar %}
+          <div class="flex justify-center text-xs text-slate-500">
+            <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 font-medium text-slate-600">Modifica: #{{ calendar.base_calendar_id }}</span>
+          </div>
+        {% endif %}
       </div>
     </div>
   </section>

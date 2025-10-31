@@ -151,6 +151,8 @@
                 </div>
                 <a
                   href="{% url 'admin:index' %}"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -199,6 +201,34 @@
                         <button
                           type="button"
                           class="inline-flex w-full items-center justify-between rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 transition hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                          data-task-create-open
+                        >
+                          <span class="flex items-center gap-2">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-brand">
+                              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path
+                                  fill-rule="evenodd"
+                                  d="M4.5 3A1.5 1.5 0 003 4.5v11A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0015.5 3h-11zm2 3.5a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5A.75.75 0 016.5 6.5zm0 3.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75zm0 3.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z"
+                                  clip-rule="evenodd"
+                                />
+                              </svg>
+                            </span>
+                            <span class="flex flex-col text-left leading-tight">
+                              Definición de tarea
+                              <span class="text-[11px] font-normal text-slate-400">Crea una nueva plantilla operativa</span>
+                            </span>
+                          </span>
+                          <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                              fill-rule="evenodd"
+                              d="M7.293 5.293a1 1 0 011.414 0L12.414 9l-3.707 3.707a1 1 0 01-1.414-1.414L9.586 10 7.293 7.707a1 1 0 010-1.414z"
+                              clip-rule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex w-full items-center justify-between rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 transition hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
                           data-calendar-create-open
                         >
                           <span class="flex items-center gap-2">
@@ -212,7 +242,7 @@
                               </svg>
                             </span>
                             <span class="flex flex-col text-left leading-tight">
-                              Calendario
+                              Cronograma de turnos
                               <span class="text-[11px] font-normal text-slate-400">Configura un nuevo calendario operativo</span>
                             </span>
                           </span>
@@ -377,6 +407,21 @@
                 <button
                   type="button"
                   class="inline-flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  data-task-create-open
+                  data-mobile-nav-close
+                >
+                  Tarea
+                  <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.5 3A1.5 1.5 0 003 4.5v11A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0015.5 3h-11zm2 3.5a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5A.75.75 0 016.5 6.5zm0 3.25a.75.75 0 01.75-.75h5.5a.75.75 0 010 1.5h-5.5a.75.75 0 01-.75-.75zm0 3.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
                   data-calendar-create-open
                   data-mobile-nav-close
                 >
@@ -416,6 +461,8 @@
                 </a>
                 <a
                   href="{% url 'admin:index' %}"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
                   data-mobile-nav-close
                 >
@@ -486,7 +533,7 @@
                   />
                 </svg>
               </a>
-              <a href="{% url 'admin:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+              <a href="{% url 'admin:index' %}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
                 <span>Administración</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path
@@ -679,6 +726,63 @@
       </div>
     {% endif %}
 
+    <div class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" data-task-create>
+      <div class="absolute inset-0 bg-slate-900/40 transition-opacity" data-task-create-backdrop></div>
+      <div class="absolute inset-y-0 right-0 flex max-w-full pl-10">
+        <section class="pointer-events-auto w-screen max-w-xl">
+          <div class="flex h-full flex-col overflow-hidden rounded-l-3xl bg-white/95 shadow-2xl ring-1 ring-slate-200/70 backdrop-blur-sm">
+            <header class="relative flex items-center justify-between gap-6 border-b border-transparent bg-gradient-to-r from-brand/15 via-white to-white px-7 py-6 shadow-sm">
+              <div class="flex items-start gap-4">
+                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 text-brand shadow ring-1 ring-brand/20">
+                  <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M7 3a1 1 0 00-1 1v1H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-1V4a1 1 0 10-2 0v1H9V4a1 1 0 00-1-1zm12 5H5v9h14V8zm-9 3.5A1.5 1.5 0 019.5 10h5a1.5 1.5 0 010 3h-5A1.5 1.5 0 017 11.5zm0 3A1.5 1.5 0 018.5 13h3a1.5 1.5 0 010 3h-3A1.5 1.5 0 017 14.5z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-brand/80">Gestor de tareas</p>
+                  <h2 class="mt-1 text-2xl font-semibold text-slate-900">Nueva Tarea</h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                data-task-create-close
+              >
+                <span class="sr-only">Cerrar panel de creación de tarea</span>
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M5.22 5.22a.75.75 0 011.06 0L10 8.94l3.72-3.72a.75.75 0 111.06 1.06L11.06 10l3.72 3.72a.75.75 0 11-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 11-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 010-1.06z" clip-rule="evenodd" />
+                </svg>
+              </button>
+            </header>
+            <form
+              method="post"
+              action="{{ task_definition_create_url }}"
+              class="flex h-full flex-col bg-gradient-to-b from-white via-white to-slate-50"
+              data-task-create-form
+              novalidate
+            >
+              {% csrf_token %}
+              <div class="flex-1 overflow-y-auto px-7 py-6">
+                <div class="mt-4">
+                  {% include "task_manager/includes/task_definition_form_fields.html" with task_form_top_margin="" task_form_footer_margin="mt-6" form=task_definition_form %}
+                </div>
+              </div>
+              <div class="border-t border-slate-100 bg-slate-50/80 px-7 py-5 text-xs text-slate-500 backdrop-blur-sm">
+                <p class="font-semibold text-slate-600">Consejo</p>
+                <p class="mt-1">
+                  Ajusta la recurrencia y posición sugerida; el generador verificará solapamientos y propondrá reasignaciones consistentes.
+                </p>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+
     <footer class="border-t border-slate-200 bg-white/70 py-6">
       <div class="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-xs text-slate-500 sm:flex-row sm:px-6 lg:px-8">
         <span>Calendario operativo · La Colina</span>
@@ -713,6 +817,17 @@
         var calendarCreateUrl = null;
         var calendarCreateLastTrigger = null;
         var calendarDetailTemplate = null;
+        var taskCreatePanel = null;
+        var taskCreateForm = null;
+        var taskCreateTriggers = [];
+        var taskCreateCloseButtons = [];
+        var taskCreateBackdrop = null;
+        var taskCreateLastTrigger = null;
+        var taskCreateStatus = null;
+        var taskCreateSpinner = null;
+        var taskCreateSubmitButton = null;
+        var taskCreateSubmitLabel = null;
+        var taskCreateSubmitDefaultLabel = '';
 
         var CalendarNavigation = (function () {
           try {
@@ -1327,6 +1442,9 @@
           if (activeQuickCreate) {
             closeQuickCreate(activeQuickCreate, false);
           }
+          if (taskCreatePanel && !taskCreatePanel.classList.contains('hidden')) {
+            closeTaskCreate(false);
+          }
           calendarCreateLastTrigger = trigger || null;
           calendarCreatePanel.classList.remove('hidden');
           document.body.classList.add('overflow-hidden');
@@ -1447,6 +1565,303 @@
 
           if (calendarCreateForm) {
             calendarCreateForm.addEventListener('submit', handleCalendarCreateSubmit);
+          }
+        }
+
+        function clearTaskCreateErrors() {
+          if (!taskCreateForm) {
+            return;
+          }
+          toArray(taskCreateForm.querySelectorAll('[data-task-field-error]')).forEach(function (errorEl) {
+            errorEl.textContent = '';
+            if (!errorEl.classList.contains('hidden')) {
+              errorEl.classList.add('hidden');
+            }
+          });
+          toArray(taskCreateForm.querySelectorAll('.border-rose-400')).forEach(function (input) {
+            input.classList.remove('border-rose-400');
+          });
+          toArray(taskCreateForm.querySelectorAll('.ring-rose-400')).forEach(function (input) {
+            input.classList.remove('ring-rose-400');
+          });
+          toArray(taskCreateForm.querySelectorAll('label.border-rose-400')).forEach(function (label) {
+            label.classList.remove('border-rose-400');
+          });
+        }
+
+        function markTaskCreateFieldError(fieldName, messages) {
+          if (!taskCreateForm || !fieldName) {
+            return;
+          }
+          var errorEl = taskCreateForm.querySelector('[data-task-field-error="' + fieldName + '"]');
+          var message = Array.isArray(messages) ? messages.join(' ') : String(messages || '');
+          if (errorEl) {
+            errorEl.textContent = message;
+            if (message.trim()) {
+              errorEl.classList.remove('hidden');
+            } else {
+              errorEl.classList.add('hidden');
+            }
+          }
+          if (fieldName !== '__all__') {
+            toArray(taskCreateForm.querySelectorAll('[name="' + fieldName + '"]')).forEach(function (input) {
+              input.classList.add('border-rose-400', 'ring-rose-400');
+              if (typeof input.closest === 'function') {
+                var label = input.closest('label');
+                if (label) {
+                  label.classList.add('border-rose-400');
+                }
+              }
+            });
+          }
+        }
+
+        function setTaskCreateStatus(message, isError) {
+          if (!taskCreateStatus) {
+            return;
+          }
+          var text = message ? String(message) : '';
+          taskCreateStatus.textContent = text;
+          taskCreateStatus.classList.remove('text-slate-500', 'text-emerald-600', 'text-rose-600');
+          if (text.trim()) {
+            taskCreateStatus.classList.remove('hidden');
+            taskCreateStatus.classList.add(isError ? 'text-rose-600' : 'text-emerald-600');
+          } else {
+            taskCreateStatus.classList.add('hidden');
+            taskCreateStatus.classList.add('text-slate-500');
+          }
+        }
+
+        function setTaskCreateLoading(isLoading) {
+          var loading = !!isLoading;
+          if (taskCreateSubmitButton) {
+            taskCreateSubmitButton.disabled = loading;
+            taskCreateSubmitButton.classList.toggle('opacity-60', loading);
+            taskCreateSubmitButton.classList.toggle('cursor-not-allowed', loading);
+          }
+          if (taskCreateSpinner) {
+            taskCreateSpinner.classList.toggle('hidden', !loading);
+          }
+          if (taskCreateSubmitLabel) {
+            taskCreateSubmitLabel.textContent = loading
+              ? 'Guardando…'
+              : (taskCreateSubmitDefaultLabel || 'Crear tarea');
+          }
+        }
+
+        function getCurrentTaskTypeValue() {
+          if (!taskCreateForm) {
+            return null;
+          }
+          var checked = taskCreateForm.querySelector('[name="task_type"]:checked');
+          return checked ? String(checked.value) : null;
+        }
+
+        function updateTaskTypeSections(selectedValue) {
+          if (!taskCreateForm) {
+            return;
+          }
+          var value = typeof selectedValue === 'string' ? selectedValue : getCurrentTaskTypeValue();
+          var sections = toArray(taskCreateForm.querySelectorAll('[data-task-type-section]'));
+          sections.forEach(function (section) {
+            var required = section.getAttribute('data-task-type-section');
+            var shouldShow = true;
+            if (required === 'one_time') {
+              shouldShow = value === 'one_time';
+            } else if (required === 'recurring') {
+              shouldShow = value === 'recurring';
+            }
+            section.classList.toggle('hidden', !shouldShow);
+            toArray(section.querySelectorAll('input, select, textarea')).forEach(function (input) {
+              if (shouldShow) {
+                input.removeAttribute('disabled');
+              } else {
+                input.setAttribute('disabled', 'disabled');
+              }
+            });
+          });
+
+          var typeLabels = toArray(taskCreateForm.querySelectorAll('[data-task-type-options] label'));
+          typeLabels.forEach(function (label) {
+            var input = label.querySelector('input[name="task_type"]');
+            if (input && input.checked) {
+              label.classList.add('border-brand', 'bg-brand/10', 'text-brand');
+              label.classList.remove('text-slate-700');
+            } else {
+              label.classList.remove('border-brand', 'bg-brand/10', 'text-brand');
+              label.classList.add('text-slate-700');
+            }
+          });
+        }
+
+        function handleTaskCreateSubmit(event) {
+          if (!taskCreateForm) {
+            return;
+          }
+          var actionUrl = taskCreateForm.getAttribute('action');
+          if (!actionUrl) {
+            return;
+          }
+          event.preventDefault();
+          clearTaskCreateErrors();
+          setTaskCreateStatus('', false);
+          setTaskCreateLoading(true);
+
+          var formData = new FormData(taskCreateForm);
+          fetch(actionUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          })
+            .then(function (response) {
+              if (response.status === 400) {
+                return response.json().then(function (payload) {
+                  throw { type: 'validation', payload: payload };
+                });
+              }
+              if (!response.ok) {
+                throw new Error('No fue posible crear la tarea.');
+              }
+              return response.json();
+            })
+            .then(function (payload) {
+              setTaskCreateLoading(false);
+              var redirectUrl = payload && payload.redirect_url ? String(payload.redirect_url) : null;
+              if (redirectUrl) {
+                setTaskCreateStatus('Tarea creada. Redirigiendo…', false);
+                window.location.assign(redirectUrl);
+                return;
+              }
+              setTaskCreateStatus('Tarea registrada correctamente.', false);
+              if (typeof taskCreateForm.reset === 'function') {
+                taskCreateForm.reset();
+              }
+              updateTaskTypeSections();
+              setTimeout(function () {
+                closeTaskCreate(false);
+              }, 800);
+            })
+            .catch(function (error) {
+              setTaskCreateLoading(false);
+              if (error && error.type === 'validation' && error.payload && error.payload.errors) {
+                var fieldErrors = error.payload.errors;
+                Object.keys(fieldErrors).forEach(function (key) {
+                  markTaskCreateFieldError(key, fieldErrors[key]);
+                });
+                if (fieldErrors.__all__) {
+                  setTaskCreateStatus(fieldErrors.__all__.join(' '), true);
+                } else {
+                  setTaskCreateStatus('Revisa los campos resaltados.', true);
+                }
+                return;
+              }
+              console.error(error);
+              setTaskCreateStatus('No fue posible crear la tarea. Intenta nuevamente.', true);
+            });
+        }
+
+        function closeTaskCreate(focusTrigger) {
+          if (!taskCreatePanel) {
+            return;
+          }
+          taskCreatePanel.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+          setTaskCreateLoading(false);
+          setTaskCreateStatus('', false);
+          clearTaskCreateErrors();
+          if (focusTrigger && taskCreateLastTrigger && typeof taskCreateLastTrigger.focus === 'function') {
+            taskCreateLastTrigger.focus();
+          }
+          taskCreateLastTrigger = null;
+        }
+
+        function openTaskCreate(trigger) {
+          if (!taskCreatePanel) {
+            return;
+          }
+          if (activeQuickCreate) {
+            closeQuickCreate(activeQuickCreate, false);
+          }
+          if (calendarCreatePanel && !calendarCreatePanel.classList.contains('hidden')) {
+            closeCalendarCreate(false);
+          }
+          taskCreateLastTrigger = trigger || null;
+          taskCreatePanel.classList.remove('hidden');
+          document.body.classList.add('overflow-hidden');
+          setTaskCreateLoading(false);
+          clearTaskCreateErrors();
+          setTaskCreateStatus('', false);
+          if (taskCreateForm && typeof taskCreateForm.reset === 'function') {
+            taskCreateForm.reset();
+          }
+          updateTaskTypeSections();
+          if (taskCreateForm) {
+            var firstInput = taskCreateForm.querySelector(
+              'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])'
+            );
+            if (firstInput && typeof firstInput.focus === 'function') {
+              firstInput.focus();
+            } else {
+              focusFirst(taskCreatePanel);
+            }
+          } else {
+            focusFirst(taskCreatePanel);
+          }
+        }
+
+        function setupTaskCreate() {
+          taskCreatePanel = document.querySelector('[data-task-create]');
+          if (!taskCreatePanel) {
+            return;
+          }
+          taskCreateForm = taskCreatePanel.querySelector('[data-task-create-form]');
+          taskCreateBackdrop = taskCreatePanel.querySelector('[data-task-create-backdrop]');
+          taskCreateCloseButtons = toArray(taskCreatePanel.querySelectorAll('[data-task-create-close]'));
+          taskCreateTriggers = toArray(document.querySelectorAll('[data-task-create-open]'));
+          taskCreateStatus = taskCreatePanel.querySelector('[data-task-create-status]');
+          taskCreateSpinner = taskCreatePanel.querySelector('[data-task-create-spinner]');
+          taskCreateSubmitButton = taskCreatePanel.querySelector('[data-task-create-submit]');
+          taskCreateSubmitLabel = taskCreatePanel.querySelector('[data-task-create-submit-label]');
+          taskCreateSubmitDefaultLabel = taskCreateSubmitLabel
+            ? String(taskCreateSubmitLabel.textContent || '').trim()
+            : taskCreateSubmitDefaultLabel;
+
+          taskCreateTriggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function (event) {
+              event.preventDefault();
+              openTaskCreate(trigger);
+            });
+          });
+
+          taskCreateCloseButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              closeTaskCreate(true);
+            });
+          });
+
+          if (taskCreateBackdrop) {
+            taskCreateBackdrop.addEventListener('click', function (event) {
+              if (event.target === taskCreateBackdrop) {
+                closeTaskCreate(false);
+              }
+            });
+          }
+
+          if (taskCreateForm) {
+            taskCreateForm.addEventListener('submit', handleTaskCreateSubmit);
+            var taskTypeInputs = toArray(taskCreateForm.querySelectorAll('input[name="task_type"]'));
+            taskTypeInputs.forEach(function (input) {
+              input.addEventListener('change', function () {
+                updateTaskTypeSections();
+              });
+            });
+            updateTaskTypeSections();
+            clearTaskCreateErrors();
+            setTaskCreateStatus('', false);
+            setTaskCreateLoading(false);
           }
         }
 
@@ -2134,6 +2549,10 @@
             closeCalendarCreate(true);
             return;
           }
+          if (taskCreatePanel && !taskCreatePanel.classList.contains('hidden')) {
+            closeTaskCreate(true);
+            return;
+          }
           if (activeCalendarMenu) {
             closeCalendarMenu(activeCalendarMenu, true);
             return;
@@ -2160,6 +2579,7 @@
           setupQuickCreateMenus();
           setupCalendarNavigators();
           setupCalendarCreate();
+          setupTaskCreate();
 
           if (mobileNav && mobileNavToggle) {
             mobileNavToggle.addEventListener('click', function () {
