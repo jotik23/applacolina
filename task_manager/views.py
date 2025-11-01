@@ -1274,6 +1274,294 @@ def _build_telegram_mini_app_payload(
         },
     ]
 
+    roster_seed = [
+        {
+            "date": day_minus_2,
+            "assignments": [
+                {
+                    "position_label": "Supervisor de bioseguridad",
+                    "collaborator": "Mateo Rojas",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Granja La Colina · Galpón 3",
+                    "status": "completed",
+                    "status_label": _("Ejecutado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Operario sanitario - Galpón 2",
+                    "collaborator": "Luisa Méndez",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Sanidad",
+                    "location": "Galpón 2 · Línea A",
+                    "status": "completed",
+                    "status_label": _("Ejecutado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Registro y trazabilidad",
+                    "collaborator": "Andrés Villa",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Control de producción",
+                    "location": "Sala de control",
+                    "status": "completed",
+                    "status_label": _("Ejecutado"),
+                    "status_theme": "emerald",
+                },
+            ],
+            "rests": [
+                {
+                    "collaborator": "Camilo Ortiz",
+                    "reason": _("Descanso compensatorio"),
+                    "notes": _("Retorna al turno nocturno el 05 Nov."),
+                }
+            ],
+        },
+        {
+            "date": day_minus_1,
+            "assignments": [
+                {
+                    "position_label": "Líder de turno - Galpón 3",
+                    "collaborator": "Gabriela Melo",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Granja La Colina",
+                    "status": "completed",
+                    "status_label": _("Ejecutado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Auxiliar operativo - Galpón 3",
+                    "collaborator": "Luis Fernando Gil",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Galpón 3 · Sala 1",
+                    "status": "completed",
+                    "status_label": _("Ejecutado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Respaldo polivalente",
+                    "collaborator": "María Fernanda Ruiz",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Apoyo transversal",
+                    "location": "Rotativo",
+                    "status": "completed",
+                    "status_label": _("Ejecutado"),
+                    "status_theme": "emerald",
+                },
+            ],
+            "rests": [
+                {
+                    "collaborator": "Lucía Pérez",
+                    "reason": _("Descanso por rotación"),
+                    "notes": _("Reincorpora 06 Nov en turno diurno."),
+                }
+            ],
+        },
+        {
+            "date": today,
+            "assignments": [
+                {
+                    "position_label": "Líder de turno - Galpón 3",
+                    "collaborator": "Gabriela Melo",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Granja La Colina",
+                    "status": "confirmed",
+                    "status_label": _("Confirmado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Auxiliar operativo - Galpón 3",
+                    "collaborator": "Luis Fernando Gil",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Galpón 3 · Sala 1",
+                    "status": "confirmed",
+                    "status_label": _("Confirmado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Apoyo sanitario - Galpón 2",
+                    "collaborator": "Sandra Leal",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Sanidad",
+                    "location": "Galpón 2 · Línea B",
+                    "status": "pending",
+                    "status_label": _("Por confirmar"),
+                    "status_theme": "amber",
+                    "notes": _("Confirma asistencia antes de las 18:00."),
+                },
+                {
+                    "position_label": "Limpieza profunda - Galpón 4",
+                    "collaborator": None,
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Servicios generales",
+                    "location": "Galpón 4",
+                    "status": "vacant",
+                    "status_label": _("Vacante"),
+                    "status_theme": "rose",
+                    "notes": _("Se requiere apoyo de la cuadrilla diurna."),
+                },
+            ],
+            "rests": [
+                {
+                    "collaborator": "Lucía Pérez",
+                    "reason": _("Descanso por rotación"),
+                    "notes": _("Regresa al turno diurno el 06 Nov."),
+                },
+                {
+                    "collaborator": "Carlos Jiménez",
+                    "reason": _("Descanso programado"),
+                },
+            ],
+            "alerts": [
+                _("Cobertura parcial en limpieza del galpón 4."),
+            ],
+        },
+        {
+            "date": tomorrow,
+            "assignments": [
+                {
+                    "position_label": "Líder de turno - Galpón 3",
+                    "collaborator": "Gabriela Melo",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Granja La Colina",
+                    "status": "confirmed",
+                    "status_label": _("Confirmado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Auxiliar operativo - Galpón 3",
+                    "collaborator": "Luis Fernando Gil",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Galpón 3 · Sala 2",
+                    "status": "confirmed",
+                    "status_label": _("Confirmado"),
+                    "status_theme": "emerald",
+                },
+                {
+                    "position_label": "Limpieza profunda - Galpón 4",
+                    "collaborator": "Equipo apoyo externo",
+                    "shift_label": "Noche · 22:00 – 06:00",
+                    "category": "Servicios generales",
+                    "location": "Galpón 4",
+                    "status": "pending",
+                    "status_label": _("Por confirmar"),
+                    "status_theme": "amber",
+                },
+            ],
+            "rests": [
+                {
+                    "collaborator": "Sandra Leal",
+                    "reason": _("Descanso compensatorio"),
+                }
+            ],
+        },
+        {
+            "date": day_plus_2,
+            "assignments": [
+                {
+                    "position_label": "Líder de turno - Galpón 3",
+                    "collaborator": "Camilo Ortiz",
+                    "shift_label": "Día · 06:00 – 14:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Granja La Colina",
+                    "status": "planned",
+                    "status_label": _("Planificado"),
+                    "status_theme": "sky",
+                },
+                {
+                    "position_label": "Auxiliar operativo - Galpón 3",
+                    "collaborator": "Luis Fernando Gil",
+                    "shift_label": "Día · 06:00 – 14:00",
+                    "category": "Operaciones - Bioseguridad",
+                    "location": "Galpón 3 · Sala 1",
+                    "status": "planned",
+                    "status_label": _("Planificado"),
+                    "status_theme": "sky",
+                },
+                {
+                    "position_label": "Apoyo sanitario - Galpón 2",
+                    "collaborator": "Sandra Leal",
+                    "shift_label": "Día · 06:00 – 14:00",
+                    "category": "Operaciones - Sanidad",
+                    "location": "Galpón 2 · Línea B",
+                    "status": "planned",
+                    "status_label": _("Planificado"),
+                    "status_theme": "sky",
+                },
+            ],
+            "rests": [
+                {
+                    "collaborator": "Gabriela Melo",
+                    "reason": _("Descanso post-turno nocturno"),
+                }
+            ],
+        },
+    ]
+
+    daily_assignment_days: list[dict[str, object]] = []
+    for index, day_entry in enumerate(roster_seed):
+        date_obj = day_entry["date"]
+        assignments = day_entry.get("assignments", [])
+        rest_entries = day_entry.get("rests", [])
+        alerts = day_entry.get("alerts", [])
+        badge_theme_map = {
+            "emerald": "border border-emerald-200 bg-emerald-50 text-emerald-700",
+            "amber": "border border-amber-200 bg-amber-50 text-amber-700",
+            "rose": "border border-rose-200 bg-rose-50 text-rose-700",
+            "sky": "border border-sky-200 bg-sky-50 text-sky-700",
+        }
+        for assignment in assignments:
+            theme = assignment.get("status_theme")
+            default_class = "border border-slate-200 bg-slate-50 text-slate-600"
+            assignment.setdefault("status_badge_class", badge_theme_map.get(theme, default_class))
+            assignment.setdefault("status_label", assignment.get("status_label") or _("Sin estado"))
+        assigned_count = sum(1 for assignment in assignments if assignment.get("collaborator"))
+        vacant_count = sum(1 for assignment in assignments if not assignment.get("collaborator"))
+        rest_count = len(rest_entries)
+        summary_parts = []
+        if assigned_count:
+            summary_parts.append(
+                _("%(count)s posiciones cubiertas") % {"count": assigned_count}
+            )
+        else:
+            summary_parts.append(_("Sin posiciones cubiertas"))
+        if rest_count:
+            summary_parts.append(_("%(count)s en descanso") % {"count": rest_count})
+        if vacant_count:
+            summary_parts.append(_("%(count)s vacantes") % {"count": vacant_count})
+        summary = " · ".join(summary_parts)
+        daily_assignment_days.append(
+            {
+                "index": index,
+                "date_iso": date_obj.isoformat(),
+                "date_label": date_format(date_obj, "DATE_FORMAT"),
+                "weekday_label": date_format(date_obj, "l").capitalize(),
+                "short_label": date_format(date_obj, "D").strip(".").capitalize(),
+                "is_today": date_obj == today,
+                "assignments": assignments,
+                "rests": rest_entries,
+                "alerts": alerts,
+                "summary": summary,
+            }
+        )
+
+    initial_day_index = next(
+        (day["index"] for day in daily_assignment_days if day.get("is_today")), 0
+    )
+    initial_day = daily_assignment_days[initial_day_index] if daily_assignment_days else None
+    daily_assignment_schedule = {
+        "initial_index": initial_day_index,
+        "current_date_iso": today.isoformat(),
+        "initial_day": initial_day,
+        "days": daily_assignment_days,
+    }
+
     leader_review_days = [
         {
             "date_iso": day_minus_3.isoformat(),
@@ -1861,6 +2149,7 @@ def _build_telegram_mini_app_payload(
         "egg_workflow": egg_workflow,
         "transport_queue": transport_queue,
         "tasks": tasks,
+        "daily_assignments": daily_assignment_schedule,
         "leader_review": {
             "title": _("Revisión de tareas ejecutadas"),
             "subtitle": _("Aprueba o devuelve los reportes de tu equipo por turno y ubicación."),

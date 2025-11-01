@@ -1778,11 +1778,8 @@
                                       <span class="text-sm font-semibold text-slate-900">{{ item.label }}</span>
                                     </div>
                                     <div class="flex flex-col items-end gap-1 text-xs text-slate-500">
-                                      <div class="inline-flex gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                                        <span>Solicitado {{ item.requested|intcomma }} {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}</span>
-                                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600">
-                                          Confirmado <span data-dispatch-item-confirmed>{{ item.confirmed|intcomma }}</span> {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}
-                                        </span>
+                                      <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                                        Confirmado <span data-dispatch-item-confirmed>{{ item.confirmed|intcomma }}</span> {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}
                                       </div>
                                       <span
                                         class="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {% if item.difference %}border-rose-200 bg-rose-50 text-rose-600{% else %}hidden{% endif %}"
@@ -1790,8 +1787,6 @@
                                       >
                                         {% if item.difference %}
                                           - {{ item.difference|intcomma }} {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}
-                                        {% else %}
-                                          OK
                                         {% endif %}
                                       </span>
                                     </div>
@@ -2847,6 +2842,130 @@
         {% endwith %}
         {% endwith %}
 
+        {% with roster=telegram_mini_app.daily_assignments %}
+        {% if roster and roster.days %}
+        <div
+          class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60"
+          data-daily-roster-card
+          data-initial-index="{{ roster.initial_index|default:0 }}"
+        >
+          <header class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-sm font-semibold text-slate-900">Asignaciones del día</h2>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-500">
+              <button
+                type="button"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-slate-200/70"
+                data-roster-prev
+                aria-label="Día anterior"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+              <div class="text-right">
+                <span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-roster-weekday>
+                  {% if roster.initial_day %}{{ roster.initial_day.weekday_label }}{% else %}—{% endif %}
+                </span>
+                <span class="block text-sm font-semibold text-slate-900" data-roster-date>
+                  {% if roster.initial_day %}{{ roster.initial_day.date_label }}{% else %}—{% endif %}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-slate-200/70"
+                data-roster-next
+                aria-label="Día siguiente"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5 15.75 12l-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
+          </header>
+          <div class="mt-4 space-y-4" data-roster-days>
+            {% for day in roster.days %}
+            <article
+              data-roster-day
+              data-index="{{ forloop.counter0 }}"
+              data-date="{{ day.date_iso }}"
+              data-weekday="{{ day.weekday_label }}"
+              data-date-label="{{ day.date_label }}"
+              class="space-y-4{% if forloop.counter0 != roster.initial_index %} hidden{% endif %}"
+            >
+              <div>
+                <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Turnos asignados</h3>
+                {% if day.assignments %}
+                <ul class="mt-2 space-y-2">
+                  {% for assignment in day.assignments %}
+                  <li class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-semibold text-slate-900">{{ assignment.position_label }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-brand">{{ assignment.category }}</p>
+                        <p class="mt-1 text-xs text-slate-500">{{ assignment.location }}</p>
+                        <p class="text-xs text-slate-500">{{ assignment.shift_label }}</p>
+                      </div>
+                      <div class="flex flex-col items-end gap-1 text-right">
+                        {% if assignment.collaborator %}
+                          <p class="text-sm font-semibold text-slate-900">{{ assignment.collaborator }}</p>
+                        {% else %}
+                          <p class="text-sm font-semibold text-rose-600">Sin asignar</p>
+                        {% endif %}
+                        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {{ assignment.status_badge_class }}">
+                          {{ assignment.status_label }}
+                        </span>
+                      </div>
+                    </div>
+                    {% if assignment.notes %}
+                      <p class="mt-2 text-xs text-slate-500">{{ assignment.notes }}</p>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                  <p class="mt-2 text-xs text-slate-500">No hay turnos programados.</p>
+                {% endif %}
+              </div>
+              <div>
+                <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Descansos del día</h3>
+                {% if day.rests %}
+                <ul class="mt-2 space-y-2">
+                  {% for rest in day.rests %}
+                  <li class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-semibold text-emerald-700">{{ rest.collaborator }}</p>
+                        <p class="text-xs text-emerald-600">{{ rest.reason }}</p>
+                      </div>
+                      {% if rest.notes %}
+                        <p class="text-xs text-emerald-600">{{ rest.notes }}</p>
+                      {% endif %}
+                    </div>
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                  <p class="mt-2 text-xs text-slate-500">No hay descansos programados.</p>
+                {% endif %}
+              </div>
+              {% if day.alerts %}
+              <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <ul class="list-disc space-y-1 pl-4 text-xs text-amber-700">
+                  {% for alert in day.alerts %}
+                  <li>{{ alert }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
+            </article>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
         <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
           <h2 class="text-sm font-semibold text-slate-900">Sugerencias enviadas</h2>
           <ul class="mt-2 space-y-2 text-xs text-slate-700">
@@ -3530,6 +3649,113 @@
             renderState();
           });
         }
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var content = document.querySelector('[data-mini-app-content]');
+        var rosterCard = content
+          ? content.querySelector('[data-daily-roster-card]')
+          : document.querySelector('[data-daily-roster-card]');
+        if (!rosterCard) {
+          return;
+        }
+
+        var dayNodes = Array.prototype.slice.call(rosterCard.querySelectorAll('[data-roster-day]'));
+        if (!dayNodes.length) {
+          return;
+        }
+
+        var prevButton = rosterCard.querySelector('[data-roster-prev]');
+        var nextButton = rosterCard.querySelector('[data-roster-next]');
+        var dateLabel = rosterCard.querySelector('[data-roster-date]');
+        var weekdayLabel = rosterCard.querySelector('[data-roster-weekday]');
+        var telegramApp = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+
+        var initialIndex = parseInt(rosterCard.getAttribute('data-initial-index') || '0', 10);
+        if (Number.isNaN(initialIndex)) {
+          initialIndex = 0;
+        }
+
+        function clampIndex(index) {
+          if (index < 0) {
+            return 0;
+          }
+          if (index >= dayNodes.length) {
+            return dayNodes.length - 1;
+          }
+          return index;
+        }
+
+        function applyNavState(activeIndex) {
+          if (prevButton) {
+            var isDisabled = activeIndex === 0;
+            prevButton.disabled = isDisabled;
+            prevButton.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+            prevButton.classList.toggle('opacity-50', isDisabled);
+            prevButton.classList.toggle('cursor-not-allowed', isDisabled);
+          }
+          if (nextButton) {
+            var isNextDisabled = activeIndex === dayNodes.length - 1;
+            nextButton.disabled = isNextDisabled;
+            nextButton.setAttribute('aria-disabled', isNextDisabled ? 'true' : 'false');
+            nextButton.classList.toggle('opacity-50', isNextDisabled);
+            nextButton.classList.toggle('cursor-not-allowed', isNextDisabled);
+          }
+        }
+
+        function renderActiveDay(targetIndex) {
+          var newIndex = clampIndex(targetIndex);
+          dayNodes.forEach(function (node, index) {
+            if (index === newIndex) {
+              node.classList.remove('hidden');
+              node.setAttribute('data-state', 'active');
+            } else {
+              node.classList.add('hidden');
+              node.removeAttribute('data-state');
+            }
+          });
+
+          var activeDay = dayNodes[newIndex];
+          if (activeDay) {
+            if (dateLabel) {
+              dateLabel.textContent = activeDay.getAttribute('data-date-label') || '';
+            }
+            if (weekdayLabel) {
+              weekdayLabel.textContent = activeDay.getAttribute('data-weekday') || '';
+            }
+          }
+
+          rosterCard.setAttribute('data-current-index', String(newIndex));
+          applyNavState(newIndex);
+
+          if (telegramApp && telegramApp.HapticFeedback && telegramApp.HapticFeedback.selectionChanged) {
+            telegramApp.HapticFeedback.selectionChanged();
+          }
+        }
+
+        if (prevButton) {
+          prevButton.addEventListener('click', function () {
+            var currentIndex = parseInt(rosterCard.getAttribute('data-current-index') || String(initialIndex), 10);
+            if (Number.isNaN(currentIndex)) {
+              currentIndex = 0;
+            }
+            renderActiveDay(currentIndex - 1);
+          });
+        }
+
+        if (nextButton) {
+          nextButton.addEventListener('click', function () {
+            var currentIndex = parseInt(rosterCard.getAttribute('data-current-index') || String(initialIndex), 10);
+            if (Number.isNaN(currentIndex)) {
+              currentIndex = 0;
+            }
+            renderActiveDay(currentIndex + 1);
+          });
+        }
+
+        renderActiveDay(initialIndex);
       })();
     </script>
 
@@ -5051,14 +5277,19 @@
                     allDifferenceThemeClasses.forEach(function (cls) {
                       stageDifferenceNode.classList.remove(cls);
                     });
-                    stageDifferenceNode.classList.remove('hidden');
-                    const stageTheme = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
-                    const stageClasses = differenceThemeClasses[stageTheme] || differenceThemeClasses.neutral;
-                    stageClasses.forEach(function (cls) {
-                      stageDifferenceNode.classList.add(cls);
-                    });
-                    stageDifferenceNode.textContent =
-                      diff === 0 ? 'OK' : (diff > 0 ? '- ' : '+ ') + formatNumber(Math.abs(diff)) + ' ' + unitShort;
+                    if (diff === 0) {
+                      stageDifferenceNode.classList.add('hidden');
+                      stageDifferenceNode.textContent = '';
+                    } else {
+                      stageDifferenceNode.classList.remove('hidden');
+                      const stageTheme = diff > 0 ? 'positive' : 'negative';
+                      const stageClasses = differenceThemeClasses[stageTheme] || differenceThemeClasses.neutral;
+                      stageClasses.forEach(function (cls) {
+                        stageDifferenceNode.classList.add(cls);
+                      });
+                      stageDifferenceNode.textContent =
+                        (diff > 0 ? '- ' : '+ ') + formatNumber(Math.abs(diff)) + ' ' + unitShort;
+                    }
                   }
                 }
               }
