@@ -637,10 +637,10 @@ def _build_telegram_mini_app_payload(
             {
                 "id": "classification",
                 "icon": "🥚",
-                "title": "Clasificación por calibres",
+                "title": "Clasificación por tipos",
                 "tone": "emerald",
                 "status": "pending",
-                "summary": "Distribuye los huevos por calibre y conserva la equivalencia con el lote recibido.",
+                "summary": "Distribuye los huevos por tipo y conserva la equivalencia con el lote recibido.",
                 "metrics": [
                     {"label": "Cartones a clasificar", "value": daily_cartons, "unit": "cartones"},
                     {"label": "Huevos", "value": daily_eggs, "unit": "huevos"},
