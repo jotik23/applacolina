@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.humanize.templatetags.humanize import intcomma
 from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
@@ -442,6 +443,7 @@ def _build_telegram_mini_app_payload(
     day_minus_1 = today - timedelta(days=1)
     day_minus_2 = today - timedelta(days=2)
     day_minus_3 = today - timedelta(days=3)
+    day_plus_2 = today + timedelta(days=2)
 
     transport_manifest_entries = [
         {
@@ -534,6 +536,110 @@ def _build_telegram_mini_app_payload(
         "date": inspection_production_date_label,
         "farm": inspection_farm,
         "barn": f" · {inspection_barn}" if inspection_barn else "",
+    }
+
+    carton_price_map: dict[str, int] = {
+        "jumbo": 12500,
+        "aaa": 11000,
+        "aa": 10500,
+        "a": 9800,
+        "b": 8800,
+        "c": 8200,
+    }
+
+    def format_currency(amount: int) -> str:
+        return f"$ {intcomma(amount).replace(',', '.')}"
+
+    inventory_reservations = [
+        {
+            "id": "order-2024-11-05-a",
+            "vendor": "Distribuidora La Plaza",
+            "channel": _("Mayorista"),
+            "contact": "+57 320 555 8899",
+            "delivery_date_iso": tomorrow.isoformat(),
+            "delivery_date_label": date_format(tomorrow, "DATE_FORMAT"),
+            "status": _("Confirmado"),
+            "items": [
+                {"type_id": "aaa", "label": "AAA", "cartons": 90},
+                {"type_id": "aa", "label": "AA", "cartons": 60},
+                {"type_id": "a", "label": "A", "cartons": 45},
+            ],
+        },
+        {
+            "id": "order-2024-11-06-b",
+            "vendor": "Mercados del Norte",
+            "channel": _("Retail"),
+            "contact": "+57 301 442 7811",
+            "delivery_date_iso": day_plus_2.isoformat(),
+            "delivery_date_label": date_format(day_plus_2, "DATE_FORMAT"),
+            "status": _("Por confirmar"),
+            "items": [
+                {"type_id": "jumbo", "label": "Jumbo", "cartons": 40},
+                {"type_id": "aaa", "label": "AAA", "cartons": 35},
+                {"type_id": "b", "label": "B", "cartons": 20},
+            ],
+        },
+    ]
+
+    inventory_reservation_totals: dict[str, int] = {}
+    for reservation in inventory_reservations:
+        reservation_cartons = 0
+        reservation_amount = 0
+        for item in reservation["items"]:
+            cartons = item["cartons"]
+            item["eggs"] = cartons * cartons_per_pack
+            carton_price = carton_price_map.get(item["type_id"], 10000)
+            item["carton_price"] = carton_price
+            item["carton_price_label"] = format_currency(carton_price)
+            item["total_amount"] = carton_price * cartons
+            item["total_amount_label"] = format_currency(item["total_amount"])
+            reservation_cartons += cartons
+            reservation_amount += item["total_amount"]
+            inventory_reservation_totals[item["type_id"]] = inventory_reservation_totals.get(item["type_id"], 0) + cartons
+        reservation["total_cartons"] = reservation_cartons
+        reservation["total_eggs"] = reservation_cartons * cartons_per_pack
+        reservation["total_amount"] = reservation_amount
+        reservation["total_amount_label"] = format_currency(reservation_amount)
+
+    inventory_ready_breakdown = []
+    inventory_alerts = []
+    for category in inspection_classified_breakdown:
+        type_id = category["id"]
+        total_cartons = category["cartons"]
+        reserved_cartons = inventory_reservation_totals.get(type_id, 0)
+        available_cartons = max(total_cartons - reserved_cartons, 0)
+        reserved_ratio = round((reserved_cartons / total_cartons) * 100, 1) if total_cartons else 0.0
+        breakdown = {
+            "id": type_id,
+            "label": category["label"],
+            "cartons": total_cartons,
+            "reserved_cartons": reserved_cartons,
+            "available_cartons": available_cartons,
+            "eggs": total_cartons * cartons_per_pack,
+            "reserved_eggs": reserved_cartons * cartons_per_pack,
+            "available_eggs": available_cartons * cartons_per_pack,
+            "reserved_ratio": reserved_ratio,
+        }
+        if available_cartons <= max(round(total_cartons * 0.2), 10):
+            inventory_alerts.append(
+                _("Tipo %(label)s: solo %(available)s cartones disponibles para venta inmediata.")
+                % {"label": category["label"], "available": available_cartons}
+            )
+        inventory_ready_breakdown.append(breakdown)
+
+    inventory_ready_total_cartons = sum(item["cartons"] for item in inventory_ready_breakdown)
+    inventory_reserved_cartons = sum(item["reserved_cartons"] for item in inventory_ready_breakdown)
+    inventory_available_cartons = sum(item["available_cartons"] for item in inventory_ready_breakdown)
+
+    inventory_ready_summary = {
+        "total_cartons": inventory_ready_total_cartons,
+        "reserved_cartons": inventory_reserved_cartons,
+        "available_cartons": inventory_available_cartons,
+        "total_eggs": inventory_ready_total_cartons * cartons_per_pack,
+        "available_eggs": inventory_available_cartons * cartons_per_pack,
+        "breakdown": inventory_ready_breakdown,
+        "reservations": inventory_reservations,
+        "alerts": inventory_alerts,
     }
 
     classification_categories = [
@@ -681,6 +787,23 @@ def _build_telegram_mini_app_payload(
                     _("Comunica ajustes de bioseguridad al supervisor antes del cierre."),
                 ],
             },
+            {
+                "id": "inventory_ready",
+                "icon": "🏷️",
+                "title": _("Inventario listo para venta"),
+                "tone": "emerald",
+                "status": "monitoring",
+                "summary": None,
+                "metrics": [
+                    {"label": _("Total clasificado"), "value": inventory_ready_summary["total_cartons"], "unit": _("cartones")},
+                    {"label": _("Reservado"), "value": inventory_ready_summary["reserved_cartons"], "unit": _("cartones")},
+                    {"label": _("Disponible"), "value": inventory_ready_summary["available_cartons"], "unit": _("cartones")},
+                ],
+                "inventory": inventory_ready_summary,
+                "checkpoints": [
+                    _("Cruza el inventario físico con las reservas antes de comprometer nuevos pedidos."),
+                ],
+            },
         ],
     }
 
@@ -738,6 +861,119 @@ def _build_telegram_mini_app_payload(
         "instructions": _(
             "Selecciona los lotes y asigna el transportador para autorizar el traslado interno."
         ),
+    }
+
+    pending_classification_sources = [
+        {
+            "id": "gs-g3-2024-10-31",
+            "farm": "Granja San Lucas",
+            "barn": "Galpón 3",
+            "cartons": 210,
+            "production_date": day_minus_3,
+            "status": "pending",
+        },
+        {
+            "id": "pr-g5-2024-11-01",
+            "farm": "Granja Providencia",
+            "barn": "Galpón 5",
+            "cartons": 185,
+            "production_date": day_minus_2,
+            "status": "in_progress",
+            "responsible": "Equipo nocturno",
+        },
+        {
+            "id": "lp-g1-2024-11-02",
+            "farm": "Granja La Primavera",
+            "barn": "Galpón 1",
+            "cartons": 196,
+            "production_date": day_minus_1,
+            "status": "pending",
+        },
+        {
+            "id": "lc-g2-2024-11-03",
+            "farm": "Granja La Colina",
+            "barn": "Galpón 2",
+            "cartons": 172,
+            "production_date": today,
+            "status": "pending",
+        },
+    ]
+
+    pending_status_meta = {
+        "pending": {"label": _("Pendiente"), "theme": "rose"},
+        "in_progress": {"label": _("En clasificación"), "theme": "brand"},
+    }
+
+    pending_classification_entries = []
+    pending_classification_alerts = []
+    pending_status_counts: dict[str, int] = {}
+    for source in pending_classification_sources:
+        production_date = source["production_date"]
+        age_days = max((today - production_date).days, 0)
+        if age_days == 1:
+            age_label = _("%(days)s día en espera") % {"days": age_days}
+        else:
+            age_label = _("%(days)s días en espera") % {"days": age_days}
+
+        status_key = source["status"]
+        status_meta = pending_status_meta.get(status_key, {"label": status_key.title(), "theme": "slate"})
+        alerts = []
+        if age_days >= 3:
+            alerts.append(
+                _("Prioritario: %(farm)s · %(barn)s lleva %(days)s días sin clasificar.")
+                % {"farm": source["farm"], "barn": source["barn"], "days": age_days}
+            )
+        entry = {
+            "id": source["id"],
+            "farm": source["farm"],
+            "barn": source["barn"],
+            "cartons": source["cartons"],
+            "eggs": source["cartons"] * cartons_per_pack,
+            "production_date_iso": production_date.isoformat(),
+            "production_date_label": date_format(production_date, "DATE_FORMAT"),
+            "age_days": age_days,
+            "age_label": age_label,
+            "status": status_key,
+            "status_label": status_meta["label"],
+            "status_theme": status_meta["theme"],
+            "alerts": alerts,
+            "is_priority": age_days >= 3,
+        }
+        if source.get("responsible"):
+            entry["responsible"] = source["responsible"]
+        pending_classification_entries.append(entry)
+        pending_status_counts[status_key] = pending_status_counts.get(status_key, 0) + 1
+        pending_classification_alerts.extend(alerts)
+
+    pending_classification_total_cartons = sum(entry["cartons"] for entry in pending_classification_entries)
+    pending_classification_total_eggs = pending_classification_total_cartons * cartons_per_pack
+
+    if pending_classification_entries:
+        oldest_age = max(entry["age_days"] for entry in pending_classification_entries)
+        if oldest_age >= 2:
+            oldest_locations = [
+                _("%(farm)s · %(barn)s") % {"farm": entry["farm"], "barn": entry["barn"]}
+                for entry in pending_classification_entries
+                if entry["age_days"] == oldest_age
+            ]
+            pending_classification_alerts.append(
+                _("Atiende primero: %(locations)s (%(days)s días en espera).")
+                % {"locations": ", ".join(oldest_locations), "days": oldest_age}
+            )
+
+    pending_classification_summary = {
+        "title": _("Producciones pendientes por clasificar"),
+        "description": _(
+            ""
+        ),
+        "total_cartons": pending_classification_total_cartons,
+        "total_eggs": pending_classification_total_eggs,
+        "entries": pending_classification_entries,
+        "alerts": pending_classification_alerts,
+        "status_counts": [
+            {"id": "pending", "label": _("Pendiente"), "count": pending_status_counts.get("pending", 0)},
+            {"id": "in_progress", "label": _("En clasificación"), "count": pending_status_counts.get("in_progress", 0)},
+        ],
     }
 
     shift_confirmation = {
@@ -822,6 +1058,494 @@ def _build_telegram_mini_app_payload(
             ],
         },
     ]
+
+    leader_review_days = [
+        {
+            "date_iso": day_minus_3.isoformat(),
+            "date_label": date_format(day_minus_3, "DATE_FORMAT"),
+            "weekday_label": date_format(day_minus_3, "l").capitalize(),
+            "shift_windows": [_("Turno diurno · 05:00 – 13:00")],
+            "locations": [
+                {
+                    "id": "lp-g1-s2",
+                    "label": _("Granja La Primavera · Galpón 1 · Sala 2"),
+                    "farm": "Granja La Primavera",
+                    "barn": "Galpón 1",
+                    "room": "Sala 2",
+                    "shift_label": _("Turno diurno"),
+                    "tasks": [
+                        {
+                            "id": "review-lp-g1-s2-001",
+                            "title": _("Limpieza profunda de nidos"),
+                            "priority": {"label": _("Alta"), "theme": "critical"},
+                            "responsible": "Sandra Leal",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("Marcada 02 Nov · 19:40"),
+                            },
+                            "review": {
+                                "state": "awaiting",
+                                "label": _("En revisión"),
+                                "details": _("Evidencia subida · espera aprobación"),
+                            },
+                            "description": _(
+                                "Asegurar desinfección completa y retiro de material orgánico en nidos de la línea B."
+                            ),
+                            "evidence_count": 3,
+                            "duration_label": _("85 minutos"),
+                            "execution_window": _("02 Nov · 17:00 – 19:30"),
+                            "tags": [_("Bioseguridad"), _("Correctivo")],
+                            "recommendation_placeholder": _("Agrega una recomendación para próximas jornadas"),
+                        },
+                        {
+                            "id": "review-lp-g1-s2-002",
+                            "title": _("Verificación de sensores ambiente"),
+                            "priority": {"label": _("Media"), "theme": "brand"},
+                            "responsible": "Kevin Duarte",
+                            "status": {
+                                "state": "overdue",
+                                "label": _("Vencida"),
+                                "details": _("Sin reporte"),
+                                "overdue_days": 2,
+                            },
+                            "review": {
+                                "state": "missing",
+                                "label": _("Sin evidencia"),
+                                "details": _("Recuerda solicitar soporte al final del turno."),
+                            },
+                            "description": _("Calibrar sensores de CO₂ y humedad. Registrar lecturas en la app."),
+                            "evidence_count": 0,
+                            "execution_window": _("02 Nov · 11:00 – 12:00"),
+                            "tags": [_("Monitoreo"), _("Turno diurno")],
+                            "alerts": [_("Priorizar calibración antes del siguiente lote.")],
+                            "recommendation_placeholder": _("Usa este espacio para anotar ajustes o recordatorios"),
+                        },
+                    ],
+                }
+            ],
+        },
+        {
+            "date_iso": day_minus_2.isoformat(),
+            "date_label": date_format(day_minus_2, "DATE_FORMAT"),
+            "weekday_label": date_format(day_minus_2, "l").capitalize(),
+            "shift_windows": [_("Turno nocturno · 22:00 – 06:00")],
+            "locations": [
+                {
+                    "id": "pr-g5-s3",
+                    "label": _("Granja Providencia · Galpón 5 · Sala 3"),
+                    "farm": "Granja Providencia",
+                    "barn": "Galpón 5",
+                    "room": "Sala 3",
+                    "shift_label": _("Turno nocturno"),
+                    "tasks": [
+                        {
+                            "id": "review-pr-g5-s3-001",
+                            "title": _("Revisión de válvulas de bebederos"),
+                            "priority": {"label": _("Alta"), "theme": "critical"},
+                            "responsible": "Ana Torres",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("Marcada 03 Nov · 05:10"),
+                            },
+                            "review": {
+                                "state": "awaiting",
+                                "label": _("En revisión"),
+                                "details": _("Evidencia lista para validar"),
+                            },
+                            "description": _(
+                                "Validar presión y fugas en la línea secundaria. Adjuntar comprobantes fotográficos."
+                            ),
+                            "evidence_count": 4,
+                            "execution_window": _("03 Nov · 01:30 – 02:15"),
+                            "tags": [_("Mantenimiento"), _("Agua")],
+                            "recommendation_placeholder": _("Sugiere mejoras o seguimiento puntual"),
+                        },
+                        {
+                            "id": "review-pr-g5-s3-002",
+                            "title": _("Control de inventario de vacunas"),
+                            "priority": {"label": _("Alta"), "theme": "brand"},
+                            "responsible": "Miguel Ríos",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("Marcada 03 Nov · 02:40"),
+                            },
+                            "review": {
+                                "state": "approved",
+                                "label": _("Aprobada"),
+                                "details": _("Revisión completada 03 Nov · 06:15"),
+                            },
+                            "description": _("Verificar stock disponible y registrar lotes abiertos."),
+                            "evidence_count": 2,
+                            "execution_window": _("03 Nov · 00:30 – 01:15"),
+                            "tags": [_("Inventario"), _("Vacunas")],
+                            "recommendation_placeholder": _("Añade notas para la próxima auditoría"),
+                        },
+                    ],
+                }
+            ],
+        },
+        {
+            "date_iso": day_minus_1.isoformat(),
+            "date_label": date_format(day_minus_1, "DATE_FORMAT"),
+            "weekday_label": date_format(day_minus_1, "l").capitalize(),
+            "shift_windows": [_("Turno nocturno · 22:00 – 06:00")],
+            "locations": [
+                {
+                    "id": "sl-g4-s1",
+                    "label": _("Granja San Lucas · Galpón 4 · Sala 1"),
+                    "farm": "Granja San Lucas",
+                    "barn": "Galpón 4",
+                    "room": "Sala 1",
+                    "shift_label": _("Turno nocturno"),
+                    "tasks": [
+                        {
+                            "id": "review-sl-g4-s1-001",
+                            "title": _("Control de ventilación nocturna"),
+                            "priority": {"label": _("Media"), "theme": "brand"},
+                            "responsible": "Lucía Hernández",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("Marcada 04 Nov · 05:55"),
+                            },
+                            "review": {
+                                "state": "awaiting",
+                                "label": _("En revisión"),
+                                "details": _("Incluye mediciones cada hora."),
+                            },
+                            "description": _(
+                                "Registrar apertura de compuertas y valores de CO₂ por tramo. Adjuntar lectura inicial y final."
+                            ),
+                            "evidence_count": 5,
+                            "execution_window": _("04 Nov · 22:15 – 05:30"),
+                            "tags": [_("Ambiente"), _("CO₂")],
+                            "recommendation_placeholder": _("Comparte hallazgos para el turno diurno"),
+                        },
+                        {
+                            "id": "review-sl-g4-s1-002",
+                            "title": _("Recorridos bioseguridad galpón"),
+                            "priority": {"label": _("Media"), "theme": "success"},
+                            "responsible": "Jairo Téllez",
+                            "status": {
+                                "state": "pending",
+                                "label": _("Pendiente"),
+                                "details": _("Reportado sin evidencia"),
+                            },
+                            "review": {
+                                "state": "missing",
+                                "label": _("Falta evidencia"),
+                                "details": _("Solicita fotos antes de aprobar."),
+                            },
+                            "description": _(
+                                "Verificar pediluvios, cambio de botas y registros de visitantes. Adjuntar fotos por estación."
+                            ),
+                            "evidence_count": 0,
+                            "execution_window": _("04 Nov · 23:00 – 23:45"),
+                            "tags": [_("Bioseguridad"), _("Recorridos")],
+                            "recommendation_placeholder": _("Anota qué esperas ver en la siguiente revisión"),
+                        },
+                        {
+                            "id": "review-sl-g4-s1-003",
+                            "title": _("Reporte de novedades de postura"),
+                            "priority": {"label": _("Alta"), "theme": "critical"},
+                            "responsible": "Camilo Ortiz",
+                            "status": {
+                                "state": "overdue",
+                                "label": _("Vencida"),
+                                "details": _("Último registro 02 Nov"),
+                                "overdue_days": 1,
+                            },
+                            "review": {
+                                "state": "missing",
+                                "label": _("Sin evidencia"),
+                                "details": _("Recuerda cargar el formato antes de aprobar."),
+                            },
+                            "description": _("Registrar variaciones de postura superiores al 3 %."),
+                            "evidence_count": 0,
+                            "execution_window": _("04 Nov · 02:30 – 03:00"),
+                            "tags": [_("Producción"), _("Seguimiento")],
+                            "recommendation_placeholder": _("Comparte el mensaje que le enviarás al equipo"),
+                        },
+                    ],
+                }
+            ],
+        },
+        {
+            "date_iso": today.isoformat(),
+            "date_label": date_format(today, "DATE_FORMAT"),
+            "weekday_label": date_format(today, "l").capitalize(),
+            "shift_windows": [_("Turno nocturno · 22:00 – 06:00"), _("Turno diurno · 06:00 – 14:00")],
+            "locations": [
+                {
+                    "id": "lc-g3-s1",
+                    "label": _("Granja La Colina · Galpón 3 · Sala 1"),
+                    "farm": "Granja La Colina",
+                    "barn": "Galpón 3",
+                    "room": "Sala 1",
+                    "shift_label": _("Turno nocturno"),
+                    "tasks": [
+                        {
+                            "id": "review-lc-g3-s1-001",
+                            "title": _("Cierre sanitario de línea de producción"),
+                            "priority": {"label": _("Alta"), "theme": "critical"},
+                            "responsible": "Diana Rojas",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("Marcada 05 Nov · 05:20"),
+                            },
+                            "review": {
+                                "state": "awaiting",
+                                "label": _("En revisión"),
+                                "details": _("Incluye 2 evidencias de apoyo"),
+                            },
+                            "description": _(
+                                "Confirmar cierre de línea con desinfección por nebulización. Adjuntar video corto y checklist."
+                            ),
+                            "evidence_count": 2,
+                            "execution_window": _("05 Nov · 03:40 – 04:55"),
+                            "tags": [_("Cierre de turno"), _("Bioseguridad")],
+                            "recommendation_placeholder": _("Anota recomendaciones para el relevo"),
+                        },
+                        {
+                            "id": "review-lc-g3-s1-002",
+                            "title": _("Balance de mortalidad y descartes"),
+                            "priority": {"label": _("Media"), "theme": "brand"},
+                            "responsible": "Luis Medina",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("Marcada 05 Nov · 04:35"),
+                            },
+                            "review": {
+                                "state": "awaiting",
+                                "label": _("En revisión"),
+                                "details": _("Revisa las cifras antes de aprobar."),
+                            },
+                            "description": _(
+                                "Consolidar cifras de mortalidad, descartes y causas. Asegurar conciliación con registros manuales."
+                            ),
+                            "evidence_count": 1,
+                            "execution_window": _("05 Nov · 02:50 – 03:30"),
+                            "tags": [_("Producción"), _("Control")],
+                            "recommendation_placeholder": _("Deja una nota si hay desvíos"),
+                        },
+                    ],
+                },
+                {
+                    "id": "lc-g2-salones",
+                    "label": _("Granja La Colina · Galpón 2 · Salones comunes"),
+                    "farm": "Granja La Colina",
+                    "barn": "Galpón 2",
+                    "room": _("Salones comunes"),
+                    "shift_label": _("Turno diurno"),
+                    "tasks": [
+                        {
+                            "id": "review-lc-g2-common-001",
+                            "title": _("Reunión de cierre con recomendaciones"),
+                            "priority": {"label": _("Media"), "theme": "success"},
+                            "responsible": "Valeria Cuéllar",
+                            "status": {
+                                "state": "completed",
+                                "label": _("Completada"),
+                                "details": _("En curso"),
+                            },
+                            "review": {
+                                "state": "awaiting",
+                                "label": _("En revisión"),
+                                "details": _("Completa el resumen antes de aprobar."),
+                            },
+                            "description": _(
+                                "Recopilar recomendaciones del turno saliente y asignar responsables para seguimiento."
+                            ),
+                            "evidence_count": 1,
+                            "execution_window": _("05 Nov · 07:30 – 08:00"),
+                            "tags": [_("Coordinación"), _("Seguimiento")],
+                            "recommendation_placeholder": _("Resume los compromisos acordados"),
+                        },
+                        {
+                            "id": "review-lc-g2-common-002",
+                            "title": _("Checklist de bioseguridad ingreso visitantes"),
+                            "priority": {"label": _("Alta"), "theme": "critical"},
+                            "responsible": "Esteban Mora",
+                            "status": {
+                                "state": "pending",
+                                "label": _("Pendiente"),
+                                "details": _("Visita programada 05 Nov · 10:00"),
+                            },
+                            "review": {
+                                "state": "not-started",
+                                "label": _("A la espera"),
+                                "details": _("Se habilitará cuando se marque como completada."),
+                            },
+                            "description": _(
+                                "Validar que visitantes completen el protocolo de ingreso, cambio de prendas y registro fotográfico."
+                            ),
+                            "evidence_count": 0,
+                            "execution_window": _("05 Nov · 09:30 – 11:30"),
+                            "tags": [_("Bioseguridad"), _("Visitas")],
+                            "recommendation_placeholder": _("Indica qué evidencia esperas recibir"),
+                        },
+                    ],
+                },
+            ],
+        },
+    ]
+
+    leader_review_summary = {
+        "total": 0,
+        "awaiting": 0,
+        "approved": 0,
+        "rejected": 0,
+        "overdue": 0,
+        "completed": 0,
+        "pending": 0,
+    }
+    shift_totals = {"day": 0, "night": 0}
+    farm_totals: dict[str, int] = {}
+    barn_totals: dict[str, int] = {}
+
+    for day_payload in leader_review_days:
+        day_totals = {
+            "total": 0,
+            "awaiting": 0,
+            "approved": 0,
+            "rejected": 0,
+            "overdue": 0,
+            "completed": 0,
+            "pending": 0,
+        }
+        for location in day_payload["locations"]:
+            location_totals = {
+                "total": 0,
+                "awaiting": 0,
+                "approved": 0,
+                "rejected": 0,
+                "overdue": 0,
+                "completed": 0,
+                "pending": 0,
+            }
+            for task in location["tasks"]:
+                status = (task.get("status") or {}).get("state")
+                review_state = (task.get("review") or {}).get("state")
+
+                leader_review_summary["total"] += 1
+                location_totals["total"] += 1
+                day_totals["total"] += 1
+
+                if status == "completed":
+                    leader_review_summary["completed"] += 1
+                    location_totals["completed"] += 1
+                    day_totals["completed"] += 1
+                elif status == "pending":
+                    leader_review_summary["pending"] += 1
+                    location_totals["pending"] += 1
+                    day_totals["pending"] += 1
+                elif status == "overdue":
+                    leader_review_summary["overdue"] += 1
+                    location_totals["overdue"] += 1
+                    day_totals["overdue"] += 1
+
+                if review_state in {"awaiting", "missing"}:
+                    leader_review_summary["awaiting"] += 1
+                    location_totals["awaiting"] += 1
+                    day_totals["awaiting"] += 1
+                elif review_state == "approved":
+                    leader_review_summary["approved"] += 1
+                    location_totals["approved"] += 1
+                    day_totals["approved"] += 1
+                elif review_state == "rejected":
+                    leader_review_summary["rejected"] += 1
+                    location_totals["rejected"] += 1
+                    day_totals["rejected"] += 1
+
+            location["totals"] = location_totals
+
+            task_count = location_totals["total"]
+            shift_label = (location.get("shift_label") or "").lower()
+            if any(keyword in shift_label for keyword in {"noche", "noct"}):
+                shift_totals["night"] += task_count
+            else:
+                shift_totals["day"] += task_count
+
+            farm_label = location.get("farm") or _("Sin granja")
+            barn_label = location.get("barn") or _("Sin galpón")
+            farm_totals[farm_label] = farm_totals.get(farm_label, 0) + task_count
+            barn_totals[barn_label] = barn_totals.get(barn_label, 0) + task_count
+
+        day_payload["totals"] = day_totals
+
+    leader_review_filters = {
+        "shifts": [
+            {
+                "id": "all",
+                "label": _("Todos los turnos"),
+                "count": leader_review_summary["total"],
+                "is_default": True,
+            },
+            {
+                "id": "day",
+                "label": _("Turno diurno"),
+                "count": shift_totals.get("day", 0),
+            },
+            {
+                "id": "night",
+                "label": _("Turno nocturno"),
+                "count": shift_totals.get("night", 0),
+            },
+        ],
+        "farms": [
+            {
+                "id": "all",
+                "label": _("Todas las granjas"),
+                "count": leader_review_summary["total"],
+                "is_default": True,
+            }
+        ],
+        "barns": [
+            {
+                "id": "all",
+                "label": _("Todos los galpones"),
+                "count": leader_review_summary["total"],
+                "is_default": True,
+            }
+        ],
+    }
+
+    for farm_label, count in sorted(farm_totals.items()):
+        leader_review_filters["farms"].append(
+            {
+                "id": slugify(farm_label),
+                "label": farm_label,
+                "count": count,
+            }
+        )
+
+    for barn_label, count in sorted(barn_totals.items()):
+        leader_review_filters["barns"].append(
+            {
+                "id": slugify(barn_label),
+                "label": barn_label,
+                "count": count,
+            }
+        )
+
+    leader_review_reject_reasons = [
+        {"id": "missing-evidence", "label": _("No se adjuntó evidencia suficiente")},
+        {"id": "repeat-task", "label": _("Repetir tarea · estándares no cumplidos")},
+        {"id": "incomplete-data", "label": _("Datos incompletos o inconsistentes")},
+        {"id": "other", "label": _("Otra razón (especificar)")},
+    ]
+
+    leader_review_tips = [
+        _("Aprueba solo cuando confirmes evidencia y consistencia con los estándares."),
+        _("Si rechazas, agrega recomendaciones concretas para el siguiente turno."),
+        _("Prioriza las tareas vencidas o sin evidencia antes del relevo."),
+    ]
+
     return {
         "date_label": date_label,
         "user": {
@@ -918,9 +1642,19 @@ def _build_telegram_mini_app_payload(
             ],
         },
         "production_reference": production_reference,
+        "pending_classification": pending_classification_summary,
         "egg_workflow": egg_workflow,
         "transport_queue": transport_queue,
         "tasks": tasks,
+        "leader_review": {
+            "title": _("Revisión de tareas ejecutadas"),
+            "subtitle": _("Aprueba o devuelve los reportes de tu equipo por turno y ubicación."),
+            "summary": leader_review_summary,
+            "filters": leader_review_filters,
+            "reject_reasons": leader_review_reject_reasons,
+            "tips": leader_review_tips,
+            "days": leader_review_days,
+        },
         "current_shift": {
             "label": "Turno nocturno - Galpon 3",
             "position": "Posicion: Auxiliar operativo",

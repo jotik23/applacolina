@@ -30,6 +30,147 @@
       .mini-app-blur {
         backdrop-filter: blur(18px);
       }
+      .tm-review-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 0.45rem 0.9rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: rgba(71, 85, 105, 0.95);
+        transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+      }
+      .tm-review-filter:hover,
+      .tm-review-filter:focus-visible {
+        outline: none;
+        border-color: rgba(59, 130, 246, 0.45);
+        color: rgb(30, 64, 175);
+        box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.12);
+      }
+      .tm-review-filter[data-active='true'] {
+        border-color: rgba(245, 158, 11, 0.6);
+        background-color: rgba(253, 230, 138, 0.55);
+        color: rgb(120, 53, 15);
+        box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.25);
+      }
+      .tm-review-filter-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5rem;
+        padding: 0.1rem 0.45rem;
+        border-radius: 9999px;
+        background-color: rgba(255, 255, 255, 0.85);
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: rgba(71, 85, 105, 0.85);
+      }
+      .tm-review-filter[data-active='true'] .tm-review-filter-count {
+        background-color: rgba(255, 255, 255, 0.92);
+        color: rgb(120, 53, 15);
+      }
+      .tm-review-status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background-color: rgba(248, 250, 252, 0.95);
+        color: rgba(71, 85, 105, 0.95);
+        padding: 0.3rem 0.8rem;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+      }
+      .tm-review-status-chip[data-state='awaiting'],
+      .tm-review-status-chip[data-state='missing'],
+      .tm-review-status-chip[data-state='not-started'] {
+        border-color: rgba(245, 158, 11, 0.45);
+        background-color: rgba(253, 230, 138, 0.45);
+        color: rgb(133, 77, 14);
+      }
+      .tm-review-status-chip[data-state='approved'] {
+        border-color: rgba(16, 185, 129, 0.4);
+        background-color: rgba(209, 250, 229, 0.7);
+        color: rgb(6, 95, 70);
+      }
+      .tm-review-status-chip[data-state='rejected'] {
+        border-color: rgba(244, 63, 94, 0.45);
+        background-color: rgba(254, 226, 226, 0.7);
+        color: rgb(159, 18, 57);
+      }
+      .tm-review-status-chip[data-state='approved'] .tm-review-status-dot {
+        background-color: rgb(16, 185, 129);
+      }
+      .tm-review-status-chip[data-state='rejected'] .tm-review-status-dot {
+        background-color: rgb(244, 63, 94);
+      }
+      .tm-review-status-chip[data-state='awaiting'] .tm-review-status-dot,
+      .tm-review-status-chip[data-state='missing'] .tm-review-status-dot,
+      .tm-review-status-chip[data-state='not-started'] .tm-review-status-dot {
+        background-color: rgb(245, 158, 11);
+      }
+      .tm-review-status-dot {
+        display: inline-flex;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background-color: currentColor;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
+      }
+      .tm-review-reason {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        border: 1px solid rgba(244, 63, 94, 0.35);
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 0.35rem 0.75rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: rgb(190, 24, 93);
+        transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+      }
+      .tm-review-reason:hover,
+      .tm-review-reason:focus-visible {
+        outline: none;
+        border-color: rgba(244, 63, 94, 0.55);
+        box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.12);
+      }
+      .tm-review-reason[data-selected='true'] {
+        background-color: rgba(244, 63, 94, 0.2);
+        border-color: rgba(244, 63, 94, 0.6);
+        color: rgb(159, 18, 57);
+        box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.2);
+      }
+      .tm-review-feedback {
+        border-radius: 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 0.75rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: rgba(71, 85, 105, 0.95);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+      }
+      .tm-review-status-chip--flash {
+        animation: tmReviewChipFlash 0.32s ease-out;
+      }
+      @keyframes tmReviewChipFlash {
+        from {
+          transform: scale(0.9);
+          opacity: 0.75;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
     </style>
   </head>
   <body class="min-h-full bg-gradient-to-br from-sky-50 via-white to-amber-50 text-slate-900">
@@ -535,7 +676,7 @@
             <div class="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
                 data-task-action="log-production"
                 data-production-section="consumption"
                 data-production-trigger
@@ -545,7 +686,7 @@
               </button>
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
                 data-task-action="log-production"
                 data-production-section="mortality"
                 data-production-trigger
@@ -555,7 +696,7 @@
               </button>
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
                 data-task-action="log-production"
                 data-production-section="discard"
                 data-production-trigger
@@ -565,13 +706,23 @@
               </button>
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
                 data-task-action="log-production"
                 data-production-section="production"
                 data-production-trigger
               >
                 <span aria-hidden="true">📦</span>
                 Registrar producción
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                data-task-action="log-production"
+                data-production-section="egg-weight"
+                data-production-trigger
+              >
+                <span aria-hidden="true">⚖️</span>
+                Registrar peso huevo
               </button>
               <button
                 type="button"
@@ -598,6 +749,7 @@
                 <li>Mortalidad: —</li>
                 <li>Descarte: —</li>
                 <li>Producción total: —</li>
+                <li>Peso promedio huevo: —</li>
                 <li>Porcentaje de postura: —</li>
               </ul>
             </div>
@@ -631,7 +783,7 @@
                 </div>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                   <label
-                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600"
+                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 sm:col-span-2"
                     data-consumption-panel
                     data-unit="kg"
                   >
@@ -647,7 +799,7 @@
                     />
                   </label>
                   <label
-                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 hidden"
+                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 hidden sm:col-span-2"
                     data-consumption-panel
                     data-unit="bultos"
                   >
@@ -737,6 +889,37 @@
               <div
                 class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
                 data-production-panel
+                data-section="egg-weight"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h4 class="text-sm font-semibold text-slate-900">Peso promedio del huevo</h4>
+                </div>
+                <label class="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                  <span class="text-xs font-semibold text-slate-700">Peso en gramos</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    inputmode="decimal"
+                    placeholder="0"
+                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                    data-production-input="egg-weight"
+                  />
+                </label>
+                <div class="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
+                    data-production-save
+                    data-section="egg-weight"
+                  >
+                    Guardar peso promedio
+                  </button>
+                </div>
+              </div>
+              <div
+                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
+                data-production-panel
                 data-section="production"
               >
                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -769,7 +952,7 @@
                     <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                       <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
                         Galpón 3
-                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
                       </span>
                       <input
                         type="number"
@@ -784,7 +967,7 @@
                     <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                       <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
                         Galpón 4
-                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
                       </span>
                       <input
                         type="number"
@@ -802,7 +985,7 @@
                       <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                         <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
                           Galpón 3 · Sala 1
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
                         </span>
                         <input
                           type="number"
@@ -817,7 +1000,7 @@
                       <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                         <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
                           Galpón 3 · Sala 2
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
                         </span>
                         <input
                           type="number"
@@ -832,7 +1015,7 @@
                       <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                         <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
                           Galpón 4 · Sala 1
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
                         </span>
                         <input
                           type="number"
@@ -847,7 +1030,7 @@
                       <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                         <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
                           Galpón 4 · Sala 2
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
                         </span>
                         <input
                           type="number"
@@ -882,6 +1065,132 @@
             <p>Datos registrados. Si necesitas cambios, abre de nuevo la sección y ajusta.</p>
           </div>
         </article>
+
+        {% with pending=telegram_mini_app.pending_classification %}
+          {% if pending %}
+            <article
+              class="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/85 to-rose-50/65 p-5 shadow-xl shadow-slate-200/60"
+              data-pending-classification-card
+            >
+              <header class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <span aria-hidden="true">🗂️</span>
+                    Producciones por clasificar
+                  </p>
+                  <h3 class="text-lg font-semibold text-slate-900">{{ pending.title }}</h3>
+                  {% if pending.description %}
+                    <p class="mt-1 text-sm text-slate-600">{{ pending.description }}</p>
+                  {% endif %}
+                </div>
+                <div class="flex flex-col items-end gap-2 text-right">
+                  <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <span aria-hidden="true">📦</span>
+                    {{ pending.total_cartons|intcomma }} cartones
+                  </span>
+                  <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                    <span aria-hidden="true">🥚</span>
+                    {{ pending.total_eggs|intcomma }} huevos
+                  </span>
+                </div>
+              </header>
+              {% if pending.status_counts %}
+                <div class="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                  {% for status in pending.status_counts %}
+                    <span
+                      class="inline-flex items-center gap-2 rounded-full border px-3 py-1 {% if status.id == 'pending' %}border-rose-200 bg-rose-50 text-rose-700{% elif status.id == 'in_progress' %}border-amber-200 bg-amber-50 text-amber-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+                    >
+                      {{ status.label }}: {{ status.count }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if pending.alerts %}
+                <div class="mt-3 rounded-2xl border border-rose-200 bg-rose-50/80 p-3 text-[11px] text-rose-700 shadow-inner shadow-rose-100/60">
+                  <p class="font-semibold uppercase tracking-wide">Alertas</p>
+                  <ul class="mt-1 space-y-1">
+                    {% for alert in pending.alerts %}
+                      <li class="flex items-start gap-2">
+                        <span aria-hidden="true">⚠️</span>
+                        <span>{{ alert }}</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+              <div class="mt-4 space-y-3" data-pending-classification-list>
+                {% for entry in pending.entries %}
+                  <article class="rounded-2xl border px-4 py-3 text-sm text-slate-700 shadow-sm {% if entry.is_priority %}border-rose-200 bg-rose-50/80 shadow-rose-100/50{% else %}border-slate-200 bg-white/95 shadow-slate-200/50{% endif %}">
+                    <header class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-semibold text-slate-900">{{ entry.farm }}</p>
+                        <p class="text-[11px] uppercase tracking-wide text-slate-500">{{ entry.barn }}</p>
+                      </div>
+                      <div class="text-right">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span aria-hidden="true">📅</span>
+                          {{ entry.production_date_label }}
+                        </span>
+                      </div>
+                    </header>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide {% if entry.status_theme == 'rose' %}border-rose-200 bg-rose-50 text-rose-700{% elif entry.status_theme == 'brand' %}border-amber-200 bg-amber-50 text-amber-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}">
+                        <span aria-hidden="true">●</span>
+                        {{ entry.status_label }}
+                      </span>
+                      {% if entry.responsible %}
+                        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                          <span aria-hidden="true">👥</span>
+                          {{ entry.responsible }}
+                        </span>
+                      {% endif %}
+                      {% if entry.is_priority %}
+                        <span class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                          <span aria-hidden="true">⚠️</span>
+                          Trabajar primero
+                        </span>
+                      {% endif %}
+                    </div>
+                    <dl class="mt-3 grid gap-2 text-[11px] uppercase tracking-wide text-slate-500 sm:grid-cols-3">
+                      <div>
+                        <dt>Cartones</dt>
+                        <dd class="mt-0.5 text-base font-semibold text-slate-900">{{ entry.cartons|intcomma }}</dd>
+                      </div>
+                      <div>
+                        <dt>Huevos estimados</dt>
+                        <dd class="mt-0.5 text-base font-semibold text-slate-900">{{ entry.eggs|intcomma }}</dd>
+                      </div>
+                      <div>
+                        <dt>Espera</dt>
+                        <dd class="mt-0.5 text-base font-semibold {% if entry.is_priority %}text-rose-600{% else %}text-slate-900{% endif %}">{{ entry.age_label }}</dd>
+                      </div>
+                    </dl>
+                    {% if entry.alerts %}
+                      <ul class="mt-3 space-y-1 text-[11px] text-rose-700">
+                        {% for alert in entry.alerts %}
+                          <li class="flex items-start gap-2">
+                            <span aria-hidden="true">→</span>
+                            <span>{{ alert }}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                    <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm shadow-emerald-200/60 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+                        data-select-egg-stage="classification"
+                      >
+                        <span aria-hidden="true">🥚</span>
+                        Clasificar
+                      </button>
+                    </div>
+                  </article>
+                {% endfor %}
+              </div>
+            </article>
+          {% endif %}
+        {% endwith %}
 
         {% with queue=telegram_mini_app.transport_queue %}
           {% if queue %}
@@ -1048,20 +1357,26 @@
                     <div class="flex items-start gap-3">
                       <span class="text-xl" aria-hidden="true">{{ stage.icon }}</span>
                       <div>
-                        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Etapa {{ forloop.counter }}</p>
+                        {% if stage.id != 'inventory_ready' %}
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Etapa {{ forloop.counter }}</p>
+                        {% endif %}
                         <h4 class="text-base font-semibold text-slate-900">{{ stage.title }}</h4>
                       </div>
                     </div>
-                    <span
-                      class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide{% if stage.tone == 'brand' %} border-amber-300 bg-amber-50 text-amber-700{% elif stage.tone == 'emerald' %} border-emerald-300 bg-emerald-50 text-emerald-700{% elif stage.tone == 'sky' %} border-sky-300 bg-sky-50 text-sky-700{% elif stage.tone == 'slate' %} border-slate-300 bg-slate-100 text-slate-700{% else %} border-slate-200 bg-slate-50 text-slate-600{% endif %}"
-                      data-egg-stage-chip
-                    >
-                      Pendiente
-                    </span>
+                    {% if stage.id != 'inventory_ready' %}
+                      <span
+                        class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide{% if stage.tone == 'brand' %} border-amber-300 bg-amber-50 text-amber-700{% elif stage.tone == 'emerald' %} border-emerald-300 bg-emerald-50 text-emerald-700{% elif stage.tone == 'sky' %} border-sky-300 bg-sky-50 text-sky-700{% elif stage.tone == 'slate' %} border-slate-300 bg-slate-100 text-slate-700{% else %} border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+                        data-egg-stage-chip
+                      >
+                        Pendiente
+                      </span>
+                    {% endif %}
                   </header>
-                  <p class="mt-3 text-sm text-slate-700">
-                    {{ stage.summary }}
-                  </p>
+                  {% if stage.summary %}
+                    <p class="mt-3 text-sm text-slate-700">
+                      {{ stage.summary }}
+                    </p>
+                  {% endif %}
 
                   {% if stage.id == 'verification' and stage.lot %}
                     <div
@@ -1265,6 +1580,95 @@
                     {% endwith %}
                   {% endif %}
 
+                  {% if stage.id == 'inventory_ready' and stage.inventory %}
+                    <section class="mt-4 space-y-4" data-inventory-ready>
+                      {% if stage.inventory.alerts %}
+                        <div class="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-xs text-rose-700 shadow-inner shadow-rose-100/60">
+                          <p class="text-[11px] font-semibold uppercase tracking-wide">Alertas</p>
+                          <ul class="mt-2 space-y-1">
+                            {% for alert in stage.inventory.alerts %}
+                              <li class="flex items-start gap-2">
+                                <span aria-hidden="true">⚠️</span>
+                                <span>{{ alert }}</span>
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        </div>
+                      {% endif %}
+                      <div class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-inner shadow-emerald-100/60">
+                        <table class="min-w-full divide-y divide-emerald-100 text-sm text-slate-700">
+                          <thead class="bg-emerald-50 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                            <tr>
+                              <th scope="col" class="px-3 py-2 text-left text-sm">Tipo</th>
+                              <th scope="col" class="px-3 py-2 text-right text-sm">Clasificado</th>
+                              <th scope="col" class="px-3 py-2 text-right text-sm">Reservado</th>
+                              <th scope="col" class="px-3 py-2 text-right text-sm">Disponible</th>
+                            </tr>
+                          </thead>
+                          <tbody class="divide-y divide-emerald-50">
+                            {% for item in stage.inventory.breakdown %}
+                              <tr{% if item.available_cartons == 0 %} class="bg-rose-50/50"{% endif %}>
+                                <td class="px-3 py-2 text-base font-semibold text-slate-900">
+                                  {{ item.label }}
+                                </td>
+                                <td class="px-3 py-2 text-right text-base font-semibold text-slate-700">
+                                  {{ item.cartons|intcomma }}
+                                </td>
+                                <td class="px-3 py-2 text-right text-base font-semibold text-amber-700">
+                                  {{ item.reserved_cartons|intcomma }}
+                                </td>
+                                <td class="px-3 py-2 text-right text-base font-semibold {% if item.available_cartons == 0 %}text-rose-600{% else %}text-emerald-700{% endif %}">
+                                  {{ item.available_cartons|intcomma }}
+                                </td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div class="space-y-3">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Reservas activas para próximos pedidos
+                        </p>
+                        <div class="grid gap-3 lg:grid-cols-2">
+                          {% for reservation in stage.inventory.reservations %}
+                            <article class="rounded-2xl border border-emerald-100 bg-white/95 p-4 text-xs text-slate-600 shadow-sm shadow-emerald-100/60">
+                              <header class="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <p class="text-sm font-semibold text-slate-900">{{ reservation.vendor }}</p>
+                                  <p class="text-[11px] uppercase tracking-wide text-emerald-600">{{ reservation.channel }}</p>
+                                  {% if reservation.contact %}
+                                    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{{ reservation.contact }}</p>
+                                  {% endif %}
+                                </div>
+                                <div class="text-right">
+                                  <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                                    <span aria-hidden="true">📅</span>
+                                    {{ reservation.delivery_date_label }}
+                                  </span>
+                                  <p class="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{{ reservation.status }}</p>
+                                </div>
+                              </header>
+                              <ul class="mt-3 space-y-2 text-slate-700">
+                                {% for item in reservation.items %}
+                                  <li class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+                                    <span class="text-sm font-semibold text-slate-900">{{ item.label }}</span>
+                                    <span class="text-right text-xs font-semibold text-slate-600">
+                                      {{ item.cartons|intcomma }} cartones
+                                      <span class="block text-[11px] font-semibold uppercase tracking-wide text-emerald-600">{{ item.carton_price_label }}</span>
+                                    </span>
+                                  </li>
+                                {% endfor %}
+                              </ul>
+                              <p class="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                Total reservado: {{ reservation.total_cartons|intcomma }} cartones · {{ reservation.total_amount_label }}
+                              </p>
+                            </article>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    </section>
+                  {% endif %}
+
                   {% if stage.id == 'classification' %}
                     <div
                       class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4"
@@ -1435,6 +1839,8 @@
                           Guardar
                         </button>
                       </div>
+                    {% elif stage.id == 'inventory_ready' %}
+                      {# sin acciones para un card informativo #}
                     {% else %}
                     <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-egg-stage-status>Esperando registro</p>
@@ -1794,6 +2200,328 @@
             {% endfor %}
           </ul>
         </div>
+
+      {% with review=telegram_mini_app.leader_review %}
+      {% if review %}
+      <section class="space-y-5 rounded-3xl border border-slate-200/80 bg-white/85 p-5 shadow-xl shadow-slate-200/70 mini-app-blur" data-leader-review>
+        <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-2">
+            <span class="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand-dark">
+              Seguimiento líder
+            </span>
+            <h2 class="text-base font-semibold text-slate-900">{{ review.title }}</h2>
+            <p class="text-xs text-slate-600">{{ review.subtitle }}</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-4 text-sm text-slate-600 sm:justify-end">
+            <div class="text-center">
+              <p class="text-3xl font-semibold text-slate-900" data-review-summary-total>{{ review.summary.total }}</p>
+            </div>
+          </div>
+        </header>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3" data-review-summary>
+          <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/70 p-4 shadow-md shadow-amber-200/60">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-600">En revisión</p>
+            <p class="mt-1 text-2xl font-semibold text-amber-700" data-review-summary-awaiting>{{ review.summary.awaiting }}</p>
+            <p class="mt-1 text-xs text-slate-600">Tareas que esperan tu verificación.</p>
+          </div>
+          <div class="rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-rose-100/70 p-4 shadow-md shadow-rose-200/60">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Vencidas</p>
+            <p class="mt-1 text-2xl font-semibold text-rose-600" data-review-summary-overdue>{{ review.summary.overdue }}</p>
+            <p class="mt-1 text-xs text-slate-600">Asignaciones que necesitan priorización.</p>
+          </div>
+          <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 p-4 shadow-md shadow-emerald-200/60">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Aprobadas</p>
+            <p class="mt-1 text-2xl font-semibold text-emerald-700" data-review-summary-approved>{{ review.summary.approved }}</p>
+            <p class="mt-1 text-xs text-slate-600">Revisiones cerradas recientemente.</p>
+          </div>
+        </div>
+        <div class="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-slate-100/60" data-review-filters>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Filtros rápidos</p>
+              <p class="text-xs text-slate-600">Enfoca la lista por turno, granja y galpón.</p>
+            </div>
+            <button
+              type="button"
+              class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              data-review-reset
+            >
+              Reiniciar filtros
+            </button>
+          </div>
+          <div class="mt-4 space-y-4">
+            <div class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Turnos</p>
+              <div class="flex flex-wrap gap-2" data-review-filter-group="shift">
+                {% for option in review.filters.shifts %}
+                  <button
+                    type="button"
+                    class="tm-review-filter"
+                    data-review-filter
+                    data-filter-type="shift"
+                    data-filter-value="{{ option.id }}"
+                    data-active="{{ option.is_default|yesno:'true,false' }}"
+                  >
+                    <span>{{ option.label }}</span>
+                    <span class="tm-review-filter-count">{{ option.count }}</span>
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Granjas</p>
+              <div class="flex flex-wrap gap-2" data-review-filter-group="farm">
+                {% for option in review.filters.farms %}
+                  <button
+                    type="button"
+                    class="tm-review-filter"
+                    data-review-filter
+                    data-filter-type="farm"
+                    data-filter-value="{{ option.id }}"
+                    data-active="{{ option.is_default|default_if_none:False|yesno:'true,false' }}"
+                  >
+                    <span>{{ option.label }}</span>
+                    <span class="tm-review-filter-count">{{ option.count }}</span>
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Galpones</p>
+              <div class="flex flex-wrap gap-2" data-review-filter-group="barn">
+                {% for option in review.filters.barns %}
+                  <button
+                    type="button"
+                    class="tm-review-filter"
+                    data-review-filter
+                    data-filter-type="barn"
+                    data-filter-value="{{ option.id }}"
+                    data-active="{{ option.is_default|default_if_none:False|yesno:'true,false' }}"
+                  >
+                    <span>{{ option.label }}</span>
+                    <span class="tm-review-filter-count">{{ option.count }}</span>
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% if review.tips %}
+        <div class="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tips rápidos</p>
+          <ul class="mt-2 space-y-1 text-xs text-slate-600">
+            {% for tip in review.tips %}
+            <li class="flex items-start gap-2">
+              <span class="mt-0.5 text-brand">•</span>
+              <span>{{ tip }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        <div class="hidden rounded-3xl border border-slate-200 bg-white/90 p-4 text-sm text-slate-600" data-review-empty>
+          No encontramos tareas para los filtros seleccionados. Ajusta la búsqueda para continuar revisando.
+        </div>
+        <div class="space-y-4" data-review-days>
+          {% for day in review.days %}
+          <article class="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-lg shadow-slate-200/60" data-review-day data-day="{{ day.date_iso }}">
+            <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {{ day.weekday_label }} · {{ day.date_label }}
+                </p>
+              </div>
+            </header>
+            <div class="mt-4 space-y-4">
+              {% for location in day.locations %}
+              <div
+                class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-inner shadow-slate-100/40"
+                data-review-location
+                data-shift="{{ location.shift_label|default:''|slugify }}"
+                data-farm="{{ location.farm|default:''|slugify }}"
+                data-barn="{{ location.barn|default:''|slugify }}"
+              >
+                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-slate-900">{{ location.label }}</h3>
+                  </div>
+                </header>
+                <div class="mt-4 space-y-3">
+                  {% for task in location.tasks %}
+                  <article
+                    class="rounded-2xl border border-white/60 bg-white/95 p-4 shadow-sm shadow-slate-100/60"
+                    data-review-task
+                    data-review-task-state="{{ task.review.state|default:'awaiting' }}"
+                    data-review-execution-state="{{ task.status.state|default:'pending' }}"
+                  >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="space-y-1">
+                        <h4 class="text-sm font-semibold text-slate-900">{{ task.title }}</h4>
+                        <div class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+                          <span
+                            class="rounded-full border px-2 py-0.5 {% if task.priority.theme == 'critical' %}border-rose-300 bg-rose-50 text-rose-700{% elif task.priority.theme == 'success' %}border-emerald-300 bg-emerald-50 text-emerald-700{% elif task.priority.theme == 'brand' %}border-amber-300 bg-amber-50 text-amber-700{% else %}border-slate-300 bg-slate-100 text-slate-700{% endif %}"
+                          >
+                            {{ task.priority.label }}
+                          </span>
+                          {% if task.tags %}
+                            {% for tag in task.tags %}
+                              <span class="rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-slate-500">{{ tag }}</span>
+                            {% endfor %}
+                          {% endif %}
+                        </div>
+                      </div>
+                      <span
+                        class="tm-review-status-chip"
+                        data-review-status-chip
+                        data-state="{{ task.review.state|default:'awaiting' }}"
+                      >
+                        <span class="tm-review-status-dot" aria-hidden="true"></span>
+                        <span data-review-status-label>{{ task.review.label }}</span>
+                      </span>
+                    </div>
+                    <dl class="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                      <div>
+                        <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Responsable</dt>
+                        <dd class="mt-1 font-semibold text-slate-900">{{ task.responsible }}</dd>
+                      </div>
+                      <div>
+                        <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Estado de ejecución</dt>
+                        <dd class="mt-1 text-slate-600">
+                          <span class="font-semibold text-slate-900">{{ task.status.label }}</span>
+                          {% if task.status.details %}
+                            · {{ task.status.details }}
+                          {% endif %}
+                          {% if task.status.overdue_days %}
+                            <span class="ml-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                              {{ task.status.overdue_days }} {% if task.status.overdue_days == 1 %}día vencido{% else %}días vencidos{% endif %}
+                            </span>
+                          {% endif %}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Estado de revisión</dt>
+                        <dd class="mt-1 text-slate-600" data-review-status-details>{{ task.review.details }}</dd>
+                      </div>
+                      <div>
+                        <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Evidencias</dt>
+                        <dd class="mt-1 text-slate-600">
+                          {{ task.evidence_count }} {% if task.evidence_count == 1 %}archivo{% else %}archivos{% endif %}
+                        </dd>
+                      </div>
+                    </dl>
+                    {% if task.alerts %}
+                      <div class="mt-3 space-y-1">
+                        {% for alert in task.alerts %}
+                          <p class="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-600">
+                            <span aria-hidden="true">⚠️</span>
+                            {{ alert }}
+                          </p>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow shadow-emerald-200/70 transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+                        data-review-approve
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:border-rose-500 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200/60"
+                        data-review-reject
+                      >
+                        Devolver
+                      </button>
+                    </div>
+                    <div
+                      class="mt-3 hidden space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-700"
+                      data-review-comment-panel
+                      data-type="approve"
+                    >
+                      <div class="space-y-1">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Recomendaciones al aprobar</p>
+                        <textarea
+                          rows="2"
+                          class="w-full rounded-xl border border-emerald-200 bg-white/95 p-2 text-xs text-slate-700 shadow-inner shadow-emerald-100/60 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                          placeholder="{{ task.recommendation_placeholder }}"
+                          data-review-comment
+                        ></textarea>
+                      </div>
+                      <div class="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          class="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-400"
+                          data-review-cancel="approve"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow shadow-emerald-200/70 hover:bg-emerald-700"
+                          data-review-confirm="approve"
+                        >
+                          Confirmar aprobación
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      class="mt-3 hidden space-y-3 rounded-2xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700"
+                      data-review-comment-panel
+                      data-type="reject"
+                    >
+                      <div class="space-y-2">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Selecciona motivo</p>
+                        <div class="flex flex-wrap gap-2">
+                          {% for reason in review.reject_reasons %}
+                            <button
+                              type="button"
+                              class="tm-review-reason"
+                              data-review-reject-reason
+                              data-value="{{ reason.id }}"
+                            >
+                              {{ reason.label }}
+                            </button>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      <textarea
+                        rows="2"
+                        class="w-full rounded-xl border border-rose-200 bg-white/95 p-2 text-xs text-slate-700 shadow-inner shadow-rose-100/60 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                        placeholder="Describe qué debe ajustar antes de aprobar."
+                        data-review-comment
+                      ></textarea>
+                      <div class="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          class="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-400"
+                          data-review-cancel="reject"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white shadow shadow-rose-200/70 hover:bg-rose-600"
+                          data-review-confirm="reject"
+                        >
+                          Enviar devolución
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mt-3 hidden tm-review-feedback" data-review-feedback></div>
+                  </article>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      {% endwith %}
 
       </section>
 
@@ -2319,6 +3047,413 @@
 
     <script>
       (function () {
+        var section = document.querySelector('[data-leader-review]');
+        if (!section) {
+          return;
+        }
+
+        var filterState = { shift: 'all', farm: 'all', barn: 'all' };
+        var filterGroups = Array.prototype.slice.call(section.querySelectorAll('[data-review-filter-group]'));
+        var locationNodes = Array.prototype.slice.call(section.querySelectorAll('[data-review-location]'));
+        var dayNodes = Array.prototype.slice.call(section.querySelectorAll('[data-review-day]'));
+        var resetButton = section.querySelector('[data-review-reset]');
+        var emptyState = section.querySelector('[data-review-empty]');
+        var summaryTotal = section.querySelector('[data-review-summary-total]');
+        var summaryAwaiting = section.querySelector('[data-review-summary-awaiting]');
+        var summaryOverdue = section.querySelector('[data-review-summary-overdue]');
+        var summaryApproved = section.querySelector('[data-review-summary-approved]');
+
+        filterGroups.forEach(function (group) {
+          var type = group.getAttribute('data-review-filter-group');
+          var activeButton = group.querySelector('[data-review-filter][data-active="true"]');
+          if (activeButton) {
+            filterState[type] = activeButton.getAttribute('data-filter-value') || 'all';
+          }
+        });
+
+        function updateCount(countNode, value) {
+          if (!countNode) {
+            return;
+          }
+          countNode.textContent = value;
+        }
+
+        function applyFilters() {
+          var hasVisible = false;
+          locationNodes.forEach(function (location) {
+            var matches = true;
+            if (filterState.shift !== 'all' && location.getAttribute('data-shift') !== filterState.shift) {
+              matches = false;
+            }
+            if (filterState.farm !== 'all' && location.getAttribute('data-farm') !== filterState.farm) {
+              matches = false;
+            }
+            if (filterState.barn !== 'all' && location.getAttribute('data-barn') !== filterState.barn) {
+              matches = false;
+            }
+            location.classList.toggle('hidden', !matches);
+            if (matches) {
+              hasVisible = true;
+            }
+          });
+
+          dayNodes.forEach(function (dayNode) {
+            var visibleLocation = dayNode.querySelector('[data-review-location]:not(.hidden)');
+            dayNode.classList.toggle('hidden', !visibleLocation);
+          });
+
+          if (emptyState) {
+            emptyState.classList.toggle('hidden', hasVisible);
+          }
+        }
+
+        function collectVisibleTasks() {
+          var tasks = [];
+          locationNodes.forEach(function (location) {
+            if (location.classList.contains('hidden')) {
+              return;
+            }
+            tasks = tasks.concat(Array.prototype.slice.call(location.querySelectorAll('[data-review-task]')));
+          });
+          return tasks;
+        }
+
+        function refreshMetrics() {
+          var visibleTasks = collectVisibleTasks();
+          var counts = {
+            total: visibleTasks.length,
+            awaiting: 0,
+            approved: 0,
+            rejected: 0,
+            overdue: 0,
+          };
+
+          visibleTasks.forEach(function (task) {
+            var state = task.getAttribute('data-review-task-state') || 'awaiting';
+            var execState = task.getAttribute('data-review-execution-state') || '';
+            if (execState === 'overdue') {
+              counts.overdue += 1;
+            }
+            if (state === 'approved') {
+              counts.approved += 1;
+            } else if (state === 'rejected') {
+              counts.rejected += 1;
+            } else {
+              counts.awaiting += 1;
+            }
+          });
+
+          if (summaryTotal) {
+            summaryTotal.textContent = counts.total;
+          }
+          if (summaryAwaiting) {
+            summaryAwaiting.textContent = counts.awaiting;
+          }
+          if (summaryOverdue) {
+            summaryOverdue.textContent = counts.overdue;
+          }
+          if (summaryApproved) {
+            summaryApproved.textContent = counts.approved;
+          }
+
+          dayNodes.forEach(function (dayNode) {
+            var locationList = Array.prototype.slice.call(dayNode.querySelectorAll('[data-review-location]'));
+            var dayTasks = [];
+            locationList.forEach(function (location) {
+              if (location.classList.contains('hidden')) {
+                return;
+              }
+              dayTasks = dayTasks.concat(Array.prototype.slice.call(location.querySelectorAll('[data-review-task]')));
+            });
+            var dayCounts = { total: dayTasks.length, awaiting: 0, approved: 0, overdue: 0 };
+            dayTasks.forEach(function (task) {
+              var state = task.getAttribute('data-review-task-state') || 'awaiting';
+              var execState = task.getAttribute('data-review-execution-state') || '';
+              if (execState === 'overdue') {
+                dayCounts.overdue += 1;
+              }
+              if (state === 'approved') {
+                dayCounts.approved += 1;
+              } else if (state === 'rejected') {
+                // omit from awaiting
+              } else {
+                dayCounts.awaiting += 1;
+              }
+            });
+            updateCount(dayNode.querySelector('[data-review-day-total] [data-review-count]'), dayCounts.total);
+            updateCount(dayNode.querySelector('[data-review-day-awaiting] [data-review-count]'), dayCounts.awaiting);
+            updateCount(dayNode.querySelector('[data-review-day-overdue] [data-review-count]'), dayCounts.overdue);
+          });
+
+          locationNodes.forEach(function (locationNode) {
+            var tasks = Array.prototype.slice.call(locationNode.querySelectorAll('[data-review-task]'));
+            if (locationNode.classList.contains('hidden')) {
+              updateCount(locationNode.querySelector('[data-review-location-total] [data-review-count]'), 0);
+              updateCount(locationNode.querySelector('[data-review-location-awaiting] [data-review-count]'), 0);
+              updateCount(locationNode.querySelector('[data-review-location-approved] [data-review-count]'), 0);
+              updateCount(locationNode.querySelector('[data-review-location-overdue] [data-review-count]'), 0);
+              return;
+            }
+            var locCounts = { total: tasks.length, awaiting: 0, approved: 0, overdue: 0 };
+            tasks.forEach(function (task) {
+              var state = task.getAttribute('data-review-task-state') || 'awaiting';
+              var execState = task.getAttribute('data-review-execution-state') || '';
+              if (execState === 'overdue') {
+                locCounts.overdue += 1;
+              }
+              if (state === 'approved') {
+                locCounts.approved += 1;
+              } else if (state === 'rejected') {
+                // skip
+              } else {
+                locCounts.awaiting += 1;
+              }
+            });
+            updateCount(locationNode.querySelector('[data-review-location-total] [data-review-count]'), locCounts.total);
+            updateCount(locationNode.querySelector('[data-review-location-awaiting] [data-review-count]'), locCounts.awaiting);
+            updateCount(locationNode.querySelector('[data-review-location-approved] [data-review-count]'), locCounts.approved);
+            updateCount(locationNode.querySelector('[data-review-location-overdue] [data-review-count]'), locCounts.overdue);
+          });
+        }
+
+        filterGroups.forEach(function (group) {
+          var type = group.getAttribute('data-review-filter-group');
+          group.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-review-filter]');
+            if (!button || !group.contains(button)) {
+              return;
+            }
+            var value = button.getAttribute('data-filter-value') || 'all';
+            var activeButton = group.querySelector('[data-review-filter][data-active="true"]');
+            if (activeButton === button) {
+              return;
+            }
+            if (activeButton) {
+              activeButton.setAttribute('data-active', 'false');
+            }
+            button.setAttribute('data-active', 'true');
+            filterState[type] = value;
+            applyFilters();
+            refreshMetrics();
+          });
+        });
+
+        if (resetButton) {
+          resetButton.addEventListener('click', function () {
+            filterGroups.forEach(function (group) {
+              var type = group.getAttribute('data-review-filter-group');
+              var activeButton = group.querySelector('[data-review-filter][data-active="true"]');
+              if (activeButton) {
+                activeButton.setAttribute('data-active', 'false');
+              }
+              var fallback =
+                group.querySelector('[data-review-filter][data-filter-value="all"]') ||
+                group.querySelector('[data-review-filter]');
+              if (fallback) {
+                fallback.setAttribute('data-active', 'true');
+                filterState[type] = fallback.getAttribute('data-filter-value') || 'all';
+              } else {
+                filterState[type] = 'all';
+              }
+            });
+            applyFilters();
+            refreshMetrics();
+          });
+        }
+
+        function togglePanel(card, type) {
+          var panel = card.querySelector('[data-review-comment-panel][data-type="' + type + '"]');
+          if (!panel) {
+            return;
+          }
+          var alternateType = type === 'approve' ? 'reject' : 'approve';
+          var alternatePanel = card.querySelector('[data-review-comment-panel][data-type="' + alternateType + '"]');
+          if (alternatePanel) {
+            alternatePanel.classList.add('hidden');
+          }
+          var isVisible = !panel.classList.contains('hidden');
+          panel.classList.toggle('hidden', isVisible);
+          if (!isVisible) {
+            var textarea = panel.querySelector('textarea');
+            if (textarea) {
+              var storedKey = type === 'approve' ? 'data-review-last-approve' : 'data-review-last-reject';
+              var storedValue = card.getAttribute(storedKey);
+              if (storedValue && !textarea.value) {
+                textarea.value = storedValue;
+              }
+              textarea.focus();
+            }
+          }
+        }
+
+        section.addEventListener('click', function (event) {
+          var descriptionToggle = event.target.closest('[data-review-description-toggle]');
+          if (descriptionToggle) {
+            var descriptionCard = descriptionToggle.closest('[data-review-task]');
+            if (!descriptionCard) {
+              return;
+            }
+            var description = descriptionCard.querySelector('[data-review-description]');
+            if (!description) {
+              return;
+            }
+            var expanded = descriptionToggle.getAttribute('aria-expanded') === 'true';
+            var labelNode = descriptionToggle.querySelector('[data-review-description-label]');
+            var openLabel = descriptionToggle.getAttribute('data-label-open') || 'Ver descripción';
+            var closeLabel = descriptionToggle.getAttribute('data-label-close') || 'Ocultar descripción';
+            descriptionToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            description.classList.toggle('hidden', expanded);
+            if (labelNode) {
+              labelNode.textContent = expanded ? openLabel : closeLabel;
+            }
+            return;
+          }
+
+          var approveButton = event.target.closest('[data-review-approve]');
+          if (approveButton) {
+            var approveCard = approveButton.closest('[data-review-task]');
+            if (approveCard) {
+              togglePanel(approveCard, 'approve');
+            }
+            return;
+          }
+
+          var rejectButton = event.target.closest('[data-review-reject]');
+          if (rejectButton) {
+            var rejectCard = rejectButton.closest('[data-review-task]');
+            if (rejectCard) {
+              togglePanel(rejectCard, 'reject');
+            }
+            return;
+          }
+
+          var cancelButton = event.target.closest('[data-review-cancel]');
+          if (cancelButton) {
+            var cancelType = cancelButton.getAttribute('data-review-cancel');
+            var cancelCard = cancelButton.closest('[data-review-task]');
+            if (!cancelType || !cancelCard) {
+              return;
+            }
+            var cancelPanel = cancelCard.querySelector('[data-review-comment-panel][data-type="' + cancelType + '"]');
+            if (cancelPanel) {
+              cancelPanel.classList.add('hidden');
+              if (cancelType === 'reject') {
+                Array.prototype.slice
+                  .call(cancelPanel.querySelectorAll('[data-review-reject-reason]'))
+                  .forEach(function (reasonNode) {
+                    reasonNode.setAttribute('data-selected', 'false');
+                  });
+              }
+            }
+            return;
+          }
+
+          var reasonButton = event.target.closest('[data-review-reject-reason]');
+          if (reasonButton) {
+            var reasonPanel = reasonButton.closest('[data-review-comment-panel]');
+            var textarea = reasonPanel ? reasonPanel.querySelector('textarea') : null;
+            var isSelected = reasonButton.getAttribute('data-selected') === 'true';
+            var reasonText = reasonButton.textContent ? reasonButton.textContent.trim() : '';
+            var lines = textarea
+              ? textarea.value
+                  .split(/\n+/)
+                  .map(function (line) {
+                    return line.trim();
+                  })
+                  .filter(Boolean)
+              : [];
+            if (isSelected) {
+              reasonButton.setAttribute('data-selected', 'false');
+              if (textarea) {
+                lines = lines.filter(function (line) {
+                  return line !== reasonText;
+                });
+                textarea.value = lines.join('\n');
+              }
+            } else {
+              reasonButton.setAttribute('data-selected', 'true');
+              if (textarea && reasonText) {
+                if (lines.indexOf(reasonText) === -1) {
+                  lines.unshift(reasonText);
+                }
+                textarea.value = lines.join('\n');
+              }
+            }
+            return;
+          }
+
+          var confirmButton = event.target.closest('[data-review-confirm]');
+          if (confirmButton) {
+            var action = confirmButton.getAttribute('data-review-confirm');
+            var actionCard = confirmButton.closest('[data-review-task]');
+            if (!action || !actionCard) {
+              return;
+            }
+            var panel = actionCard.querySelector(
+              '[data-review-comment-panel][data-type="' + (action === 'approve' ? 'approve' : 'reject') + '"]'
+            );
+            if (panel) {
+              panel.classList.add('hidden');
+              if (action === 'reject') {
+                Array.prototype.slice
+                  .call(panel.querySelectorAll('[data-review-reject-reason]'))
+                  .forEach(function (reasonNode) {
+                    reasonNode.setAttribute('data-selected', 'false');
+                  });
+              }
+              var textarea = panel.querySelector('textarea');
+              if (textarea) {
+                actionCard.setAttribute(
+                  action === 'approve' ? 'data-review-last-approve' : 'data-review-last-reject',
+                  textarea.value.trim()
+                );
+              }
+            }
+            var feedback = actionCard.querySelector('[data-review-feedback]');
+            if (feedback) {
+              var isApprove = action === 'approve';
+              feedback.textContent = isApprove
+                ? 'Tarea aprobada y enviada.'
+                : 'Devolviste la tarea con comentarios.';
+              feedback.classList.remove('hidden');
+              feedback.classList.toggle('bg-emerald-50', isApprove);
+              feedback.classList.toggle('border-emerald-200', isApprove);
+              feedback.classList.toggle('text-emerald-700', isApprove);
+              feedback.classList.toggle('bg-rose-50', !isApprove);
+              feedback.classList.toggle('border-rose-200', !isApprove);
+              feedback.classList.toggle('text-rose-700', !isApprove);
+            }
+            var statusChip = actionCard.querySelector('[data-review-status-chip]');
+            var statusLabel = actionCard.querySelector('[data-review-status-label]');
+            var statusDetails = actionCard.querySelector('[data-review-status-details]');
+            var newState = action === 'approve' ? 'approved' : 'rejected';
+            actionCard.setAttribute('data-review-task-state', newState);
+            if (statusChip) {
+              statusChip.setAttribute('data-state', newState);
+              statusChip.classList.remove('tm-review-status-chip--flash');
+              void statusChip.offsetWidth;
+              statusChip.classList.add('tm-review-status-chip--flash');
+            }
+            if (statusLabel) {
+              statusLabel.textContent = action === 'approve' ? 'Aprobada' : 'Devuelta';
+            }
+            if (statusDetails) {
+              statusDetails.textContent = action === 'approve'
+                ? 'Aprobada hace instantes'
+                : 'Devuelta para ajustes';
+            }
+            refreshMetrics();
+            return;
+          }
+        });
+
+        applyFilters();
+        refreshMetrics();
+      })();
+    </script>
+
+    <script>
+      (function () {
         var cards = document.querySelectorAll('[data-motivation-card]');
         if (!cards.length) {
           return;
@@ -2781,6 +3916,11 @@
           ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-output]'))
           : [];
 
+        const pendingClassificationCard = document.querySelector('[data-pending-classification-card]');
+        const pendingClassificationStageButtons = pendingClassificationCard
+          ? Array.prototype.slice.call(pendingClassificationCard.querySelectorAll('[data-select-egg-stage]'))
+          : [];
+
         const transportCard = document.querySelector('[data-transport-queue-card]');
         const transportForm = transportCard ? transportCard.querySelector('[data-transport-form]') : null;
         const transportLotInputs = transportCard
@@ -2853,11 +3993,14 @@
             : 0;
 
         const eggStageState = {};
+        let highlightedStageId = null;
+        let stageHighlightResetTimer = null;
 
         const productionSavedState = {
           consumption: false,
           mortality: false,
           discard: false,
+          'egg-weight': false,
           production: false,
         };
         let activeProductionSection = null;
@@ -2878,6 +4021,7 @@
           consumptionBultos: '',
           mortality: '',
           discard: '',
+          eggWeight: '',
           barnOutputs: {},
           roomOutputs: {},
           mode: 'barn',
@@ -3166,6 +4310,70 @@
             return null;
           }
           return document.querySelector('[data-egg-stage-card][data-egg-stage="' + stageId + '"]');
+        }
+
+        function clearStageHighlight() {
+          if (typeof window !== 'undefined' && stageHighlightResetTimer) {
+            window.clearTimeout(stageHighlightResetTimer);
+          }
+          stageHighlightResetTimer = null;
+          if (!highlightedStageId) {
+            return;
+          }
+          const previousCard = getStageCard(highlightedStageId);
+          if (previousCard) {
+            previousCard.classList.remove('ring-2', 'ring-offset-2', 'ring-amber-300', 'shadow-amber-200/70');
+          }
+          highlightedStageId = null;
+        }
+
+        function focusStageCard(stageId, options) {
+          if (!stageId) {
+            return;
+          }
+          const card = getStageCard(stageId);
+          if (!card) {
+            return;
+          }
+
+          clearStageHighlight();
+          card.classList.add('ring-2', 'ring-offset-2', 'ring-amber-300', 'shadow-amber-200/70');
+          highlightedStageId = stageId;
+
+          if (!options || options.scroll !== false) {
+            try {
+              card.scrollIntoView({
+                behavior: (options && options.scrollBehavior) || 'smooth',
+                block: (options && options.scrollBlock) || 'start',
+              });
+            } catch (error) {
+              card.scrollIntoView(true);
+            }
+          }
+
+          if (options && options.focusFirstInput) {
+            const focusTarget =
+              card.querySelector('[data-classification-input]') || card.querySelector('input, textarea, select');
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+              try {
+                focusTarget.focus({ preventScroll: true });
+              } catch (focusError) {
+                focusTarget.focus();
+              }
+            }
+          }
+
+          if (typeof window !== 'undefined' && stageHighlightResetTimer) {
+            window.clearTimeout(stageHighlightResetTimer);
+          }
+          const persistMs = options && typeof options.persist === 'number' ? options.persist : 2800;
+          if (typeof window !== 'undefined') {
+            stageHighlightResetTimer = window.setTimeout(function () {
+              if (highlightedStageId === stageId) {
+                clearStageHighlight();
+              }
+            }, persistMs);
+          }
         }
 
         function ensureStageState(stageId) {
@@ -3551,6 +4759,8 @@
 
           const productionInfo = getProductionLines();
           lines.push('Producción total: ' + productionInfo.totalLabel);
+          const eggWeightValue = normalizeNumber(productionState.eggWeight);
+          lines.push('Peso promedio huevo: ' + (eggWeightValue !== null ? formatNumber(eggWeightValue) + ' g' : '—'));
           const baseHens = resolveActiveHens();
           if (baseHens !== null) {
             let availableHens = baseHens;
@@ -3639,6 +4849,10 @@
           } else if (section === 'mortality' || section === 'discard') {
             target = productionInputs.find(function (input) {
               return input.getAttribute('data-production-input') === section;
+            });
+          } else if (section === 'egg-weight') {
+            target = productionInputs.find(function (input) {
+              return input.getAttribute('data-production-input') === 'egg-weight';
             });
           } else if (section === 'production') {
             const mode = productionState.mode || 'barn';
@@ -3755,6 +4969,11 @@
                   return input.getAttribute('data-production-input') === section;
                 });
                 productionState[section] = field ? field.value : '';
+              } else if (section === 'egg-weight') {
+                const field = productionInputs.find(function (input) {
+                  return input.getAttribute('data-production-input') === 'egg-weight';
+                });
+                productionState.eggWeight = field ? field.value : '';
               } else if (section === 'production') {
                 productionState.barnOutputs = {};
                 productionState.roomOutputs = {};
@@ -3918,6 +5137,21 @@
           });
 
           updateTransportSelectionSummary();
+        }
+
+        if (pendingClassificationStageButtons.length) {
+          pendingClassificationStageButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              const targetStage = button.getAttribute('data-select-egg-stage');
+              if (!targetStage) {
+                return;
+              }
+              focusStageCard(targetStage, { focusFirstInput: targetStage === 'classification' });
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
+              }
+            });
+          });
         }
 
         if (eggStageCards.length) {
