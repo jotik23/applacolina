@@ -1777,41 +1777,49 @@
                                     <div class="flex items-center gap-2">
                                       <span class="text-sm font-semibold text-slate-900">{{ item.label }}</span>
                                     </div>
-                                    <div class="text-right text-xs text-slate-500">
-                                      <span class="block text-sm font-semibold text-slate-900">
-                                        <span data-dispatch-item-confirmed>{{ item.confirmed|intcomma }}</span> {{ item.unit_label }}
-                                      </span>
-                                      <span class="inline-flex items-center gap-1 text-[11px]">
-                                        Solicitado: {{ item.requested|intcomma }} {{ item.unit_label }}
-                                        <span
-                                          class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide {% if item.difference %}border-rose-200 bg-rose-50 text-rose-600{% else %}hidden{% endif %}"
-                                          data-dispatch-item-difference
-                                        >
-                                          {% if item.difference %}
-                                            Falta {{ item.difference|intcomma }}
-                                          {% else %}
-                                            Sin ajustes
-                                          {% endif %}
+                                    <div class="flex flex-col items-end gap-1 text-xs text-slate-500">
+                                      <div class="inline-flex gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                        <span>Solicitado {{ item.requested|intcomma }} {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}</span>
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600">
+                                          Confirmado <span data-dispatch-item-confirmed>{{ item.confirmed|intcomma }}</span> {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}
                                         </span>
+                                      </div>
+                                      <span
+                                        class="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {% if item.difference %}border-rose-200 bg-rose-50 text-rose-600{% else %}hidden{% endif %}"
+                                        data-dispatch-item-difference
+                                      >
+                                        {% if item.difference %}
+                                          - {{ item.difference|intcomma }} {% if item.unit == 'cartons' %}cart{% else %}{{ item.unit_label }}{% endif %}
+                                        {% else %}
+                                          OK
+                                        {% endif %}
                                       </span>
                                     </div>
                                 </li>
                               {% endfor %}
                             </ul>
                             <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-                              <div class="flex flex-wrap items-center gap-3">
-                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                                  Cartones confirmados:
-                                  <span data-dispatch-summary-cartons data-dispatch-id="{{ dispatch.id }}">
+                              <div class="grid w-full gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 md:grid-cols-2">
+                                <div class="flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3 py-1">
+                                  <span>Cartones solicitados</span>
+                                  <span class="text-slate-900">{{ dispatch.totals.requested_cartons|intcomma }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-1">
+                                  <span class="text-emerald-700">Cartones confirmados</span>
+                                  <span class="text-emerald-700" data-dispatch-summary-cartons data-dispatch-id="{{ dispatch.id }}">
                                     {{ dispatch.totals.confirmed_cartons|intcomma }}
                                   </span>
-                                </span>
-                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                                  Aves confirmadas:
-                                  <span data-dispatch-summary-hens data-dispatch-id="{{ dispatch.id }}">
+                                </div>
+                                <div class="flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3 py-1">
+                                  <span>Aves solicitadas</span>
+                                  <span class="text-slate-900">{{ dispatch.totals.requested_hens|intcomma }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-1">
+                                  <span class="text-emerald-700">Aves confirmadas</span>
+                                  <span class="text-emerald-700" data-dispatch-summary-hens data-dispatch-id="{{ dispatch.id }}">
                                     {{ dispatch.totals.confirmed_hens|intcomma }}
                                   </span>
-                                </span>
+                                </div>
                               </div>
                               <div class="flex flex-wrap gap-2">
                                 <button
@@ -2172,8 +2180,14 @@
                         </table>
                       </div>
                       <div class="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600" data-dispatch-total-summary>
-                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-eggs data-summary-kind="requested">0 cartones · 0 huevos solicitados</p>
-                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-hens data-summary-kind="requested">0 aves solicitadas</p>
+                        <p class="text-sm font-semibold text-slate-900">
+                          Cartones solicitados:
+                          <span data-dispatch-total-cartons data-summary-kind="requested">0</span>
+                        </p>
+                        <p class="text-sm font-semibold text-slate-900">
+                          Aves solicitadas:
+                          <span data-dispatch-total-hens data-summary-kind="requested">0</span>
+                        </p>
                       </div>
                       <label class="block text-sm font-semibold text-slate-600">
                         Notas para transporte
@@ -2309,9 +2323,15 @@
                           </table>
                         </div>
                         <div class="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600" data-dispatch-total-summary>
-                          <p class="text-sm font-semibold text-slate-900" data-dispatch-total-eggs data-summary-kind="requested">0 cartones · 0 huevos solicitados</p>
-                          <p class="text-sm font-semibold text-slate-900" data-dispatch-total-hens data-summary-kind="requested">0 aves solicitadas</p>
-                    </div>
+                          <p class="text-sm font-semibold text-slate-900">
+                            Cartones solicitados:
+                            <span data-dispatch-total-cartons data-summary-kind="requested">{{ dispatch.totals.requested_cartons|intcomma }}</span>
+                          </p>
+                          <p class="text-sm font-semibold text-slate-900">
+                            Aves solicitadas:
+                            <span data-dispatch-total-hens data-summary-kind="requested">{{ dispatch.totals.requested_hens|intcomma }}</span>
+                          </p>
+                        </div>
                     <label class="block text-sm font-semibold text-slate-600">
                       Notas para transporte
                       <textarea
@@ -2401,25 +2421,32 @@
                           </span>
                         </div>
                       </header>
-                      <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                      <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
                         <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
                           <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Conductor</dt>
                           <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.driver.name }}</dd>
-                          <dd class="text-[11px] text-slate-500">{{ dispatch.driver.phone }}</dd>
+                          <dd class="text-[11px] text-slate-500">Teléfono {{ dispatch.driver.phone }}</dd>
                         </div>
                         <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
-                          <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vehículo</dt>
+                          <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vehículo asignado</dt>
                           <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.vehicle.label }}</dd>
                           <dd class="text-[11px] text-slate-500">Placa {{ dispatch.vehicle.plate }}</dd>
                         </div>
-                        <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
-                          <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contacto logística</dt>
-                          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.contact }}</dd>
+                      </dl>
+                      {% if dispatch.contact or dispatch.notes %}
+                        <div class="mt-2 space-y-1 text-xs text-slate-500">
+                          {% if dispatch.contact %}
+                            <p>
+                              Contacto logística: <span class="font-semibold text-slate-900">{{ dispatch.contact }}</span>
+                            </p>
+                          {% endif %}
                           {% if dispatch.notes %}
-                            <dd class="mt-1 text-[11px] text-slate-500">Nota: {{ dispatch.notes }}</dd>
+                            <p>
+                              Notas programadas: <span class="font-semibold text-slate-900">{{ dispatch.notes }}</span>
+                            </p>
                           {% endif %}
                         </div>
-                      </dl>
+                      {% endif %}
                       <div class="mt-3">
                         <label class="block text-sm font-semibold text-slate-600">
                           <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Estado del despacho</span>
@@ -2475,7 +2502,7 @@
                                 </td>
                                 <td class="px-3 py-2 text-right">
                                   <span
-                                    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                                    class="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
                                     data-dispatch-difference
                                   >
                                     —
@@ -2486,13 +2513,27 @@
                           </tbody>
                         </table>
                       </div>
-                      <div class="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-3 text-xs text-slate-600">
-                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-eggs data-summary-kind="confirmed">
-                          0 cartones · 0 huevos confirmados
-                        </p>
-                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-hens data-summary-kind="confirmed">
-                          0 aves confirmadas
-                        </p>
+                      <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-3 text-xs text-slate-600">
+                        <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-900">
+                          <span>Cartones solicitados</span>
+                          <span>{{ dispatch.totals.requested_cartons|intcomma }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-900">
+                          <span>Cartones confirmados</span>
+                          <span data-dispatch-total-cartons data-summary-kind="confirmed">
+                            {{ dispatch.totals.confirmed_cartons|intcomma }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-900">
+                          <span>Aves solicitadas</span>
+                          <span>{{ dispatch.totals.requested_hens|intcomma }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-900">
+                          <span>Aves confirmadas</span>
+                          <span data-dispatch-total-hens data-summary-kind="confirmed">
+                            {{ dispatch.totals.confirmed_hens|intcomma }}
+                          </span>
+                        </div>
                         <label class="block text-sm font-semibold text-slate-600">
                           Notas adicionales
                           <textarea
@@ -4933,8 +4974,6 @@
           }
           const mode = panel.getAttribute('data-dispatch-mode') || '';
           const summaryField = mode === 'create' || mode === 'edit' ? 'requested' : 'confirmed';
-          const eggsNode = panel.querySelector('[data-dispatch-total-eggs]');
-          const hensNode = panel.querySelector('[data-dispatch-total-hens]');
           const inputs = Array.prototype.slice.call(
             panel.querySelectorAll('[data-dispatch-input][data-field="' + summaryField + '"]')
           );
@@ -4950,18 +4989,20 @@
               totalCartons += safeValue;
             }
           });
-          if (eggsNode) {
-            const eggs = totalCartons * dispatchCartonsPerPack;
-            const summaryKind = eggsNode.getAttribute('data-summary-kind') || summaryField;
-            const suffix = summaryKind === 'requested' ? ' solicitados' : ' confirmados';
-            eggsNode.textContent =
-              formatNumber(totalCartons) + ' cartones · ' + formatNumber(eggs) + ' huevos' + suffix;
-          }
-          if (hensNode) {
-            const summaryKind = hensNode.getAttribute('data-summary-kind') || summaryField;
-            const suffix = summaryKind === 'requested' ? ' solicitadas' : ' confirmadas';
-            hensNode.textContent = formatNumber(totalHens) + ' aves' + suffix;
-          }
+          const cartonNodes = Array.prototype.slice.call(panel.querySelectorAll('[data-dispatch-total-cartons]'));
+          cartonNodes.forEach(function (node) {
+            const kind = node.getAttribute('data-summary-kind') || summaryField;
+            if (kind === summaryField) {
+              node.textContent = formatNumber(totalCartons);
+            }
+          });
+          const henNodes = Array.prototype.slice.call(panel.querySelectorAll('[data-dispatch-total-hens]'));
+          henNodes.forEach(function (node) {
+            const kind = node.getAttribute('data-summary-kind') || summaryField;
+            if (kind === summaryField) {
+              node.textContent = formatNumber(totalHens);
+            }
+          });
           if (mode !== 'create' && mode !== 'edit') {
             const dispatchId = panel.getAttribute('data-dispatch-id') || '';
             const detailRows = Array.prototype.slice.call(panel.querySelectorAll('[data-dispatch-detail-row]'));
@@ -4969,6 +5010,7 @@
               const requestedValue = normalizeNumber(row.getAttribute('data-requested'));
               const requested = requestedValue !== null && requestedValue >= 0 ? requestedValue : 0;
               const unitLabel = row.getAttribute('data-unit-label') || '';
+              const unitShort = row.getAttribute('data-unit') === 'cartons' ? 'cart' : unitLabel;
               const itemType = row.getAttribute('data-item-type') || '';
               const input = row.querySelector('[data-dispatch-input][data-field="confirmed"]');
               const confirmedValue = input ? normalizeNumber(input.value) : null;
@@ -4981,13 +5023,13 @@
                   differenceNode.classList.remove(cls);
                 });
                 let themeKey = 'neutral';
-                let textContent = 'Sin ajustes';
+                let textContent = 'OK';
                 if (diff > 0) {
                   themeKey = 'positive';
-                  textContent = 'Faltan ' + formatNumber(diff) + ' ' + unitLabel;
+                  textContent = '- ' + formatNumber(diff) + ' ' + unitShort;
                 } else if (diff < 0) {
                   themeKey = 'negative';
-                  textContent = 'Sobran ' + formatNumber(Math.abs(diff)) + ' ' + unitLabel;
+                  textContent = '+ ' + formatNumber(Math.abs(diff)) + ' ' + unitShort;
                 }
                 const classes = differenceThemeClasses[themeKey] || differenceThemeClasses.neutral;
                 classes.forEach(function (cls) {
@@ -5009,19 +5051,14 @@
                     allDifferenceThemeClasses.forEach(function (cls) {
                       stageDifferenceNode.classList.remove(cls);
                     });
-                    if (diff === 0) {
-                      stageDifferenceNode.classList.add('hidden');
-                      stageDifferenceNode.textContent = 'Sin ajustes';
-                    } else {
-                      stageDifferenceNode.classList.remove('hidden');
-                      const stageTheme = diff > 0 ? 'positive' : 'negative';
-                      const stageClasses = differenceThemeClasses[stageTheme] || differenceThemeClasses.neutral;
-                      stageClasses.forEach(function (cls) {
-                        stageDifferenceNode.classList.add(cls);
-                      });
-                      stageDifferenceNode.textContent =
-                        (diff > 0 ? 'Faltan ' : 'Sobran ') + formatNumber(Math.abs(diff)) + ' ' + unitLabel;
-                    }
+                    stageDifferenceNode.classList.remove('hidden');
+                    const stageTheme = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                    const stageClasses = differenceThemeClasses[stageTheme] || differenceThemeClasses.neutral;
+                    stageClasses.forEach(function (cls) {
+                      stageDifferenceNode.classList.add(cls);
+                    });
+                    stageDifferenceNode.textContent =
+                      diff === 0 ? 'OK' : (diff > 0 ? '- ' : '+ ') + formatNumber(Math.abs(diff)) + ' ' + unitShort;
                   }
                 }
               }
