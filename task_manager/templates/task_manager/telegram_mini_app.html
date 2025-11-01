@@ -1357,13 +1357,13 @@
                     <div class="flex items-start gap-3">
                       <span class="text-xl" aria-hidden="true">{{ stage.icon }}</span>
                       <div>
-                        {% if stage.id != 'inventory_ready' %}
+                        {% if stage.id != 'inventory_ready' and stage.id != 'dispatches' %}
                           <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Etapa {{ forloop.counter }}</p>
                         {% endif %}
                         <h4 class="text-base font-semibold text-slate-900">{{ stage.title }}</h4>
                       </div>
                     </div>
-                    {% if stage.id != 'inventory_ready' %}
+                    {% if stage.id != 'inventory_ready' and stage.id != 'dispatches' %}
                       <span
                         class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide{% if stage.tone == 'brand' %} border-amber-300 bg-amber-50 text-amber-700{% elif stage.tone == 'emerald' %} border-emerald-300 bg-emerald-50 text-emerald-700{% elif stage.tone == 'sky' %} border-sky-300 bg-sky-50 text-sky-700{% elif stage.tone == 'slate' %} border-slate-300 bg-slate-100 text-slate-700{% else %} border-slate-200 bg-slate-50 text-slate-600{% endif %}"
                         data-egg-stage-chip
@@ -1666,6 +1666,179 @@
                           {% endfor %}
                         </div>
                       </div>
+                      <div class="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 p-4 text-sm text-emerald-700 shadow-inner shadow-emerald-100/50">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p class="text-sm text-emerald-700">
+                            Usa el inventario disponible para programar un despacho directo a ventas.
+                          </p>
+                          <button
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-emerald-200/70 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
+                            data-dispatch-create-trigger
+                          >
+                            <span aria-hidden="true">➕</span>
+                            Crear despacho
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  {% endif %}
+
+                  {% if stage.id == 'dispatches' %}
+                    <section class="mt-4 space-y-4" data-dispatch-board>
+                      <div class="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                          <span aria-hidden="true">👥</span>
+                          Vendedores activos: {{ stage.vendors_count }}
+                        </span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                          <span aria-hidden="true">📦</span>
+                          Tipos monitoreados: {{ stage.type_catalog|length }}
+                        </span>
+                      </div>
+                      {% if stage.pending_badges %}
+                        <div class="flex flex-wrap gap-2">
+                          {% for badge in stage.pending_badges %}
+                            <span class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
+                              <span aria-hidden="true">⚠️</span>
+                              {{ badge }}
+                            </span>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                      <div class="space-y-3" data-dispatch-list>
+                        {% for dispatch in stage.dispatches %}
+                          <article
+                            class="rounded-2xl border border-slate-200 bg-white/90 p-4 text-sm text-slate-700 shadow-sm shadow-slate-200/50"
+                            data-dispatch-row
+                            data-dispatch-id="{{ dispatch.id }}"
+                            data-dispatch-status="{{ dispatch.status }}"
+                          >
+                            <header class="flex flex-wrap items-start justify-between gap-3">
+                              <div class="space-y-1">
+                                <p class="text-base font-semibold text-slate-900">
+                                  {{ dispatch.vendor.name }}
+                                </p>
+                                <div class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+                                  <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                                    {{ dispatch.vendor.channel }}
+                                  </span>
+                                  <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                                    {{ dispatch.seller }}
+                                  </span>
+                                </div>
+                              </div>
+                              <div class="flex flex-col items-end gap-2 text-right">
+                                <span class="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow shadow-slate-300/70">
+                                  <span aria-hidden="true">📅</span>
+                                  {{ dispatch.scheduled_date_label }}
+                                </span>
+                                <span
+                                  class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if dispatch.status_theme == 'emerald' %}border-emerald-300 bg-emerald-50 text-emerald-700{% elif dispatch.status_theme == 'brand' %}border-amber-300 bg-amber-50 text-amber-700{% elif dispatch.status_theme == 'rose' %}border-rose-300 bg-rose-50 text-rose-600{% elif dispatch.status_theme == 'sky' %}border-sky-300 bg-sky-50 text-sky-700{% else %}border-slate-300 bg-slate-50 text-slate-600{% endif %}"
+                                  data-dispatch-status-chip
+                                  data-dispatch-id="{{ dispatch.id }}"
+                                  data-dispatch-status="{{ dispatch.status }}"
+                                >
+                                  {{ dispatch.status_label }}
+                                </span>
+                              </div>
+                            </header>
+                            <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                              <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
+                                <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Conductor</dt>
+                                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.driver.name }}</dd>
+                                <dd class="text-[11px] text-slate-500">{{ dispatch.driver.phone }}</dd>
+                              </div>
+                              <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
+                                <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vehículo</dt>
+                                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.vehicle.label }}</dd>
+                                <dd class="text-[11px] text-slate-500">Placa {{ dispatch.vehicle.plate }}</dd>
+                              </div>
+                              <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
+                                <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contacto</dt>
+                                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.contact }}</dd>
+                                {% if dispatch.notes %}
+                                  <dd class="mt-1 text-[11px] text-slate-500">
+                                    {{ dispatch.notes }}
+                                  </dd>
+                                {% endif %}
+                              </div>
+                            </dl>
+                            <ul class="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-white/80" data-dispatch-items>
+                                {% for item in dispatch.items %}
+                                  <li
+                                    class="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                                    data-dispatch-item
+                                    data-dispatch-id="{{ dispatch.id }}"
+                                    data-item-type="{{ item.type_id }}"
+                                    data-unit="{{ item.unit }}"
+                                    data-unit-label="{{ item.unit_label }}"
+                                  >
+                                    <div class="flex items-center gap-2">
+                                      <span class="text-sm font-semibold text-slate-900">{{ item.label }}</span>
+                                    </div>
+                                    <div class="text-right text-xs text-slate-500">
+                                      <span class="block text-sm font-semibold text-slate-900">
+                                        <span data-dispatch-item-confirmed>{{ item.confirmed|intcomma }}</span> {{ item.unit_label }}
+                                      </span>
+                                      <span class="inline-flex items-center gap-1 text-[11px]">
+                                        Solicitado: {{ item.requested|intcomma }} {{ item.unit_label }}
+                                        <span
+                                          class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide {% if item.difference %}border-rose-200 bg-rose-50 text-rose-600{% else %}hidden{% endif %}"
+                                          data-dispatch-item-difference
+                                        >
+                                          {% if item.difference %}
+                                            Falta {{ item.difference|intcomma }}
+                                          {% else %}
+                                            Sin ajustes
+                                          {% endif %}
+                                        </span>
+                                      </span>
+                                    </div>
+                                </li>
+                              {% endfor %}
+                            </ul>
+                            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+                              <div class="flex flex-wrap items-center gap-3">
+                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                  Cartones confirmados:
+                                  <span data-dispatch-summary-cartons data-dispatch-id="{{ dispatch.id }}">
+                                    {{ dispatch.totals.confirmed_cartons|intcomma }}
+                                  </span>
+                                </span>
+                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                  Aves confirmadas:
+                                  <span data-dispatch-summary-hens data-dispatch-id="{{ dispatch.id }}">
+                                    {{ dispatch.totals.confirmed_hens|intcomma }}
+                                  </span>
+                                </span>
+                              </div>
+                              <div class="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                                  data-dispatch-detail-trigger
+                                  data-dispatch-id="{{ dispatch.id }}"
+                                >
+                                  Ver detalle
+                                </button>
+                                <button
+                                  type="button"
+                                  class="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-slate-900 shadow shadow-amber-200/60 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                                  data-dispatch-edit-trigger
+                                  data-dispatch-id="{{ dispatch.id }}"
+                                >
+                                  Editar
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        {% empty %}
+                          <div class="rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm text-slate-600">
+                            No hay despachos programados. Usa el botón de crear para iniciar uno.
+                          </div>
+                        {% endfor %}
+                      </div>
                     </section>
                   {% endif %}
 
@@ -1841,6 +2014,12 @@
                       </div>
                     {% elif stage.id == 'inventory_ready' %}
                       {# sin acciones para un card informativo #}
+                    {% elif stage.id == 'dispatches' %}
+                      <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-egg-stage-status>
+                          Gestiona los despachos con los botones del listado.
+                        </p>
+                      </div>
                     {% else %}
                     <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-egg-stage-status>Esperando registro</p>
@@ -1875,6 +2054,475 @@
                   </div>
                 </article>
               {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% with dispatch_summary=telegram_mini_app.egg_workflow.dispatch_summary %}
+          {% if dispatch_summary %}
+            <div class="mt-5 space-y-4" data-dispatch-panels>
+              <article
+                class="hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70"
+                data-dispatch-form-card
+              >
+                <header class="flex items-start justify-between gap-3">
+                  <div class="space-y-1">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-brand">
+                      Programar despacho
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/70"
+                    data-dispatch-close
+                    aria-label="Cerrar panel de gestión de despacho"
+                  >
+                    ✕
+                  </button>
+                </header>
+                <div class="mt-4 space-y-4" data-dispatch-form-container>
+                  <div
+                    class="hidden rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4"
+                    data-dispatch-form
+                    data-dispatch-id="new"
+                    data-dispatch-mode="create"
+                  >
+                    <header class="flex items-start justify-between gap-3">
+                      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nuevo despacho</p>
+                    </header>
+                    <form class="mt-4 space-y-4" data-dispatch-form-body>
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="block text-sm font-semibold text-slate-600">
+                          Fecha programada
+                          <input
+                            type="date"
+                            value="{{ dispatch_summary.form.scheduled_date_value }}"
+                            class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            data-dispatch-input
+                            data-field="scheduled_date"
+                          />
+                        </label>
+                        <label class="block text-sm font-semibold text-slate-600">
+                          Conductor
+                          <select
+                            class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            data-dispatch-input
+                            data-field="driver"
+                          >
+                            {% for driver in dispatch_summary.form.drivers %}
+                              <option value="{{ driver.id }}">{{ driver.name }} · {{ driver.phone }}</option>
+                            {% endfor %}
+                          </select>
+                        </label>
+                        <label class="block text-sm font-semibold text-slate-600">
+                          Vendedor
+                          <select
+                            class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            data-dispatch-input
+                            data-field="vendor"
+                          >
+                            {% for vendor in dispatch_summary.form.vendors %}
+                              <option value="{{ vendor.id }}">{{ vendor.name }} · {{ vendor.channel }}</option>
+                            {% endfor %}
+                          </select>
+                        </label>
+                        <label class="block text-sm font-semibold text-slate-600">
+                          Vehículo
+                          <select
+                            class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            data-dispatch-input
+                            data-field="vehicle"
+                          >
+                            {% for vehicle in dispatch_summary.form.vehicles %}
+                              <option value="{{ vehicle.id }}">{{ vehicle.label }} · {{ vehicle.plate }}</option>
+                            {% endfor %}
+                          </select>
+                        </label>
+                      </div>
+                      <div class="overflow-hidden rounded-2xl border border-slate-200">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+                          <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            <tr>
+                              <th scope="col" class="px-3 py-2 text-left">Tipo</th>
+                              <th scope="col" class="px-3 py-2 text-left">Unidad</th>
+                              <th scope="col" class="px-3 py-2 text-right">Solicitado</th>
+                            </tr>
+                          </thead>
+                          <tbody class="divide-y divide-slate-100">
+                            {% for type_entry in dispatch_summary.form.type_catalog %}
+                              <tr>
+                                <td class="px-3 py-2 text-sm font-semibold text-slate-900">{{ type_entry.label }}</td>
+                                <td class="px-3 py-2 text-xs uppercase tracking-wide text-slate-500">{{ type_entry.unit }}</td>
+                                <td class="px-3 py-2 text-right">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value="0"
+                                    class="w-full rounded-lg border border-slate-200 px-2 py-1 text-right text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                                    data-dispatch-input
+                                    data-field="requested"
+                                    data-type="{{ type_entry.id }}"
+                                    data-unit="{{ type_entry.unit_key }}"
+                                  />
+                                </td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div class="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600" data-dispatch-total-summary>
+                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-eggs data-summary-kind="requested">0 cartones · 0 huevos solicitados</p>
+                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-hens data-summary-kind="requested">0 aves solicitadas</p>
+                      </div>
+                      <label class="block text-sm font-semibold text-slate-600">
+                        Notas para transporte
+                        <textarea
+                          rows="3"
+                          placeholder="Detalla puntos de entrega, ventanas horarias o restricciones."
+                          class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                          data-dispatch-input
+                          data-field="notes"
+                        ></textarea>
+                      </label>
+                      <div class="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-300 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/70"
+                          data-dispatch-close
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-900 shadow shadow-amber-200/70 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                          data-dispatch-submit
+                        >
+                          Guardar borrador
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                  {% for dispatch in dispatch_summary.dispatches %}
+                    <div
+                      class="hidden rounded-2xl border border-slate-200 bg-slate-50/60 p-4"
+                      data-dispatch-form
+                      data-dispatch-id="{{ dispatch.id }}"
+                      data-dispatch-mode="edit"
+                    >
+                      <header class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            Editar despacho · {{ dispatch.code }}
+                          </p>
+                          <h5 class="text-base font-semibold text-slate-900">{{ dispatch.vendor.name }}</h5>
+                        </div>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow shadow-slate-200/70">
+                          {{ dispatch.scheduled_date_label }}
+                        </span>
+                      </header>
+                      <form class="mt-4 space-y-4" data-dispatch-form-body>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          <label class="block text-sm font-semibold text-slate-600">
+                            Fecha programada
+                            <input
+                              type="date"
+                              value="{{ dispatch.scheduled_date_iso }}"
+                              class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                              data-dispatch-input
+                              data-field="scheduled_date"
+                            />
+                          </label>
+                          <label class="block text-sm font-semibold text-slate-600">
+                            Conductor
+                            <select
+                              class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                              data-dispatch-input
+                              data-field="driver"
+                            >
+                              {% for driver in dispatch_summary.form.drivers %}
+                                <option value="{{ driver.id }}"{% if driver.id == dispatch.driver.id %} selected{% endif %}>
+                                  {{ driver.name }} · {{ driver.phone }}
+                                </option>
+                              {% endfor %}
+                            </select>
+                          </label>
+                          <label class="block text-sm font-semibold text-slate-600">
+                            Vendedor
+                            <select
+                              class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                              data-dispatch-input
+                              data-field="vendor"
+                            >
+                              {% for vendor in dispatch_summary.form.vendors %}
+                                <option value="{{ vendor.id }}"{% if vendor.id == dispatch.vendor.id %} selected{% endif %}>
+                                  {{ vendor.name }} · {{ vendor.channel }}
+                                </option>
+                              {% endfor %}
+                            </select>
+                          </label>
+                          <label class="block text-sm font-semibold text-slate-600">
+                            Vehículo
+                            <select
+                              class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                              data-dispatch-input
+                              data-field="vehicle"
+                            >
+                              {% for vehicle in dispatch_summary.form.vehicles %}
+                                <option value="{{ vehicle.id }}"{% if vehicle.id == dispatch.vehicle.id %} selected{% endif %}>
+                                  {{ vehicle.label }} · {{ vehicle.plate }}
+                                </option>
+                              {% endfor %}
+                            </select>
+                          </label>
+                        </div>
+                        <div class="overflow-hidden rounded-2xl border border-slate-200">
+                          <table class="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+                            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              <tr>
+                                <th scope="col" class="px-3 py-2 text-left">Tipo</th>
+                                <th scope="col" class="px-3 py-2 text-left">Unidad</th>
+                                <th scope="col" class="px-3 py-2 text-right">Solicitado</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                              {% for row in dispatch.catalog_rows %}
+                                <tr>
+                                  <td class="px-3 py-2 text-sm font-semibold text-slate-900">{{ row.label }}</td>
+                                  <td class="px-3 py-2 text-xs uppercase tracking-wide text-slate-500">{{ row.unit_label }}</td>
+                                  <td class="px-3 py-2 text-right">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value="{{ row.requested }}"
+                                      class="w-full rounded-lg border border-slate-200 px-2 py-1 text-right text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                                      data-dispatch-input
+                                      data-field="requested"
+                                      data-type="{{ row.type_id }}"
+                                      data-unit="{{ row.unit }}"
+                                    />
+                                  </td>
+                                </tr>
+                              {% endfor %}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600" data-dispatch-total-summary>
+                          <p class="text-sm font-semibold text-slate-900" data-dispatch-total-eggs data-summary-kind="requested">0 cartones · 0 huevos solicitados</p>
+                          <p class="text-sm font-semibold text-slate-900" data-dispatch-total-hens data-summary-kind="requested">0 aves solicitadas</p>
+                    </div>
+                    <label class="block text-sm font-semibold text-slate-600">
+                      Notas para transporte
+                      <textarea
+                        rows="3"
+                        class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            data-dispatch-input
+                            data-field="notes"
+                          >{{ dispatch.notes }}</textarea>
+                        </label>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-300 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/70"
+                            data-dispatch-close
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-900 shadow shadow-amber-200/70 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                            data-dispatch-submit
+                          >
+                            Guardar cambios
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  {% endfor %}
+                </div>
+              </article>
+
+              <article
+                class="hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70"
+                data-dispatch-detail-card
+              >
+                <header class="flex items-start justify-between gap-3">
+                  <div class="space-y-1">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-brand">
+                      Confirmar despacho
+                    </p>
+                    <h4 class="text-lg font-semibold text-slate-900">Detalle de envío</h4>
+                    <p class="text-sm text-slate-600">
+                      Revisa cantidades finales antes de liberar el transporte.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/70"
+                    data-dispatch-close
+                    aria-label="Cerrar panel de detalle de despacho"
+                  >
+                    ✕
+                  </button>
+                </header>
+                <div class="mt-4 space-y-4" data-dispatch-detail-container>
+                  {% for dispatch in dispatch_summary.dispatches %}
+                    <section
+                      class="hidden rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                      data-dispatch-detail
+                      data-dispatch-id="{{ dispatch.id }}"
+                      data-dispatch-mode="detail"
+                      data-dispatch-status="{{ dispatch.status }}"
+                    >
+                      <header class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            {{ dispatch.code }}
+                          </p>
+                          <h5 class="text-base font-semibold text-slate-900">
+                            {{ dispatch.vendor.name }}
+                          </h5>
+                          <p class="text-sm text-slate-600">
+                            {{ dispatch.vendor.channel }} · {{ dispatch.seller }}
+                          </p>
+                        </div>
+                        <div class="flex flex-col items-end gap-2 text-right">
+                          <span class="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow shadow-slate-200/70">
+                            {{ dispatch.scheduled_date_label }}
+                          </span>
+                          <span
+                            class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if dispatch.status_theme == 'emerald' %}border-emerald-300 bg-emerald-50 text-emerald-700{% elif dispatch.status_theme == 'brand' %}border-amber-300 bg-amber-50 text-amber-700{% elif dispatch.status_theme == 'rose' %}border-rose-300 bg-rose-50 text-rose-600{% elif dispatch.status_theme == 'sky' %}border-sky-300 bg-sky-50 text-sky-700{% else %}border-slate-300 bg-slate-50 text-slate-600{% endif %}"
+                            data-dispatch-status-chip
+                            data-dispatch-id="{{ dispatch.id }}"
+                            data-dispatch-status="{{ dispatch.status }}"
+                          >
+                            {{ dispatch.status_label }}
+                          </span>
+                        </div>
+                      </header>
+                      <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                        <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
+                          <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Conductor</dt>
+                          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.driver.name }}</dd>
+                          <dd class="text-[11px] text-slate-500">{{ dispatch.driver.phone }}</dd>
+                        </div>
+                        <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
+                          <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vehículo</dt>
+                          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.vehicle.label }}</dd>
+                          <dd class="text-[11px] text-slate-500">Placa {{ dispatch.vehicle.plate }}</dd>
+                        </div>
+                        <div class="rounded-xl border border-slate-100 bg-white/80 p-3">
+                          <dt class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contacto logística</dt>
+                          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ dispatch.contact }}</dd>
+                          {% if dispatch.notes %}
+                            <dd class="mt-1 text-[11px] text-slate-500">Nota: {{ dispatch.notes }}</dd>
+                          {% endif %}
+                        </div>
+                      </dl>
+                      <div class="mt-3">
+                        <label class="block text-sm font-semibold text-slate-600">
+                          <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Estado del despacho</span>
+                          <select
+                            class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            data-dispatch-status-input
+                            data-dispatch-id="{{ dispatch.id }}"
+                          >
+                            {% for option in dispatch_summary.status_options %}
+                              <option value="{{ option.id }}"{% if option.id == dispatch.status %} selected{% endif %}>
+                                {{ option.label }}
+                              </option>
+                            {% endfor %}
+                          </select>
+                        </label>
+                      </div>
+                      <div class="overflow-hidden rounded-2xl border border-slate-200">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm text-slate-700">
+                          <thead class="bg-slate-100 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            <tr>
+                              <th scope="col" class="px-3 py-2 text-left">Tipo</th>
+                              <th scope="col" class="px-3 py-2 text-right">Solicitado</th>
+                              <th scope="col" class="px-3 py-2 text-right">Confirmado</th>
+                              <th scope="col" class="px-3 py-2 text-right">Pendiente</th>
+                            </tr>
+                          </thead>
+                          <tbody class="divide-y divide-slate-100">
+                            {% for row in dispatch.catalog_rows %}
+                              <tr
+                                data-dispatch-detail-row
+                                data-requested="{{ row.requested }}"
+                                data-unit="{{ row.unit }}"
+                                data-unit-label="{{ row.unit_label }}"
+                                data-item-type="{{ row.type_id }}"
+                              >
+                                <td class="px-3 py-2 text-sm font-semibold text-slate-900">{{ row.label }}</td>
+                                <td class="px-3 py-2 text-right">
+                                  <span class="font-semibold text-slate-900">{{ row.requested|intcomma }}</span>
+                                  <span class="text-xs text-slate-500">{{ row.unit_label }}</span>
+                                </td>
+                                <td class="px-3 py-2 text-right">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value="{{ row.confirmed }}"
+                                    class="w-full rounded-lg border border-slate-200 px-2 py-1 text-right text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                                    data-dispatch-input
+                                    data-field="confirmed"
+                                    data-type="{{ row.type_id }}"
+                                    data-unit="{{ row.unit }}"
+                                  />
+                                </td>
+                                <td class="px-3 py-2 text-right">
+                                  <span
+                                    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                                    data-dispatch-difference
+                                  >
+                                    —
+                                  </span>
+                                </td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div class="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-3 text-xs text-slate-600">
+                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-eggs data-summary-kind="confirmed">
+                          0 cartones · 0 huevos confirmados
+                        </p>
+                        <p class="text-sm font-semibold text-slate-900" data-dispatch-total-hens data-summary-kind="confirmed">
+                          0 aves confirmadas
+                        </p>
+                        <label class="block text-sm font-semibold text-slate-600">
+                          Notas adicionales
+                          <textarea
+                            rows="3"
+                            class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                            placeholder="Registra novedades del cargue o ajustes finales antes de despachar."
+                            data-dispatch-detail-notes
+                          ></textarea>
+                        </label>
+                      </div>
+                      <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-300 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200/70"
+                          data-dispatch-close
+                        >
+                          Volver
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-emerald-200/70 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
+                          data-dispatch-confirm
+                        >
+                          Confirmar salida
+                        </button>
+                      </div>
+                    </section>
+                  {% endfor %}
+                </div>
+              </article>
             </div>
           {% endif %}
         {% endwith %}
@@ -3992,6 +4640,78 @@
             ? Number(inspectionSummaryNode.getAttribute('data-expected-cartons')) || 0
             : 0;
 
+        const dispatchStageCard = document.querySelector('[data-egg-stage-card][data-egg-stage="dispatches"]');
+        const dispatchFormCard = document.querySelector('[data-dispatch-form-card]');
+        const dispatchDetailCard = document.querySelector('[data-dispatch-detail-card]');
+        const dispatchFormContainer = dispatchFormCard
+          ? dispatchFormCard.querySelector('[data-dispatch-form-container]')
+          : null;
+        const dispatchDetailContainer = dispatchDetailCard
+          ? dispatchDetailCard.querySelector('[data-dispatch-detail-container]')
+          : null;
+        const dispatchCreateTriggers = Array.prototype.slice.call(
+          document.querySelectorAll('[data-dispatch-create-trigger]')
+        );
+        const dispatchEditTriggers = Array.prototype.slice.call(
+          document.querySelectorAll('[data-dispatch-edit-trigger]')
+        );
+        const dispatchDetailTriggers = Array.prototype.slice.call(
+          document.querySelectorAll('[data-dispatch-detail-trigger]')
+        );
+        const dispatchCloseTriggers = Array.prototype.slice.call(document.querySelectorAll('[data-dispatch-close]'));
+        const dispatchSubmitButtons = Array.prototype.slice.call(document.querySelectorAll('[data-dispatch-submit]'));
+        const dispatchConfirmButtons = Array.prototype.slice.call(document.querySelectorAll('[data-dispatch-confirm]'));
+        const dispatchCartonsPerPack =
+          eggWorkflow && typeof eggWorkflow.cartons_per_pack === 'number' ? eggWorkflow.cartons_per_pack : 30;
+        const dispatchFormPanels = dispatchFormContainer
+          ? Array.prototype.slice.call(dispatchFormContainer.querySelectorAll('[data-dispatch-form]'))
+          : [];
+        const dispatchDetailPanels = dispatchDetailContainer
+          ? Array.prototype.slice.call(dispatchDetailContainer.querySelectorAll('[data-dispatch-detail]'))
+          : [];
+        const dispatchSummary = eggWorkflow && eggWorkflow.dispatch_summary ? eggWorkflow.dispatch_summary : null;
+        const dispatchStatusOptions =
+          dispatchSummary && Array.isArray(dispatchSummary.status_options) ? dispatchSummary.status_options : [];
+        const dispatchStatusMap = {};
+        dispatchStatusOptions.forEach(function (option) {
+          if (option && option.id) {
+            dispatchStatusMap[option.id] = option;
+          }
+        });
+        const statusThemeClasses = {
+          slate: ['border-slate-300', 'bg-slate-50', 'text-slate-600'],
+          brand: ['border-amber-300', 'bg-amber-50', 'text-amber-700'],
+          rose: ['border-rose-300', 'bg-rose-50', 'text-rose-600'],
+          emerald: ['border-emerald-300', 'bg-emerald-50', 'text-emerald-700'],
+          sky: ['border-sky-300', 'bg-sky-50', 'text-sky-700'],
+        };
+        const allStatusThemeClasses = [];
+        Object.keys(statusThemeClasses).forEach(function (key) {
+          const themeClasses = statusThemeClasses[key];
+          themeClasses.forEach(function (cls) {
+            if (allStatusThemeClasses.indexOf(cls) === -1) {
+              allStatusThemeClasses.push(cls);
+            }
+          });
+        });
+        const differenceThemeClasses = {
+          positive: ['border-rose-200', 'bg-rose-50', 'text-rose-600'],
+          negative: ['border-amber-200', 'bg-amber-50', 'text-amber-600'],
+          neutral: ['border-emerald-200', 'bg-emerald-50', 'text-emerald-600'],
+        };
+        const allDifferenceThemeClasses = [];
+        Object.keys(differenceThemeClasses).forEach(function (key) {
+          const diffClasses = differenceThemeClasses[key];
+          diffClasses.forEach(function (cls) {
+            if (allDifferenceThemeClasses.indexOf(cls) === -1) {
+              allDifferenceThemeClasses.push(cls);
+            }
+          });
+        });
+        const dispatchStatusSelects = Array.prototype.slice.call(
+          document.querySelectorAll('[data-dispatch-status-input]')
+        );
+
         const eggStageState = {};
         let highlightedStageId = null;
         let stageHighlightResetTimer = null;
@@ -4112,6 +4832,255 @@
             if (transportSuccessText) {
               transportSuccessText.textContent = '';
             }
+          }
+        }
+
+        function focusDispatchCard(cardNode) {
+          if (!cardNode) {
+            return;
+          }
+          if (typeof cardNode.scrollIntoView === 'function') {
+            cardNode.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            });
+          }
+        }
+
+        function hideDispatchForms() {
+          if (!dispatchFormContainer) {
+            return;
+          }
+          Array.prototype.slice
+            .call(dispatchFormContainer.querySelectorAll('[data-dispatch-form]'))
+            .forEach(function (panel) {
+              panel.classList.add('hidden');
+            });
+        }
+
+        function hideDispatchDetails() {
+          if (!dispatchDetailContainer) {
+            return;
+          }
+          Array.prototype.slice
+            .call(dispatchDetailContainer.querySelectorAll('[data-dispatch-detail]'))
+            .forEach(function (panel) {
+              panel.classList.add('hidden');
+            });
+        }
+
+        function showDispatchForm(dispatchId) {
+          if (!dispatchFormCard || !dispatchFormContainer) {
+            return;
+          }
+          const targetPanel = dispatchFormContainer.querySelector(
+            '[data-dispatch-form][data-dispatch-id="' + dispatchId + '"]'
+          );
+          if (!targetPanel) {
+            return;
+          }
+          if (dispatchDetailCard) {
+            dispatchDetailCard.classList.add('hidden');
+          }
+          hideDispatchDetails();
+          hideDispatchForms();
+          dispatchFormCard.classList.remove('hidden');
+          targetPanel.classList.remove('hidden');
+          focusDispatchCard(dispatchFormCard);
+          updateDispatchPanelTotals(targetPanel);
+        }
+
+        function showDispatchDetail(dispatchId) {
+          if (!dispatchDetailCard || !dispatchDetailContainer) {
+            return;
+          }
+          const targetPanel = dispatchDetailContainer.querySelector(
+            '[data-dispatch-detail][data-dispatch-id="' + dispatchId + '"]'
+          );
+          if (!targetPanel) {
+            return;
+          }
+          if (dispatchFormCard) {
+            dispatchFormCard.classList.add('hidden');
+          }
+          hideDispatchForms();
+          hideDispatchDetails();
+          dispatchDetailCard.classList.remove('hidden');
+          targetPanel.classList.remove('hidden');
+          updateDispatchPanelTotals(targetPanel);
+          focusDispatchCard(dispatchDetailCard);
+        }
+
+        function closeDispatchCard(cardNode) {
+          if (!cardNode) {
+            return;
+          }
+          if (cardNode === dispatchFormCard) {
+            hideDispatchForms();
+          }
+          if (cardNode === dispatchDetailCard) {
+            hideDispatchDetails();
+          }
+          cardNode.classList.add('hidden');
+          if (dispatchStageCard) {
+            focusDispatchCard(dispatchStageCard);
+          }
+        }
+
+        function updateDispatchPanelTotals(panel) {
+          if (!panel) {
+            return;
+          }
+          const mode = panel.getAttribute('data-dispatch-mode') || '';
+          const summaryField = mode === 'create' || mode === 'edit' ? 'requested' : 'confirmed';
+          const eggsNode = panel.querySelector('[data-dispatch-total-eggs]');
+          const hensNode = panel.querySelector('[data-dispatch-total-hens]');
+          const inputs = Array.prototype.slice.call(
+            panel.querySelectorAll('[data-dispatch-input][data-field="' + summaryField + '"]')
+          );
+          let totalCartons = 0;
+          let totalHens = 0;
+          inputs.forEach(function (input) {
+            const unit = input.getAttribute('data-unit') || 'cartons';
+            const value = normalizeNumber(input.value);
+            const safeValue = value !== null && value >= 0 ? value : 0;
+            if (unit === 'hens') {
+              totalHens += safeValue;
+            } else {
+              totalCartons += safeValue;
+            }
+          });
+          if (eggsNode) {
+            const eggs = totalCartons * dispatchCartonsPerPack;
+            const summaryKind = eggsNode.getAttribute('data-summary-kind') || summaryField;
+            const suffix = summaryKind === 'requested' ? ' solicitados' : ' confirmados';
+            eggsNode.textContent =
+              formatNumber(totalCartons) + ' cartones · ' + formatNumber(eggs) + ' huevos' + suffix;
+          }
+          if (hensNode) {
+            const summaryKind = hensNode.getAttribute('data-summary-kind') || summaryField;
+            const suffix = summaryKind === 'requested' ? ' solicitadas' : ' confirmadas';
+            hensNode.textContent = formatNumber(totalHens) + ' aves' + suffix;
+          }
+          if (mode !== 'create' && mode !== 'edit') {
+            const dispatchId = panel.getAttribute('data-dispatch-id') || '';
+            const detailRows = Array.prototype.slice.call(panel.querySelectorAll('[data-dispatch-detail-row]'));
+            detailRows.forEach(function (row) {
+              const requestedValue = normalizeNumber(row.getAttribute('data-requested'));
+              const requested = requestedValue !== null && requestedValue >= 0 ? requestedValue : 0;
+              const unitLabel = row.getAttribute('data-unit-label') || '';
+              const itemType = row.getAttribute('data-item-type') || '';
+              const input = row.querySelector('[data-dispatch-input][data-field="confirmed"]');
+              const confirmedValue = input ? normalizeNumber(input.value) : null;
+              const confirmed = confirmedValue !== null && confirmedValue >= 0 ? confirmedValue : 0;
+              const diff = requested - confirmed;
+              const differenceNode = row.querySelector('[data-dispatch-difference]');
+              if (differenceNode) {
+                differenceNode.classList.remove('hidden');
+                allDifferenceThemeClasses.forEach(function (cls) {
+                  differenceNode.classList.remove(cls);
+                });
+                let themeKey = 'neutral';
+                let textContent = 'Sin ajustes';
+                if (diff > 0) {
+                  themeKey = 'positive';
+                  textContent = 'Faltan ' + formatNumber(diff) + ' ' + unitLabel;
+                } else if (diff < 0) {
+                  themeKey = 'negative';
+                  textContent = 'Sobran ' + formatNumber(Math.abs(diff)) + ' ' + unitLabel;
+                }
+                const classes = differenceThemeClasses[themeKey] || differenceThemeClasses.neutral;
+                classes.forEach(function (cls) {
+                  differenceNode.classList.add(cls);
+                });
+                differenceNode.textContent = textContent;
+              }
+              if (dispatchId && itemType) {
+                const stageItem = document.querySelector(
+                  '[data-dispatch-item][data-dispatch-id="' + dispatchId + '"][data-item-type="' + itemType + '"]'
+                );
+                if (stageItem) {
+                  const confirmedNode = stageItem.querySelector('[data-dispatch-item-confirmed]');
+                  if (confirmedNode) {
+                    confirmedNode.textContent = formatNumber(confirmed);
+                  }
+                  const stageDifferenceNode = stageItem.querySelector('[data-dispatch-item-difference]');
+                  if (stageDifferenceNode) {
+                    allDifferenceThemeClasses.forEach(function (cls) {
+                      stageDifferenceNode.classList.remove(cls);
+                    });
+                    if (diff === 0) {
+                      stageDifferenceNode.classList.add('hidden');
+                      stageDifferenceNode.textContent = 'Sin ajustes';
+                    } else {
+                      stageDifferenceNode.classList.remove('hidden');
+                      const stageTheme = diff > 0 ? 'positive' : 'negative';
+                      const stageClasses = differenceThemeClasses[stageTheme] || differenceThemeClasses.neutral;
+                      stageClasses.forEach(function (cls) {
+                        stageDifferenceNode.classList.add(cls);
+                      });
+                      stageDifferenceNode.textContent =
+                        (diff > 0 ? 'Faltan ' : 'Sobran ') + formatNumber(Math.abs(diff)) + ' ' + unitLabel;
+                    }
+                  }
+                }
+              }
+            });
+            if (dispatchId) {
+              const summaryCartonsNode = document.querySelector(
+                '[data-dispatch-summary-cartons][data-dispatch-id="' + dispatchId + '"]'
+              );
+              if (summaryCartonsNode) {
+                summaryCartonsNode.textContent = formatNumber(totalCartons);
+              }
+              const summaryHensNode = document.querySelector(
+                '[data-dispatch-summary-hens][data-dispatch-id="' + dispatchId + '"]'
+              );
+              if (summaryHensNode) {
+                summaryHensNode.textContent = formatNumber(totalHens);
+              }
+            }
+          }
+        }
+
+        function updateAllDispatchTotals() {
+          dispatchFormPanels.forEach(function (panel) {
+            updateDispatchPanelTotals(panel);
+          });
+          dispatchDetailPanels.forEach(function (panel) {
+            updateDispatchPanelTotals(panel);
+          });
+        }
+
+        function applyDispatchStatusVisuals(dispatchId, statusId) {
+          if (!dispatchId) {
+            return;
+          }
+          const statusData = dispatchStatusMap[statusId] || null;
+          const statusLabel =
+            statusData && statusData.label ? statusData.label : statusId ? statusId.toUpperCase() : '—';
+          const theme = statusData && statusData.theme ? statusData.theme : 'slate';
+          const themeClasses = statusThemeClasses[theme] || statusThemeClasses.slate;
+          const chips = Array.prototype.slice.call(
+            document.querySelectorAll('[data-dispatch-status-chip][data-dispatch-id="' + dispatchId + '"]')
+          );
+          chips.forEach(function (chip) {
+            allStatusThemeClasses.forEach(function (cls) {
+              chip.classList.remove(cls);
+            });
+            themeClasses.forEach(function (cls) {
+              chip.classList.add(cls);
+            });
+            chip.textContent = statusLabel;
+            chip.setAttribute('data-dispatch-status', statusId);
+          });
+          const listRow = document.querySelector('[data-dispatch-row][data-dispatch-id="' + dispatchId + '"]');
+          if (listRow) {
+            listRow.setAttribute('data-dispatch-status', statusId);
+          }
+          const detailPanel = document.querySelector('[data-dispatch-detail][data-dispatch-id="' + dispatchId + '"]');
+          if (detailPanel) {
+            detailPanel.setAttribute('data-dispatch-status', statusId);
           }
         }
 
@@ -5017,11 +5986,116 @@
                   console.info('No se pudo enviar el resumen simulado a Telegram:', error);
                 }
               } else {
-                console.info('Registro guardado:', section, getProductionSummaryLines());
+              console.info('Registro guardado:', section, getProductionSummaryLines());
               }
           });
         });
       }
+
+        dispatchCreateTriggers.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            showDispatchForm('new');
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+              telegram.HapticFeedback.selectionChanged();
+            }
+          });
+        });
+
+        dispatchEditTriggers.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const dispatchId = button.getAttribute('data-dispatch-id');
+            if (dispatchId) {
+              showDispatchForm(dispatchId);
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
+              }
+            }
+          });
+        });
+
+        dispatchDetailTriggers.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const dispatchId = button.getAttribute('data-dispatch-id');
+            if (dispatchId) {
+              showDispatchDetail(dispatchId);
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
+              }
+            }
+          });
+        });
+
+        dispatchCloseTriggers.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const formCard = button.closest('[data-dispatch-form-card]');
+            const detailCard = button.closest('[data-dispatch-detail-card]');
+            const cardNode = formCard || detailCard;
+            if (cardNode) {
+              closeDispatchCard(cardNode);
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+                telegram.HapticFeedback.impactOccurred('soft');
+              }
+            }
+          });
+        });
+
+        dispatchSubmitButtons.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            if (typeof button.blur === 'function') {
+              button.blur();
+            }
+            const formPanel = button.closest('[data-dispatch-form]');
+            const dispatchId = formPanel ? formPanel.getAttribute('data-dispatch-id') || 'new' : 'new';
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('success');
+            }
+            console.info('Despacho guardado (simulado):', dispatchId);
+          });
+        });
+
+        dispatchConfirmButtons.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            if (typeof button.blur === 'function') {
+              button.blur();
+            }
+            const detailPanel = button.closest('[data-dispatch-detail]');
+            const dispatchId = detailPanel ? detailPanel.getAttribute('data-dispatch-id') || '' : '';
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('success');
+            }
+            console.info('Despacho confirmado (simulado):', dispatchId);
+          });
+        });
+
+        dispatchStatusSelects.forEach(function (select) {
+          const dispatchId = select.getAttribute('data-dispatch-id');
+          if (dispatchId) {
+            applyDispatchStatusVisuals(dispatchId, select.value);
+          }
+          select.addEventListener('change', function () {
+            const currentId = select.getAttribute('data-dispatch-id');
+            if (currentId) {
+              applyDispatchStatusVisuals(currentId, select.value);
+            }
+          });
+        });
+
+        const dispatchInputNodes = Array.prototype.slice.call(document.querySelectorAll('[data-dispatch-input]'));
+        dispatchInputNodes.forEach(function (input) {
+          input.addEventListener('input', function () {
+            const panel =
+              input.closest('[data-dispatch-form]') || input.closest('[data-dispatch-detail]');
+            updateDispatchPanelTotals(panel);
+          });
+        });
+
+        updateAllDispatchTotals();
 
         if (transportCard && transportForm) {
           if (expectedDateField && !expectedDateField.value && transportDefaultDate) {

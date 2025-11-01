@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Iterable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 from urllib.parse import parse_qsl
 
 from django.conf import settings
@@ -642,6 +642,204 @@ def _build_telegram_mini_app_payload(
         "alerts": inventory_alerts,
     }
 
+    dispatch_type_catalog = [
+        {"id": "jumbo", "label": "Jumbo", "unit": _("cartones"), "unit_key": "cartons"},
+        {"id": "aaa", "label": "AAA", "unit": _("cartones"), "unit_key": "cartons"},
+        {"id": "aa", "label": "AA", "unit": _("cartones"), "unit_key": "cartons"},
+        {"id": "a", "label": "A", "unit": _("cartones"), "unit_key": "cartons"},
+        {"id": "b", "label": "B", "unit": _("cartones"), "unit_key": "cartons"},
+        {"id": "c", "label": "C", "unit": _("cartones"), "unit_key": "cartons"},
+        {"id": "live_hens", "label": _("Gallinas vivas"), "unit": _("aves"), "unit_key": "hens"},
+        {"id": "processed_hens", "label": _("Gallinas faenadas"), "unit": _("aves"), "unit_key": "hens"},
+    ]
+
+    dispatch_vendor_options = [
+        {"id": "vendor-plaza", "name": "Distribuidora La Plaza", "channel": _("Mayorista")},
+        {"id": "vendor-norte", "name": "Mercados del Norte", "channel": _("Retail")},
+        {"id": "vendor-fresco", "name": "Huevos Frescos del Centro", "channel": _("Mayorista")},
+    ]
+
+    dispatch_driver_options = [
+        {"id": "driver-carlos", "name": "Carlos Pérez", "phone": "+57 320 555 2211"},
+        {"id": "driver-andrea", "name": "Andrea Ríos", "phone": "+57 301 884 7733"},
+        {"id": "driver-luis", "name": "Luis Martínez", "phone": "+57 314 992 1150"},
+    ]
+
+    dispatch_vehicle_options = [
+        {"id": "vehicle-npr-01", "label": _("Camión NPR refrigerado"), "plate": "TES-123"},
+        {"id": "vehicle-npr-02", "label": _("Camión NPR seco"), "plate": "GDF-908"},
+        {"id": "vehicle-van-01", "label": _("Van refrigerada"), "plate": "XTY-445"},
+    ]
+
+    dispatch_status_palette = {
+        "planned": {"label": _("Programado"), "theme": "slate"},
+        "loading": {"label": _("Cargando"), "theme": "brand"},
+        "issue": {"label": _("Imprevisto"), "theme": "rose"},
+        "completed": {"label": _("Despachado"), "theme": "emerald"},
+    }
+
+    dispatch_status_options = [
+        {"id": status_key, "label": status_data["label"], "theme": status_data["theme"]}
+        for status_key, status_data in dispatch_status_palette.items()
+    ]
+
+    dispatches: list[dict[str, Any]] = [
+        {
+            "id": "dispatch-dlp-2024-11-05",
+            "code": "DSP-241105-A",
+            "vendor": dispatch_vendor_options[0],
+            "seller": "Laura Gómez",
+            "scheduled_date_iso": tomorrow.isoformat(),
+            "scheduled_date_label": date_format(tomorrow, "DATE_FORMAT"),
+            "status": "loading",
+            "driver": dispatch_driver_options[0],
+            "vehicle": dispatch_vehicle_options[0],
+            "contact": "+57 315 774 0021",
+            "notes": _("Verificar temperatura de la cava antes de salir."),
+            "items": [
+                {"type_id": "aaa", "label": "AAA", "unit": "cartons", "requested": 90, "confirmed": 90},
+                {"type_id": "aa", "label": "AA", "unit": "cartons", "requested": 60, "confirmed": 58},
+                {"type_id": "processed_hens", "label": _("Gallinas faenadas"), "unit": "hens", "requested": 120, "confirmed": 118},
+            ],
+        },
+        {
+            "id": "dispatch-mn-2024-11-06",
+            "code": "DSP-241106-B",
+            "vendor": dispatch_vendor_options[1],
+            "seller": "Juan Rodríguez",
+            "scheduled_date_iso": day_plus_2.isoformat(),
+            "scheduled_date_label": date_format(day_plus_2, "DATE_FORMAT"),
+            "status": "planned",
+            "driver": dispatch_driver_options[1],
+            "vehicle": dispatch_vehicle_options[2],
+            "contact": "+57 321 660 4412",
+            "notes": _("Coordinar entrega segmentada: primero retail, luego grandes superficies."),
+            "items": [
+                {"type_id": "jumbo", "label": "Jumbo", "unit": "cartons", "requested": 40, "confirmed": 0},
+                {"type_id": "aaa", "label": "AAA", "unit": "cartons", "requested": 32, "confirmed": 0},
+                {"type_id": "live_hens", "label": _("Gallinas vivas"), "unit": "hens", "requested": 80, "confirmed": 0},
+            ],
+        },
+        {
+            "id": "dispatch-hfc-2024-11-04",
+            "code": "DSP-241104-C",
+            "vendor": dispatch_vendor_options[2],
+            "seller": "María Fernanda Torres",
+            "scheduled_date_iso": today.isoformat(),
+            "scheduled_date_label": date_format(today, "DATE_FORMAT"),
+            "status": "issue",
+            "driver": dispatch_driver_options[2],
+            "vehicle": dispatch_vehicle_options[1],
+            "contact": "+57 312 223 1199",
+            "notes": _("Confirmar recepción con turno de la tarde."),
+            "items": [
+                {"type_id": "aa", "label": "AA", "unit": "cartons", "requested": 48, "confirmed": 48},
+                {"type_id": "a", "label": "A", "unit": "cartons", "requested": 36, "confirmed": 36},
+                {"type_id": "b", "label": "B", "unit": "cartons", "requested": 24, "confirmed": 24},
+                {"type_id": "live_hens", "label": _("Gallinas vivas"), "unit": "hens", "requested": 60, "confirmed": 60},
+            ],
+        },
+    ]
+
+    total_confirmed_cartons = 0
+    total_confirmed_hens = 0
+    pending_cartons = 0
+    pending_hens = 0
+    unique_vendor_ids: set[str] = set()
+
+    for dispatch in dispatches:
+        vendor = dispatch["vendor"]
+        unique_vendor_ids.add(vendor["id"])
+        status_key = dispatch["status"]
+        status_palette = dispatch_status_palette.get(status_key, dispatch_status_palette["planned"])
+        dispatch["status_label"] = status_palette["label"]
+        dispatch["status_theme"] = status_palette["theme"]
+
+        requested_cartons = 0
+        confirmed_cartons = 0
+        requested_hens = 0
+        confirmed_hens = 0
+        item_map: dict[str, dict[str, Any]] = {}
+
+        for item in dispatch["items"]:
+            unit = item["unit"]
+            requested = item["requested"]
+            confirmed = item["confirmed"]
+            difference = max(requested - confirmed, 0)
+            item["difference"] = difference
+            item_map[item["type_id"]] = item
+            if unit == "cartons":
+                item["unit_label"] = _("cartones")
+                requested_cartons += requested
+                confirmed_cartons += confirmed
+                pending_cartons += difference
+            else:
+                item["unit_label"] = _("aves")
+                requested_hens += requested
+                confirmed_hens += confirmed
+                pending_hens += difference
+
+        dispatch["totals"] = {
+            "requested_cartons": requested_cartons,
+            "confirmed_cartons": confirmed_cartons,
+            "requested_hens": requested_hens,
+            "confirmed_hens": confirmed_hens,
+        }
+        catalog_rows: list[dict[str, Any]] = []
+        for catalog_entry in dispatch_type_catalog:
+            type_id = catalog_entry["id"]
+            catalog_unit = catalog_entry["unit_key"]
+            item = item_map.get(type_id)
+            requested_value = item["requested"] if item else 0
+            confirmed_value = item["confirmed"] if item else 0
+            difference_value = item["difference"] if item else 0
+            catalog_rows.append(
+                {
+                    "type_id": type_id,
+                    "label": catalog_entry["label"],
+                    "unit_label": catalog_entry["unit"],
+                    "unit": catalog_unit,
+                    "requested": requested_value,
+                    "confirmed": confirmed_value,
+                    "difference": difference_value,
+                }
+            )
+        dispatch["catalog_rows"] = catalog_rows
+        dispatch["item_map"] = item_map
+        total_confirmed_cartons += confirmed_cartons
+        total_confirmed_hens += confirmed_hens
+
+    dispatch_stage_metrics = [
+        {"label": _("Despachos programados"), "value": len(dispatches), "unit": _("rutas")},
+        {"label": _("Cartones confirmados"), "value": total_confirmed_cartons, "unit": _("cartones")},
+        {"label": _("Aves confirmadas"), "value": total_confirmed_hens, "unit": _("aves")},
+    ]
+
+    pending_badges = []
+    if pending_cartons:
+        pending_badges.append(_("Faltan %(value)s cartones por confirmar") % {"value": intcomma(pending_cartons)})
+    if pending_hens:
+        pending_badges.append(_("Faltan %(value)s aves por confirmar") % {"value": intcomma(pending_hens)})
+
+    dispatch_form_defaults = {
+        "scheduled_date_label": date_format(tomorrow, "DATE_FORMAT"),
+        "scheduled_date_value": tomorrow.isoformat(),
+        "drivers": dispatch_driver_options,
+        "vendors": dispatch_vendor_options,
+        "vehicles": dispatch_vehicle_options,
+        "type_catalog": dispatch_type_catalog,
+        "cartons_per_pack": cartons_per_pack,
+    }
+
+    dispatch_summary = {
+        "metrics": dispatch_stage_metrics,
+        "vendors_count": len(unique_vendor_ids),
+        "pending_badges": pending_badges,
+        "form": dispatch_form_defaults,
+        "dispatches": dispatches,
+        "status_options": dispatch_status_options,
+    }
+
     classification_categories = [
         {"id": "jumbo", "label": "Jumbo", "cartons": 85, "theme": "emerald"},
         {"id": "aaa", "label": "AAA", "cartons": 210, "theme": "amber"},
@@ -804,7 +1002,24 @@ def _build_telegram_mini_app_payload(
                     _("Cruza el inventario físico con las reservas antes de comprometer nuevos pedidos."),
                 ],
             },
+            {
+                "id": "dispatches",
+                "icon": "🗂️",
+                "title": _("Despachos a ventas"),
+                "tone": "slate",
+                "status": "planning",
+                "summary": _(
+                    "Concentra los envíos programados y confirma cantidades finales por canal antes de liberar al transporte."
+                ),
+                "metrics": dispatch_summary["metrics"],
+                "dispatches": dispatch_summary["dispatches"],
+                "vendors_count": dispatch_summary["vendors_count"],
+                "pending_badges": dispatch_summary["pending_badges"],
+                "form": dispatch_summary["form"],
+                "type_catalog": dispatch_type_catalog,
+            },
         ],
+        "dispatch_summary": dispatch_summary,
     }
 
     transport_lot_backlog = [
