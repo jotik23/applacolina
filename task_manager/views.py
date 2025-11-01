@@ -438,9 +438,103 @@ def _build_telegram_mini_app_payload(
     weekday_label = date_format(today, "l").capitalize()
     day_number = date_format(today, "d")
     month_label = date_format(today, "M").strip(".").lower()
+    tomorrow = today + timedelta(days=1)
+    day_minus_1 = today - timedelta(days=1)
+    day_minus_2 = today - timedelta(days=2)
+    day_minus_3 = today - timedelta(days=3)
+
+    transport_manifest_entries = [
+        {
+            "id": "GS-2024-11-G3",
+            "label": "Granja San Lucas · Galpón 3",
+            "farm": "Granja San Lucas",
+            "barn": "Galpón 3",
+            "rooms": ["Sala 1", "Sala 2"],
+            "cartons": 240,
+            "production_date_iso": day_minus_1.isoformat(),
+            "production_date_label": date_format(day_minus_1, "DATE_FORMAT"),
+            "tag": _("Día reciente"),
+        },
+        {
+            "id": "GS-2024-11-G4",
+            "label": "Granja San Lucas · Galpón 4",
+            "farm": "Granja San Lucas",
+            "barn": "Galpón 4",
+            "rooms": ["Sala 1"],
+            "cartons": 200,
+            "production_date_iso": day_minus_1.isoformat(),
+            "production_date_label": date_format(day_minus_1, "DATE_FORMAT"),
+            "tag": _("Compartido"),
+        },
+        {
+            "id": "PR-2024-08-G5",
+            "label": "Granja Providencia · Galpón 5",
+            "farm": "Granja Providencia",
+            "barn": "Galpón 5",
+            "rooms": ["Sala 2"],
+            "cartons": 195,
+            "production_date_iso": day_minus_2.isoformat(),
+            "production_date_label": date_format(day_minus_2, "DATE_FORMAT"),
+            "tag": _("Día anterior"),
+        },
+        {
+            "id": "LP-2024-03-G1",
+            "label": "Granja La Primavera · Galpón 1",
+            "farm": "Granja La Primavera",
+            "barn": "Galpón 1",
+            "rooms": [],
+            "cartons": 185,
+            "production_date_iso": day_minus_3.isoformat(),
+            "production_date_label": date_format(day_minus_3, "DATE_FORMAT"),
+            "tag": _("Revisión"),
+        },
+    ]
+    transport_manifest_total_cartons = sum(entry["cartons"] for entry in transport_manifest_entries)
+    transport_manifest_count = len(transport_manifest_entries)
+    transport_manifest_origin = _("%(count)s lotes · múltiples granjas") % {"count": transport_manifest_count}
+    verification_reference_entry = transport_manifest_entries[0] if transport_manifest_entries else None
+    verification_lot = None
+    if verification_reference_entry:
+        verification_lot = {
+            "id": verification_reference_entry["id"],
+            "label": verification_reference_entry["label"],
+            "farm": verification_reference_entry["farm"],
+            "barn": verification_reference_entry["barn"],
+            "production_date_label": verification_reference_entry["production_date_label"],
+            "cartons": verification_reference_entry["cartons"],
+            "rooms": verification_reference_entry.get("rooms", []),
+        }
+
     cartons_per_pack = 30
-    daily_cartons = 820
+    daily_cartons = transport_manifest_total_cartons
     daily_eggs = daily_cartons * cartons_per_pack
+    inspection_reference_entry = transport_manifest_entries[0]
+    inspection_production_date_label = inspection_reference_entry["production_date_label"]
+    inspection_farm = inspection_reference_entry["farm"]
+    inspection_barn = inspection_reference_entry["barn"]
+    inspection_initial_cartons = daily_cartons
+    inspection_transported_cartons = max(daily_cartons - 12, 0)
+    inspection_classified_cartons = max(daily_cartons - 18, 0)
+    inspection_discarded_cartons = max(inspection_initial_cartons - inspection_classified_cartons, 0)
+    inspection_classified_breakdown = [
+        {"id": "jumbo", "label": "Jumbo", "cartons": 118, "theme": "emerald"},
+        {"id": "aaa", "label": "AAA", "cartons": 210, "theme": "amber"},
+        {"id": "aa", "label": "AA", "cartons": 172, "theme": "sky"},
+        {"id": "a", "label": "A", "cartons": 140, "theme": "slate"},
+        {"id": "b", "label": "B", "cartons": 90, "theme": "violet"},
+        {"id": "c", "label": "C", "cartons": 72, "theme": "brand"},
+    ]
+    inspection_input_categories = [
+        {**item, "kind": "sellable"} for item in inspection_classified_breakdown
+    ]
+    inspection_input_categories.append(
+        {"id": "discard", "label": _("Descartados"), "cartons": inspection_discarded_cartons, "theme": "rose", "kind": "discard"}
+    )
+    inspection_metadata_label = _("%(date)s · %(farm)s%(barn)s") % {
+        "date": inspection_production_date_label,
+        "farm": inspection_farm,
+        "barn": f" · {inspection_barn}" if inspection_barn else "",
+    }
 
     classification_categories = [
         {"id": "jumbo", "label": "Jumbo", "cartons": 85, "theme": "emerald"},
@@ -468,9 +562,9 @@ def _build_telegram_mini_app_payload(
     egg_workflow = {
         "cartons_per_pack": cartons_per_pack,
         "batch": {
-            "label": "Lote GS-2024-11",
-            "origin": "Granja San Lucas · Galpón 3",
-            "rooms": ["Sala 1", "Sala 2"],
+            "label": _("Manifiesto interno · semana %(week)s") % {"week": date_format(today, "W")},
+            "origin": _("Múltiples granjas · ver detalle en transporte"),
+            "rooms": ["Galpón 3", "Galpón 4", "Galpón 5", "Galpón 1"],
             "produced_cartons": daily_cartons,
             "produced_eggs": daily_eggs,
             "recorded_at": date_format(today, "d M Y"),
@@ -482,14 +576,19 @@ def _build_telegram_mini_app_payload(
                 "title": "Transporte interno",
                 "tone": "brand",
                 "status": "pending",
-                "summary": "Traslada la producción registrada hacia el centro de acopio sin perder trazabilidad.",
+                "summary": _(
+                    "Consolida las cargas de distintos galpones y fechas en un solo despacho hacia el centro de acopio."
+                ),
                 "metrics": [
-                    {"label": "Cartones cargados", "value": daily_cartons, "unit": "cartones"},
-                    {"label": "Unidades", "value": daily_eggs, "unit": "huevos"},
+                    {"label": _("Cartones en manifiesto"), "value": daily_cartons, "unit": "cartones"},
                 ],
                 "route": {
-                    "origin": "Galpón 3 · Salas 1 y 2",
-                    "destination": "Centro de clasificación & inspección",
+                    "origin": transport_manifest_origin,
+                    "destination": _("Centro de clasificación & inspección"),
+                },
+                "manifest": {
+                    "entries": transport_manifest_entries,
+                    "total_cartons": daily_cartons,
                 },
                 "progress_steps": [
                     {"id": "verified", "label": "Verificado"},
@@ -515,10 +614,20 @@ def _build_telegram_mini_app_payload(
                     {"label": "Cartones esperados", "value": daily_cartons, "unit": "cartones"},
                     {"label": "Huevos esperados", "value": daily_eggs, "unit": "huevos"},
                 ],
+                "lot": verification_lot,
                 "fields": [
-                    {"id": "cartons_received", "label": "Cartones recibidos", "placeholder": str(daily_cartons)},
-                    {"id": "eggs_damaged", "label": "Huevos fisurados", "placeholder": "0"},
-                    {"id": "temperature", "label": "Temperatura (°C)", "placeholder": "25"},
+                    {
+                        "id": "cartons_received",
+                        "label": "Cartones recibidos",
+                        "placeholder": str(daily_cartons),
+                        "input_type": "number",
+                    },
+                    {
+                        "id": "eggs_damaged",
+                        "label": "Huevos fisurados",
+                        "placeholder": "0",
+                        "input_type": "number",
+                    },
                 ],
                 "checkpoints": [
                     "Anota diferencias en cartones o unidades.",
@@ -544,34 +653,36 @@ def _build_telegram_mini_app_payload(
                 "title": "Inspección final",
                 "tone": "slate",
                 "status": "pending",
-                "summary": "Registra hallazgos sanitarios y libera el lote para despacho.",
-                "metrics": [
-                    {"label": "Lotes revisados", "value": 1, "unit": "lote"},
-                    {"label": "Cartones listos", "value": daily_cartons - 5, "unit": "cartones"},
-                    {"label": "Cartones retenidos", "value": 5, "unit": "cartones"},
-                ],
+                "summary": _(
+                    "Valida el cierre del lote y confirma cuántos cartones quedan listos para la venta después de la inspección."
+                ),
+                "overview": {
+                    "production_date_label": inspection_production_date_label,
+                    "farm": inspection_farm,
+                    "barn": inspection_barn,
+                    "metadata_label": inspection_metadata_label,
+                    "initial_cartons": inspection_initial_cartons,
+                    "transported_cartons": inspection_transported_cartons,
+                    "classified_cartons": inspection_classified_cartons,
+                    "discarded_cartons": inspection_discarded_cartons,
+                    "classified_breakdown": inspection_classified_breakdown,
+                },
+                "inspection_categories": inspection_input_categories,
                 "fields": [
                     {
                         "id": "notes",
                         "label": "Observaciones",
-                        "placeholder": "Ej: Retener 5 cartones para revisión",
+                        "placeholder": _("Ej: Ajustar temperatura de cámara antes de liberar"),
                         "multiline": True,
                     },
-                    {"id": "released_by", "label": "Inspector", "placeholder": "Nombre del responsable"},
-                    {"id": "release_time", "label": "Hora de liberación", "placeholder": "hh:mm"},
                 ],
                 "checkpoints": [
-                    "Confirma limpieza de área y temperatura de cámara.",
-                    "Marca cartones retenidos y notifica al supervisor.",
+                    _("Confirma limpieza del área y registra fotos si hubo descartes."),
+                    _("Comunica ajustes de bioseguridad al supervisor antes del cierre."),
                 ],
             },
         ],
     }
-
-    tomorrow = today + timedelta(days=1)
-    day_minus_1 = today - timedelta(days=1)
-    day_minus_2 = today - timedelta(days=2)
-    day_minus_3 = today - timedelta(days=3)
 
     transport_lot_backlog = [
         {
