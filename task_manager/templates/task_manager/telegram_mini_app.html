@@ -34,33 +34,440 @@
   </head>
   <body class="min-h-full bg-gradient-to-br from-sky-50 via-white to-amber-50 text-slate-900">
     <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 py-6">
+      {% if mini_app_access_granted and telegram_mini_app %}
       <header class="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur">
-        <div class="flex items-center gap-4">
-          <div data-telegram-avatar class="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-lg font-semibold text-slate-900 shadow-sm shadow-amber-200/60">
-            {{ telegram_mini_app.user.avatar_initials }}
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <div class="flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
+            <div class="flex flex-col items-center gap-1 text-center sm:items-start sm:text-left">
+              <h1 data-telegram-display-name class="text-base font-semibold text-slate-900">
+                {{ telegram_mini_app.user.display_name }}
+              </h1>
+              <p data-mini-app-contact class="text-xs text-slate-600">
+                {{ telegram_mini_app.user.contact_handle }}
+              </p>
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:mt-1">
+                {{ telegram_mini_app.user.role }}
+              </p>
+            </div>
+            {% if mini_app_logout_url %}
+            <form method="post" action="{{ mini_app_logout_url }}" class="flex justify-center sm:justify-start">
+              {% csrf_token %}
+              <button
+                type="submit"
+                class="group flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-white/70 text-slate-400 shadow-sm shadow-amber-100 transition hover:bg-rose-50 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50"
+              >
+                <span class="sr-only">Cerrar sesión</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="h-4 w-4"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6a3 3 0 0 1 6 0v3" />
+                  <path d="M19 10a7 7 0 1 1-14 0" />
+                  <path d="M12 14v3" />
+                </svg>
+              </button>
+            </form>
+            {% endif %}
           </div>
-          <div class="flex-1">
-            <h1 data-telegram-display-name class="text-base font-semibold text-slate-900">
-              {{ telegram_mini_app.user.display_name }}
-            </h1>
-            <p data-telegram-username class="text-xs text-slate-600">
-              {% if telegram_mini_app.user.username %}@{{ telegram_mini_app.user.username }}{% else %}Sin usuario Telegram{% endif %}
-            </p>
-            <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {{ telegram_mini_app.user.role }}
-            </p>
+          <div class="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-[220px]">
+            <div
+              data-motivation-card
+              class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-100 via-white to-sky-50 p-3 shadow-md shadow-amber-200/60"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Tu ranking</p>
+              <div class="mt-2 flex items-baseline justify-between">
+                <span class="text-3xl font-semibold text-amber-600">#3</span>
+                <span class="text-xs text-slate-600">de 18</span>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-600">Continúa así para alcanzar el top 2 esta semana.</p>
+            </div>
+            <div
+              data-motivation-card
+              class="hidden rounded-2xl border border-sky-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-3 shadow-md shadow-sky-200/60"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Puntos de hoy</p>
+              <div class="mt-2 flex items-center gap-3">
+                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white text-lg font-semibold text-sky-600 shadow-inner shadow-sky-200/70">
+                  28
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm font-semibold text-slate-900">Meta: 35 pts</p>
+                  <div class="mt-1 h-2 w-full rounded-full bg-slate-200">
+                    <span class="block h-full w-3/4 rounded-full bg-sky-400"></span>
+                  </div>
+                  <p class="mt-1 text-[11px] text-slate-600">Solo te faltan 7 puntos.</p>
+                </div>
+              </div>
+            </div>
+            <div
+              data-motivation-card
+              class="hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-3 shadow-md shadow-emerald-200/50"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Racha activa</p>
+              <p class="mt-2 text-sm font-semibold text-emerald-600">3 días al 100%</p>
+              <div class="mt-3 flex items-center gap-2 text-[11px] text-slate-600">
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 font-semibold">4</span>
+                <span>Completa mañana para alcanzar la racha dorada.</span>
+              </div>
+            </div>
+            <div
+              data-motivation-card
+              class="hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-amber-50 p-3 shadow-md shadow-rose-200/50"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Reconocimiento</p>
+              <p class="mt-2 text-sm font-semibold text-rose-600">Destacado en limpieza</p>
+              <p class="mt-2 text-[11px] text-slate-600">Tu atención en Galpón 4 aceleró toda la jornada.</p>
+              <p class="mt-2 text-[11px] text-slate-500">Sigue entregando esta energía.</p>
+            </div>
+            <div
+              data-motivation-card
+              class="hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-amber-50 to-sky-50 p-3 shadow-md shadow-slate-200/60"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-700">Siguiente objetivo</p>
+              <div class="mt-2 space-y-2 text-[11px] text-slate-600">
+                <div class="flex items-center gap-2">
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-xs font-semibold">1</span>
+                  Completa dos tareas más para desbloquear 50 puntos.
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 text-sky-600 text-xs font-semibold">2</span>
+                  Asigna una sugerencia y comparte la mejora.
+                </div>
+              </div>
+            </div>
           </div>
-          <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-200/60 transition hover:border-brand hover:text-brand">
-            Ajustes
-          </button>
-        </div>
-        <div class="mt-4 flex items-center justify-between text-xs text-slate-600">
-          <span>Resumen del dia</span>
-          <span>{{ telegram_mini_app.date_label }}</span>
         </div>
       </header>
 
+      {% with shift=telegram_mini_app.shift_confirmation %}
+      {% if shift %}
+      <section
+        class="rounded-3xl border border-emerald-200 bg-gradient-to-br from-white/95 via-emerald-50/90 to-sky-50/90 p-5 shadow-lg shadow-emerald-200/60"
+        data-shift-confirmation-card
+        data-requires-confirmation="{{ shift.requires_confirmation|yesno:'true,false' }}"
+        data-confirmed="{{ shift.confirmed|yesno:'true,false' }}"
+        {% if shift.storage_key %}data-storage-key="{{ shift.storage_key }}"{% endif %}
+      >
+        <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+              <span aria-hidden="true">🗓️</span>
+              Confirma tu turno
+            </p>
+            <h2 class="text-xl font-semibold text-slate-900">{{ shift.date_label }}</h2>
+            <p class="mt-1 text-sm text-slate-700">
+              Mi turno
+              <span class="font-semibold text-slate-900">{{ shift.category_label }} · {{ shift.position_label }}</span>
+            </p>
+          </div>
+          <span
+            data-shift-status
+            class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700"
+          >
+            Pendiente
+          </span>
+        </header>
+        <dl class="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+          {% if shift.farm %}
+          <div>
+            <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Granja</dt>
+            <dd class="mt-1 font-semibold text-slate-900">{{ shift.farm }}</dd>
+          </div>
+          {% endif %}
+          {% if shift.barn %}
+          <div>
+            <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Galpón</dt>
+            <dd class="mt-1 font-semibold text-slate-900">{{ shift.barn }}</dd>
+          </div>
+          {% endif %}
+          {% if shift.rooms %}
+          <div class="sm:col-span-2">
+            <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Salones</dt>
+            <dd class="mt-1 font-semibold text-slate-900">{{ shift.rooms|join:", " }}</dd>
+          </div>
+          {% endif %}
+        </dl>
+        {% if shift.handoff_from or shift.handoff_to %}
+        <p class="mt-4 text-sm text-slate-700">
+          {% if shift.handoff_from and shift.handoff_to %}
+            Le recibo turno a <span class="font-semibold text-slate-900">{{ shift.handoff_from }}</span> y le entregaré turno a <span class="font-semibold text-slate-900">{{ shift.handoff_to }}</span>.
+          {% elif shift.handoff_from %}
+            Le recibo turno a <span class="font-semibold text-slate-900">{{ shift.handoff_from }}</span>.
+          {% elif shift.handoff_to %}
+            Le entregaré turno a <span class="font-semibold text-slate-900">{{ shift.handoff_to }}</span>.
+          {% endif %}
+        </p>
+        {% endif %}
+        <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600" data-shift-pending-label>Confirma tu turno para continuar.</p>
+          <p class="hidden text-xs font-semibold uppercase tracking-wide text-emerald-600" data-shift-confirmed-label>Turno confirmado</p>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-200/70 transition hover:shadow-emerald-300/80 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
+            data-confirm-shift
+          >
+            Confirmar mi turno
+          </button>
+        </div>
+      </section>
+      {% endif %}
+
+      <div
+        data-mini-app-content
+        class="flex flex-col gap-5{% if shift and shift.requires_confirmation and not shift.confirmed %} pointer-events-none opacity-60 blur-sm{% endif %}"
+        aria-disabled="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% else %}false{% endif %}"
+        data-guard-locked="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% else %}false{% endif %}"
+      >
+      {% with telegram_mini_app.goals as goals %}
+      {% with telegram_mini_app.scorecard as scorecard %}
+      {% if goals and goals.headline %}
       <section class="space-y-3">
+        {% if goals.selection and goals.selection.is_open %}
+        <article
+          class="rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 via-amber-50 to-white p-5 shadow-2xl shadow-rose-200/70"
+          data-goal-selector
+          data-selected-id="{{ goals.selection.selected_option_id }}"
+        >
+          <header class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
+                <span aria-hidden="true">🏆</span>
+                Escoge tu plan de premio
+              </p>
+              <h2 class="text-lg font-semibold text-slate-900">{{ goals.selection.window_label }}</h2>
+              <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-rose-500">Tu recompensa mensual</p>
+            </div>
+            <span
+              class="inline-flex items-center gap-2 rounded-full bg-rose-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-600 shadow shadow-rose-200/60"
+            >
+              <span aria-hidden="true">🕒</span>
+              Ventana activa
+            </span>
+          </header>
+          <p class="mt-2 text-sm text-slate-700">{{ goals.selection.window_description }}</p>
+
+          <div class="mt-4 rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-inner shadow-amber-200/40">
+            <div class="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                class="flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 text-amber-600 transition hover:border-amber-400 hover:text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-300/60"
+                data-goal-nav="prev"
+                aria-label="Meta anterior"
+              >
+                <span aria-hidden="true">←</span>
+              </button>
+              <div class="w-full flex-1">
+                {% for option in goals.selection.options %}
+                  <article
+                    class="{% if option.id != goals.selection.selected_option_id %}hidden{% endif %} space-y-3 text-left"
+                    data-goal-option
+                    data-goal-option-id="{{ option.id }}"
+                    data-goal-option-label="{{ option.title }}"
+                  >
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Opción {{ forloop.counter }} de {{ goals.selection.options|length }}</p>
+                        <h3 class="text-sm font-semibold text-slate-900">{{ option.title }}</h3>
+                      </div>
+                      <span
+                        class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600"
+                      >
+                        Premio
+                        <span class="text-slate-900">{{ option.reward_label }}</span>
+                      </span>
+                    </div>
+                    <p class="text-sm text-slate-700">{{ option.summary }}</p>
+                    <ul class="space-y-1 text-xs text-slate-600">
+                      <li>
+                        <span class="font-semibold text-slate-800">Puntos requeridos:</span>
+                        {{ option.points_required }}
+                      </li>
+                      <li>
+                        <span class="font-semibold text-slate-800">Enfoque sugerido:</span>
+                        {{ option.effort_label }}
+                      </li>
+                    </ul>
+                    {% if option.badges %}
+                      <div class="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                        {% for badge in option.badges %}
+                          <span
+                            class="rounded-full px-2 py-0.5 {% if badge.theme == 'brand' %}bg-amber-100 text-amber-700{% elif badge.theme == 'success' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}"
+                          >
+                            {{ badge.label }}
+                          </span>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="flex flex-wrap gap-2">
+                      {% for action in option.actions %}
+                        <button
+                          type="button"
+                          class="rounded-full px-3 py-1 text-xs font-semibold transition {% if action.action == 'select' %}bg-brand text-slate-900 shadow shadow-amber-200/70 hover:bg-brand-dark{% else %}border border-slate-200 text-slate-600 hover:border-brand hover:text-brand{% endif %}"
+                          data-goal-action="{{ action.action }}"
+                          data-goal-option-id="{{ option.id }}"
+                        >
+                          {{ action.label }}
+                        </button>
+                      {% endfor %}
+                    </div>
+                  </article>
+                {% endfor %}
+              </div>
+              <button
+                type="button"
+                class="flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 text-amber-600 transition hover:border-amber-400 hover:text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-300/60"
+                data-goal-nav="next"
+                aria-label="Meta siguiente"
+              >
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <div class="mt-3 flex items-center justify-between text-[11px] text-slate-500">
+              <p data-goal-selection-label>
+                Selección actual:
+                <span class="font-semibold text-slate-900" data-goal-selection-value>
+                  {% for option in goals.selection.options %}
+                    {% if option.id == goals.selection.selected_option_id %}
+                      {{ option.title }}
+                    {% endif %}
+                  {% endfor %}
+                </span>
+              </p>
+              <div class="flex items-center gap-1">
+                {% for option in goals.selection.options %}
+                  <span
+                    class="h-2.5 w-2.5 rounded-full bg-slate-200"
+                    data-goal-indicator
+                    data-goal-option-id="{{ option.id }}"
+                  ></span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </article>
+        {% endif %}
+        <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
+          <header class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-amber-500">Tus metas activas</p>
+              <h2 class="text-base font-semibold text-slate-900">{{ goals.headline.title }}</h2>
+            </div>
+            <div class="text-right">
+              <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">{{ goals.headline.progress_percent }}% cumplido</span>
+              <p class="mt-1 text-[11px] text-slate-500">{{ goals.headline.deadline }}</p>
+            </div>
+          </header>
+          <p class="mt-2 text-sm text-slate-700">{{ goals.headline.description }}</p>
+          <div class="mt-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span>{{ goals.headline.progress_label }}</span>
+              <span>{{ goals.headline.points_gap_label }}</span>
+            </div>
+            <div class="mt-2 h-2 w-full rounded-full bg-slate-200">
+              <div
+                class="h-2 rounded-full bg-gradient-to-r from-amber-400 via-brand to-amber-500"
+                style="width: {{ goals.headline.progress_percent|default:0 }}%;"
+                aria-hidden="true"
+              ></div>
+            </div>
+          </div>
+          <ul class="mt-4 space-y-2 text-xs text-slate-700">
+            <li class="flex items-center justify-between">
+              <span>Puntos validados</span>
+              <span class="text-sm font-semibold text-slate-900">{{ scorecard.points }}</span>
+            </li>
+            {% if scorecard.next_reward %}
+              <li class="flex items-center justify-between text-amber-700">
+                <span>{{ scorecard.next_reward }}</span>
+                <span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">Objetivo</span>
+              </li>
+            {% endif %}
+            <li class="flex items-center justify-between">
+              <span>{{ scorecard.streak }}</span>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Racha</span>
+            </li>
+            <li class="flex items-center justify-between">
+              <span>{{ scorecard.extras }}</span>
+              <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Extra</span>
+            </li>
+            {% if scorecard.penalties %}
+              <li class="flex items-center justify-between text-rose-600">
+                <span>{{ scorecard.penalties }}</span>
+                <span class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">Revisa</span>
+              </li>
+            {% endif %}
+          </ul>
+          <p class="mt-4 text-xs text-slate-600">{{ scorecard.message }}</p>
+          <details class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700">
+            <summary class="flex cursor-pointer items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-brand hover:text-brand-dark">
+              <span>Ver más metas y plan de puntos</span>
+              <span aria-hidden="true">→</span>
+            </summary>
+            <div class="mt-3 space-y-3">
+              {% if goals.items %}
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Focos de esta semana</p>
+                  <ul class="mt-2 space-y-2">
+                    {% for item in goals.items %}
+                      <li class="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-800">
+                          <span>{{ item.title }}</span>
+                          <span>{{ item.progress_percent }}%</span>
+                        </div>
+                        <div class="mt-2 h-1.5 w-full rounded-full bg-slate-100">
+                          <div
+                            class="h-1.5 rounded-full bg-emerald-400/80"
+                            style="width: {{ item.progress_percent|default:0 }}%;"
+                            aria-hidden="true"
+                          ></div>
+                        </div>
+                        <p class="mt-2 text-[11px] text-slate-600">{{ item.progress_label }}</p>
+                        <p class="text-[11px] font-semibold text-emerald-700">{{ item.impact }}</p>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+              <div class="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Rendimiento reciente</p>
+                <ul class="mt-2 space-y-1">
+                  <li>{{ scorecard.streak }}</li>
+                  <li>{{ scorecard.extras }}</li>
+                  {% if scorecard.penalties %}
+                    <li class="text-rose-600">{{ scorecard.penalties }}</li>
+                  {% endif %}
+                  <li class="text-slate-600">Recuerda: cada incumplimiento resta el doble que una tarea completada.</li>
+                </ul>
+              </div>
+              {% if telegram_mini_app.history %}
+                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Histórico rápido</p>
+                  <ul class="mt-2 divide-y divide-slate-100 text-[11px] text-slate-600">
+                    {% for item in telegram_mini_app.history %}
+                      <li class="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                        <span class="pr-3 font-semibold text-slate-900">{{ item.label }}</span>
+                        <span class="text-right text-xs text-slate-500">{{ item.summary }}</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+            </div>
+          </details>
+        </article>
+      </section>
+      {% endif %}
+      {% endwith %}
+      {% endwith %}
+
+      <section class="space-y-3" data-daily-tasks-section>
         <div class="flex items-center justify-between text-sm text-slate-600">
           <div>
             <h2 class="text-base font-semibold text-slate-900">Tareas del dia</h2>
@@ -120,44 +527,130 @@
         </div>
       </section>
 
-      <section class="space-y-4">
+      <section class="space-y-4" data-weekly-calendar-section>
+        {% with current_shift=telegram_mini_app.current_shift %}
+        {% with week=current_shift.week %}
         <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
-          <h2 class="text-sm font-semibold text-slate-900">Mi turno</h2>
-          <p class="mt-2 text-sm text-slate-700">{{ telegram_mini_app.current_shift.label }}</p>
-          <p class="mt-1 text-xs text-slate-600">{{ telegram_mini_app.current_shift.position }}</p>
-          <p class="mt-1 text-xs text-slate-600">{{ telegram_mini_app.current_shift.next }}</p>
-        </div>
+          <header class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-sm font-semibold text-slate-900">Mi calendario de turnos</h2>
+            </div>
+            <div class="flex flex-col items-end gap-1 text-right text-xs text-slate-500">
+              <span class="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.16 0 4.15.76 5.71 2.03" />
+                </svg>
+                {{ current_shift.next }}
+              </span>
+              {% if week %}
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {{ week.range_label }}
+                </span>
+              {% endif %}
+            </div>
+          </header>
 
-        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
-          <h2 class="text-sm font-semibold text-slate-900">Puntaje y consistencia</h2>
-          <ul class="mt-2 space-y-1 text-xs text-slate-700">
-            <li>Total puntos: <span class="font-semibold text-slate-900">{{ telegram_mini_app.scorecard.points }}</span></li>
-            <li>{{ telegram_mini_app.scorecard.streak }}</li>
-            <li>{{ telegram_mini_app.scorecard.extras }}</li>
+          {% if week and week.days %}
+          <ul class="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+            {% for day in week.days %}
+              <li
+                class="rounded-2xl border p-3 transition {% if day.is_rest %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[11px] font-semibold uppercase tracking-wide {% if day.is_rest %}text-emerald-600{% else %}text-slate-500{% endif %}">
+                    {{ day.weekday }}
+                  </span>
+                  <span class="text-[11px] font-semibold text-slate-400">{{ day.date_label }}</span>
+                </div>
+                {% if day.is_rest %}
+                  <div class="mt-3 flex items-start gap-2 text-sm font-semibold text-emerald-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75h4.5M3 18h18M4.5 18V9.75a4.5 4.5 0 0 1 4.5-4.5h6a4.5 4.5 0 0 1 4.5 4.5V18" />
+                    </svg>
+                    <div>
+                      <p>{{ day.shift_label }}</p>
+                      <p class="mt-1 text-[11px] font-normal text-emerald-600">{{ day.category }}</p>
+                    </div>
+                  </div>
+                {% else %}
+                  <p class="mt-3 text-sm font-semibold text-slate-900">{{ day.shift_label }}</p>
+                  <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-brand">{{ day.category }}</p>
+                  {% if day.farm or day.barn %}
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      {% if day.farm %}
+                        <span class="inline-flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21V9m0 0 7.5 12M12 9 4.5 21" />
+                          </svg>
+                          {{ day.farm }}
+                        </span>
+                      {% endif %}
+                      {% if day.farm and day.barn %}
+                        <span class="text-slate-300">•</span>
+                      {% endif %}
+                      {% if day.barn %}
+                        <span class="inline-flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9.75 12 4.5l7.5 5.25V18a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 18V9.75Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 21v-7.5h4.5V21" />
+                          </svg>
+                          {{ day.barn }}
+                        </span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                {% endif %}
+              </li>
+            {% endfor %}
           </ul>
-          <p class="mt-3 text-xs text-slate-600">{{ telegram_mini_app.scorecard.message }}</p>
+          {% endif %}
         </div>
+        {% endwith %}
+        {% endwith %}
 
         <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
           <h2 class="text-sm font-semibold text-slate-900">Sugerencias enviadas</h2>
           <ul class="mt-2 space-y-2 text-xs text-slate-700">
             {% for suggestion in telegram_mini_app.suggestions %}
-              <li class="rounded-2xl border border-slate-200 bg-slate-50 p-3">{{ suggestion }}</li>
+              <li class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <p class="flex-1 text-slate-700">{{ suggestion.message|default:suggestion }}</p>
+                  {% if suggestion.status %}
+                    {% with status=suggestion.status %}
+                      <span class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide {{ status.badge_class }}">
+                        {% if status.icon == "clock" %}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5v4.5l2.25 2.25" />
+                          </svg>
+                        {% elif status.icon == "check" %}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                        {% elif status.icon == "x-mark" %}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6m0 12L6 6" />
+                          </svg>
+                        {% elif status.icon == "arrow-path" %}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5H19.5v11.25" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 4.5-3 3" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5H4.5V8.25" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 19.5 3-3" />
+                          </svg>
+                        {% endif %}
+                        {{ status.label }}
+                      </span>
+                    {% endwith %}
+                  {% endif %}
+                </div>
+              </li>
+            {% empty %}
+              <li class="rounded-2xl border border-dashed border-slate-200 bg-white p-3 text-slate-400">Sin sugerencias registradas.</li>
             {% endfor %}
           </ul>
         </div>
 
-        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
-          <h2 class="text-sm font-semibold text-slate-900">Historico rapido</h2>
-          <ul class="mt-2 space-y-2 text-xs text-slate-700">
-            {% for item in telegram_mini_app.history %}
-              <li class="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <span class="font-semibold text-slate-900">{{ item.label }}</span>
-                <span class="text-right text-xs text-slate-600">{{ item.summary }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
       </section>
 
       <footer class="sticky bottom-4 mt-auto flex justify-center">
@@ -169,10 +662,431 @@
           Revisar proxima tarea
         </button>
       </footer>
+      </div>
+      {% endwith %}
+      {% else %}
+      <section class="rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-xl shadow-slate-200/70 mini-app-blur">
+        <header class="space-y-2 text-center">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingreso a la mini app</p>
+          <h1 class="text-xl font-semibold text-slate-900">Identifícate para continuar</h1>
+          <p class="text-sm text-slate-600">
+            {% if mini_app_client == 'telegram' %}
+              No recibimos la confirmación automática de Telegram. Ingresa con tus credenciales para continuar.
+            {% elif mini_app_client == 'embedded' %}
+              Usa las credenciales de la mini app para validar tu sesión en la app móvil.
+            {% else %}
+              Accede con la cédula y la clave asignadas por el equipo administrativo.
+            {% endif %}
+          </p>
+        </header>
+
+        {% if telegram_auth_error %}
+          <div class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+            {{ telegram_auth_error }}
+          </div>
+        {% endif %}
+
+        {% if mini_app_form %}
+        <form method="post" class="mt-6 space-y-4">
+          {% csrf_token %}
+          {% if mini_app_form.non_field_errors %}
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+              {% for error in mini_app_form.non_field_errors %}
+                <p>{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="space-y-2">
+            <label for="{{ mini_app_form.username.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {{ mini_app_form.username.label }}
+            </label>
+            {{ mini_app_form.username }}
+            {% if mini_app_form.username.errors %}
+              <div class="text-[11px] text-rose-600">
+                {% for error in mini_app_form.username.errors %}
+                  <p>{{ error }}</p>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="space-y-2">
+            <label for="{{ mini_app_form.password.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {{ mini_app_form.password.label }}
+            </label>
+            {{ mini_app_form.password }}
+            {% if mini_app_form.password.errors %}
+              <div class="text-[11px] text-rose-600">
+                {% for error in mini_app_form.password.errors %}
+                  <p>{{ error }}</p>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          <button type="submit" class="w-full rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark">
+            Ingresar a la mini app
+          </button>
+        </form>
+        {% endif %}
+
+        <p class="mt-6 text-center text-[11px] text-slate-500">
+          Esta mini app solo requiere permisos básicos de operario. Contacta al administrador si necesitas acceso al panel completo.
+        </p>
+      </section>
+      {% endif %}
     </main>
 
+    <script>
+      (function () {
+        var card = document.querySelector('[data-shift-confirmation-card]');
+        if (!card) {
+          return;
+        }
+        var requires = card.getAttribute('data-requires-confirmation') === 'true';
+        var isConfirmed = card.getAttribute('data-confirmed') === 'true';
+        var storageKey = card.getAttribute('data-storage-key');
+        var storedState = null;
+        try {
+          storedState = storageKey ? window.sessionStorage.getItem(storageKey) : null;
+        } catch (error) {
+          storedState = null;
+        }
+
+        if (storedState === 'confirmed') {
+          isConfirmed = true;
+        }
+
+        var content = document.querySelector('[data-mini-app-content]');
+        var confirmButton = card.querySelector('[data-confirm-shift]');
+        var pendingLabel = card.querySelector('[data-shift-pending-label]');
+        var confirmedLabel = card.querySelector('[data-shift-confirmed-label]');
+        var statusBadge = card.querySelector('[data-shift-status]');
+        var contentParent = content ? content.parentNode : null;
+        var tasksSection = content ? content.querySelector('[data-daily-tasks-section]') : null;
+        var calendarSection = content ? content.querySelector('[data-weekly-calendar-section]') : null;
+
+        function moveCardBeforeContent() {
+          if (!contentParent || !content) {
+            return;
+          }
+          contentParent.insertBefore(card, content);
+        }
+
+        function moveCardAfterTasks() {
+          if (calendarSection && calendarSection.parentNode) {
+            calendarSection.parentNode.insertBefore(card, calendarSection);
+            return;
+          }
+          if (tasksSection && tasksSection.parentNode) {
+            var parent = tasksSection.parentNode;
+            var next = tasksSection.nextElementSibling;
+            if (next) {
+              parent.insertBefore(card, next);
+            } else {
+              parent.appendChild(card);
+            }
+          }
+        }
+
+        function lockInterface() {
+          if (!content) {
+            return;
+          }
+          content.classList.add('pointer-events-none', 'opacity-60', 'blur-sm');
+          content.setAttribute('aria-disabled', 'true');
+          content.setAttribute('data-guard-locked', 'true');
+        }
+
+        function unlockInterface() {
+          if (!content) {
+            return;
+          }
+          content.classList.remove('pointer-events-none', 'opacity-60', 'blur-sm');
+          content.setAttribute('aria-disabled', 'false');
+          content.setAttribute('data-guard-locked', 'false');
+        }
+
+        function renderState() {
+          if (isConfirmed) {
+            moveCardAfterTasks();
+          } else {
+            moveCardBeforeContent();
+          }
+
+          if (statusBadge) {
+            statusBadge.textContent = isConfirmed ? 'Turno confirmado' : 'Pendiente';
+            statusBadge.className = isConfirmed
+              ? 'inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700'
+              : 'inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700';
+          }
+
+          if (pendingLabel) {
+            pendingLabel.classList.toggle('hidden', isConfirmed);
+          }
+          if (confirmedLabel) {
+            confirmedLabel.classList.toggle('hidden', !isConfirmed);
+          }
+          if (confirmButton) {
+            confirmButton.disabled = isConfirmed;
+            confirmButton.classList.toggle('opacity-60', isConfirmed);
+            confirmButton.classList.toggle('cursor-not-allowed', isConfirmed);
+            confirmButton.textContent = isConfirmed ? 'Turno confirmado' : 'Confirmar mi turno';
+          }
+
+          if (isConfirmed) {
+            unlockInterface();
+            if (storageKey) {
+              try {
+                window.sessionStorage.setItem(storageKey, 'confirmed');
+              } catch (error) {
+                // Session storage is optional; ignore failures (e.g., private mode).
+              }
+            }
+          } else if (requires) {
+            lockInterface();
+          } else {
+            unlockInterface();
+          }
+        }
+
+        if (requires && !isConfirmed && storedState !== 'confirmed') {
+          lockInterface();
+        }
+
+        renderState();
+
+        if (confirmButton && requires) {
+          confirmButton.addEventListener('click', function () {
+            if (isConfirmed) {
+              return;
+            }
+            isConfirmed = true;
+            renderState();
+          });
+        }
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var root = document.querySelector('[data-goal-selector]');
+        if (!root) {
+          return;
+        }
+
+        var storageKey = 'miniapp-goal-choice';
+        var optionNodes = Array.prototype.slice.call(root.querySelectorAll('[data-goal-option]'));
+        if (!optionNodes.length) {
+          return;
+        }
+
+        var indicators = Array.prototype.slice.call(root.querySelectorAll('[data-goal-indicator]'));
+        var selectionValue = root.querySelector('[data-goal-selection-value]');
+        var selectionLabel = root.querySelector('[data-goal-selection-label]');
+        var navNodes = Array.prototype.slice.call(root.querySelectorAll('[data-goal-nav]'));
+
+        function findIndexById(optionId) {
+          return optionNodes.findIndex(function (node) {
+            return node.getAttribute('data-goal-option-id') === optionId;
+          });
+        }
+
+        var storedId = null;
+        try {
+          storedId = window.sessionStorage.getItem(storageKey);
+        } catch (error) {
+          storedId = null;
+        }
+
+        var initialId =
+          storedId ||
+          root.getAttribute('data-selected-id') ||
+          optionNodes[0].getAttribute('data-goal-option-id');
+        var activeIndex = findIndexById(initialId);
+        if (activeIndex === -1) {
+          activeIndex = 0;
+          initialId = optionNodes[0].getAttribute('data-goal-option-id');
+        }
+        var selectedId = initialId;
+        var hasStoredSelection = Boolean(storedId);
+
+        function updateIndicators() {
+          indicators.forEach(function (indicator, index) {
+            var isActive = index === activeIndex;
+            indicator.classList.toggle('bg-brand', isActive);
+            indicator.classList.toggle('bg-slate-200', !isActive);
+            indicator.style.transform = isActive ? 'scale(1.1)' : 'scale(1)';
+            indicator.style.opacity = isActive ? '1' : '0.5';
+            indicator.setAttribute('aria-current', isActive ? 'true' : 'false');
+          });
+        }
+
+        function updateSelectionLabel(highlight) {
+          if (!selectionValue) {
+            return;
+          }
+          var labelIndex = findIndexById(selectedId);
+          var label = labelIndex >= 0 ? optionNodes[labelIndex].getAttribute('data-goal-option-label') : '';
+          selectionValue.textContent = label;
+
+          if (!selectionLabel) {
+            return;
+          }
+          if (!selectionLabel.dataset.baseClass) {
+            selectionLabel.dataset.baseClass = selectionLabel.className;
+          }
+          if (highlight) {
+            selectionLabel.classList.remove('text-slate-500');
+            selectionLabel.classList.add('text-emerald-600');
+          } else if (selectionLabel.dataset.baseClass) {
+            selectionLabel.className = selectionLabel.dataset.baseClass;
+          }
+        }
+
+        function refreshSelectButtons() {
+          optionNodes.forEach(function (node) {
+            var selectButton = node.querySelector('[data-goal-action="select"]');
+            if (!selectButton) {
+              return;
+            }
+            var nodeId = node.getAttribute('data-goal-option-id');
+            var isSelected = nodeId === selectedId;
+            if (!selectButton.dataset.defaultLabel) {
+              selectButton.dataset.defaultLabel = selectButton.textContent.trim();
+            }
+            selectButton.disabled = isSelected;
+            selectButton.classList.toggle('opacity-60', isSelected);
+            selectButton.classList.toggle('cursor-not-allowed', isSelected);
+            selectButton.textContent = isSelected ? 'Meta elegida' : selectButton.dataset.defaultLabel;
+          });
+        }
+
+        function showOption(index) {
+          if (optionNodes.length === 1) {
+            index = 0;
+          } else if (index < 0) {
+            index = optionNodes.length - 1;
+          } else if (index >= optionNodes.length) {
+            index = 0;
+          }
+
+          activeIndex = index;
+
+          optionNodes.forEach(function (node, nodeIndex) {
+            node.classList.toggle('hidden', nodeIndex !== activeIndex);
+          });
+          updateIndicators();
+        }
+
+        function selectOption(optionId, highlight) {
+          var index = findIndexById(optionId);
+          if (index === -1) {
+            return;
+          }
+          selectedId = optionId;
+          root.setAttribute('data-selected-id', selectedId);
+
+          try {
+            window.sessionStorage.setItem(storageKey, optionId);
+          } catch (error) {
+            // Ignore storage errors (e.g., private mode).
+          }
+
+          showOption(index);
+          updateSelectionLabel(highlight);
+          refreshSelectButtons();
+        }
+
+        if (optionNodes.length <= 1) {
+          navNodes.forEach(function (node) {
+            node.disabled = true;
+            node.style.opacity = '0.5';
+            node.style.cursor = 'not-allowed';
+          });
+        } else {
+          navNodes.forEach(function (node) {
+            node.addEventListener('click', function (event) {
+              var direction = event.currentTarget.getAttribute('data-goal-nav');
+              var nextIndex = direction === 'next' ? activeIndex + 1 : activeIndex - 1;
+              showOption(nextIndex);
+            });
+          });
+        }
+
+        root.addEventListener('click', function (event) {
+          var actionButton = event.target.closest('[data-goal-action]');
+          if (!actionButton || !root.contains(actionButton)) {
+            return;
+          }
+          var action = actionButton.getAttribute('data-goal-action');
+          var optionId = actionButton.getAttribute('data-goal-option-id');
+          if (!optionId) {
+            return;
+          }
+
+          if (action === 'select') {
+            selectOption(optionId, true);
+            var telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('success');
+            }
+            var selectedIndex = findIndexById(optionId);
+            var selectedLabel =
+              selectedIndex >= 0 ? optionNodes[selectedIndex].getAttribute('data-goal-option-label') : optionId;
+            if (telegram && telegram.sendData) {
+              telegram.sendData(
+                JSON.stringify({
+                  action: 'select-goal',
+                  goal: optionId,
+                  label: selectedLabel,
+                })
+              );
+            } else {
+              console.info('Meta seleccionada:', selectedLabel);
+            }
+          } else if (action === 'details') {
+            var optionIndex = findIndexById(optionId);
+            var optionLabel =
+              optionIndex >= 0 ? optionNodes[optionIndex].getAttribute('data-goal-option-label') : '';
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
+              window.Telegram.WebApp.sendData(
+                JSON.stringify({
+                  action: 'open-goal-details',
+                  goal: optionId,
+                  label: optionLabel,
+                })
+              );
+            } else {
+              console.info('Detalle de meta:', optionLabel || optionId);
+            }
+          }
+        });
+
+        showOption(activeIndex);
+        updateSelectionLabel(hasStoredSelection);
+        refreshSelectButtons();
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var cards = document.querySelectorAll('[data-motivation-card]');
+        if (!cards.length) {
+          return;
+        }
+        var selectedIndex = Math.floor(Math.random() * cards.length);
+        cards.forEach(function (card, index) {
+          card.classList.toggle('hidden', index !== selectedIndex);
+        });
+      })();
+    </script>
+
+    {% if telegram_mini_app %}
     {{ telegram_mini_app|json_script:"tm-mini-app-config" }}
-    {% if telegram_integration_enabled %}
+    {% endif %}
+    {% if telegram_integration_enabled and telegram_mini_app %}
     <script>
       (function () {
         const dataScript = document.getElementById('tm-mini-app-config');
@@ -189,33 +1103,6 @@
         if (telegram) {
           telegram.ready();
           telegram.expand();
-
-          const user = telegram.initDataUnsafe && telegram.initDataUnsafe.user ? telegram.initDataUnsafe.user : null;
-          if (user) {
-            const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
-            const username = user.username ? '@' + user.username : '';
-
-            const nameTarget = document.querySelector('[data-telegram-display-name]');
-            const usernameTarget = document.querySelector('[data-telegram-username]');
-            const avatarTarget = document.querySelector('[data-telegram-avatar]');
-
-            if (nameTarget && fullName) {
-              nameTarget.textContent = fullName;
-            }
-            if (usernameTarget) {
-              usernameTarget.textContent = username || 'Sin usuario Telegram';
-            }
-            if (avatarTarget) {
-              const initials = (fullName || username || 'TG')
-                .split(' ')
-                .filter(Boolean)
-                .map((segment) => segment.trim()[0])
-                .join('')
-                .slice(0, 2)
-                .toUpperCase();
-              avatarTarget.textContent = initials || 'TG';
-            }
-          }
 
           const theme = telegram.themeParams || {};
           if (theme.bg_color) {

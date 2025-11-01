@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
 from django.utils.translation import gettext_lazy as _
 
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
@@ -237,3 +238,53 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
                 self.add_error("month_days", message)
 
         return cleaned_data
+
+
+class MiniAppAuthenticationForm(AuthenticationForm):
+    username = forms.CharField(
+        label=_("Cédula"),
+        widget=forms.TextInput(
+            attrs={
+                "autofocus": True,
+                "autocomplete": "username",
+                "inputmode": "numeric",
+                "class": (
+                    "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm "
+                    "font-medium text-slate-900 shadow-sm focus:border-brand focus:outline-none "
+                    "focus:ring-2 focus:ring-brand/40"
+                ),
+                "placeholder": _("Ingresa tu cédula"),
+            }
+        ),
+    )
+    password = forms.CharField(
+        label=_("Clave"),
+        strip=False,
+        widget=forms.PasswordInput(
+            attrs={
+                "autocomplete": "current-password",
+                "class": (
+                    "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm "
+                    "font-medium text-slate-900 shadow-sm focus:border-brand focus:outline-none "
+                    "focus:ring-2 focus:ring-brand/40"
+                ),
+                "placeholder": _("Ingresa tu clave"),
+            }
+        ),
+    )
+
+    error_messages = {
+        "invalid_login": _(
+            "Los datos ingresados no son válidos. Verifica la cédula y la clave."
+        ),
+        "inactive": _("Tu cuenta está inactiva. Contacta al administrador."),
+        "no_mini_app_access": _("No tienes permisos para acceder a la mini app."),
+    }
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if not user.has_perm("task_manager.access_mini_app"):
+            raise forms.ValidationError(
+                self.error_messages["no_mini_app_access"],
+                code="no_mini_app_access",
+            )

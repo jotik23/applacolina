@@ -1,9 +1,15 @@
+import hashlib
+import hmac
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Iterable, Mapping, Optional, Sequence
+from enum import Enum
+from typing import Iterable, Mapping, Optional, Sequence, Tuple
+from urllib.parse import parse_qsl
 
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -18,10 +24,130 @@ from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views import View, generic
 
-from .forms import TaskDefinitionQuickCreateForm
+from notifications.models import TelegramBotConfig, TelegramChatLink
+
+from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
 from .models import TaskCategory, TaskDefinition, TaskStatus
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
 from production.models import ChickenHouse, Farm, Room
+
+
+class MiniAppClient(Enum):
+    TELEGRAM = "telegram"
+    EMBEDDED = "embedded"
+    WEB = "web"
+
+
+def _resolve_mini_app_client(request) -> MiniAppClient:
+    """Infer the client origin (Telegram, embedded app, or browser)."""
+
+    user_agent = (request.META.get("HTTP_USER_AGENT") or "").lower()
+    client_hint = (request.GET.get("client") or request.META.get("HTTP_X_LACOLINA_MINIAPP_CLIENT") or "").lower()
+
+    if (
+        "telegram" in user_agent
+        or request.GET.get("tgWebAppData")
+        or request.GET.get("telegram")
+        or request.META.get("HTTP_X_TELEGRAM_INIT_DATA")
+    ):
+        return MiniAppClient.TELEGRAM
+
+    if client_hint in {"mobile", "embedded"}:
+        return MiniAppClient.EMBEDDED
+
+    if "miniapp-mobile" in user_agent or "lacolina-miniapp" in user_agent:
+        return MiniAppClient.EMBEDDED
+
+    return MiniAppClient.WEB
+
+
+def _resolve_default_mini_app_bot() -> Optional[TelegramBotConfig]:
+    """Return the Telegram bot configured for the mini app, if any."""
+
+    configured_name = getattr(settings, "TASK_MANAGER_MINI_APP_BOT_NAME", "").strip()
+    queryset = TelegramBotConfig.objects.filter(is_active=True)
+
+    if configured_name:
+        bot = queryset.filter(name=configured_name).first()
+        if bot:
+            return bot
+
+    return queryset.order_by("name").first()
+
+
+def _default_auth_backend() -> str:
+    """Return the default authentication backend for explicit login calls."""
+
+    backends = getattr(settings, "AUTHENTICATION_BACKENDS", None)
+    if backends:
+        if isinstance(backends, (list, tuple)) and backends:
+            return backends[0]
+        if isinstance(backends, str):
+            return backends
+
+    return "django.contrib.auth.backends.ModelBackend"
+
+
+def _get_telegram_init_data(request) -> Optional[str]:
+    """Extract the signed init data sent by Telegram Web Apps."""
+
+    candidates = [
+        request.GET.get("tgWebAppData"),
+        request.GET.get("init_data"),
+        request.GET.get("telegram_init_data"),
+        request.META.get("HTTP_X_TELEGRAM_INIT_DATA"),
+    ]
+
+    for candidate in candidates:
+        if candidate:
+            return candidate
+    return None
+
+
+def _verify_telegram_signature(init_data: str, *, bot_token: str) -> dict[str, str]:
+    """Validate the Telegram init data signature and return the parsed payload."""
+
+    parsed_pairs = dict(parse_qsl(init_data, strict_parsing=True))
+    received_hash = parsed_pairs.pop("hash", None)
+    if not received_hash:
+        raise ValueError("Telegram no incluyó la firma de verificación.")
+
+    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed_pairs.items()))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(calculated_hash, received_hash):
+        raise ValueError("La firma de Telegram no es válida.")
+
+    return parsed_pairs
+
+
+def _extract_telegram_user(payload: Mapping[str, str]) -> dict[str, object]:
+    """Load the Telegram user information from the init data payload."""
+
+    user_json = payload.get("user")
+    if not user_json:
+        raise ValueError("Telegram no incluyó la información del usuario.")
+
+    try:
+        user_payload = json.loads(user_json)
+    except json.JSONDecodeError as exc:  # pragma: no cover - defensive parsing
+        raise ValueError("No se pudo interpretar la información del usuario de Telegram.") from exc
+
+    if "id" not in user_payload:
+        raise ValueError("El payload de Telegram no incluye el identificador del usuario.")
+
+    return user_payload
+
+
+def _resolve_primary_group_label(user: UserProfile) -> Optional[str]:
+    """Return the name of the first group associated to the user, if any."""
+
+    if not hasattr(user, "groups"):
+        return None
+
+    group = user.groups.order_by("name").first()
+    return group.name if group else None
 
 
 class TaskManagerHomeView(generic.TemplateView):
@@ -260,7 +386,33 @@ class TaskManagerHomeView(generic.TemplateView):
 task_manager_home_view = TaskManagerHomeView.as_view()
 
 
-def _build_telegram_mini_app_payload(*, date_label: str, display_name: str, username: str, role: str, initials: str) -> dict[str, object]:
+def _build_telegram_mini_app_payload(
+    *,
+    date_label: str,
+    display_name: str,
+    contact_handle: str,
+    role: str,
+    initials: str,
+) -> dict[str, object]:
+    today = timezone.localdate()
+    weekday_label = date_format(today, "l").capitalize()
+    day_number = date_format(today, "d")
+    month_label = date_format(today, "M").strip(".").lower()
+    shift_confirmation = {
+        "date_label": _("Hoy, %(weekday)s %(day)s de %(month)s")
+        % {"weekday": weekday_label, "day": day_number, "month": month_label},
+        "category_label": "Operaciones - Bioseguridad",
+        "position_label": "Auxiliar operativo",
+        "farm": "Granja La Colina",
+        "barn": "Galpón 3",
+        "rooms": ["Sala 1", "Sala 2"],
+        "handoff_from": "Camilo Ortiz",
+        "handoff_to": "Lucía Pérez",
+        "requires_confirmation": True,
+        "confirmed": False,
+        "storage_key": f"miniapp-shift-confirm::{today.isoformat()}",
+    }
+
     tasks = [
         {
             "title": "Checklist apertura galpon",
@@ -328,25 +480,208 @@ def _build_telegram_mini_app_payload(*, date_label: str, display_name: str, user
         "date_label": date_label,
         "user": {
             "display_name": display_name,
-            "username": username,
+            "contact_handle": contact_handle,
             "role": role,
             "avatar_initials": initials,
+        },
+        "goals": {
+            "headline": {
+                "title": "Meta central del mes",
+                "description": "Suma 160 puntos validados para activar el bono productividad y un descanso flexible.",
+                "progress_percent": 68,
+                "progress_label": "",
+                "points_gap_label": "Te faltan 51 pts (≈ 4 tareas claves)",
+                "deadline": "Cierra 30 Nov",
+                "reward": "Bono $120.000 + descanso flexible",
+            },
+            "selection": {
+                "is_open": True,
+                "window_label": "Elige tus metas antes del 08 Nov 11:59 p. m.",
+                "window_description": "Durante esta ventana puedes decidir el plan de metas que prefieras. Tú eliges en qué enfocarte según los premios disponibles.",
+                "selected_option_id": "productivity-bonus",
+                "options": [
+                    {
+                        "id": "productivity-bonus",
+                        "title": "Plan productividad total",
+                        "summary": "Ideal si ya vienes con buena racha y puedes sostener el ritmo.",
+                        "reward_label": "Bono $120.000 + descanso flexible",
+                        "points_required": "160 pts validados",
+                        "effort_label": "4 tareas foco extra esta semana",
+                        "badges": [
+                            {"label": "Mayor premio", "theme": "brand"},
+                            {"label": "Racha mínima 5 días", "theme": "neutral"},
+                        ],
+                        "actions": [
+                            {"label": "Quiero esta meta", "action": "select"},
+                            {"label": "Ver plan detallado", "action": "details"},
+                        ],
+                    },
+                    {
+                        "id": "innovation-pack",
+                        "title": "Plan innovación y mejoras",
+                        "summary": "Perfecto si lideras iniciativas de mejora y registro de evidencias.",
+                        "reward_label": "Bono $90.000 + reconocimiento en comité",
+                        "points_required": "120 pts validados",
+                        "effort_label": "3 reportes con evidencia aprobada",
+                        "badges": [
+                            {"label": "Creatividad", "theme": "success"},
+                            {"label": "Validación líder", "theme": "neutral"},
+                        ],
+                        "actions": [
+                            {"label": "Quiero esta meta", "action": "select"},
+                            {"label": "Ver plan detallado", "action": "details"},
+                        ],
+                    },
+                    {
+                        "id": "balanced-shift",
+                        "title": "Plan balance descanso-trabajo",
+                        "summary": "Suma menos puntos pero asegura descansos estratégicos.",
+                        "reward_label": "Bono $70.000 + turno libre a elección",
+                        "points_required": "100 pts validados",
+                        "effort_label": "Cumplir descansos planificados y 2 extras voluntarias",
+                        "badges": [
+                            {"label": "Descansos", "theme": "neutral"},
+                            {"label": "Flexibilidad", "theme": "brand"},
+                        ],
+                        "actions": [
+                            {"label": "Quiero esta meta", "action": "select"},
+                            {"label": "Ver plan detallado", "action": "details"},
+                        ],
+                    },
+                ],
+            },
+            "items": [
+                {
+                    "title": "Validar tareas criticas",
+                    "progress_percent": 75,
+                    "progress_label": "9 de 12 tareas críticas aprobadas",
+                    "impact": "+90 pts",
+                },
+                {
+                    "title": "Cumplir descansos planificados",
+                    "progress_percent": 40,
+                    "progress_label": "2 de 5 descansos equilibrados",
+                    "impact": "Evita penalizaciones",
+                },
+                {
+                    "title": "Reportes con evidencia",
+                    "progress_percent": 55,
+                    "progress_label": "6 de 11 evidencias aceptadas",
+                    "impact": "+30 pts al bono",
+                },
+            ],
         },
         "tasks": tasks,
         "current_shift": {
             "label": "Turno nocturno - Galpon 3",
             "position": "Posicion: Auxiliar operativo",
             "next": "Proximo turno: 05 Nov - 22:00",
+            "week": {
+                "range_label": "Semana 04 - 09 Nov",
+                "days": [
+                    {
+                        "weekday": "Lun",
+                        "date_label": "04 Nov",
+                        "shift_label": "Noche 22:00-06:00",
+                        "category": "Operaciones - Bioseguridad",
+                        "farm": "Granja La Colina",
+                        "barn": "Galpon 3",
+                        "is_rest": False,
+                    },
+                    {
+                        "weekday": "Mar",
+                        "date_label": "05 Nov",
+                        "shift_label": "Noche 22:00-06:00",
+                        "category": "Operaciones - Bioseguridad",
+                        "farm": "Granja La Colina",
+                        "barn": "Galpon 3",
+                        "is_rest": False,
+                    },
+                    {
+                        "weekday": "Mie",
+                        "date_label": "06 Nov",
+                        "shift_label": "Descanso programado",
+                        "category": "Recuperacion",
+                        "farm": None,
+                        "barn": None,
+                        "is_rest": True,
+                    },
+                    {
+                        "weekday": "Jue",
+                        "date_label": "07 Nov",
+                        "shift_label": "Descanso programado",
+                        "category": "Recuperacion",
+                        "farm": None,
+                        "barn": None,
+                        "is_rest": True,
+                    },
+                    {
+                        "weekday": "Vie",
+                        "date_label": "08 Nov",
+                        "shift_label": "Dia 06:00-14:00",
+                        "category": "Operaciones - Sanidad",
+                        "farm": "Granja La Colina",
+                        "barn": "Galpon 2",
+                        "is_rest": False,
+                    },
+                    {
+                        "weekday": "Sab",
+                        "date_label": "09 Nov",
+                        "shift_label": "Dia 06:00-14:00",
+                        "category": "Operaciones - Sanidad",
+                        "farm": "Granja La Colina",
+                        "barn": "Galpon 2",
+                        "is_rest": False,
+                    },
+                ],
+            },
         },
+        "shift_confirmation": shift_confirmation,
         "scorecard": {
             "points": 122,
             "streak": "Racha vigente: 6 dias cumplidos",
             "extras": "Tareas extra reportadas: 3",
+            "penalties": "Incumplimientos: 1 (impacto -18 pts)",
+            "next_reward": "A 28 pts de desbloquear descanso adicional",
             "message": "Sigue reportando iniciativas. Cada aporte aprobado suma 15 puntos.",
         },
         "suggestions": [
-            "Mantenimiento preventivo ventiladores - pendiente revision del staff.",
-            "Mejora en checklist de bioseguridad - aprobado y publicado.",
+            {
+                "message": "Mantenimiento preventivo ventiladores - pendiente revision del staff.",
+                "status": {
+                    "label": "En revisión",
+                    "theme": "pending",
+                    "icon": "clock",
+                    "badge_class": "border-amber-200 bg-amber-50 text-amber-700",
+                },
+            },
+            {
+                "message": "Mejora en checklist de bioseguridad - aprobado y publicado.",
+                "status": {
+                    "label": "Aprobada",
+                    "theme": "approved",
+                    "icon": "check",
+                    "badge_class": "border-emerald-200 bg-emerald-50 text-emerald-700",
+                },
+            },
+            {
+                "message": "Ajuste de cronograma de limpieza - reprogramada para el siguiente turno.",
+                "status": {
+                    "label": "Reprogramada",
+                    "theme": "rescheduled",
+                    "icon": "arrow-path",
+                    "badge_class": "border-sky-200 bg-sky-50 text-sky-700",
+                },
+            },
+            {
+                "message": "Propuesta de puntos adicionales en descanso - rechazada por comité.",
+                "status": {
+                    "label": "Rechazada",
+                    "theme": "rejected",
+                    "icon": "x-mark",
+                    "badge_class": "border-rose-200 bg-rose-50 text-rose-700",
+                },
+            },
         ],
         "history": [
             {"label": "03 Nov", "summary": "3 tareas completadas - 1 postergada"},
@@ -356,34 +691,131 @@ def _build_telegram_mini_app_payload(*, date_label: str, display_name: str, user
     }
 
 
-class TaskManagerTelegramMiniAppView(generic.TemplateView):
-    """Render the operator experience for the Telegram mini app with integration hooks."""
+class TaskManagerMiniAppView(generic.TemplateView):
+    """Render the operator experience for the mini app, handling authentication sources."""
 
     template_name = "task_manager/telegram_mini_app.html"
+    form_class = MiniAppAuthenticationForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.mini_app_client = _resolve_mini_app_client(request)
+        self.telegram_auth_error: Optional[str] = None
+        self.telegram_user_payload: Optional[dict[str, object]] = None
+
+        if self.mini_app_client == MiniAppClient.TELEGRAM and not request.user.is_authenticated:
+            user, error = self._attempt_telegram_login(request)
+            if user:
+                backend = _default_auth_backend()
+                user.backend = backend  # type: ignore[attr-defined]
+                login(request, user)
+            else:
+                self.telegram_auth_error = error
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request=request, data=request.POST)
+        if form.is_valid():
+            login(request, form.get_user())
+            return redirect(request.path)
+
+        return self.render_to_response(self.get_context_data(form=form))
+
+    def _attempt_telegram_login(self, request) -> Tuple[Optional[UserProfile], Optional[str]]:
+        init_data = _get_telegram_init_data(request)
+        if not init_data:
+            return None, _("No se recibieron las credenciales de Telegram.")
+
+        bot = _resolve_default_mini_app_bot()
+        if not bot:
+            return None, _("No hay un bot de Telegram activo configurado para la mini app.")
+
+        try:
+            payload = _verify_telegram_signature(init_data, bot_token=bot.token)
+            user_payload = _extract_telegram_user(payload)
+        except ValueError as exc:
+            return None, str(exc)
+
+        telegram_user_id = user_payload.get("id")
+        chat_link = (
+            TelegramChatLink.objects.filter(bot=bot, telegram_user_id=telegram_user_id)
+            .select_related("user")
+            .first()
+        )
+
+        if not chat_link:
+            return None, _("No encontramos un chat verificado asociado a tu cuenta de Telegram.")
+
+        if chat_link.status != TelegramChatLink.Status.VERIFIED:
+            return None, _("Tu chat de Telegram aún no ha sido verificado.")
+
+        user = chat_link.user
+        if not getattr(user, "is_active", False):
+            return None, _("Tu cuenta está inactiva. Contacta al administrador.")
+
+        if not user.has_perm("task_manager.access_mini_app"):
+            return None, _("No tienes permisos para acceder a la mini app.")
+
+        self.telegram_user_payload = user_payload
+        self._refresh_chat_link_metadata(chat_link, user_payload)
+        return user, None
+
+    def _refresh_chat_link_metadata(self, chat_link: TelegramChatLink, user_payload: Mapping[str, object]) -> None:
+        update_fields: list[str] = []
+        for attr in ("username", "first_name", "last_name", "language_code"):
+            value = user_payload.get(attr)
+            if value is None:
+                continue
+            if getattr(chat_link, attr) != value:
+                setattr(chat_link, attr, value)
+                update_fields.append(attr)
+
+        chat_link.last_interaction_at = timezone.now()
+        update_fields.append("last_interaction_at")
+
+        if update_fields:
+            if "updated_at" not in update_fields:
+                update_fields.append("updated_at")
+            chat_link.save(update_fields=update_fields)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         today = timezone.localdate()
         user = getattr(self.request, "user", None)
-        if getattr(user, "is_authenticated", False):
-            raw_full_name = user.get_full_name() or ""
-            raw_username = user.get_username() or ""
+
+        has_authenticated_user = getattr(user, "is_authenticated", False)
+        has_access = has_authenticated_user and user.has_perm("task_manager.access_mini_app")
+
+        if has_access:
+            display_name = (user.get_full_name() or user.get_username() or "Operario").strip()
+            phone_number = getattr(user, "telefono", "") or ""
+            phone_number = str(phone_number).strip()
+            contact_handle = f"@{phone_number}" if phone_number else "@Sin teléfono"
+            role_label = _resolve_primary_group_label(user) or "Operario"
+            initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+            context["telegram_mini_app"] = _build_telegram_mini_app_payload(
+                date_label=date_format(today, "DATE_FORMAT"),
+                display_name=display_name,
+                contact_handle=contact_handle,
+                role=role_label,
+                initials=initials,
+            )
+            context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
-            raw_full_name = ""
-            raw_username = ""
+            context["telegram_mini_app"] = None
+            context["mini_app_logout_url"] = None
 
-        display_name = (raw_full_name or raw_username or "Operario invitado").strip()
-        username = raw_username.strip()
-        initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+        if not has_access:
+            form = kwargs.get("form") or self.form_class(request=self.request)
+            context["mini_app_form"] = form
+        else:
+            context["mini_app_form"] = None
 
-        context["telegram_mini_app"] = _build_telegram_mini_app_payload(
-            date_label=date_format(today, "DATE_FORMAT"),
-            display_name=display_name,
-            username=username,
-            role="Operario",
-            initials=initials,
-        )
-        context["telegram_integration_enabled"] = True
+        context["mini_app_client"] = self.mini_app_client.value
+        context["telegram_integration_enabled"] = self.mini_app_client == MiniAppClient.TELEGRAM
+        context["telegram_auth_error"] = self.telegram_auth_error
+        context["mini_app_access_granted"] = has_access
+
         return context
 
 
@@ -400,7 +832,7 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
         context["telegram_mini_app"] = _build_telegram_mini_app_payload(
             date_label=date_format(today, "DATE_FORMAT"),
             display_name=display_name,
-            username="",
+            contact_handle="@demo",
             role="Vista previa",
             initials=initials,
         )
@@ -408,7 +840,15 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
         return context
 
 
-telegram_mini_app_view = TaskManagerTelegramMiniAppView.as_view()
+def mini_app_logout_view(request):
+    if request.method == "POST":
+        logout(request)
+        return redirect("task_manager:telegram-mini-app")
+
+    return redirect("task_manager:telegram-mini-app")
+
+
+telegram_mini_app_view = TaskManagerMiniAppView.as_view()
 telegram_mini_app_demo_view = TaskManagerTelegramMiniAppDemoView.as_view()
 
 

@@ -242,6 +242,9 @@ class TaskDefinition(models.Model):
         verbose_name = _("Tarea")
         verbose_name_plural = _("Tareas")
         ordering = ("display_order", "name", "pk")
+        permissions = [
+            ("access_mini_app", _("Puede acceder a la mini app de tareas")),
+        ]
 
     def __str__(self) -> str:
         return self.name
