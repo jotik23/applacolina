@@ -765,7 +765,7 @@ def apply_task_definition_filters(
     status_value = filters.status
     status_id = _parse_positive_int(status_value)
     if status_id is not None:
-        queryset = queryset.filter(status_id=status_id)
+        queryset = queryset.filter(effective_status_id=status_id)
 
     category_value = filters.category
     category_id = _parse_positive_int(category_value)
@@ -972,10 +972,20 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
         else:
             schedule_detail = " · ".join(schedule_segments) if schedule_segments else _("Configuración pendiente")
 
-        status_label = task.status.name if getattr(task, "status", None) and task.status.name else _("Sin estado")
+        effective_status = task.effective_status
+        effective_status_id = task.effective_status_id
+        if effective_status and getattr(effective_status, "name", ""):
+            status_label = effective_status.name
+            status_is_active = effective_status.is_active
+        elif getattr(task, "status", None) and getattr(task.status, "name", ""):
+            status_label = task.status.name
+            status_is_active = task.status.is_active
+        else:
+            status_label = _("Sin estado")
+            status_is_active = False
         status_key_value = (
-            f"status:{task.status_id}"
-            if task.status_id
+            f"status:{effective_status_id}"
+            if effective_status_id
             else f"status:{slugify(status_label) or 'sin-estado'}"
         )
         group_status = TaskDefinitionGroupValue(
@@ -1048,8 +1058,8 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
                 name=task.name,
                 description=task.description,
                 category_label=task.category.name,
-                status_label=task.status.name,
-                status_is_active=task.status.is_active,
+                status_label=status_label,
+                status_is_active=status_is_active,
                 task_type_label=task_type_label,
                 schedule_summary=schedule_summary,
                 schedule_segments=schedule_segments,

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import Iterable
+from functools import lru_cache
+from typing import Iterable, Optional
 
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import BooleanField, Case, F, IntegerField, Q, Value, When
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from production.models import ChickenHouse, Farm, Room
@@ -17,6 +20,8 @@ class TaskStatus(models.Model):
     name = models.CharField(_("Nombre"), max_length=80, unique=True)
     is_active = models.BooleanField(_("Activo"), default=True)
 
+    OVERDUE_NAME: str = "Vencido"
+
     class Meta:
         verbose_name = _("Estado de tarea")
         verbose_name_plural = _("Estados de tareas")
@@ -24,6 +29,19 @@ class TaskStatus(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @classmethod
+    @lru_cache(maxsize=1)
+    def overdue_status(cls) -> Optional["TaskStatus"]:
+        try:
+            return cls.objects.get(name__iexact=cls.OVERDUE_NAME)
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    def overdue_status_id(cls) -> Optional[int]:
+        status = cls.overdue_status()
+        return status.pk if status else None
 
 
 class TaskCategory(models.Model):
@@ -38,6 +56,39 @@ class TaskCategory(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class TaskDefinitionQuerySet(models.QuerySet):
+    def with_overdue_state(self) -> "TaskDefinitionQuerySet":
+        today = timezone.localdate()
+        overdue_condition = Q(
+            task_type="one_time",
+            scheduled_for__isnull=False,
+            scheduled_for__lt=today,
+        )
+        overdue_status_id = TaskStatus.overdue_status_id()
+        annotations: dict[str, models.Expression] = {
+            "is_overdue": Case(
+                When(overdue_condition, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            ),
+        }
+        if overdue_status_id is not None:
+            annotations["effective_status_id"] = Case(
+                When(overdue_condition, then=Value(overdue_status_id)),
+                default=F("status_id"),
+                output_field=IntegerField(),
+            )
+        else:
+            annotations["effective_status_id"] = F("status_id")
+        return self.annotate(**annotations)
+
+
+class TaskDefinitionManager(models.Manager.from_queryset(TaskDefinitionQuerySet)):
+    def get_queryset(self) -> TaskDefinitionQuerySet:
+        queryset = super().get_queryset()
+        return queryset.with_overdue_state()
 
 
 class TaskDefinition(models.Model):
@@ -185,6 +236,8 @@ class TaskDefinition(models.Model):
     created_at = models.DateTimeField(_("Creado en"), auto_now_add=True)
     updated_at = models.DateTimeField(_("Actualizado en"), auto_now=True)
 
+    objects = TaskDefinitionManager()
+
     class Meta:
         verbose_name = _("Tarea")
         verbose_name_plural = _("Tareas")
@@ -258,6 +311,55 @@ class TaskDefinition(models.Model):
     def _clear_recurrence_arrays(self) -> None:
         for field_name in self.RECURRENCE_ARRAY_FIELDS:
             setattr(self, field_name, [])
+
+    def _compute_is_overdue(self, reference_date=None) -> bool:
+        if reference_date is None:
+            reference_date = timezone.localdate()
+        if self.task_type != self.TaskType.ONE_TIME:
+            return False
+        if not self.scheduled_for:
+            return False
+        return self.scheduled_for < reference_date
+
+    @property
+    def is_overdue(self) -> bool:
+        cached = getattr(self, "_is_overdue_cache", None)
+        if cached is not None:
+            return bool(cached)
+        computed = self._compute_is_overdue()
+        self._is_overdue_cache = computed
+        return computed
+
+    @is_overdue.setter
+    def is_overdue(self, value: bool) -> None:
+        self._is_overdue_cache = bool(value)
+
+    def _compute_effective_status_id(self) -> Optional[int]:
+        overdue_status_id = TaskStatus.overdue_status_id()
+        if self.is_overdue and overdue_status_id is not None:
+            return overdue_status_id
+        return self.status_id
+
+    @property
+    def effective_status_id(self) -> Optional[int]:
+        cached = getattr(self, "_effective_status_id_cache", None)
+        if cached is not None:
+            return cached
+        computed = self._compute_effective_status_id()
+        self._effective_status_id_cache = computed
+        return computed
+
+    @effective_status_id.setter
+    def effective_status_id(self, value: Optional[int]) -> None:
+        self._effective_status_id_cache = None if value is None else int(value)
+
+    @property
+    def effective_status(self) -> Optional[TaskStatus]:
+        if self.is_overdue:
+            overdue_status = TaskStatus.overdue_status()
+            if overdue_status is not None:
+                return overdue_status
+        return self.status
 
 
 class TaskAssignment(models.Model):
