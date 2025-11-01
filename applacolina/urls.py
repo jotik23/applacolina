@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 admin.site.site_header = "Administracion de La Colina"
 admin.site.site_title = "Administracion de La Colina"
@@ -23,7 +24,8 @@ admin.site.index_title = "Panel de administracion"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('personal.portal_urls', namespace='portal')),
+    path('', RedirectView.as_view(pattern_name='task_manager:index', permanent=False)),
+    path('portal/', include('personal.portal_urls', namespace='portal')),
     path('calendario/', include('personal.urls', namespace='personal')),
     path('task-manager/', include('task_manager.urls', namespace='task_manager')),
     path('produccion-avicola/', include('production.urls', namespace='production')),

@@ -90,6 +90,24 @@
       box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08);
     }
 
+    .tm-filter-picker[data-disabled='true'] .tm-filter-trigger,
+    .tm-filter-trigger[disabled] {
+      cursor: not-allowed;
+      border-color: rgba(148, 163, 184, 0.35);
+      background-color: rgba(248, 250, 252, 0.85);
+      color: rgba(71, 85, 105, 0.6);
+      box-shadow: none;
+      opacity: 0.75;
+    }
+
+    .tm-filter-picker[data-disabled='true'] .tm-filter-trigger:hover,
+    .tm-filter-trigger[disabled]:hover,
+    .tm-filter-picker[data-disabled='true'] .tm-filter-trigger[data-hover='true'] {
+      border-color: rgba(148, 163, 184, 0.35);
+      color: rgba(71, 85, 105, 0.6);
+      box-shadow: none;
+    }
+
     .tm-filter-trigger:focus-visible {
       outline: none;
       border-color: rgba(59, 130, 246, 0.55);
@@ -528,14 +546,14 @@
   <div class="space-y-10">
     <section data-tm-tabs class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <nav class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
-        <button data-tm-tab="tareas" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Tareas</button>
-        <button data-tm-tab="asignaciones" class="tab-button rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="true">Asignaciones diarias</button>
-        <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Seguimiento &amp; análisis</button>
-        <button data-tm-tab="operario" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Vista operario</button>
+        <button data-tm-tab="tareas" class="tab-button rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="true">Tareas</button>
+        <button data-tm-tab="asignaciones" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Asignaciones diarias</button>
+        <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Seguimiento &amp; análisis</button>
+        <a href="{% url 'task_manager:telegram-mini-app' %}" target="_blank" rel="noopener noreferrer" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Vista operario</a>
       </nav>
 
       <div class="space-y-12">
-        <article id="tm-tareas" data-tm-panel="tareas" class="hidden space-y-10">
+        <article id="tm-tareas" data-tm-panel="tareas" class="space-y-10">
           <section class="space-y-6">
             <header class="flex flex-wrap items-center justify-between gap-4">
             </header>
@@ -548,7 +566,22 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="tm-badge-neutral">Filtros</span>
-                    <span id="tm-task-filters-heading" class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">Combina criterios para refinar la lista</span>
+                    <span id="tm-task-filters-heading" class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400"></span>
+                    {% if task_definition_filters_applied %}
+                      <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                        {% for filter in task_definition_active_filters %}
+                          <a
+                            href="{{ filter.remove_url }}"
+                            class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
+                          >
+                            <span>{{ filter.label }}:</span>
+                            <span class="text-slate-900">{{ filter.display_value }}</span>
+                            <span aria-hidden="true" class="text-slate-400">&times;</span>
+                            <span class="sr-only">Quitar filtro {{ filter.label }}</span>
+                          </a>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </div>
                   <a
                     href="{{ task_definition_clear_filters_url }}"
@@ -558,23 +591,6 @@
                     Limpiar filtros
                   </a>
                 </div>
-                {% if task_definition_filters_applied %}
-                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-                    {% for filter in task_definition_active_filters %}
-                      <a
-                        href="{{ filter.remove_url }}"
-                        class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
-                      >
-                        <span>{{ filter.label }}:</span>
-                        <span class="text-slate-900">{{ filter.display_value }}</span>
-                        <span aria-hidden="true" class="text-slate-400">&times;</span>
-                        <span class="sr-only">Quitar filtro {{ filter.label }}</span>
-                      </a>
-                    {% endfor %}
-                  </div>
-                {% else %}
-                  <p class="text-[0.72rem] font-medium text-slate-400">Sin filtros activos. Usa los selectores para refinar la lista.</p>
-                {% endif %}
                 <div class="grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-6">
                   <fieldset class="space-y-3">
                     <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</legend>
@@ -634,39 +650,24 @@
 
               <div class="border-t border-dashed border-slate-200/70"></div>
 
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   <span class="tm-badge-neutral">Agrupación</span>
-                  <span>Organiza la tabla por tus prioridades</span>
                 </div>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
-                  data-group-clear
-                  data-disabled-label="true"
-                >
-                  Limpiar agrupación
-                </button>
-              </div>
-
-              <div class="flex flex-wrap items-start gap-5">
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agrupar rápidamente</legend>
+                <fieldset class="flex min-w-[170px] basis-[220px] flex-none flex-col gap-1 self-stretch justify-center">
                   {% with config=task_manager_group_primary_filter %}
                     {% include "task_manager/includes/filter_picker.html" with name="group_primary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
                   {% endwith %}
                 </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agrupación secundaria</legend>
+                <fieldset class="flex min-w-[170px] basis-[220px] flex-none flex-col gap-1 self-stretch justify-center" data-group-secondary-fieldset>
                   {% with config=task_manager_group_secondary_filter %}
                     {% include "task_manager/includes/filter_picker.html" with name="group_secondary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
                   {% endwith %}
                 </fieldset>
 
-                <fieldset class="min-w-[220px] flex-1 space-y-3">
-                  <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agrupaciones sugeridas</legend>
-                  <div class="flex flex-wrap gap-2">
+                <fieldset class="flex min-w-[220px] flex-1 flex-col gap-2 self-stretch justify-center">
+                  <div class="flex h-full flex-wrap items-center gap-2">
                     <button
                       type="button"
                       class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
@@ -686,10 +687,21 @@
                       class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
                       data-group-preset="scope-task_type"
                     >
-                      Lugar → Tipo de planificación
+                      Lugar → Planificación
                     </button>
                   </div>
                 </fieldset>
+
+                <div class="ml-auto flex-none self-center">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                    data-group-clear
+                    data-disabled-label="true"
+                  >
+                    Limpiar agrupación
+                  </button>
+                </div>
               </div>
             </form>
 
@@ -807,7 +819,7 @@
           </div>
         </article>
 
-        <article id="tm-asignaciones" data-tm-panel="asignaciones" class="space-y-8">
+        <article id="tm-asignaciones" data-tm-panel="asignaciones" class="hidden space-y-8">
           <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-lg font-semibold text-slate-900">Planificador de asignaciones</h2>
@@ -1336,155 +1348,6 @@
           </section>
         </article>
 
-        <article id="tm-operario" data-tm-panel="operario" class="hidden space-y-9">
-          <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-slate-900">Vista operario</h2>
-              <p class="text-sm text-slate-500">Experiencia directa para que cada colaborador gestione sus tareas, descansos y sugerencias.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-              <button type="button" class="rounded-full border border-slate-200 px-3 py-1 hover:border-brand hover:text-brand">Ver modo móvil</button>
-              <button type="button" class="rounded-full border border-slate-200 px-3 py-1 hover:border-brand hover:text-brand">Enviar recordatorio push</button>
-            </div>
-          </header>
-
-          <section class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr),minmax(0,1fr)]">
-            <div class="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 class="text-base font-semibold text-slate-900">Tareas del día · 04 Nov 2025</h3>
-                  <p class="text-sm text-slate-500">Resalta tareas recurrentes, únicas por vencer y aquellas vencidas.</p>
-                </div>
-                <div class="flex items-center gap-2 text-xs text-slate-500">
-                  <div class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
-                    Vista
-                    <div class="min-w-[160px]">
-                  {% with config=task_manager_today_view_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="today_view" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                    </div>
-                  </div>
-                  <button type="button" class="rounded-full border border-slate-200 px-3 py-1 font-semibold hover:border-brand hover:text-brand">Histórico</button>
-                  <button type="button" class="rounded-full bg-brand px-3 py-1 text-sm font-semibold text-white hover:bg-brand-dark">Reportar nueva tarea</button>
-                </div>
-              </header>
-
-              <div class="space-y-4">
-                <article class="tm-operario-card border-l-4 border-brand">
-                  <header>
-                    <h4>Checklist apertura galpón</h4>
-                    <span class="tm-badge tm-badge-brand">Recurrente</span>
-                    <span class="tm-badge tm-badge-neutral">Prioridad media</span>
-                  </header>
-                  <p>Completar antes de iniciar el turno. Verifica ventilación, bebederos y bioseguridad.</p>
-                  <div class="tm-operario-meta">
-                    <span>Turno: Diurno · Posición auxiliar operativo</span>
-                    <span>Asignada por: Supervisor bioseguridad</span>
-                  </div>
-                  <div class="tm-operario-actions">
-                    <button type="button">Marcar completada</button>
-                    <button type="button">Agregar evidencia</button>
-                    <button type="button">Postergar</button>
-                  </div>
-                </article>
-
-                <article class="tm-operario-card border-l-4 border-rose-400 bg-rose-50/40">
-                  <header>
-                    <h4>Reporte correctivo galpón 2</h4>
-                    <span class="tm-badge tm-badge-critical">Única · Vencida</span>
-                  </header>
-                  <p>Registrar hallazgos del recorrido nocturno. Adjuntar fotografías.</p>
-                  <div class="tm-operario-meta">
-                    <span>Turno: Nocturno · Posición líder de turno</span>
-                    <span>Asignada para: 03 Nov · Vence hoy</span>
-                  </div>
-                  <div class="tm-operario-actions">
-                    <button type="button">Enviar evidencia</button>
-                    <button type="button">Agregar nota</button>
-                    <button type="button">Solicitar ayuda</button>
-                  </div>
-                </article>
-
-                <article class="tm-operario-card border-l-4 border-emerald-400 bg-emerald-50/40">
-                  <header>
-                    <h4>Capacitación protocolos</h4>
-                    <span class="tm-badge tm-badge-success">Extra voluntaria</span>
-                  </header>
-                  <p>Participa en la sesión de actualización de protocolos de higiene. Suma puntos adicionales.</p>
-                  <div class="tm-operario-meta">
-                    <span>Horario: 16:00 · Sala formación</span>
-                    <span>Reportada por: Gabriela Melo</span>
-                  </div>
-                  <div class="tm-operario-actions">
-                    <button type="button">Acepto realizarla</button>
-                    <button type="button">Dejar en pull</button>
-                  </div>
-                </article>
-
-                <article class="tm-operario-card border-l-4 border-slate-400 bg-slate-50">
-                  <header>
-                    <h4>Descanso programado</h4>
-                    <span class="tm-badge tm-badge-neutral">Automático</span>
-                  </header>
-                  <p>Descanso compensatorio después de 6 días de racha. No se asignan tareas en esta franja.</p>
-                  <div class="tm-operario-meta">
-                    <span>Fecha: 05 Nov · Pr&oacute;ximo turno nocturno</span>
-                    <span>Generado automáticamente para balancear jornada</span>
-                  </div>
-                  <div class="tm-operario-actions">
-                    <button type="button">Ver historial</button>
-                    <button type="button">Solicitar cambio</button>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <aside class="space-y-5 rounded-xl border border-slate-100 bg-slate-50/40 p-6">
-              <section>
-                <h3 class="text-sm font-semibold text-slate-900">Mi turno actual</h3>
-                <div class="mt-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                  <p class="font-semibold text-slate-800">Turno nocturno · Galpón 3</p>
-                  <p class="mt-1 text-xs text-slate-500">Posición: Auxiliar operativo</p>
-                  <p class="mt-3 text-xs text-slate-500">Próximo turno: 05 Nov · 22:00</p>
-                </div>
-              </section>
-              <section>
-                <h3 class="text-sm font-semibold text-slate-900">Puntaje y consistencia</h3>
-                <div class="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-500">
-                  <p>Total puntos: <span class="font-semibold text-slate-800">122</span></p>
-                  <p>Racha vigente: <span class="font-semibold text-slate-800">6 días cumplidos</span></p>
-                  <p>Tareas extra reportadas: <span class="font-semibold text-slate-800">3</span></p>
-                  <p class="mt-3 text-slate-500">Sigue reportando iniciativas. Cada aporte aprobado suma 15 puntos.</p>
-                </div>
-              </section>
-              <section>
-                <h3 class="text-sm font-semibold text-slate-900">Sugerencias enviadas</h3>
-                <ul class="mt-3 space-y-3 text-xs text-slate-500">
-                  <li class="rounded-lg border border-emerald-200 bg-white px-3 py-2">
-                    Mantenimiento preventivo ventiladores — pendiente revisión del staff.
-                  </li>
-                  <li class="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    Mejora en checklist de bioseguridad — aprobado y publicado.
-                  </li>
-                </ul>
-              </section>
-              <section>
-                <h3 class="text-sm font-semibold text-slate-900">Histórico rápido</h3>
-                <div class="mt-3 space-y-2 text-xs text-slate-500">
-                  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span class="font-semibold text-slate-700">03 Nov</span> · 3 tareas completadas · 1 postergada
-                  </div>
-                  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span class="font-semibold text-slate-700">02 Nov</span> · 4 tareas completadas
-                  </div>
-                  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span class="font-semibold text-slate-700">01 Nov</span> · Descanso programado
-                  </div>
-                </div>
-              </section>
-            </aside>
-          </section>
-        </article>
       </div>
     </section>
   </div>
@@ -1555,22 +1418,6 @@
       border-color: rgba(245, 158, 11, 0.9);
       color: rgb(245 158 11);
     }
-    .tm-operario-card {
-      border-radius: 1rem;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      background-color: rgba(255, 255, 255, 0.95);
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
-    }
-    .tm-operario-card header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
-    }
     .tm-badge {
       display: inline-flex;
       align-items: center;
@@ -1597,30 +1444,6 @@
     .tm-badge-success {
       background-color: rgba(134, 239, 172, 0.2);
       color: rgb(22, 101, 52);
-    }
-    .tm-operario-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      font-size: 0.75rem;
-      color: rgb(100, 116, 139);
-    }
-    .tm-operario-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-    .tm-operario-actions button {
-      border-radius: 9999px;
-      border: 1px solid rgba(148, 163, 184, 0.6);
-      padding: 0.25rem 0.75rem;
-      color: rgb(71, 85, 105);
-    }
-    .tm-operario-actions button:hover {
-      border-color: rgba(245, 158, 11, 0.9);
-      color: rgb(245 158 11);
     }
     .tm-task-row-highlight {
       animation: tm-task-row-glow 3s ease-out forwards;
@@ -1968,6 +1791,11 @@
 
           if (trigger) {
             trigger.addEventListener('click', function (event) {
+              if (trigger.hasAttribute('disabled') || picker.getAttribute('data-disabled') === 'true') {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+              }
               event.preventDefault();
               var isOpen = picker.getAttribute('data-open') === 'true';
               if (isOpen) {
@@ -2066,6 +1894,17 @@
             }
             var controller = pickerControllers.get(String(name));
             return controller ? controller.element : null;
+          },
+          close: function (name) {
+            if (!name) {
+              return false;
+            }
+            var controller = pickerControllers.get(String(name));
+            if (!controller) {
+              return false;
+            }
+            closePicker(controller.element);
+            return true;
           },
         };
       };
@@ -3071,6 +2910,7 @@
 
         var presetButtons = filterForm.querySelectorAll('[data-group-preset]');
         var clearGroupingButton = filterForm.querySelector('[data-group-clear]');
+        var secondaryFieldset = filterForm.querySelector('[data-group-secondary-fieldset]');
 
         var updateGroupingClearState = function () {
           if (!clearGroupingButton) {
@@ -3091,6 +2931,45 @@
           clearGroupingButton.toggleAttribute('disabled', !hasGrouping);
         };
 
+        var updateSecondaryGroupingState = function () {
+          var filtersApi = window.tmFilterPickers;
+          if (!filtersApi || typeof filtersApi.getValue !== 'function') {
+            return;
+          }
+          var primaryValue = filtersApi.getValue('group_primary') || '';
+          var shouldDisable = !primaryValue || primaryValue === 'none';
+          if (shouldDisable && filtersApi && typeof filtersApi.select === 'function') {
+            filtersApi.select('group_secondary', 'none', { silent: true });
+          }
+          if (shouldDisable && filtersApi && typeof filtersApi.close === 'function') {
+            filtersApi.close('group_secondary');
+          }
+          var secondaryPicker =
+            filtersApi && typeof filtersApi.getPicker === 'function'
+              ? filtersApi.getPicker('group_secondary')
+              : null;
+          if (!secondaryPicker) {
+            return;
+          }
+          if (shouldDisable) {
+            secondaryPicker.setAttribute('data-disabled', 'true');
+          } else {
+            secondaryPicker.removeAttribute('data-disabled');
+          }
+          var trigger = secondaryPicker.querySelector('[data-filter-trigger]');
+          if (trigger) {
+            trigger.toggleAttribute('disabled', shouldDisable);
+            if (shouldDisable) {
+              trigger.setAttribute('aria-disabled', 'true');
+            } else {
+              trigger.removeAttribute('aria-disabled');
+            }
+          }
+          if (secondaryFieldset) {
+            secondaryFieldset.classList.toggle('opacity-60', shouldDisable);
+          }
+        };
+
         var handleGroupingPreset = function (preset) {
           if (!preset) {
             return;
@@ -3108,6 +2987,7 @@
           var primaryChanged = filtersApi.select('group_primary', primaryValue, { silent: true });
           var secondaryChanged = filtersApi.select('group_secondary', secondaryValue, { silent: true });
           updateGroupingClearState();
+          updateSecondaryGroupingState();
           if (primaryChanged || secondaryChanged) {
             applyTaskDefinitionFilters();
           }
@@ -3133,6 +3013,7 @@
             var primaryCleared = filtersApi.select('group_primary', 'none', { silent: true });
             var secondaryCleared = filtersApi.select('group_secondary', 'none', { silent: true });
             updateGroupingClearState();
+            updateSecondaryGroupingState();
             if (primaryCleared || secondaryCleared) {
               applyTaskDefinitionFilters();
             }
@@ -3143,12 +3024,15 @@
             }
             if (event.detail.name === 'group_primary' || event.detail.name === 'group_secondary') {
               updateGroupingClearState();
+              updateSecondaryGroupingState();
             }
           });
           updateGroupingClearState();
+          updateSecondaryGroupingState();
         }
 
         updateGroupingClearState();
+        updateSecondaryGroupingState();
       }
 
       var popover = document.createElement('div');
@@ -3573,14 +3457,21 @@
       if (!tabContainer) {
         return;
       }
-      var buttons = Array.prototype.slice.call(tabContainer.querySelectorAll('.tab-button'));
+      var buttons = Array.prototype.slice.call(tabContainer.querySelectorAll('.tab-button[data-tm-tab]'));
       var panels = Array.prototype.slice.call(tabContainer.querySelectorAll('[data-tm-panel]'));
       function findButton(tabId) {
         return buttons.find(function (button) {
           return button.getAttribute('data-tm-tab') === tabId;
         });
       }
-      function activate(tabId) {
+      function isDisabled(button) {
+        return !!(button && (button.disabled || button.getAttribute('aria-disabled') === 'true'));
+      }
+      function activate(tabId, options) {
+        var shouldFocus = true;
+        if (options && Object.prototype.hasOwnProperty.call(options, 'focus')) {
+          shouldFocus = !!options.focus;
+        }
         panels.forEach(function (panel) {
           var isActive = panel.getAttribute('data-tm-panel') === tabId;
           panel.classList.toggle('hidden', !isActive);
@@ -3592,41 +3483,46 @@
           button.classList.toggle('text-white', isActive);
         });
         var target = tabContainer.querySelector('[data-tm-panel="' + tabId + '"]');
-        if (target) {
+        if (shouldFocus && target) {
           target.setAttribute('tabindex', '-1');
           target.focus();
           target.removeAttribute('tabindex');
         }
       }
-      function tryActivate(tabId) {
+      function tryActivate(tabId, options) {
         if (!tabId) {
           return false;
         }
         var targetButton = findButton(tabId);
-        if (!targetButton) {
+        if (!targetButton || isDisabled(targetButton)) {
           return false;
         }
-        activate(tabId);
+        activate(tabId, options);
         return true;
       }
       buttons.forEach(function (button) {
+        if (isDisabled(button)) {
+          button.setAttribute('aria-disabled', 'true');
+          button.setAttribute('tabindex', '-1');
+          return;
+        }
         button.addEventListener('click', function () {
           activate(button.getAttribute('data-tm-tab'));
         });
       });
       var params = new URLSearchParams(window.location.search);
       var tabFromQuery = params.get('tm_tab');
-      if (tryActivate(tabFromQuery)) {
+      if (tryActivate(tabFromQuery, { focus: false })) {
         return;
       }
       var hash = window.location.hash;
       if (hash && hash.indexOf('#tm-') === 0) {
         var tabId = hash.slice(4);
-        if (tryActivate(tabId)) {
+        if (tryActivate(tabId, { focus: false })) {
           return;
         }
       }
-      activate('asignaciones');
+      activate('tareas', { focus: false });
     })();
   </script>
 {% endblock %}

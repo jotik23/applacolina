@@ -61,7 +61,7 @@ class TaskManagerHomeView(generic.TemplateView):
                 highlight_id = None
 
         queryset = get_task_definition_queryset(filters)
-        paginator = Paginator(queryset, 20)
+        paginator = Paginator(queryset, 400)
         page_number = self.request.GET.get("page")
         page_obj = paginator.get_page(page_number)
 
@@ -112,28 +112,24 @@ class TaskManagerHomeView(generic.TemplateView):
         context["task_definition_page_end"] = end_index
 
         group_primary_groups = build_grouping_primary_filter_groups()
-        raw_group_primary = (self.request.GET.get("group_primary") or "none").strip() or "none"
-        group_primary_value = (
-            raw_group_primary
-            if resolve_option_label(group_primary_groups, raw_group_primary) is not None
-            else "none"
-        )
-        group_primary_label = (
-            resolve_option_label(group_primary_groups, group_primary_value) or _("Sin agrupación")
-        )
+        default_group_primary = "status"
+        raw_group_primary = (self.request.GET.get("group_primary") or "").strip()
+        group_primary_candidate = raw_group_primary or default_group_primary
+        if resolve_option_label(group_primary_groups, group_primary_candidate) is None:
+            group_primary_candidate = default_group_primary
+        group_primary_value = group_primary_candidate
+        group_primary_label = resolve_option_label(group_primary_groups, group_primary_value) or _("Sin agrupación")
 
         group_secondary_groups = build_grouping_secondary_filter_groups()
-        raw_group_secondary = (self.request.GET.get("group_secondary") or "none").strip() or "none"
-        group_secondary_value = (
-            raw_group_secondary
-            if resolve_option_label(group_secondary_groups, raw_group_secondary) is not None
-            else "none"
-        )
-        if group_secondary_value == group_primary_value:
-            group_secondary_value = "none"
-        group_secondary_label = (
-            resolve_option_label(group_secondary_groups, group_secondary_value) or _("No aplicar")
-        )
+        default_group_secondary = "responsible"
+        raw_group_secondary = (self.request.GET.get("group_secondary") or "").strip()
+        group_secondary_candidate = raw_group_secondary or default_group_secondary
+        if resolve_option_label(group_secondary_groups, group_secondary_candidate) is None:
+            group_secondary_candidate = default_group_secondary
+        if group_secondary_candidate == group_primary_value and group_secondary_candidate != "none":
+            group_secondary_candidate = "none"
+        group_secondary_value = group_secondary_candidate
+        group_secondary_label = resolve_option_label(group_secondary_groups, group_secondary_value) or _("No aplicar")
 
         schedule_start_date = _parse_iso_date(filters.scheduled_start)
         schedule_end_date = _parse_iso_date(filters.scheduled_end)
@@ -543,7 +539,7 @@ class TaskDefinitionListView(LoginRequiredMixin, View):
 
         filters = build_task_definition_filters(request.GET)
         queryset = get_task_definition_queryset(filters)
-        paginator = Paginator(queryset, 20)
+        paginator = Paginator(queryset, 400)
         page_number = request.GET.get("page")
         page_obj = paginator.get_page(page_number)
         rows = build_task_definition_rows(page_obj.object_list)

@@ -29,13 +29,13 @@
     data-task-highlight-id="{{ task_definition_highlight_id|default:'' }}"
   >
     {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" %}
-      <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+      <header class="sticky top-0 z-40 border-b border-white/10 bg-gradient-to-r from-slate-950 via-indigo-900 to-sky-800 text-white shadow-lg shadow-slate-900/40 backdrop-blur">
         <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <div class="flex h-16 items-center justify-between gap-4">
             <div class="flex items-center gap-4">
               <button
                 type="button"
-                class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white md:hidden"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 md:hidden"
                 data-mobile-nav-toggle
                 aria-controls="mobile-navigation"
                 aria-expanded="false"
@@ -45,16 +45,16 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.75h16.5M3.75 12h16.5M3.75 18.25h16.5" />
                 </svg>
               </button>
-              <a href="{% url 'personal:dashboard' %}" class="flex flex-col">
-                <span class="text-sm font-semibold tracking-tight text-slate-900 sm:text-base">Sistema de Gestión Avícola</span>
-                <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Granjas La Colina</span>
+              <a href="{% url 'task_manager:index' %}" class="flex flex-col">
+                <span class="text-sm font-semibold tracking-tight text-white sm:text-base">Sistema de Gestión Avícola</span>
+                <span class="text-xs font-medium uppercase tracking-wide text-white/70">Granjas La Colina</span>
               </a>
             </div>
             <div class="flex items-center gap-3">
               <div class="hidden items-center gap-2 lg:flex" aria-label="Accesos rápidos">
                 <a
                   href="{% url 'task_manager:index' %}"
-                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path
@@ -65,50 +65,23 @@
                   </svg>
                   <span>Gestión de tareas</span>
                 </a>
-                <a
-                  href="{% url 'task_manager:telegram-mini-app' %}"
-                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                >
-                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path
-                      fill-rule="evenodd"
-                      d="M2.47 2.47a.75.75 0 01.79-.17l14 5a.75.75 0 01.02 1.4l-7.19 2.88-2.88 7.2a.75.75 0 01-1.4-.02l-5-14a.75.75 0 01.27-.8zM4.11 4.11l3.58 10.03 1.55-3.88a.75.75 0 01.41-.41l3.88-1.55-10.42-4.19z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                  <span>Mini app Telegram</span>
-                </a>
-                <a
-                  href="{% url 'production:index' %}"
-                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                <span
+                  role="button"
+                  aria-disabled="true"
+                  class="inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/50 opacity-60"
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
                   </svg>
                   <span>Producción</span>
-                </a>
-                {% if request.user.is_staff %}
-                  <a
-                    href="{% url 'notifications:telegram-updates' %}"
-                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                  >
-                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path
-                        fill-rule="evenodd"
-                        d="M3.5 4.75A2.25 2.25 0 015.75 2.5h8.5A2.25 2.25 0 0116.5 4.75v6.5a2.25 2.25 0 01-2.25 2.25H11l-2.7 2.16a.75.75 0 01-1.2-.59v-1.57H5.75A2.25 2.25 0 013.5 11.25v-6.5zm2.25-.75a.75.75 0 00-.75.75v6.5c0 .414.336.75.75.75h2.25a.75.75 0 01.75.75v1.38l2.13-1.7a.75.75 0 01.47-.16h3.13a.75.75 0 00.75-.75v-6.5a.75.75 0 00-.75-.75h-8.5z"
-                        clip-rule="evenodd"
-                      />
-                    </svg>
-                    <span>Telegram</span>
-                  </a>
-                {% endif %}
+                </span>
                 <div
                   class="relative inline-flex"
                   data-calendar-menu
                 >
                   <button
                     type="button"
-                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                    class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     data-calendar-menu-trigger
                     aria-haspopup="true"
                     aria-expanded="false"
@@ -121,7 +94,7 @@
                       />
                     </svg>
                     <span>Manejo de Personal</span>
-                    <svg class="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg class="h-3 w-3 text-white/70" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.208l3.71-3.978a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0l-4.24-4.54a.75.75 0 01.02-1.06z" />
                     </svg>
                     <span class="sr-only">Abrir menú de manejo de personal</span>
@@ -182,7 +155,7 @@
                   href="{% url 'admin:index' %}"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path
@@ -197,7 +170,7 @@
               <div class="relative hidden sm:inline-flex" data-quick-create>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  class="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   data-quick-create-trigger
                   aria-haspopup="true"
                   aria-expanded="false"
@@ -243,7 +216,7 @@
                               </svg>
                             </span>
                             <span class="flex flex-col text-left leading-tight">
-                              Definición de tarea
+                              Tarea
                               <span class="text-[11px] font-normal text-slate-400">Crea una nueva plantilla operativa</span>
                             </span>
                           </span>
@@ -288,25 +261,24 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-center gap-2 text-xs font-medium text-slate-500">
+              <div class="flex items-center gap-2 text-xs font-medium text-white/70">
                 {% if request.user.is_authenticated %}
                   <div class="hidden text-right sm:block">
-                    <p class="text-sm font-semibold text-slate-900">{{ user_label }}</p>
-                    <p class="text-[11px] uppercase tracking-wide text-slate-400">Sesión activa</p>
+                    <p class="text-sm font-semibold text-white">{{ user_label }}</p>
                   </div>
-                  <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white sm:h-10 sm:w-10">
+                  <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white sm:h-10 sm:w-10">
                     {{ user_label|slice:":1"|upper }}
                   </span>
                   <a
                     href="{% url 'portal:logout' %}"
-                    class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                    class="inline-flex items-center rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
-                    Cerrar sesión
+                    Salir
                   </a>
                 {% else %}
                   <a
                     href="{% url 'portal:login' %}"
-                    class="inline-flex items-center gap-2 rounded-full border border-brand px-4 py-2 text-xs font-semibold text-brand transition hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                    class="inline-flex items-center gap-2 rounded-full border border-white/25 px-4 py-2 text-xs font-semibold text-white transition hover:border-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path
@@ -478,16 +450,16 @@
                     />
                   </svg>
                 </a>
-                <a
-                  href="{% url 'production:index' %}"
-                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-                  data-mobile-nav-close
+                <span
+                  role="button"
+                  aria-disabled="true"
+                  class="inline-flex cursor-not-allowed items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-slate-400 opacity-60"
                 >
                   Producción
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
                   </svg>
-                </a>
+                </span>
                 <a
                   href="{% url 'admin:index' %}"
                   target="_blank"
@@ -546,22 +518,12 @@
                   />
                 </svg>
               </a>
-              <a href="{% url 'task_manager:telegram-mini-app' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
-                <span>Mini app Telegram</span>
-                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path
-                    fill-rule="evenodd"
-                    d="M2.47 2.47a.75.75 0 01.79-.17l14 5a.75.75 0 01.02 1.4l-7.19 2.88-2.88 7.2a.75.75 0 01-1.4-.02l-5-14a.75.75 0 01.27-.8zM4.11 4.11l3.58 10.03 1.55-3.88a.75.75 0 01.41-.41l3.88-1.55-10.42-4.19z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </a>
-              <a href="{% url 'production:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+              <span role="button" aria-disabled="true" class="flex cursor-not-allowed items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-slate-400 opacity-60">
                 <span>Producción avícola</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
                 </svg>
-              </a>
+              </span>
               <a href="{% url 'personal:dashboard' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
                 <span>Calendarios</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
