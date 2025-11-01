@@ -18,6 +18,7 @@ FIELD_INPUT_CLASSES = (
 )
 TEXTAREA_CLASSES = FIELD_INPUT_CLASSES + " min-h-[120px] resize-y"
 MULTISELECT_CLASSES = FIELD_INPUT_CLASSES + " h-36"
+CHECKBOX_CLASSES = "h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand focus:ring-offset-0"
 
 
 class TaskDefinitionQuickCreateForm(forms.ModelForm):
@@ -55,6 +56,8 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "description",
             "status",
             "category",
+            "is_mandatory",
+            "criticality_level",
             "task_type",
             "scheduled_for",
             "weekly_days",
@@ -85,6 +88,12 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             ),
             "status": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
             "category": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
+            "is_mandatory": forms.CheckboxInput(
+                attrs={
+                    "class": CHECKBOX_CLASSES,
+                }
+            ),
+            "criticality_level": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
             "task_type": forms.Select(
                 attrs={
                     "class": FIELD_INPUT_CLASSES,
@@ -118,6 +127,8 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "description": _("Descripción"),
             "status": _("Estado"),
             "category": _("Categoría"),
+            "is_mandatory": _("Obligatoriedad"),
+            "criticality_level": _("Nivel de criticidad"),
             "task_type": _("Recurrencia"),
             "scheduled_for": _("Fecha puntual"),
             "position": _("Posición prioritaria"),
@@ -137,6 +148,10 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             ),
             "collaborator": _(
                 "Selecciona un colaborador sugerido opcional; se validará su vigencia."
+            ),
+            "is_mandatory": _(""),
+            "criticality_level": _(
+                "Indica la severidad del impacto operativo si la tarea se omite."
             ),
             "farms": _("Limita la tarea a una o varias granjas específicas."),
             "chicken_houses": _("Filtra por galpones concretos dentro de las granjas."),

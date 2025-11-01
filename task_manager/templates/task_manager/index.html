@@ -607,6 +607,20 @@
                   </fieldset>
 
                   <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Obligatoriedad</legend>
+                    {% with config=task_manager_mandatory_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="mandatory" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
+
+                  <fieldset class="space-y-3">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Nivel de criticidad</legend>
+                    {% with config=task_manager_criticality_filter %}
+                      {% include "task_manager/includes/filter_picker.html" with name="criticality" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                    {% endwith %}
+                  </fieldset>
+
+                  <fieldset class="space-y-3">
                     <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cobertura</legend>
                     {% with config=task_manager_scope_filter %}
                       {% include "task_manager/includes/filter_picker.html" with name="scope" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
@@ -1919,6 +1933,8 @@
         var GROUP_DIMENSIONS = {
           status: { label: 'Estado', emptyLabel: 'Sin estado' },
           category: { label: 'Categoría', emptyLabel: 'Sin categoría' },
+          mandatory: { label: 'Obligatoriedad', emptyLabel: 'Opcional' },
+          criticality: { label: 'Nivel de criticidad', emptyLabel: 'Sin nivel definido' },
           scope: { label: 'Lugar', emptyLabel: 'Cobertura general' },
           responsible: { label: 'Responsable sugerido', emptyLabel: 'Sin responsable' },
           task_type: { label: 'Tipo de planificación', emptyLabel: 'Sin tipo definido' },
@@ -2189,7 +2205,7 @@
 
           primaryGroups.forEach(function (group) {
             validKeys.add(group.key);
-          var header = createGroupHeaderRow('primary', group.dimension, group.value, group.count, group.key, null);
+            var header = createGroupHeaderRow('primary', group.dimension, group.value, group.count, group.key, null);
             fragment.appendChild(header);
             if (secondary === 'none') {
               group.rows.forEach(function (row) {

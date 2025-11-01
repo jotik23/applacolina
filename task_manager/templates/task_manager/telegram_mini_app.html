@@ -1,4 +1,4 @@
-{% load static %}
+{% load static humanize %}
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-gradient-to-br from-sky-50 via-white to-amber-50">
   <head>
@@ -38,7 +38,12 @@
       <header class="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur">
         <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div class="flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
-            <div class="flex flex-col items-center gap-1 text-center sm:items-start sm:text-left">
+            <div class="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+              <span
+                class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-200/80"
+              >
+                Granjas la Colina
+              </span>
               <h1 data-telegram-display-name class="text-base font-semibold text-slate-900">
                 {{ telegram_mini_app.user.display_name }}
               </h1>
@@ -50,11 +55,17 @@
               </p>
             </div>
             {% if mini_app_logout_url %}
-            <form method="post" action="{{ mini_app_logout_url }}" class="flex justify-center sm:justify-start">
+            <form
+              method="post"
+              action="{{ mini_app_logout_url }}"
+              class="flex justify-center sm:justify-start"
+              data-mini-app-logout-form
+            >
               {% csrf_token %}
               <button
                 type="submit"
                 class="group flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-white/70 text-slate-400 shadow-sm shadow-amber-100 transition hover:bg-rose-50 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50"
+                data-mini-app-finish-trigger
               >
                 <span class="sr-only">Cerrar sesión</span>
                 <svg
@@ -206,11 +217,11 @@
         </p>
         {% endif %}
         <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600" data-shift-pending-label>Confirma tu turno para continuar.</p>
-          <p class="hidden text-xs font-semibold uppercase tracking-wide text-emerald-600" data-shift-confirmed-label>Turno confirmado</p>
+          <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600" data-shift-pending-label>Confirma tu turno para continuar.</p>
+          <p class="hidden text-sm font-semibold uppercase tracking-wide text-emerald-600" data-shift-confirmed-label>Turno confirmado</p>
           <button
             type="button"
-            class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-200/70 transition hover:shadow-emerald-300/80 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
+            class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200/70 transition hover:shadow-emerald-300/80 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
             data-confirm-shift
           >
             Confirmar mi turno
@@ -473,16 +484,830 @@
             <h2 class="text-base font-semibold text-slate-900">Tareas del dia</h2>
             <p class="text-xs text-slate-600">Revisa las asignaciones actuales y los descansos planificados.</p>
           </div>
-          <button type="button" class="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark">
+          <button
+            type="button"
+            class="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark"
+            data-report-trigger
+            data-report-task="{{ telegram_mini_app.tasks.0.title|default:'' }}"
+            data-report-points="{{ telegram_mini_app.tasks.0.reward_points|default:'15' }}"
+          >
             Reportar tarea
           </button>
         </div>
 
         <div class="space-y-4">
-          {% for task in telegram_mini_app.tasks %}
+          <article
+            class="relative overflow-hidden rounded-3xl border border-rose-200 bg-gradient-to-br from-white via-rose-50/95 to-amber-50/80 p-5 shadow-2xl shadow-rose-200/70"
+            data-task-card
+            data-task-title="Registro de producción diario"
+            data-production-card
+            data-production-active-hens="{{ telegram_mini_app.production_reference.active_hens|default:'' }}"
+          >
+            <div class="pointer-events-none absolute inset-y-0 right-0 hidden w-32 bg-gradient-to-l from-rose-100/80 via-transparent to-transparent sm:block"></div>
+            <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-2">
+                <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
+                  <span aria-hidden="true">🚨</span>
+                  Tarea crítica del día
+                </p>
+                <h3 class="text-lg font-semibold text-slate-900">Registro de producción diario</h3>
+                <div class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+                  <span class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-rose-700">Crítica</span>
+                  <span class="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-700">Registro obligatorio</span>
+                  <span class="rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-slate-700">Producción</span>
+                </div>
+              </div>
+              <div class="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
+                <span class="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-700 shadow-sm shadow-rose-200/60">
+                  <span class="h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true"></span>
+                  Prioridad máxima
+                </span>
+              </div>
+            </header>
+            <div class="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                data-task-action="log-production"
+                data-production-section="consumption"
+                data-production-trigger
+              >
+                <span aria-hidden="true">🍽️</span>
+                Registrar consumo
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                data-task-action="log-production"
+                data-production-section="mortality"
+                data-production-trigger
+              >
+                <span aria-hidden="true">🩺</span>
+                Registrar mortalidad
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                data-task-action="log-production"
+                data-production-section="discard"
+                data-production-trigger
+              >
+                <span aria-hidden="true">♻️</span>
+                Registrar descarte
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                data-task-action="log-production"
+                data-production-section="production"
+                data-production-trigger
+              >
+                <span aria-hidden="true">📦</span>
+                Registrar producción
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-full border border-emerald-200 px-4 py-2 text-xs font-semibold text-emerald-600 shadow-sm shadow-emerald-100/40 transition hover:border-emerald-400 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                data-task-action="complete-production"
+              >
+                <span aria-hidden="true">✅</span>
+                Marcar como completada
+              </button>
+            </div>
+            <div
+              class="mt-4 rounded-2xl border border-rose-100 bg-white/80 p-4 text-xs text-slate-600 shadow-inner shadow-rose-100/50"
+              data-production-summary-card
+            >
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Resumen de tus registros</p>
+                <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
+                  <span aria-hidden="true">✨</span>
+                  En vivo
+                </span>
+              </div>
+              <ul class="mt-2 space-y-1 text-xs text-slate-600" data-production-summary-card-list>
+                <li>Consumo: —</li>
+                <li>Mortalidad: —</li>
+                <li>Descarte: —</li>
+                <li>Producción total: —</li>
+                <li>Porcentaje de postura: —</li>
+              </ul>
+            </div>
+            <div class="mt-4 space-y-3" data-production-editor>
+              <div
+                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
+                data-production-panel
+                data-section="consumption"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <h4 class="text-sm font-semibold text-slate-900">Consumo</h4>
+                  <div class="inline-flex rounded-full bg-slate-100 p-1 text-xs font-semibold text-slate-600" data-consumption-toggle>
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm shadow-white/50 ring-1 ring-slate-200 transition data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:ring-rose-400"
+                      data-consumption-option
+                      data-unit="kg"
+                      data-state="active"
+                    >
+                      Kg
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-600 transition data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-rose-200/60 data-[state=active]:ring-rose-400"
+                      data-consumption-option
+                      data-unit="bultos"
+                    >
+                      Bultos
+                    </button>
+                  </div>
+                </div>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label
+                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600"
+                    data-consumption-panel
+                    data-unit="kg"
+                  >
+                    <span class="text-xs font-semibold text-slate-700">Total (kg)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      inputmode="decimal"
+                      placeholder="0"
+                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                      data-consumption-input
+                      data-unit="kg"
+                    />
+                  </label>
+                  <label
+                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 hidden"
+                    data-consumption-panel
+                    data-unit="bultos"
+                  >
+                    <span class="text-xs font-semibold text-slate-700">Total (bultos)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      inputmode="decimal"
+                      placeholder="0"
+                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                      data-consumption-input
+                      data-unit="bultos"
+                    />
+                  </label>
+                </div>
+                <div class="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
+                    data-production-save
+                    data-section="consumption"
+                  >
+                    Guardar consumo
+                  </button>
+                </div>
+              </div>
+              <div
+                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
+                data-production-panel
+                data-section="mortality"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h4 class="text-sm font-semibold text-slate-900">Mortalidad</h4>
+                </div>
+                <label class="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                  <span class="text-xs font-semibold text-slate-700">Aves</span>
+                  <input
+                    type="number"
+                    min="0"
+                    inputmode="numeric"
+                    placeholder="0"
+                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                    data-production-input="mortality"
+                  />
+                </label>
+                <div class="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
+                    data-production-save
+                    data-section="mortality"
+                  >
+                    Guardar mortalidad
+                  </button>
+                </div>
+              </div>
+              <div
+                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
+                data-production-panel
+                data-section="discard"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <h4 class="text-sm font-semibold text-slate-900">Descarte</h4>
+                </div>
+                <label class="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                  <span class="text-xs font-semibold text-slate-700">Aves</span>
+                  <input
+                    type="number"
+                    min="0"
+                    inputmode="numeric"
+                    placeholder="0"
+                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
+                    data-production-input="discard"
+                  />
+                </label>
+                <div class="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
+                    data-production-save
+                    data-section="discard"
+                  >
+                    Guardar descarte
+                  </button>
+                </div>
+              </div>
+              <div
+                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
+                data-production-panel
+                data-section="production"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <h4 class="text-sm font-semibold text-slate-900">Producción</h4>
+                  <div
+                    class="inline-flex rounded-full bg-slate-100 p-1 text-xs font-semibold text-slate-600"
+                    data-production-mode-toggle
+                  >
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm shadow-white/50 ring-1 ring-slate-200 transition data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:ring-emerald-300"
+                      data-production-mode-option
+                      data-mode="barn"
+                      data-state="active"
+                    >
+                      Galpón
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-600 transition data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-emerald-200/60 data-[state=active]:ring-emerald-300"
+                      data-production-mode-option
+                      data-mode="room"
+                    >
+                      Salón
+                    </button>
+                  </div>
+                </div>
+                <div class="mt-3 space-y-3">
+                  <div class="grid gap-3 sm:grid-cols-2" data-production-output-panel data-mode="barn">
+                    <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                      <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        Galpón 3
+                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        inputmode="numeric"
+                        placeholder="0"
+                        class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                        data-production-output
+                        data-barn="Galpón 3"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                      <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        Galpón 4
+                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        inputmode="numeric"
+                        placeholder="0"
+                        class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                        data-production-output
+                        data-barn="Galpón 4"
+                      />
+                    </label>
+                  </div>
+                  <div class="hidden space-y-3" data-production-output-panel data-mode="room">
+                    <div class="grid gap-3 sm:grid-cols-2">
+                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                          Galpón 3 · Sala 1
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          inputmode="numeric"
+                          placeholder="0"
+                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                          data-production-output
+                          data-room="Galpón 3 · Sala 1"
+                        />
+                      </label>
+                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                          Galpón 3 · Sala 2
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          inputmode="numeric"
+                          placeholder="0"
+                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                          data-production-output
+                          data-room="Galpón 3 · Sala 2"
+                        />
+                      </label>
+                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                          Galpón 4 · Sala 1
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          inputmode="numeric"
+                          placeholder="0"
+                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                          data-production-output
+                          data-room="Galpón 4 · Sala 1"
+                        />
+                      </label>
+                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                          Galpón 4 · Sala 2
+                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Huevos</span>
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          inputmode="numeric"
+                          placeholder="0"
+                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                          data-production-output
+                          data-room="Galpón 4 · Sala 2"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-200/70 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                    data-production-save
+                    data-section="production"
+                  >
+                    Guardar producción
+                  </button>
+                </div>
+              </div>
+            </div>
+          <div
+            class="mt-4 hidden rounded-2xl border border-emerald-200 bg-emerald-50/90 p-3 text-xs text-emerald-700 shadow-inner shadow-emerald-100/60"
+            data-production-complete-banner
+          >
+            <p class="font-semibold text-emerald-700">¡Registro listo!</p>
+            <p>Datos registrados. Si necesitas cambios, abre de nuevo la sección y ajusta.</p>
+          </div>
+        </article>
+
+        {% with queue=telegram_mini_app.transport_queue %}
+          {% if queue %}
             <article
-              class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60"
-              data-task-card
+              class="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100 p-5 shadow-lg shadow-slate-200/70"
+              data-transport-queue-card
+              data-default-expected-date="{{ queue.default_expected_date_iso }}"
+            >
+              <header class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <span aria-hidden="true">🚚</span>
+                    Transporte interno pendiente
+                  </p>
+                  <h3 class="text-base font-semibold text-slate-900">
+                    {{ queue.title|default:"Lotes listos para transporte" }}
+                  </h3>
+                  <p class="mt-1 text-sm text-slate-600">
+                    Autoriza y agenda el traslado de los lotes listos para despacho.
+                  </p>
+                </div>
+                <div class="flex flex-col items-end gap-2 text-right">
+                  <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm shadow-slate-200/70">
+                    {{ queue.pending_count }} lotes pendientes
+                  </span>
+                  <span class="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm shadow-slate-200/60">
+                    {{ queue.total_cartons|intcomma }} cartones en fila
+                  </span>
+                  <p class="text-xs text-slate-500">Fecha sugerida: {{ queue.default_expected_date_label }}</p>
+                </div>
+              </header>
+              <p class="mt-3 text-xs text-slate-500">
+                {{ queue.instructions }}
+              </p>
+              <form class="mt-4 space-y-4" data-transport-form>
+                <div class="space-y-3" data-transport-lot-list>
+                  {% for lot in queue.lots %}
+                    <label
+                      class="relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/85 p-4 pl-12 shadow-sm shadow-slate-100/40 transition hover:border-slate-300 data-[state=authorized]:border-emerald-200 data-[state=authorized]:bg-emerald-50 data-[state=authorized]:shadow-emerald-100/60"
+                      data-transport-lot-row
+                      data-lot-id="{{ lot.id }}"
+                    >
+                      <input
+                        type="checkbox"
+                        class="absolute left-4 top-4 h-5 w-5 rounded border-slate-300 text-slate-600 focus:ring-slate-400"
+                        value="{{ lot.id }}"
+                        data-transport-lot-input
+                        data-cartons="{{ lot.cartons }}"
+                        data-lot-label="{{ lot.label }}"
+                        data-production-date="{{ lot.production_date_iso }}"
+                        data-production-date-label="{{ lot.production_date_label }}"
+                      />
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 class="text-sm font-semibold text-slate-900">{{ lot.label }}</h4>
+                          <p class="text-xs text-slate-500">{{ lot.farm }}{% if lot.barn %} · {{ lot.barn }}{% endif %}</p>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                          {% if lot.status %}
+                            <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                              {{ lot.status }}
+                            </span>
+                          {% endif %}
+                          <span class="hidden items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+                                data-transport-lot-status>
+                            Autorizado
+                          </span>
+                        </div>
+                      </div>
+                      <dl class="grid gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
+                        <div>
+                          <dt class="uppercase tracking-wide text-slate-500">Producción</dt>
+                          <dd class="mt-0.5 font-semibold text-slate-900">{{ lot.production_date_label }}</dd>
+                        </div>
+                        <div>
+                          <dt class="uppercase tracking-wide text-slate-500">Cartones</dt>
+                          <dd class="mt-0.5 font-semibold text-slate-900">{{ lot.cartons|intcomma }}</dd>
+                        </div>
+                        <div>
+                          <dt class="uppercase tracking-wide text-slate-500">Salas</dt>
+                          <dd class="mt-0.5 font-semibold text-slate-900">
+                            {% if lot.rooms %}
+                              {{ lot.rooms|join:", " }}
+                            {% else %}
+                              —
+                            {% endif %}
+                          </dd>
+                        </div>
+                      </dl>
+                    </label>
+                  {% empty %}
+                    <p class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+                      No tienes lotes pendientes por transportar. ¡Buen trabajo!
+                    </p>
+                  {% endfor %}
+                </div>
+                {% if queue.lots %}
+                  <div class="rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-inner shadow-slate-100/60">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-transport-selection-summary>
+                      Selecciona los lotes que deseas autorizar para transporte.
+                    </p>
+                  </div>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/90 p-4 text-xs text-slate-600">
+                      <span class="text-xs font-semibold text-slate-700">Transportador</span>
+                      <select
+                        class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/60"
+                        data-transport-transporter
+                      >
+                        <option value="">Selecciona el transportador</option>
+                        {% for transporter in queue.transporters %}
+                          <option value="{{ transporter.id }}"{% if queue.default_transporter_id and transporter.id == queue.default_transporter_id %} selected{% endif %}>
+                            {{ transporter.label }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    <label class="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/90 p-4 text-xs text-slate-600">
+                      <span class="text-xs font-semibold text-slate-700">Fecha estimada de transporte</span>
+                      <input
+                        type="date"
+                        class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/60"
+                        value="{{ queue.default_expected_date_iso }}"
+                        data-transport-date
+                      />
+                      <span class="text-[10px] text-slate-500">Sugerencia: {{ queue.default_expected_date_label }}</span>
+                    </label>
+                  </div>
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="hidden text-xs text-rose-600 sm:text-right" data-transport-feedback></p>
+                    <button
+                      type="submit"
+                      class="inline-flex items-center gap-2 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-amber-200/60 transition hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-300/60 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                      data-transport-authorize
+                      disabled
+                    >
+                      <span aria-hidden="true">🚛</span>
+                      Autorizar transporte
+                    </button>
+                  </div>
+                {% endif %}
+              </form>
+              <div
+                class="mt-4 hidden rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-xs text-emerald-700 shadow-inner shadow-emerald-100/60"
+                data-transport-success
+              >
+                <p class="font-semibold">Transporte autorizado</p>
+                <p data-transport-success-text></p>
+              </div>
+            </article>
+          {% endif %}
+        {% endwith %}
+
+        {% with egg_flow=telegram_mini_app.egg_workflow %}
+          {% if egg_flow %}
+            <article
+              class="rounded-3xl border border-amber-200 bg-gradient-to-br from-white via-amber-50/80 to-sky-50/70 p-5 shadow-xl shadow-amber-200/70"
+              data-egg-workflow-card
+            >
+              <header class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600">
+                    <span aria-hidden="true">🥚</span>
+                    Flujo de producción del lote
+                  </p>
+                  <h3 class="text-base font-semibold text-slate-900">{{ egg_flow.batch.label }}</h3>
+                  <p class="text-sm text-slate-600">{{ egg_flow.batch.origin }}</p>
+                </div>
+                <div class="flex flex-col items-end gap-2 text-right">
+                  <span class="inline-flex items-center gap-2 rounded-full bg-amber-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-200/70">
+                    1 cartón = {{ egg_flow.cartons_per_pack }} huevos
+                  </span>
+                  <p class="text-xs text-slate-500">Registrado {{ egg_flow.batch.recorded_at }}</p>
+                </div>
+              </header>
+              {% if egg_flow.batch.rooms %}
+                <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-600">
+                  {% for room in egg_flow.batch.rooms %}
+                    <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white/80 px-2 py-1 font-semibold text-amber-700">
+                      <span aria-hidden="true">🏠</span>
+                      {{ room }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <dl class="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-3">
+                <div class="rounded-2xl border border-white/60 bg-white/80 p-3 shadow-sm shadow-amber-200/40">
+                  <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cartones del día</dt>
+                  <dd class="mt-1 text-lg font-semibold text-slate-900">{{ egg_flow.batch.produced_cartons|intcomma }}</dd>
+                </div>
+                <div class="rounded-2xl border border-white/60 bg-white/80 p-3 shadow-sm shadow-amber-200/40">
+                  <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Huevos totales</dt>
+                  <dd class="mt-1 text-lg font-semibold text-slate-900">{{ egg_flow.batch.produced_eggs|intcomma }}</dd>
+                </div>
+                <div class="rounded-2xl border border-white/60 bg-white/80 p-3 shadow-sm shadow-amber-200/40">
+                  <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Equivalencia</dt>
+                  <dd class="mt-1 text-sm font-semibold text-amber-700">{{ egg_flow.batch.produced_cartons|intcomma }} cartones × {{ egg_flow.cartons_per_pack }} = {{ egg_flow.batch.produced_eggs|intcomma }} huevos</dd>
+                </div>
+              </dl>
+              <p class="mt-3 text-xs text-slate-500">
+                Cada etapa confirma y preserva la trazabilidad del lote. Completa los datos clave y marca la actividad como lista cuando cierres la revisión.
+              </p>
+            </article>
+
+            <div class="space-y-4" data-egg-stage-list>
+              {% for stage in egg_flow.stages %}
+                <article
+                  class="rounded-3xl border bg-white p-5 shadow-lg shadow-slate-200/60{% if stage.tone == 'brand' %} border-amber-200 shadow-amber-200/60{% elif stage.tone == 'emerald' %} border-emerald-200 shadow-emerald-200/60{% elif stage.tone == 'sky' %} border-sky-200 shadow-sky-200/60{% elif stage.tone == 'slate' %} border-slate-200 shadow-slate-200/50{% endif %}"
+                  data-egg-stage-card
+                  data-egg-stage="{{ stage.id }}"
+                >
+                  <header class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                      <span class="text-xl" aria-hidden="true">{{ stage.icon }}</span>
+                      <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Etapa {{ forloop.counter }}</p>
+                        <h4 class="text-base font-semibold text-slate-900">{{ stage.title }}</h4>
+                      </div>
+                    </div>
+                    <span
+                      class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide{% if stage.tone == 'brand' %} border-amber-300 bg-amber-50 text-amber-700{% elif stage.tone == 'emerald' %} border-emerald-300 bg-emerald-50 text-emerald-700{% elif stage.tone == 'sky' %} border-sky-300 bg-sky-50 text-sky-700{% elif stage.tone == 'slate' %} border-slate-300 bg-slate-100 text-slate-700{% else %} border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+                      data-egg-stage-chip
+                    >
+                      Pendiente
+                    </span>
+                  </header>
+                  <p class="mt-3 text-sm text-slate-700">
+                    {{ stage.summary }}
+                  </p>
+
+                  {% if stage.id == 'transport' and stage.route %}
+                    <dl class="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                      <div class="rounded-2xl border border-amber-100 bg-white/80 p-3 shadow-inner shadow-amber-100/40">
+                        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Origen</dt>
+                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ stage.route.origin }}</dd>
+                      </div>
+                      <div class="rounded-2xl border border-amber-100 bg-white/80 p-3 shadow-inner shadow-amber-100/40">
+                        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Destino</dt>
+                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ stage.route.destination }}</dd>
+                      </div>
+                    </dl>
+                  {% endif %}
+
+                  {% if stage.metrics %}
+                    <dl class="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-3">
+                      {% for metric in stage.metrics %}
+                        <div class="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                          <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ metric.label }}</dt>
+                          <dd class="mt-1 text-lg font-semibold text-slate-900">
+                            {{ metric.value|intcomma }}
+                            <span class="ml-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ metric.unit }}</span>
+                          </dd>
+                        </div>
+                      {% endfor %}
+                    </dl>
+                  {% endif %}
+
+                  {% if stage.id == 'classification' %}
+                    <div
+                      class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4"
+                      data-classification-panel
+                    >
+                      <header class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Calibres esperados</p>
+                          <p class="text-sm text-slate-600">Verifica que la sumatoria coincida con el lote recibido.</p>
+                        </div>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm shadow-emerald-200/60">
+                          Meta: {{ egg_flow.batch.produced_cartons|intcomma }} cartones
+                        </span>
+                      </header>
+                      <div class="mt-4 space-y-3" data-classification-rows>
+                        {% for category in stage.categories %}
+                          <div
+                            class="rounded-2xl border border-emerald-100 bg-white/90 p-3"
+                            data-classification-row
+                            data-category-id="{{ category.id }}"
+                            data-expected-cartons="{{ category.cartons }}"
+                            data-eggs-per-carton="{{ egg_flow.cartons_per_pack }}"
+                          >
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p class="text-sm font-semibold text-slate-900">{{ category.label }}</p>
+                                <p class="text-xs text-slate-500">{{ category.cartons|intcomma }} cartones · {{ category.eggs|intcomma }} huevos · {{ category.percentage }}%</p>
+                              </div>
+                              <span class="inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide{% if category.theme == 'emerald' %} border-emerald-200 bg-emerald-50 text-emerald-600{% elif category.theme == 'amber' %} border-amber-200 bg-amber-50 text-amber-600{% elif category.theme == 'sky' %} border-sky-200 bg-sky-50 text-sky-600{% elif category.theme == 'slate' %} border-slate-200 bg-slate-100 text-slate-600{% elif category.theme == 'violet' %} border-violet-200 bg-violet-50 text-violet-600{% elif category.theme == 'brand' %} border-amber-200 bg-amber-50 text-amber-700{% elif category.theme == 'rose' %} border-rose-200 bg-rose-50 text-rose-600{% else %} border-slate-200 bg-slate-100 text-slate-600{% endif %}">
+                                Meta
+                              </span>
+                            </div>
+                            <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                              <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Equivalencia esperada</p>
+                                <p class="mt-1 text-sm font-semibold text-emerald-700">{{ category.eggs|intcomma }} huevos</p>
+                              </div>
+                              <label class="block" data-classification-input-wrapper>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cartones registrados</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  placeholder="{{ category.cartons }}"
+                                  class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
+                                  data-classification-input
+                                  data-category-id="{{ category.id }}"
+                                />
+                              </label>
+                              <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Huevos registrados</p>
+                                <p class="mt-1 text-sm font-semibold text-slate-900" data-classification-eggs data-category-id="{{ category.id }}">0 huevos</p>
+                              </div>
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+                      <div class="mt-4 space-y-2 rounded-2xl border border-emerald-200 bg-white/90 p-3 text-xs text-emerald-700">
+                        <p class="font-semibold">Totales esperados: {{ egg_flow.batch.produced_cartons|intcomma }} cartones ({{ egg_flow.batch.produced_eggs|intcomma }} huevos)</p>
+                        <p
+                          data-classification-summary
+                          data-expected-cartons="{{ egg_flow.batch.produced_cartons }}"
+                          data-expected-eggs="{{ egg_flow.batch.produced_eggs }}"
+                          data-eggs-per-carton="{{ egg_flow.cartons_per_pack }}"
+                        >
+                          Totales registrados: 0 cartones (0 huevos)
+                        </p>
+                        <p class="text-[11px] text-emerald-600" data-classification-feedback>
+                          Si hay diferencia, revisa los descartes o ajusta el transporte antes de liberar el lote.
+                        </p>
+                      </div>
+                    </div>
+                  {% endif %}
+
+                  {% if stage.fields %}
+                    <div class="mt-4 space-y-3" data-egg-stage-form>
+                      {% for field in stage.fields %}
+                        <label class="block" data-egg-stage-field="{{ field.id }}">
+                          <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ field.label }}</span>
+                          {% if field.multiline %}
+                            <textarea
+                              rows="3"
+                              placeholder="{{ field.placeholder }}"
+                              class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                              data-egg-stage-input
+                              data-stage="{{ stage.id }}"
+                              data-field="{{ field.id }}"
+                            ></textarea>
+                          {% else %}
+                            <input
+                              type="text"
+                              placeholder="{{ field.placeholder }}"
+                              class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                              data-egg-stage-input
+                              data-stage="{{ stage.id }}"
+                              data-field="{{ field.id }}"
+                            />
+                          {% endif %}
+                        </label>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+
+                  {% if stage.checkpoints %}
+                    <ul class="mt-4 space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-xs text-slate-600">
+                      {% for checkpoint in stage.checkpoints %}
+                        <li class="flex items-start gap-2">
+                          <span aria-hidden="true">•</span>
+                          <span>{{ checkpoint }}</span>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+
+                  {% if stage.id == 'transport' %}
+                    <div class="mt-5 space-y-3">
+                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-egg-stage-status>Selecciona el estado actual del transporte.</p>
+                      {% if stage.progress_steps %}
+                        <div class="flex flex-wrap gap-2" data-egg-stage-progress data-stage="{{ stage.id }}">
+                          {% for step in stage.progress_steps %}
+                            <button
+                              type="button"
+                              class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                              data-egg-stage-progress-step
+                              data-stage="{{ stage.id }}"
+                              data-step-index="{{ forloop.counter0 }}"
+                              data-step-id="{{ step.id }}"
+                              data-step-label="{{ step.label }}"
+                            >
+                              {{ step.label }}
+                            </button>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                      <p class="text-[11px] text-slate-500" data-egg-stage-progress-help>Avanza en orden: verificado → cargado → en destino → completado.</p>
+                    </div>
+                  {% else %}
+                    <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500" data-egg-stage-status>Esperando registro</p>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                          data-egg-stage-save
+                          data-stage="{{ stage.id }}"
+                        >
+                          Guardar etapa
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-full bg-brand px-4 py-2 text-xs font-semibold text-slate-900 shadow shadow-amber-200/60 transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                          data-egg-stage-complete
+                          data-stage="{{ stage.id }}"
+                        >
+                          Marcar como completada
+                        </button>
+                      </div>
+                    </div>
+                  {% endif %}
+
+                  <div
+                    class="mt-4 hidden rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-700"
+                    data-egg-stage-complete-banner
+                  >
+                    <p class="font-semibold">Etapa registrada</p>
+                    <p>Tu información quedó guardada. Puedes actualizarla en cualquier momento.</p>
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% for task in telegram_mini_app.tasks %}
+          <article
+            class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60"
+            data-task-card
               data-task-title="{{ task.title }}"
             >
               <header class="flex flex-col gap-2">
@@ -526,6 +1351,156 @@
           {% endfor %}
         </div>
       </section>
+
+      <div
+        data-mini-app-report
+        class="hidden flex flex-col gap-5"
+      >
+        <section class="rounded-3xl border border-brand/40 bg-gradient-to-br from-white via-amber-50 to-sky-50 p-5 shadow-2xl shadow-amber-200/70">
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-2">
+              <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-brand">
+                <span aria-hidden="true">📝</span>
+                Reportar tarea completada
+              </p>
+              <h2 class="text-xl font-semibold text-slate-900">Cuéntanos qué lograste</h2>
+              <p class="text-sm text-slate-600">
+                Toma menos de un minuto. Usa una sugerencia o escribe la tarea tal como la realizaste para que podamos celebrarla contigo.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-white/70 text-slate-400 shadow-sm shadow-amber-100 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-200/70"
+              data-report-cancel
+              aria-label="Cancelar y volver"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="h-4 w-4"
+                aria-hidden="true"
+              >
+                <path d="M6 18 18 6m0 12L6 6" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="mt-5 space-y-6" data-report-view>
+            <div data-report-step="form" class="space-y-6">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between gap-2 text-xs">
+                  <p class="font-semibold uppercase tracking-wide text-slate-500">Sugerencias rápidas</p>
+                  <span class="rounded-full bg-white/70 px-2 py-1 text-[11px] text-slate-400">
+                    Toca una opción para autocompletar
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  {% for task in telegram_mini_app.tasks %}
+                    <button
+                      type="button"
+                      class="group rounded-full border border-transparent bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm shadow-amber-100 transition hover:border-brand hover:bg-brand/90 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/40"
+                      data-report-suggestion
+                      data-report-task="{{ task.title }}"
+                      data-report-points="{{ task.reward_points|default:'15' }}"
+                    >
+                      <span class="inline-flex items-center gap-2">
+                        <span aria-hidden="true">✨</span>
+                        {{ task.title }}
+                      </span>
+                    </button>
+                  {% empty %}
+                    <p class="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-4 py-3 text-xs text-slate-500">
+                      Por ahora no hay tareas sugeridas, escríbela directamente abajo.
+                    </p>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <form class="space-y-4" data-report-form>
+                <div class="space-y-2">
+                  <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500" for="mini-app-report-task">
+                    Nombre de la tarea
+                  </label>
+                  <input
+                    id="mini-app-report-task"
+                    name="task"
+                    type="text"
+                    inputmode="text"
+                    autocomplete="off"
+                    placeholder="Ej. Checklist apertura galpón"
+                    class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-inner shadow-amber-100/50 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                    data-report-input
+                  />
+                  <p class="hidden text-xs text-rose-600" data-report-error>Cuéntame al menos el nombre de la tarea para registrarla.</p>
+                  <p class="text-[11px] text-slate-500" data-report-suggestion-label>
+                    Sugerencia aplicada: <span class="font-semibold text-slate-700" data-report-suggestion-value>—</span>
+                  </p>
+                </div>
+
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-slate-200/70"
+                    data-report-cancel
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    class="rounded-full bg-gradient-to-r from-brand via-amber-400 to-emerald-400 px-6 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:shadow-amber-300/80 focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    data-report-submit
+                  >
+                    Reportar avance
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div data-report-step="success" class="hidden space-y-5">
+              <div class="rounded-3xl border border-emerald-200 bg-gradient-to-br from-white via-emerald-50 to-sky-50 p-5 shadow-inner shadow-emerald-200/50">
+                <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                  <span aria-hidden="true">🌱</span>
+                  ¡Gracias por levantar la mano!
+                </p>
+                <h3 class="mt-2 text-lg font-semibold text-slate-900" data-report-success-greeting>¡Gracias!</h3>
+                <p class="mt-2 text-sm text-slate-700">
+                  Tu reporte de <span class="font-semibold text-slate-900" data-report-success-task></span> inspira confianza en todo el equipo.
+                </p>
+                <p class="mt-3 hidden text-sm text-emerald-700" data-report-success-impact>
+                  Cuando sea validado sumarás <span class="font-semibold" data-report-success-points></span> directos a tus metas, estás construyendo resultados brillantes.
+                </p>
+                <p class="mt-3 hidden text-sm text-slate-600" data-report-success-recognition>
+                  Este gesto mantiene al equipo alineado y refuerza lo que ya haces tan bien: cuidar cada detalle.
+                </p>
+                <p class="mt-4 text-[11px] uppercase tracking-wide text-slate-400">
+                  Sigue compartiendo tus logros, estamos acompañándote en cada paso.
+                </p>
+              </div>
+              <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-slate-200/70"
+                  data-report-again
+                >
+                  Registrar otra tarea
+                </button>
+                <button
+                  type="button"
+                  class="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  data-report-done
+                >
+                  Volver al inicio
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
 
       <section class="space-y-4" data-weekly-calendar-section>
         {% with current_shift=telegram_mini_app.current_shift %}
@@ -658,16 +1633,119 @@
           type="button"
           class="w-full rounded-full bg-brand px-5 py-3 text-sm font-semibold text-slate-900 shadow-xl shadow-amber-200/70 transition hover:bg-brand-dark"
           data-telegram-main-action
+          data-login-url="{% url 'task_manager:telegram-mini-app' %}"
+          {% if mini_app_logout_url %}data-logout-url="{{ mini_app_logout_url }}"{% endif %}
+          data-mini-app-finish-trigger
         >
-          Revisar proxima tarea
+          Finalizar mi turno
         </button>
       </footer>
+
+      <div
+        data-mini-app-flow-dialog-root
+        class="fixed inset-0 z-[60] hidden flex items-center justify-center px-4 py-6 sm:py-12"
+        aria-hidden="true"
+      >
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+        <div class="relative z-10 w-full max-w-sm space-y-4">
+          <article
+            data-mini-app-dialog="confirm"
+            class="hidden flex flex-col gap-5 rounded-3xl border border-slate-200 bg-white/95 p-6 text-center shadow-2xl shadow-slate-900/20 backdrop-blur"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tm-flow-confirm-title"
+            aria-describedby="tm-flow-confirm-description"
+            aria-hidden="true"
+          >
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-brand-dark">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l3.5 2" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            </div>
+            <div>
+              <h2 id="tm-flow-confirm-title" class="text-lg font-semibold text-slate-900">¿Listo para cerrar tu turno?</h2>
+            </div>
+            <div class="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+              <p class="font-semibold uppercase tracking-wide">Antes de salir</p>
+              <p class="mt-1 text-slate-600">
+                Asegúrate de haber reportado las tareas completadas. El equipo continuará con base en tu registro.
+              </p>
+            </div>
+            <div class="space-y-3">
+              <div data-flow-confirm-status class="hidden">
+                <div class="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-500">
+                  <span class="inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-brand"></span>
+                  <span class="font-medium">Cerrando tu turno...</span>
+                </div>
+              </div>
+              <p data-flow-confirm-error class="hidden rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600"></p>
+              <div class="flex flex-col gap-2">
+                <button
+                  type="button"
+                  data-flow-action="confirm-accept"
+                  class="inline-flex items-center justify-center gap-2 rounded-full bg-brand px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand/40 focus:ring-offset-0"
+                >
+                  Sí, cerrar mi turno
+                </button>
+                <button
+                  type="button"
+                  data-flow-action="confirm-cancel"
+                  class="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200/60 focus:ring-offset-0"
+                >
+                  Seguir en mi turno
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article
+            data-mini-app-dialog="gratitude"
+            class="hidden flex flex-col gap-5 rounded-3xl border border-emerald-200 bg-white/95 p-6 text-center shadow-2xl shadow-emerald-200/40 backdrop-blur"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tm-flow-gratitude-title"
+            aria-describedby="tm-flow-gratitude-description"
+            aria-hidden="true"
+          >
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-inner shadow-emerald-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+            </div>
+            <div>
+              <h2 id="tm-flow-gratitude-title" class="text-lg font-semibold text-slate-900">¡Turno completado!</h2>
+              <p id="tm-flow-gratitude-description" class="mt-2 text-sm text-slate-600">
+                Gracias por tu compromiso hoy. Tu registro quedó guardado y el equipo de Granjas la Colina seguirá sobre esa base.
+              </p>
+            </div>
+            <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-xs text-emerald-700">
+              <p class="font-semibold uppercase tracking-wide">Progreso asegurado</p>
+              <p class="mt-1 text-slate-600">
+                Mañana retomaremos contigo desde donde lo dejaste. ¡Vamos por un nuevo turno impecable!
+              </p>
+            </div>
+            <button
+              type="button"
+              data-flow-action="gratitude-accept"
+              class="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/70 focus:ring-offset-0"
+            >
+              Volver a iniciar sesión
+            </button>
+          </article>
+        </div>
+      </div>
+
       </div>
       {% endwith %}
       {% else %}
       <section class="rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-xl shadow-slate-200/70 mini-app-blur">
-        <header class="space-y-2 text-center">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingreso a la mini app</p>
+        <header class="space-y-3 text-center">
+          <span
+            class="inline-flex items-center justify-center gap-2 rounded-full border border-brand/50 bg-brand/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-dark"
+          >
+            Granjas la Colina
+          </span>
           <h1 class="text-xl font-semibold text-slate-900">Identifícate para continuar</h1>
           <p class="text-sm text-slate-600">
             {% if mini_app_client == 'telegram' %}
@@ -726,13 +1804,13 @@
           </div>
 
           <button type="submit" class="w-full rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark">
-            Ingresar a la mini app
+            Ingresar
           </button>
         </form>
         {% endif %}
 
         <p class="mt-6 text-center text-[11px] text-slate-500">
-          Esta mini app solo requiere permisos básicos de operario. Contacta al administrador si necesitas acceso al panel completo.
+          Contacta a tu líder más próximo si necesitas acceso al panel completo.
         </p>
       </section>
       {% endif %}
@@ -1083,10 +2161,360 @@
       })();
     </script>
 
+    <script>
+      (function () {
+        var content = document.querySelector('[data-mini-app-content]');
+        if (!content) {
+          return;
+        }
+
+        var reportView = content.querySelector('[data-mini-app-report]');
+        if (!reportView) {
+          return;
+        }
+
+        var telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        var backButton = telegram && telegram.BackButton ? telegram.BackButton : null;
+        var userNameNode = document.querySelector('[data-telegram-display-name]');
+        var userName = userNameNode ? userNameNode.textContent.trim() : 'equipo';
+
+        var openButtons = Array.prototype.slice.call(document.querySelectorAll('[data-report-trigger]'));
+        var suggestionButtons = Array.prototype.slice.call(reportView.querySelectorAll('[data-report-suggestion]'));
+        var suggestionLabel = reportView.querySelector('[data-report-suggestion-label]');
+        var suggestionValue = reportView.querySelector('[data-report-suggestion-value]');
+        var form = reportView.querySelector('[data-report-form]');
+        var input = reportView.querySelector('[data-report-input]');
+        var errorText = reportView.querySelector('[data-report-error]');
+        var formStep = reportView.querySelector('[data-report-step="form"]');
+        var successStep = reportView.querySelector('[data-report-step="success"]');
+        var cancelButtons = Array.prototype.slice.call(reportView.querySelectorAll('[data-report-cancel]'));
+        var doneButton = reportView.querySelector('[data-report-done]');
+        var againButton = reportView.querySelector('[data-report-again]');
+        var successGreeting = reportView.querySelector('[data-report-success-greeting]');
+        var successTask = reportView.querySelector('[data-report-success-task]');
+        var successImpact = reportView.querySelector('[data-report-success-impact]');
+        var successPoints = reportView.querySelector('[data-report-success-points]');
+        var successRecognition = reportView.querySelector('[data-report-success-recognition]');
+
+        var state = {
+          suggestionTitle: '',
+          suggestionPoints: null,
+        };
+
+        var homeSections = [];
+
+        function collectHomeSections() {
+          homeSections = Array.prototype.slice
+            .call(content.children)
+            .filter(function (node) {
+              if (node === reportView) {
+                return false;
+              }
+              if (node.hasAttribute('data-mini-app-flow-dialog-root')) {
+                return false;
+              }
+              return true;
+            });
+        }
+
+        function parsePoints(value) {
+          if (value === null || value === undefined || value === '') {
+            return null;
+          }
+          var numeric = parseInt(value, 10);
+          if (isNaN(numeric)) {
+            return null;
+          }
+          return numeric;
+        }
+
+        function clearError() {
+          if (errorText) {
+            errorText.classList.add('hidden');
+          }
+          if (input) {
+            input.classList.remove('border-rose-300');
+          }
+        }
+
+        function showError() {
+          if (errorText) {
+            errorText.classList.remove('hidden');
+          }
+          if (input) {
+            input.classList.add('border-rose-300');
+          }
+        }
+
+        function highlightSuggestionButtons() {
+          if (!suggestionButtons.length) {
+            return;
+          }
+          var matchedPoints = null;
+          suggestionButtons.forEach(function (button) {
+            var title = button.getAttribute('data-report-task') || '';
+            var isMatch = state.suggestionTitle && title === state.suggestionTitle;
+            button.classList.toggle('report-suggestion-active', Boolean(isMatch));
+            button.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+            if (isMatch) {
+              matchedPoints = parsePoints(button.getAttribute('data-report-points'));
+            }
+          });
+          state.suggestionPoints = matchedPoints;
+        }
+
+        function updateSuggestionLabel() {
+          if (!suggestionLabel || !suggestionValue) {
+            return;
+          }
+          if (state.suggestionTitle) {
+            suggestionLabel.classList.remove('text-slate-400');
+            suggestionValue.textContent = state.suggestionTitle;
+          } else {
+            suggestionLabel.classList.add('text-slate-400');
+            suggestionValue.textContent = 'Personalizada';
+          }
+        }
+
+        function setSuggestion(title, points, focusInput) {
+          state.suggestionTitle = title ? title.trim() : '';
+          state.suggestionPoints = typeof points === 'number' ? points : parsePoints(points);
+          if (input) {
+            input.value = state.suggestionTitle;
+            if (focusInput) {
+              window.requestAnimationFrame(function () {
+                input.focus();
+                var length = input.value.length;
+                if (typeof input.setSelectionRange === 'function') {
+                  input.setSelectionRange(length, length);
+                }
+              });
+            }
+          }
+          updateSuggestionLabel();
+          highlightSuggestionButtons();
+          clearError();
+        }
+
+        function showFormStep() {
+          if (formStep) {
+            formStep.classList.remove('hidden');
+          }
+          if (successStep) {
+            successStep.classList.add('hidden');
+          }
+          clearError();
+        }
+
+        function showSuccessStep(title, points) {
+          if (formStep) {
+            formStep.classList.add('hidden');
+          }
+          if (successStep) {
+            successStep.classList.remove('hidden');
+          }
+          var displayName = userName || 'equipo';
+          if (successGreeting) {
+            successGreeting.textContent = '¡Gracias, ' + displayName + '!';
+          }
+          if (successTask) {
+            successTask.textContent = title || 'tu labor de hoy';
+          }
+          if (points && successImpact && successPoints) {
+            successImpact.classList.remove('hidden');
+            successPoints.textContent = '+' + points + ' pts';
+          } else if (successImpact) {
+            successImpact.classList.add('hidden');
+          }
+          if (successRecognition) {
+            if (points) {
+              successRecognition.classList.add('hidden');
+            } else {
+              successRecognition.textContent =
+                'Tu dedicación en ' +
+                (title || 'esta tarea') +
+                ' mantiene al equipo alineado y demuestra tu liderazgo silencioso.';
+              successRecognition.classList.remove('hidden');
+            }
+          }
+        }
+
+        function handleBackButton() {
+          switchToHome();
+        }
+
+        function showReportView(initialSuggestion) {
+          collectHomeSections();
+          homeSections.forEach(function (node) {
+            node.classList.add('hidden');
+          });
+          reportView.classList.remove('hidden');
+          showFormStep();
+          setSuggestion(initialSuggestion.title, initialSuggestion.points, true);
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+            telegram.HapticFeedback.selectionChanged();
+          }
+          if (backButton) {
+            if (typeof backButton.offClick === 'function') {
+              backButton.offClick(handleBackButton);
+            }
+            if (typeof backButton.onClick === 'function') {
+              backButton.onClick(handleBackButton);
+            }
+            if (typeof backButton.show === 'function') {
+              backButton.show();
+            }
+          }
+          if (content && typeof content.scrollIntoView === 'function') {
+            content.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+
+        function switchToHome() {
+          reportView.classList.add('hidden');
+          collectHomeSections();
+          homeSections.forEach(function (node) {
+            node.classList.remove('hidden');
+          });
+          showFormStep();
+          setSuggestion('', null, false);
+          if (input) {
+            input.value = '';
+          }
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+            telegram.HapticFeedback.impactOccurred('light');
+          }
+          if (backButton) {
+            if (typeof backButton.offClick === 'function') {
+              backButton.offClick(handleBackButton);
+            }
+            if (typeof backButton.hide === 'function') {
+              backButton.hide();
+            }
+          }
+        }
+
+        function getInitialSuggestion(details) {
+          var suggestion =
+            details && (details.title || details.points !== undefined)
+              ? {
+                  title: details.title || '',
+                  points: parsePoints(details.points),
+                }
+              : null;
+          if (!suggestion || (!suggestion.title && suggestion.points === null)) {
+            if (suggestionButtons.length) {
+              var first = suggestionButtons[0];
+              suggestion = {
+                title: first.getAttribute('data-report-task') || '',
+                points: parsePoints(first.getAttribute('data-report-points')),
+              };
+            } else {
+              suggestion = { title: '', points: null };
+            }
+          }
+          return suggestion;
+        }
+
+        collectHomeSections();
+        highlightSuggestionButtons();
+        updateSuggestionLabel();
+
+        openButtons.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            var source = event.currentTarget;
+            var title = source.getAttribute('data-report-task') || '';
+            var points = parsePoints(source.getAttribute('data-report-points'));
+            var suggestion = getInitialSuggestion({ title: title, points: points });
+            showReportView(suggestion);
+          });
+        });
+
+        suggestionButtons.forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            var btn = event.currentTarget;
+            var title = btn.getAttribute('data-report-task') || '';
+            var points = parsePoints(btn.getAttribute('data-report-points'));
+            setSuggestion(title, points, true);
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+              telegram.HapticFeedback.impactOccurred('soft');
+            }
+          });
+        });
+
+        if (input) {
+          input.addEventListener('input', function () {
+            clearError();
+            state.suggestionTitle = input.value.trim();
+            highlightSuggestionButtons();
+            updateSuggestionLabel();
+          });
+        }
+
+        cancelButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            switchToHome();
+          });
+        });
+
+        if (doneButton) {
+          doneButton.addEventListener('click', function () {
+            switchToHome();
+          });
+        }
+
+        if (againButton) {
+          againButton.addEventListener('click', function () {
+            showFormStep();
+            var suggestion = getInitialSuggestion({});
+            setSuggestion(suggestion.title, suggestion.points, true);
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+              telegram.HapticFeedback.selectionChanged();
+            }
+          });
+        }
+
+        if (form) {
+          form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (!input) {
+              return;
+            }
+            var value = input.value.trim();
+            if (!value) {
+              showError();
+              input.focus();
+              return;
+            }
+            state.suggestionTitle = value;
+            highlightSuggestionButtons();
+            var points = state.suggestionPoints;
+            showSuccessStep(value, points);
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('success');
+            }
+            if (telegram && typeof telegram.sendData === 'function') {
+              try {
+                telegram.sendData(
+                  JSON.stringify({
+                    action: 'report-task',
+                    title: value,
+                    points: points,
+                  })
+                );
+              } catch (error) {
+                console.info('No se pudo enviar el reporte a Telegram:', error);
+              }
+            }
+          });
+        }
+      })();
+    </script>
+
     {% if telegram_mini_app %}
     {{ telegram_mini_app|json_script:"tm-mini-app-config" }}
     {% endif %}
-    {% if telegram_integration_enabled and telegram_mini_app %}
+    {% if telegram_mini_app %}
     <script>
       (function () {
         const dataScript = document.getElementById('tm-mini-app-config');
@@ -1100,68 +2528,1559 @@
         }
 
         const telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-        if (telegram) {
-          telegram.ready();
-          telegram.expand();
+        const eggWorkflow = payload && payload.egg_workflow ? payload.egg_workflow : null;
+        const productionReference = payload && payload.production_reference ? payload.production_reference : null;
+        const eggStageDefinitions = {};
+        if (eggWorkflow && Array.isArray(eggWorkflow.stages)) {
+          eggWorkflow.stages.forEach(function (stage) {
+            if (stage && stage.id) {
+              eggStageDefinitions[stage.id] = stage;
+            }
+          });
+        }
+        const confirmMessageText = '¿Deseas finalizar tu turno y cerrar sesión?';
+        const mainAction = document.querySelector('[data-telegram-main-action]');
+        const finishTriggers = Array.prototype.slice.call(
+          document.querySelectorAll('[data-mini-app-finish-trigger]')
+        );
+        const loginUrl =
+          mainAction && mainAction.getAttribute('data-login-url')
+            ? mainAction.getAttribute('data-login-url')
+            : window.location.pathname;
+        const logoutUrl =
+          mainAction && mainAction.getAttribute('data-logout-url')
+            ? mainAction.getAttribute('data-logout-url')
+            : null;
+        const logoutForm = document.querySelector('[data-mini-app-logout-form]');
+        const csrfTokenInput = logoutForm ? logoutForm.querySelector('input[name="csrfmiddlewaretoken"]') : null;
+        const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
 
-          const theme = telegram.themeParams || {};
-          if (theme.bg_color) {
-            document.body.style.backgroundColor = theme.bg_color;
-          }
-          if (theme.text_color) {
-            document.body.style.color = theme.text_color;
-          }
+        const dialogRoot = document.querySelector('[data-mini-app-flow-dialog-root]');
+        const confirmDialog = dialogRoot ? dialogRoot.querySelector('[data-mini-app-dialog="confirm"]') : null;
+        const gratitudeDialog = dialogRoot ? dialogRoot.querySelector('[data-mini-app-dialog="gratitude"]') : null;
+        const confirmAcceptButton = confirmDialog ? confirmDialog.querySelector('[data-flow-action="confirm-accept"]') : null;
+        const confirmCancelButton = confirmDialog ? confirmDialog.querySelector('[data-flow-action="confirm-cancel"]') : null;
+        const confirmStatusNode = confirmDialog ? confirmDialog.querySelector('[data-flow-confirm-status]') : null;
+        const confirmErrorNode = confirmDialog ? confirmDialog.querySelector('[data-flow-confirm-error]') : null;
+        const gratitudeAcceptButton = gratitudeDialog
+          ? gratitudeDialog.querySelector('[data-flow-action="gratitude-accept"]')
+          : null;
 
-          const mainButton = telegram.MainButton;
-          if (mainButton && payload && payload.tasks && payload.tasks.length) {
-            mainButton.setParams({
-              text: 'Abrir tarea principal',
-              is_visible: true,
-            });
-            mainButton.onClick(function () {
-              telegram.sendData(
-                JSON.stringify({
-                  action: 'open-task',
-                  title: payload.tasks[0].title,
-                })
-              );
-            });
+        const confirmAcceptDefaultLabel = confirmAcceptButton ? confirmAcceptButton.textContent.trim() : '';
+        const confirmCancelDefaultLabel = confirmCancelButton ? confirmCancelButton.textContent.trim() : '';
+
+        let isProcessingMainAction = false;
+        let activeDialog = null;
+        let lastFocusedElement = null;
+        let productionLastFocusedElement = null;
+
+        const productionCard = document.querySelector('[data-production-card]');
+        const productionCompleteBanner = productionCard
+          ? productionCard.querySelector('[data-production-complete-banner]')
+          : null;
+        const productionTriggerButtons = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-trigger]'))
+          : [];
+        const productionSummaryCardList = productionCard
+          ? productionCard.querySelector('[data-production-summary-card-list]')
+          : null;
+        const productionPanels = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-panel]'))
+          : [];
+        const productionSaveButtons = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-save]'))
+          : [];
+        const consumptionToggleButtons = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-consumption-option]'))
+          : [];
+        const consumptionPanels = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-consumption-panel]'))
+          : [];
+        const consumptionInputs = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-consumption-input]'))
+          : [];
+        const productionModeButtons = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-mode-option]'))
+          : [];
+        const productionOutputPanels = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-output-panel]'))
+          : [];
+        const productionInputs = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-input]'))
+          : [];
+        const productionOutputInputs = productionCard
+          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-output]'))
+          : [];
+
+        const transportCard = document.querySelector('[data-transport-queue-card]');
+        const transportForm = transportCard ? transportCard.querySelector('[data-transport-form]') : null;
+        const transportLotInputs = transportCard
+          ? Array.prototype.slice.call(transportCard.querySelectorAll('[data-transport-lot-input]'))
+          : [];
+        const transportAuthorizeButton = transportCard
+          ? transportCard.querySelector('[data-transport-authorize]')
+          : null;
+        const transportSelectionSummary = transportCard
+          ? transportCard.querySelector('[data-transport-selection-summary]')
+          : null;
+        const transportFeedbackNode = transportCard ? transportCard.querySelector('[data-transport-feedback]') : null;
+        const transportSuccessNode = transportCard ? transportCard.querySelector('[data-transport-success]') : null;
+        const transportSuccessText = transportCard ? transportCard.querySelector('[data-transport-success-text]') : null;
+        const transporterField = transportCard ? transportCard.querySelector('[data-transport-transporter]') : null;
+        const expectedDateField = transportCard ? transportCard.querySelector('[data-transport-date]') : null;
+        const transportDefaultDate = transportCard
+          ? transportCard.getAttribute('data-default-expected-date') || ''
+          : '';
+
+        const eggStageCards = Array.prototype.slice.call(document.querySelectorAll('[data-egg-stage-card]'));
+        const eggStageSaveButtons = Array.prototype.slice.call(document.querySelectorAll('[data-egg-stage-save]'));
+        const eggStageCompleteButtons = Array.prototype.slice.call(document.querySelectorAll('[data-egg-stage-complete]'));
+        const eggStageInputs = Array.prototype.slice.call(document.querySelectorAll('[data-egg-stage-input]'));
+        const stageProgressContainers = {};
+        const classificationPanel = document.querySelector('[data-classification-panel]');
+        const classificationRows = classificationPanel
+          ? Array.prototype.slice.call(classificationPanel.querySelectorAll('[data-classification-row]'))
+          : [];
+        const classificationInputs = classificationPanel
+          ? Array.prototype.slice.call(classificationPanel.querySelectorAll('[data-classification-input]'))
+          : [];
+        const classificationSummaryNode = classificationPanel
+          ? classificationPanel.querySelector('[data-classification-summary]')
+          : null;
+        const classificationFeedbackNode = classificationPanel
+          ? classificationPanel.querySelector('[data-classification-feedback]')
+          : null;
+        const classificationEggsPerCarton =
+          classificationSummaryNode && classificationSummaryNode.hasAttribute('data-eggs-per-carton')
+            ? Number(classificationSummaryNode.getAttribute('data-eggs-per-carton')) || 0
+            : 0;
+        const classificationExpectedCartons =
+          classificationSummaryNode && classificationSummaryNode.hasAttribute('data-expected-cartons')
+            ? Number(classificationSummaryNode.getAttribute('data-expected-cartons')) || 0
+            : 0;
+        const classificationExpectedEggs =
+          classificationSummaryNode && classificationSummaryNode.hasAttribute('data-expected-eggs')
+            ? Number(classificationSummaryNode.getAttribute('data-expected-eggs')) || 0
+            : classificationExpectedCartons * (classificationEggsPerCarton || 0);
+
+        const eggStageState = {};
+
+        const productionSavedState = {
+          consumption: false,
+          mortality: false,
+          discard: false,
+          production: false,
+        };
+        let activeProductionSection = null;
+
+        const hasIntl = typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function';
+        const numberFormatter = hasIntl ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }) : null;
+        const percentageFormatter = hasIntl
+          ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2, minimumFractionDigits: 0 })
+          : null;
+        const dateFormatter =
+          typeof Intl !== 'undefined' && typeof Intl.DateTimeFormat === 'function'
+            ? new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: '2-digit', month: 'short' })
+            : null;
+        const BULTO_IN_KG = 40;
+        const productionState = {
+          unit: 'kg',
+          consumptionKg: '',
+          consumptionBultos: '',
+          mortality: '',
+          discard: '',
+          barnOutputs: {},
+          roomOutputs: {},
+          mode: 'barn',
+        };
+
+        function normalizeNumber(value) {
+          if (value === null || value === undefined || value === '') {
+            return null;
+          }
+          const numeric = Number(value);
+          return Number.isFinite(numeric) ? numeric : null;
+        }
+
+        function formatNumber(value) {
+          if (!Number.isFinite(value)) {
+            return '—';
+          }
+          if (!numberFormatter) {
+            return String(value);
+          }
+          return numberFormatter.format(value);
+        }
+
+        function formatPercentage(value) {
+          if (!Number.isFinite(value)) {
+            return '—';
+          }
+          if (percentageFormatter) {
+            return percentageFormatter.format(value) + ' %';
+          }
+          const fixed = value.toFixed(2);
+          return fixed.replace(/\.?0+$/, '') + ' %';
+        }
+
+        function resolveActiveHens() {
+          if (productionReference && Object.prototype.hasOwnProperty.call(productionReference, 'active_hens')) {
+            const parsedReference = normalizeNumber(productionReference.active_hens);
+            if (parsedReference !== null && parsedReference > 0) {
+              return parsedReference;
+            }
+          }
+          const attributeValue = productionCard ? productionCard.getAttribute('data-production-active-hens') : null;
+          const parsedAttribute = normalizeNumber(attributeValue);
+          if (parsedAttribute !== null && parsedAttribute > 0) {
+            return parsedAttribute;
+          }
+          return null;
+        }
+
+        function formatDateLabel(value) {
+          if (!value) {
+            return 'Sin fecha';
+          }
+          const parsed = Date.parse(value);
+          if (Number.isNaN(parsed)) {
+            return value;
+          }
+          if (dateFormatter) {
+            return dateFormatter.format(new Date(parsed));
+          }
+          return new Date(parsed).toISOString().slice(0, 10);
+        }
+
+        function hideTransportMessages() {
+          if (transportFeedbackNode) {
+            transportFeedbackNode.classList.add('hidden');
+            transportFeedbackNode.textContent = '';
+          }
+          if (transportSuccessNode) {
+            transportSuccessNode.classList.add('hidden');
+            if (transportSuccessText) {
+              transportSuccessText.textContent = '';
+            }
           }
         }
 
+        function showTransportFeedback(message) {
+          if (!transportFeedbackNode) {
+            return;
+          }
+          transportFeedbackNode.textContent = message;
+          transportFeedbackNode.classList.remove('hidden');
+          if (transportSelectionSummary) {
+            transportSelectionSummary.classList.add('text-rose-600');
+          }
+          if (transportSuccessNode) {
+            transportSuccessNode.classList.add('hidden');
+            if (transportSuccessText) {
+              transportSuccessText.textContent = '';
+            }
+          }
+        }
+
+        function showTransportSuccess(message) {
+          if (!transportSuccessNode) {
+            return;
+          }
+          if (transportFeedbackNode) {
+            transportFeedbackNode.classList.add('hidden');
+            transportFeedbackNode.textContent = '';
+          }
+          transportSuccessNode.classList.remove('hidden');
+          if (transportSuccessText) {
+            transportSuccessText.textContent = message;
+          }
+        }
+
+        function getSelectedTransportLots() {
+          return transportLotInputs.filter(function (input) {
+            return !input.disabled && input.checked;
+          });
+        }
+
+        function computeTransportTotals() {
+          const selected = getSelectedTransportLots();
+          let totalCartons = 0;
+          const lots = selected.map(function (input) {
+            const rawCartons = normalizeNumber(input.getAttribute('data-cartons'));
+            const cartons = Number.isFinite(rawCartons) && rawCartons > 0 ? rawCartons : 0;
+            if (cartons > 0) {
+              totalCartons += cartons;
+            }
+            return {
+              id: input.value,
+              label: input.getAttribute('data-lot-label') || input.value,
+              cartons: cartons,
+              productionDate: input.getAttribute('data-production-date') || null,
+              productionDateLabel: input.getAttribute('data-production-date-label') || null,
+            };
+          });
+          return { inputs: selected, lots: lots, totalCartons: totalCartons };
+        }
+
+        function updateTransportSelectionSummary() {
+          if (!transportSelectionSummary) {
+            return;
+          }
+          const totals = computeTransportTotals();
+          if (totals.lots.length) {
+            const lotLabel = totals.lots.length === 1 ? '1 lote' : totals.lots.length + ' lotes';
+            const cartonLabel = formatNumber(Math.max(totals.totalCartons, 0)) + ' cartones';
+            transportSelectionSummary.textContent = 'Seleccionados: ' + lotLabel + ' · ' + cartonLabel;
+            transportSelectionSummary.classList.remove('text-rose-600');
+          } else {
+            transportSelectionSummary.textContent =
+              'Selecciona los lotes que deseas autorizar para transporte.';
+            transportSelectionSummary.classList.remove('text-rose-600');
+          }
+          if (transportAuthorizeButton) {
+            const transporterReady = transporterField && transporterField.value;
+            const hasDate = expectedDateField && expectedDateField.value;
+            transportAuthorizeButton.disabled = !(totals.lots.length && transporterReady && hasDate);
+          }
+        }
+
+        function renderList(node, lines) {
+          if (!node) {
+            return;
+          }
+          node.innerHTML = '';
+          lines.forEach(function (line) {
+            const li = document.createElement('li');
+            li.textContent = line;
+            node.appendChild(li);
+          });
+        }
+
+        function getStageDefinition(stageId) {
+          if (!stageId) {
+            return null;
+          }
+          return Object.prototype.hasOwnProperty.call(eggStageDefinitions, stageId)
+            ? eggStageDefinitions[stageId]
+            : null;
+        }
+
+        function updateTransportStatusLabel(stageId) {
+          if (stageId !== 'transport') {
+            return;
+          }
+          const card = getStageCard(stageId);
+          if (!card) {
+            return;
+          }
+          const statusNode = card.querySelector('[data-egg-stage-status]');
+          if (!statusNode) {
+            return;
+          }
+          const state = ensureStageState(stageId);
+          const progress = state.data && state.data.progress ? state.data.progress : null;
+          const stepIndex = progress && typeof progress.stepIndex === 'number' ? progress.stepIndex : -1;
+          const definition = getStageDefinition(stageId);
+          const steps = definition && Array.isArray(definition.progress_steps) ? definition.progress_steps : [];
+          if (stepIndex >= 0 && steps[stepIndex]) {
+            statusNode.textContent = 'Estado actual: ' + steps[stepIndex].label;
+          } else {
+            statusNode.textContent = 'Selecciona el estado actual del transporte.';
+          }
+        }
+
+        function updateTransportButtons(stageId) {
+          if (stageId !== 'transport') {
+            return;
+          }
+          const containerEntry = stageProgressContainers[stageId];
+          if (!containerEntry || !Array.isArray(containerEntry.buttons)) {
+            return;
+          }
+          const state = ensureStageState(stageId);
+          const progress = state.data && state.data.progress ? state.data.progress : null;
+          const activeIndex = progress && typeof progress.stepIndex === 'number' ? progress.stepIndex : -1;
+          containerEntry.buttons.forEach(function (button, index) {
+            button.classList.remove(
+              'bg-brand',
+              'text-slate-900',
+              'border-brand',
+              'bg-emerald-500',
+              'text-white',
+              'border-emerald-500',
+              'opacity-60'
+            );
+            button.classList.add('border-slate-200', 'text-slate-600');
+            if (index === activeIndex) {
+              button.classList.remove('border-slate-200', 'text-slate-600');
+              button.classList.add('bg-brand', 'text-slate-900', 'border-brand');
+              button.setAttribute('aria-pressed', 'true');
+            } else if (index < activeIndex) {
+              button.classList.remove('border-slate-200', 'text-slate-600');
+              button.classList.add('bg-emerald-500', 'text-white', 'border-emerald-500');
+              button.setAttribute('aria-pressed', 'false');
+            } else {
+              button.setAttribute('aria-pressed', 'false');
+            }
+          });
+        }
+
+        function setTransportProgress(stageId, stepIndex, stepId) {
+          const state = ensureStageState(stageId);
+          state.data = state.data || {};
+          const definition = getStageDefinition(stageId);
+          const steps = definition && Array.isArray(definition.progress_steps) ? definition.progress_steps : [];
+          if (!steps.length) {
+            state.data.progress = { stepIndex: -1, stepId: null };
+            markStageSaved(stageId);
+            updateTransportButtons(stageId);
+            updateTransportStatusLabel(stageId);
+            return;
+          }
+          const clampedIndex = Math.max(0, Math.min(stepIndex, steps.length - 1));
+          const targetStep = steps[clampedIndex] || null;
+          state.data.progress = {
+            stepIndex: clampedIndex,
+            stepId: stepId || (targetStep ? targetStep.id : null),
+          };
+
+          if (steps.length && clampedIndex === steps.length - 1) {
+            markStageCompleted(stageId);
+          } else {
+            markStageSaved(stageId);
+          }
+
+          updateTransportButtons(stageId);
+          updateTransportStatusLabel(stageId);
+
+          if (telegram && typeof telegram.sendData === 'function') {
+            try {
+              telegram.sendData(
+                JSON.stringify({
+                  action: 'egg-stage-progress',
+                  stage: stageId,
+                  step: state.data.progress.stepId,
+                  step_index: state.data.progress.stepIndex,
+                  label: targetStep ? targetStep.label : null,
+                })
+              );
+            } catch (error) {
+              console.info('No se pudo enviar el progreso de transporte a Telegram:', error);
+            }
+          } else {
+            console.info('Progreso transporte:', stageId, state.data.progress);
+          }
+        }
+
+        function getStageCard(stageId) {
+          if (!stageId) {
+            return null;
+          }
+          return document.querySelector('[data-egg-stage-card][data-egg-stage="' + stageId + '"]');
+        }
+
+        function ensureStageState(stageId) {
+          if (!stageId) {
+            return { data: {}, status: 'pending', completed: false };
+          }
+          if (!Object.prototype.hasOwnProperty.call(eggStageState, stageId)) {
+            let defaultData;
+            if (stageId === 'classification') {
+              defaultData = { categories: {}, totals: { cartons: 0, eggs: 0 } };
+            } else if (stageId === 'transport') {
+              defaultData = { progress: { stepIndex: -1, stepId: null } };
+            } else {
+              defaultData = {};
+            }
+            eggStageState[stageId] = {
+              data: defaultData,
+              status: 'pending',
+              completed: false,
+            };
+          } else {
+            const current = eggStageState[stageId];
+            if (stageId === 'classification') {
+              current.data = current.data || { categories: {}, totals: { cartons: 0, eggs: 0 } };
+              current.data.categories = current.data.categories || {};
+              current.data.totals = current.data.totals || { cartons: 0, eggs: 0 };
+            } else if (stageId === 'transport') {
+              current.data = current.data || {};
+              if (!current.data.progress) {
+                current.data.progress = { stepIndex: -1, stepId: null };
+              } else {
+                if (typeof current.data.progress.stepIndex !== 'number') {
+                  current.data.progress.stepIndex = -1;
+                }
+                if (!current.data.progress.hasOwnProperty('stepId')) {
+                  current.data.progress.stepId = null;
+                }
+              }
+            } else {
+              current.data = current.data || {};
+            }
+            if (!current.status) {
+              current.status = 'pending';
+            }
+            if (typeof current.completed !== 'boolean') {
+              current.completed = false;
+            }
+          }
+          return eggStageState[stageId];
+        }
+
+        function setStageVisualStatus(stageId, status) {
+          const card = getStageCard(stageId);
+          if (!card) {
+            return;
+          }
+          const chip = card.querySelector('[data-egg-stage-chip]');
+          const statusNode = card.querySelector('[data-egg-stage-status]');
+          const banner = card.querySelector('[data-egg-stage-complete-banner]');
+          const completeButton = card.querySelector('[data-egg-stage-complete]');
+
+          if (status === 'completed') {
+            if (chip) {
+              chip.textContent = 'Lista';
+            }
+            if (statusNode) {
+              statusNode.textContent = 'Etapa completada';
+            }
+            if (banner) {
+              banner.classList.remove('hidden');
+            }
+            if (completeButton) {
+              if (!completeButton.dataset.defaultLabel) {
+                completeButton.dataset.defaultLabel = completeButton.textContent.trim();
+              }
+              completeButton.disabled = true;
+              completeButton.classList.remove('bg-brand', 'hover:bg-brand-dark', 'text-slate-900');
+              completeButton.classList.add('bg-emerald-500', 'text-white', 'hover:bg-emerald-600');
+              completeButton.innerHTML = '<span aria-hidden="true">✅</span><span>Completada</span>';
+            }
+          } else {
+            if (banner) {
+              banner.classList.add('hidden');
+            }
+            if (statusNode) {
+              statusNode.textContent = status === 'saved' ? 'Cambios guardados' : 'Esperando registro';
+            }
+            if (chip) {
+              chip.textContent = status === 'saved' ? 'Guardada' : 'Pendiente';
+            }
+            if (completeButton) {
+              const defaultLabel = completeButton.dataset.defaultLabel || 'Marcar como completada';
+              completeButton.disabled = false;
+              completeButton.classList.remove('bg-emerald-500', 'text-white', 'hover:bg-emerald-600');
+              completeButton.classList.add('bg-brand', 'text-slate-900', 'hover:bg-brand-dark');
+              completeButton.textContent = defaultLabel;
+            }
+          }
+        }
+
+        function markStagePending(stageId) {
+          const state = ensureStageState(stageId);
+          state.status = 'pending';
+          state.completed = false;
+          setStageVisualStatus(stageId, 'pending');
+          if (stageId === 'transport') {
+            updateTransportButtons(stageId);
+            updateTransportStatusLabel(stageId);
+          }
+        }
+
+        function markStageSaved(stageId) {
+          const state = ensureStageState(stageId);
+          state.status = 'saved';
+          state.completed = false;
+          setStageVisualStatus(stageId, 'saved');
+          if (stageId === 'transport') {
+            updateTransportButtons(stageId);
+            updateTransportStatusLabel(stageId);
+          }
+        }
+
+        function markStageCompleted(stageId) {
+          const state = ensureStageState(stageId);
+          state.status = 'completed';
+          state.completed = true;
+          setStageVisualStatus(stageId, 'completed');
+          if (stageId === 'transport') {
+            updateTransportButtons(stageId);
+            updateTransportStatusLabel(stageId);
+          }
+        }
+
+        function buildStagePayload(stageId) {
+          const state = ensureStageState(stageId);
+          if (stageId === 'classification') {
+            updateClassificationValues();
+            return {
+              categories: Object.assign({}, state.data.categories || {}),
+              totals: Object.assign({}, state.data.totals || {}),
+              expected_cartons: classificationExpectedCartons,
+              expected_eggs: classificationExpectedEggs,
+            };
+          }
+
+          const data = {};
+          const card = getStageCard(stageId);
+          const inputs = card ? Array.prototype.slice.call(card.querySelectorAll('[data-egg-stage-input]')) : [];
+          inputs.forEach(function (input) {
+            const field = input.getAttribute('data-field');
+            if (!field) {
+              return;
+            }
+            data[field] = input.value || '';
+          });
+          state.data = data;
+          return data;
+        }
+
+        function updateClassificationValues() {
+          if (!classificationPanel) {
+            return;
+          }
+          const state = ensureStageState('classification');
+          const categories = state.data.categories || {};
+          let totalCartons = 0;
+          let totalEggs = 0;
+
+          classificationRows.forEach(function (row) {
+            const categoryId = row.getAttribute('data-category-id');
+            const input = row.querySelector('[data-classification-input]');
+            const eggsNode = row.querySelector('[data-classification-eggs]');
+            const eggsPerCarton = Number(row.getAttribute('data-eggs-per-carton')) || classificationEggsPerCarton || 0;
+            const rawValue = input ? normalizeNumber(input.value) : null;
+            const cartonsValue = rawValue !== null && rawValue >= 0 ? rawValue : 0;
+            totalCartons += cartonsValue;
+            const eggsValue = cartonsValue * eggsPerCarton;
+            totalEggs += eggsValue;
+            if (categoryId) {
+              categories[categoryId] = cartonsValue;
+            }
+            if (eggsNode) {
+              eggsNode.textContent = formatNumber(eggsValue) + ' huevos';
+            }
+          });
+
+          state.data.categories = categories;
+          state.data.totals = { cartons: totalCartons, eggs: totalEggs };
+
+          if (classificationSummaryNode) {
+            classificationSummaryNode.classList.remove('text-rose-600', 'text-emerald-700');
+            classificationSummaryNode.textContent =
+              'Totales registrados: ' +
+              formatNumber(totalCartons) +
+              ' cartones (' +
+              formatNumber(totalEggs) +
+              ' huevos)';
+          }
+
+          if (classificationFeedbackNode) {
+            classificationFeedbackNode.classList.remove('text-rose-600', 'text-emerald-700', 'text-emerald-600');
+            if (classificationExpectedCartons > 0) {
+              if (totalCartons === classificationExpectedCartons) {
+                classificationFeedbackNode.textContent = 'Totales equilibrados. Continúa con la inspección.';
+                classificationFeedbackNode.classList.add('text-emerald-700');
+                if (classificationSummaryNode) {
+                  classificationSummaryNode.classList.add('text-emerald-700');
+                }
+              } else {
+                const diff = totalCartons - classificationExpectedCartons;
+                if (diff > 0) {
+                  classificationFeedbackNode.textContent =
+                    'Hay +' +
+                    formatNumber(diff) +
+                    ' cartones sobre lo esperado. Ajusta la clasificación o registra el excedente.';
+                } else {
+                  classificationFeedbackNode.textContent =
+                    'Faltan ' +
+                    formatNumber(Math.abs(diff)) +
+                    ' cartones para igualar el lote.';
+                }
+                classificationFeedbackNode.classList.add('text-rose-600');
+                if (classificationSummaryNode) {
+                  classificationSummaryNode.classList.add('text-rose-600');
+                }
+              }
+            } else {
+              classificationFeedbackNode.textContent =
+                'Si hay diferencia, revisa los descartes o ajusta el transporte antes de liberar el lote.';
+              classificationFeedbackNode.classList.add('text-emerald-600');
+            }
+          }
+        }
+
+        function getConsumptionInfo() {
+          const kg = normalizeNumber(productionState.consumptionKg);
+          const bultos = normalizeNumber(productionState.consumptionBultos);
+          if (kg !== null) {
+            const derivedBultos = kg / BULTO_IN_KG;
+            return {
+              primary: formatNumber(kg) + ' kg',
+              secondary: '≈ ' + formatNumber(derivedBultos) + ' bultos',
+            };
+          }
+          if (bultos !== null) {
+            const derivedKg = bultos * BULTO_IN_KG;
+            return {
+              primary: formatNumber(bultos) + ' bultos',
+              secondary: '≈ ' + formatNumber(derivedKg) + ' kg',
+            };
+          }
+          return { primary: '—', secondary: null };
+        }
+
+        function getProductionLines() {
+          let total = 0;
+          const details = [];
+
+          Object.keys(productionState.barnOutputs).forEach(function (label) {
+            const value = productionState.barnOutputs[label];
+            total += value;
+            details.push(label + ': ' + formatNumber(value));
+          });
+
+          Object.keys(productionState.roomOutputs).forEach(function (label) {
+            const value = productionState.roomOutputs[label];
+            total += value;
+            details.push(label + ': ' + formatNumber(value));
+          });
+
+          return {
+            total: total,
+            totalLabel: total > 0 ? formatNumber(total) + ' huevos' : '—',
+            detail: details,
+          };
+        }
+
+        function getProductionSummaryLines() {
+          const lines = [];
+          const consumptionInfo = getConsumptionInfo();
+          lines.push('Consumo: ' + consumptionInfo.primary);
+          if (consumptionInfo.secondary) {
+            lines.push('Equivalencia: ' + consumptionInfo.secondary);
+          }
+          const mortalityValue = normalizeNumber(productionState.mortality);
+          const discardValue = normalizeNumber(productionState.discard);
+          lines.push('Mortalidad: ' + (mortalityValue !== null ? formatNumber(mortalityValue) + ' aves' : '—'));
+          lines.push('Descarte: ' + (discardValue !== null ? formatNumber(discardValue) + ' aves' : '—'));
+
+          const productionInfo = getProductionLines();
+          lines.push('Producción total: ' + productionInfo.totalLabel);
+          const baseHens = resolveActiveHens();
+          if (baseHens !== null) {
+            let availableHens = baseHens;
+            if (mortalityValue !== null) {
+              availableHens -= mortalityValue;
+            }
+            if (discardValue !== null) {
+              availableHens -= discardValue;
+            }
+            if (availableHens > 0 && Number.isFinite(productionInfo.total) && productionInfo.total > 0) {
+              const posturePercent = (productionInfo.total / availableHens) * 100;
+              lines.push('Postura: ' + formatPercentage(posturePercent));
+            } else {
+              lines.push('Postura: —');
+            }
+          } else {
+            lines.push('Postura: —');
+          }
+          if (productionInfo.detail.length) {
+            lines.push('Detalle: ' + productionInfo.detail.join(' · '));
+          }
+          return lines;
+        }
+
+        function updateProductionSummary() {
+          const lines = getProductionSummaryLines();
+          renderList(productionSummaryCardList, lines);
+        }
+
+        function markProductionComplete() {
+          if (!productionCard) {
+            return;
+          }
+          if (productionCompleteBanner) {
+            productionCompleteBanner.classList.remove('hidden');
+          }
+          productionCard.classList.add('ring-2', 'ring-emerald-300', 'ring-offset-2', 'ring-offset-white');
+          productionCard.setAttribute('data-task-completed', 'true');
+        }
+
+        function updateTriggerStyles(activeSection) {
+          productionTriggerButtons.forEach(function (button) {
+            if (!button.dataset.baseClass) {
+              button.dataset.baseClass = button.className;
+            }
+            const base = button.dataset.baseClass;
+            const section = button.getAttribute('data-production-section') || 'consumption';
+            const isActive = activeSection && section === activeSection;
+            const isSaved = productionSavedState[section];
+
+            let classes = base;
+            if (isActive) {
+              classes += ' bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-200/80';
+            } else if (isSaved) {
+              classes += ' border-emerald-300 text-emerald-700 bg-emerald-50 shadow-sm shadow-emerald-100/60';
+            }
+            button.className = classes;
+          });
+        }
+
+        function showProductionPanel(section, options) {
+          activeProductionSection = section;
+          if (section === 'consumption') {
+            setActiveConsumptionUnit(productionState.unit || 'kg');
+          }
+          if (section === 'production') {
+            setProductionMode(productionState.mode || 'barn');
+          }
+          productionPanels.forEach(function (panel) {
+            const panelSection = panel.getAttribute('data-section');
+            panel.classList.toggle('hidden', panelSection !== section);
+          });
+          updateTriggerStyles(section);
+
+          if (!(options && options.focus)) {
+            return;
+          }
+
+          let target = null;
+          if (section === 'consumption') {
+            const unit = productionState.unit || 'kg';
+            target =
+              consumptionInputs.find(function (input) {
+                return input.getAttribute('data-unit') === unit;
+              }) || consumptionInputs[0];
+          } else if (section === 'mortality' || section === 'discard') {
+            target = productionInputs.find(function (input) {
+              return input.getAttribute('data-production-input') === section;
+            });
+          } else if (section === 'production') {
+            const mode = productionState.mode || 'barn';
+            if (mode === 'barn') {
+              target = productionOutputInputs.find(function (input) {
+                return input.hasAttribute('data-barn');
+              });
+            } else {
+              target = productionOutputInputs.find(function (input) {
+                return input.hasAttribute('data-room');
+              });
+            }
+          }
+
+          if (target && typeof target.focus === 'function') {
+            setTimeout(function () {
+              target.focus();
+            }, 30);
+          }
+        }
+
+        function hideProductionPanels() {
+          activeProductionSection = null;
+          productionPanels.forEach(function (panel) {
+            panel.classList.add('hidden');
+          });
+          updateTriggerStyles(null);
+        }
+
+        function toggleProductionPanel(section) {
+          if (activeProductionSection === section) {
+            hideProductionPanels();
+          } else {
+            showProductionPanel(section, { focus: true });
+          }
+        }
+
+        function setActiveConsumptionUnit(unit) {
+          productionState.unit = unit;
+          consumptionToggleButtons.forEach(function (button) {
+            const buttonUnit = button.getAttribute('data-unit');
+            const isActive = buttonUnit === unit;
+            button.setAttribute('data-state', isActive ? 'active' : 'inactive');
+          });
+          consumptionPanels.forEach(function (panel) {
+            const panelUnit = panel.getAttribute('data-unit');
+            panel.classList.toggle('hidden', panelUnit !== unit);
+          });
+        }
+
+        function setProductionMode(mode) {
+          productionState.mode = mode;
+          productionModeButtons.forEach(function (button) {
+            const buttonMode = button.getAttribute('data-mode');
+            const isActive = buttonMode === mode;
+            button.setAttribute('data-state', isActive ? 'active' : 'inactive');
+          });
+          productionOutputPanels.forEach(function (panel) {
+            const panelMode = panel.getAttribute('data-mode');
+            panel.classList.toggle('hidden', panelMode !== mode);
+          });
+        }
+
+        if (productionCard) {
+          updateTriggerStyles(null);
+          setActiveConsumptionUnit(productionState.unit);
+          setProductionMode(productionState.mode);
+          updateProductionSummary();
+
+          productionTriggerButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+              const section = event.currentTarget.getAttribute('data-production-section') || 'consumption';
+              toggleProductionPanel(section);
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
+              }
+            });
+          });
+
+          consumptionToggleButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+              const unit = event.currentTarget.getAttribute('data-unit') || 'kg';
+              setActiveConsumptionUnit(unit);
+              if (activeProductionSection === 'consumption') {
+                showProductionPanel('consumption', { focus: true });
+              }
+            });
+          });
+
+          productionModeButtons.forEach(function (button) {
+            button.addEventListener('click', function (event) {
+              const mode = event.currentTarget.getAttribute('data-mode') || 'barn';
+              setProductionMode(mode);
+              if (activeProductionSection === 'production') {
+                showProductionPanel('production', { focus: true });
+              }
+            });
+          });
+
+          productionSaveButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              const section = button.getAttribute('data-section') || 'consumption';
+              if (section === 'consumption') {
+                const kgInput = consumptionInputs.find(function (input) {
+                  return input.getAttribute('data-unit') === 'kg';
+                });
+                const bultosInput = consumptionInputs.find(function (input) {
+                  return input.getAttribute('data-unit') === 'bultos';
+                });
+                productionState.consumptionKg = kgInput ? kgInput.value : '';
+                productionState.consumptionBultos = bultosInput ? bultosInput.value : '';
+              } else if (section === 'mortality' || section === 'discard') {
+                const field = productionInputs.find(function (input) {
+                  return input.getAttribute('data-production-input') === section;
+                });
+                productionState[section] = field ? field.value : '';
+              } else if (section === 'production') {
+                productionState.barnOutputs = {};
+                productionState.roomOutputs = {};
+                productionOutputInputs.forEach(function (input) {
+                  const value = normalizeNumber(input.value);
+                  const barn = input.getAttribute('data-barn');
+                  const room = input.getAttribute('data-room');
+                  if (barn) {
+                    if (value === null) {
+                      delete productionState.barnOutputs[barn];
+                    } else {
+                      productionState.barnOutputs[barn] = value;
+                    }
+                  } else if (room) {
+                    if (value === null) {
+                      delete productionState.roomOutputs[room];
+                    } else {
+                      productionState.roomOutputs[room] = value;
+                    }
+                  }
+                });
+              }
+
+              productionSavedState[section] = true;
+              updateProductionSummary();
+              hideProductionPanels();
+
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('success');
+              }
+              if (telegram && typeof telegram.sendData === 'function') {
+                try {
+                  telegram.sendData(
+                    JSON.stringify({
+                      action: 'simulate-production-save',
+                      section: section,
+                      summary: getProductionSummaryLines(),
+                    })
+                  );
+                } catch (error) {
+                  console.info('No se pudo enviar el resumen simulado a Telegram:', error);
+                }
+              } else {
+                console.info('Registro guardado:', section, getProductionSummaryLines());
+              }
+          });
+        });
+      }
+
+        if (transportCard && transportForm) {
+          if (expectedDateField && !expectedDateField.value && transportDefaultDate) {
+            expectedDateField.value = transportDefaultDate;
+          }
+
+          transportLotInputs.forEach(function (input) {
+            input.addEventListener('change', function () {
+              hideTransportMessages();
+              updateTransportSelectionSummary();
+            });
+          });
+
+          if (transporterField) {
+            transporterField.addEventListener('change', function () {
+              hideTransportMessages();
+              updateTransportSelectionSummary();
+            });
+          }
+
+          if (expectedDateField) {
+            expectedDateField.addEventListener('change', function () {
+              hideTransportMessages();
+              updateTransportSelectionSummary();
+            });
+          }
+
+          transportForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            hideTransportMessages();
+            const totals = computeTransportTotals();
+            if (!totals.lots.length) {
+              showTransportFeedback('Selecciona al menos un lote para autorizar.');
+              return;
+            }
+            if (!transporterField || !transporterField.value) {
+              showTransportFeedback('Indica el transportador asignado.');
+              return;
+            }
+            if (!expectedDateField || !expectedDateField.value) {
+              showTransportFeedback('Define la fecha estimada de transporte.');
+              return;
+            }
+
+            const transporterOption = transporterField.options[transporterField.selectedIndex];
+            const transporterLabel = transporterOption ? transporterOption.textContent.trim() : transporterField.value;
+            const expectedDateValue = expectedDateField.value;
+            const expectedDateLabel = formatDateLabel(expectedDateValue);
+            const lotsPayload = totals.lots.map(function (lot) {
+              return {
+                id: lot.id,
+                label: lot.label,
+                cartons: lot.cartons,
+                production_date: lot.productionDate,
+                production_date_label: lot.productionDateLabel,
+              };
+            });
+
+            totals.inputs.forEach(function (input) {
+              input.checked = false;
+              input.disabled = true;
+              const row = input.closest('[data-transport-lot-row]');
+              if (row) {
+                row.dataset.state = 'authorized';
+                const statusBadge = row.querySelector('[data-transport-lot-status]');
+                if (statusBadge) {
+                  statusBadge.classList.remove('hidden');
+                }
+              }
+            });
+
+            const lotNames = totals.lots.map(function (lot) {
+              return lot.label;
+            });
+            const successMessage =
+              (lotNames.length === 1 ? 'Lote ' + lotNames[0] : lotNames.length + ' lotes autorizados') +
+              ' · Transporte: ' +
+              transporterLabel +
+              ' · Salida estimada: ' +
+              expectedDateLabel +
+              '.';
+
+            showTransportSuccess(successMessage);
+            updateTransportSelectionSummary();
+            if (transportAuthorizeButton) {
+              transportAuthorizeButton.blur();
+            }
+
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('success');
+            }
+            if (telegram && typeof telegram.sendData === 'function') {
+              try {
+                telegram.sendData(
+                  JSON.stringify({
+                    action: 'authorize-transport',
+                    transporter_id: transporterField.value,
+                    transporter_label: transporterLabel,
+                    expected_date: expectedDateValue,
+                    lots: lotsPayload,
+                  })
+                );
+              } catch (error) {
+                console.info('No se pudo enviar la autorización de transporte a Telegram:', error);
+              }
+            } else {
+              console.info('Transporte autorizado:', {
+                transporter: transporterField.value,
+                expected_date: expectedDateValue,
+                lots: lotsPayload,
+              });
+            }
+          });
+
+          updateTransportSelectionSummary();
+        }
+
+        if (eggStageCards.length) {
+          eggStageCards.forEach(function (card) {
+            const stageId = card.getAttribute('data-egg-stage');
+            if (!stageId) {
+              return;
+            }
+            ensureStageState(stageId);
+            const completeButton = card.querySelector('[data-egg-stage-complete]');
+            if (completeButton && !completeButton.dataset.defaultLabel) {
+              completeButton.dataset.defaultLabel = completeButton.textContent.trim();
+            }
+            const progressContainer = card.querySelector('[data-egg-stage-progress]');
+            if (progressContainer) {
+              const buttons = Array.prototype.slice.call(
+                progressContainer.querySelectorAll('[data-egg-stage-progress-step]')
+              );
+              stageProgressContainers[stageId] = {
+                container: progressContainer,
+                buttons: buttons,
+              };
+              buttons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                  const index = Number(button.getAttribute('data-step-index')) || 0;
+                  const stepId = button.getAttribute('data-step-id') || '';
+                  setTransportProgress(stageId, index, stepId);
+                  if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                    telegram.HapticFeedback.selectionChanged();
+                  }
+                });
+              });
+            }
+            setStageVisualStatus(stageId, ensureStageState(stageId).status || 'pending');
+            updateTransportButtons(stageId);
+            updateTransportStatusLabel(stageId);
+          });
+
+          eggStageInputs.forEach(function (input) {
+            const stageId = input.getAttribute('data-stage');
+            if (!stageId) {
+              return;
+            }
+            input.addEventListener('input', function () {
+              const field = input.getAttribute('data-field');
+              const state = ensureStageState(stageId);
+              if (field) {
+                state.data[field] = input.value || '';
+              }
+              markStagePending(stageId);
+            });
+          });
+
+          if (classificationInputs.length) {
+            classificationInputs.forEach(function (input) {
+              input.addEventListener('input', function () {
+                updateClassificationValues();
+                markStagePending('classification');
+              });
+            });
+            updateClassificationValues();
+          }
+
+          eggStageSaveButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              const stageId = button.getAttribute('data-stage');
+              if (!stageId) {
+                return;
+              }
+              const payload = buildStagePayload(stageId);
+              markStageSaved(stageId);
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+                telegram.HapticFeedback.impactOccurred('soft');
+              }
+              if (telegram && typeof telegram.sendData === 'function') {
+                try {
+                  telegram.sendData(
+                    JSON.stringify({
+                      action: 'egg-stage-save',
+                      stage: stageId,
+                      data: payload,
+                    })
+                  );
+                } catch (error) {
+                  console.info('No se pudo enviar la etapa guardada a Telegram:', error);
+                }
+              } else {
+                console.info('Etapa guardada:', stageId, payload);
+              }
+            });
+          });
+
+          eggStageCompleteButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              const stageId = button.getAttribute('data-stage');
+              if (!stageId) {
+                return;
+              }
+              const payload = buildStagePayload(stageId);
+              if (stageId === 'classification') {
+                const totals = (payload && payload.totals) || { cartons: 0 };
+                if (classificationExpectedCartons > 0 && totals.cartons !== classificationExpectedCartons) {
+                  if (classificationSummaryNode) {
+                    classificationSummaryNode.classList.remove('text-emerald-700');
+                    classificationSummaryNode.classList.add('text-rose-600');
+                  }
+                  if (classificationFeedbackNode) {
+                    classificationFeedbackNode.classList.remove('text-emerald-700', 'text-emerald-600');
+                    classificationFeedbackNode.classList.add('text-rose-600');
+                    classificationFeedbackNode.textContent =
+                      'Debes igualar los ' + formatNumber(classificationExpectedCartons) + ' cartones antes de cerrar.';
+                  }
+                  if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                    telegram.HapticFeedback.notificationOccurred('error');
+                  }
+                  return;
+                }
+              }
+
+              markStageCompleted(stageId);
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('success');
+              }
+              if (telegram && typeof telegram.sendData === 'function') {
+                try {
+                  telegram.sendData(
+                    JSON.stringify({
+                      action: 'egg-stage-complete',
+                      stage: stageId,
+                      data: payload,
+                    })
+                  );
+                } catch (error) {
+                  console.info('No se pudo enviar la confirmacion de etapa a Telegram:', error);
+                }
+              } else {
+                console.info('Etapa completada:', stageId, payload);
+              }
+            });
+          });
+        }
         const buttons = document.querySelectorAll('[data-task-action]');
         buttons.forEach(function (button) {
           button.addEventListener('click', function (event) {
             const action = event.currentTarget.getAttribute('data-task-action');
             const card = event.currentTarget.closest('[data-task-card]');
             const title = card ? card.getAttribute('data-task-title') : '';
+            let section = null;
+            if (action === 'log-production') {
+              section = event.currentTarget.getAttribute('data-production-section') || 'consumption';
+            }
+            if (action === 'complete-production') {
+              hideProductionPanels();
+              markProductionComplete();
+              if (!event.currentTarget.dataset.defaultLabel) {
+                event.currentTarget.dataset.defaultLabel = event.currentTarget.textContent.trim();
+              }
+              event.currentTarget.classList.remove('border', 'border-rose-200', 'hover:border-rose-400', 'hover:text-rose-600');
+              event.currentTarget.classList.add('bg-emerald-500', 'text-white', 'border-transparent');
+              event.currentTarget.innerHTML = '<span aria-hidden="true">✅</span><span>Completada</span>';
+              event.currentTarget.disabled = true;
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('success');
+              }
+            }
             if (telegram) {
               if (telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
                 telegram.HapticFeedback.impactOccurred('soft');
               }
-              telegram.sendData(
-                JSON.stringify({
-                  action: action,
-                  title: title,
-                })
-              );
+              const payload = {
+                action: action,
+                title: title,
+              };
+              if (section) {
+                payload.section = section;
+              }
+              telegram.sendData(JSON.stringify(payload));
             } else {
-              console.info('Accion seleccionada:', action, title);
+              if (section) {
+                console.info('Accion seleccionada:', action, title, 'Sección:', section);
+              } else {
+                console.info('Accion seleccionada:', action, title);
+              }
             }
           });
         });
 
-        const mainAction = document.querySelector('[data-telegram-main-action]');
-        if (mainAction) {
-          mainAction.addEventListener('click', function () {
-            if (telegram && payload && payload.tasks && payload.tasks.length) {
-              telegram.sendData(
-                JSON.stringify({
-                  action: 'open-next-task',
-                  title: payload.tasks[0].title,
-                })
-              );
+        function redirectToLogin() {
+          if (loginUrl) {
+            window.location.assign(loginUrl);
+          } else {
+            window.location.reload();
+          }
+        }
+
+        function performLogout() {
+          if (!logoutUrl) {
+            return Promise.resolve();
+          }
+
+          const formData = new FormData();
+          if (csrfToken) {
+            formData.append('csrfmiddlewaretoken', csrfToken);
+          }
+
+          return fetch(logoutUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            body: formData,
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error('Logout request failed with status ' + response.status);
+              }
+            })
+            .catch(function (error) {
+              console.warn('No se pudo cerrar sesión mediante fetch.', error);
+              if (logoutForm) {
+                logoutForm.submit();
+              } else if (logoutUrl) {
+                window.location.assign(logoutUrl);
+              }
+              throw error;
+            });
+        }
+
+        function hideConfirmError() {
+          if (confirmErrorNode) {
+            confirmErrorNode.textContent = '';
+            confirmErrorNode.classList.add('hidden');
+          }
+        }
+
+        function showConfirmError(message) {
+          if (confirmErrorNode) {
+            confirmErrorNode.textContent = message;
+            confirmErrorNode.classList.remove('hidden');
+          }
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+            telegram.HapticFeedback.notificationOccurred('error');
+          }
+        }
+
+        function setConfirmLoading(isLoading) {
+          if (!confirmDialog) {
+            return;
+          }
+          confirmDialog.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+
+          if (confirmAcceptButton) {
+            confirmAcceptButton.disabled = isLoading;
+            confirmAcceptButton.classList.toggle('opacity-70', isLoading);
+            confirmAcceptButton.classList.toggle('cursor-not-allowed', isLoading);
+            confirmAcceptButton.textContent = isLoading ? 'Cerrando tu turno...' : confirmAcceptDefaultLabel;
+          }
+
+          if (confirmCancelButton) {
+            confirmCancelButton.disabled = isLoading;
+            confirmCancelButton.classList.toggle('opacity-60', isLoading);
+            confirmCancelButton.classList.toggle('cursor-not-allowed', isLoading);
+            confirmCancelButton.textContent = confirmCancelDefaultLabel;
+          }
+
+          if (confirmStatusNode) {
+            confirmStatusNode.classList.toggle('hidden', !isLoading);
+          }
+        }
+
+        function closeDialogs() {
+          if (!dialogRoot) {
+            return;
+          }
+          activeDialog = null;
+          dialogRoot.classList.add('hidden');
+          dialogRoot.setAttribute('aria-hidden', 'true');
+          if (confirmDialog) {
+            confirmDialog.classList.add('hidden');
+            confirmDialog.setAttribute('aria-hidden', 'true');
+          }
+          if (gratitudeDialog) {
+            gratitudeDialog.classList.add('hidden');
+            gratitudeDialog.setAttribute('aria-hidden', 'true');
+          }
+          if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+            lastFocusedElement.focus();
+          }
+          lastFocusedElement = null;
+        }
+
+        function openDialog(type) {
+          if (!dialogRoot) {
+            return false;
+          }
+          activeDialog = type;
+          dialogRoot.classList.remove('hidden');
+          dialogRoot.setAttribute('aria-hidden', 'false');
+          if (!dialogRoot.classList.contains('flex')) {
+            dialogRoot.classList.add('flex');
+          }
+
+          if (confirmDialog) {
+            const isConfirm = type === 'confirm';
+            confirmDialog.classList.toggle('hidden', !isConfirm);
+            confirmDialog.setAttribute('aria-hidden', isConfirm ? 'false' : 'true');
+          }
+
+          if (gratitudeDialog) {
+            const isGratitude = type === 'gratitude';
+            gratitudeDialog.classList.toggle('hidden', !isGratitude);
+            gratitudeDialog.setAttribute('aria-hidden', isGratitude ? 'false' : 'true');
+          }
+
+          window.requestAnimationFrame(function () {
+            if (type === 'confirm' && confirmAcceptButton) {
+              confirmAcceptButton.focus();
+            } else if (type === 'gratitude' && gratitudeAcceptButton) {
+              gratitudeAcceptButton.focus();
             }
+          });
+
+          return true;
+        }
+
+        function resetConfirmDialog() {
+          hideConfirmError();
+          setConfirmLoading(false);
+        }
+
+        function openConfirmDialog() {
+          if (!confirmDialog || !dialogRoot) {
+            return false;
+          }
+          lastFocusedElement = document.activeElement;
+          resetConfirmDialog();
+          const opened = openDialog('confirm');
+          if (opened && telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+            telegram.HapticFeedback.impactOccurred('soft');
+          }
+          return opened;
+        }
+
+        function openGratitudeDialog() {
+          if (!gratitudeDialog || !dialogRoot) {
+            redirectToLogin();
+            return;
+          }
+          openDialog('gratitude');
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+            telegram.HapticFeedback.notificationOccurred('success');
+          }
+        }
+
+        function beginLogoutFlow() {
+          if (isProcessingMainAction) {
+            return;
+          }
+          isProcessingMainAction = true;
+          hideConfirmError();
+          setConfirmLoading(true);
+
+          Promise.resolve()
+            .then(function () {
+              return performLogout();
+            })
+            .then(function () {
+              isProcessingMainAction = false;
+              setConfirmLoading(false);
+              openGratitudeDialog();
+            })
+            .catch(function (error) {
+              isProcessingMainAction = false;
+              setConfirmLoading(false);
+              showConfirmError('No pudimos cerrar tu turno. Inténtalo nuevamente.');
+              console.warn('Ocurrió un problema al completar el turno.', error);
+            });
+        }
+
+        function handleCompleteShift() {
+          if (openConfirmDialog()) {
+            return;
+          }
+
+          const proceed = function () {
+            beginLogoutFlow();
+          };
+
+          if (telegram && typeof telegram.showConfirm === 'function') {
+            telegram.showConfirm(confirmMessageText, function (accepted) {
+              if (accepted) {
+                proceed();
+              }
+            });
+            return;
+          }
+
+          if (window.confirm(confirmMessageText)) {
+            proceed();
+          }
+        }
+
+        finishTriggers.forEach(function (trigger) {
+          trigger.addEventListener('click', function (event) {
+            if (event && typeof event.preventDefault === 'function') {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            handleCompleteShift();
+          });
+        });
+
+        if (confirmAcceptButton) {
+          confirmAcceptButton.addEventListener('click', function () {
+            beginLogoutFlow();
+          });
+        }
+
+        if (confirmCancelButton) {
+          confirmCancelButton.addEventListener('click', function () {
+            if (!isProcessingMainAction) {
+              closeDialogs();
+            }
+          });
+        }
+
+        if (dialogRoot) {
+          dialogRoot.addEventListener('click', function (event) {
+            if (event.target === dialogRoot && activeDialog === 'confirm' && !isProcessingMainAction) {
+              closeDialogs();
+            }
+          });
+
+          document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && activeDialog === 'confirm' && !isProcessingMainAction) {
+              event.preventDefault();
+              closeDialogs();
+            }
+          });
+        }
+
+        if (gratitudeAcceptButton) {
+          gratitudeAcceptButton.addEventListener('click', function () {
+            gratitudeAcceptButton.disabled = true;
+            gratitudeAcceptButton.classList.add('opacity-80');
+            gratitudeAcceptButton.textContent = 'Redirigiendo...';
+            redirectToLogin();
           });
         }
       })();

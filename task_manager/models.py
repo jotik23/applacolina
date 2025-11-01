@@ -102,6 +102,12 @@ class TaskDefinition(models.Model):
         VIDEO = "video", _("Video obligatorio")
         PHOTO_OR_VIDEO = "photo_or_video", _("Foto o video obligatorio")
 
+    class CriticalityLevel(models.TextChoices):
+        LOW = "low", _("Baja")
+        MEDIUM = "medium", _("Media")
+        HIGH = "high", _("Alta")
+        CRITICAL = "critical", _("Crítica")
+
     class RecordFormat(models.TextChoices):
         NONE = "none", _("No requiere formato")
         PRODUCTION_RECORD = "production_record", _("Registro de producción")
@@ -132,6 +138,18 @@ class TaskDefinition(models.Model):
         on_delete=models.PROTECT,
         related_name="task_definitions",
         verbose_name=_("Categoría"),
+    )
+    is_mandatory = models.BooleanField(
+        _("Obligatoria"),
+        default=False,
+        help_text=_("Indica si la ejecución de la tarea es obligatoria."),
+    )
+    criticality_level = models.CharField(
+        _("Nivel de criticidad"),
+        max_length=16,
+        choices=CriticalityLevel.choices,
+        default=CriticalityLevel.MEDIUM,
+        help_text=_("Define el nivel de impacto operativo si la tarea no se ejecuta."),
     )
     task_type = models.CharField(
         _("Tipo"),

@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Iterable, Mapping, Optional, Sequence, Tuple
 from urllib.parse import parse_qsl
@@ -172,6 +172,14 @@ class TaskManagerHomeView(generic.TemplateView):
         category_value, category_label = ensure_filter_selection(
             filters, "category", category_groups, defaults.category
         )
+        mandatory_groups = build_mandatory_filter_groups()
+        mandatory_value, mandatory_label = ensure_filter_selection(
+            filters, "mandatory", mandatory_groups, defaults.mandatory
+        )
+        criticality_groups = build_criticality_filter_groups()
+        criticality_value, criticality_label = ensure_filter_selection(
+            filters, "criticality", criticality_groups, defaults.criticality
+        )
         scope_groups = build_scope_filter_groups()
         scope_value, scope_label = ensure_filter_selection(filters, "scope", scope_groups, defaults.scope)
         responsible_groups = build_responsible_filter_groups()
@@ -284,6 +292,18 @@ class TaskManagerHomeView(generic.TemplateView):
             groups=category_groups,
             neutral_value=defaults.category,
         )
+        context["task_manager_mandatory_filter"] = FilterPickerData(
+            default_value=mandatory_value,
+            default_label=mandatory_label,
+            groups=mandatory_groups,
+            neutral_value=defaults.mandatory,
+        )
+        context["task_manager_criticality_filter"] = FilterPickerData(
+            default_value=criticality_value,
+            default_label=criticality_label,
+            groups=criticality_groups,
+            neutral_value=defaults.criticality,
+        )
         context["task_manager_scope_filter"] = FilterPickerData(
             default_value=scope_value,
             default_label=scope_label,
@@ -325,6 +345,26 @@ class TaskManagerHomeView(generic.TemplateView):
         if filters.category != defaults.category:
             active_filters.append(
                 build_active_filter_chip(self.request, "category", _("Categoría"), category_label, category_value)
+            )
+        if filters.mandatory != defaults.mandatory:
+            active_filters.append(
+                build_active_filter_chip(
+                    self.request,
+                    "mandatory",
+                    _("Obligatoriedad"),
+                    mandatory_label,
+                    mandatory_value,
+                )
+            )
+        if filters.criticality != defaults.criticality:
+            active_filters.append(
+                build_active_filter_chip(
+                    self.request,
+                    "criticality",
+                    _("Nivel de criticidad"),
+                    criticality_label,
+                    criticality_value,
+                )
             )
         if filters.scope != defaults.scope:
             active_filters.append(
@@ -398,6 +438,197 @@ def _build_telegram_mini_app_payload(
     weekday_label = date_format(today, "l").capitalize()
     day_number = date_format(today, "d")
     month_label = date_format(today, "M").strip(".").lower()
+    cartons_per_pack = 30
+    daily_cartons = 820
+    daily_eggs = daily_cartons * cartons_per_pack
+
+    classification_categories = [
+        {"id": "jumbo", "label": "Jumbo", "cartons": 85, "theme": "emerald"},
+        {"id": "aaa", "label": "AAA", "cartons": 210, "theme": "amber"},
+        {"id": "aa", "label": "AA", "cartons": 180, "theme": "sky"},
+        {"id": "a", "label": "A", "cartons": 150, "theme": "slate"},
+        {"id": "b", "label": "B", "cartons": 110, "theme": "violet"},
+        {"id": "c", "label": "C", "cartons": 60, "theme": "brand"},
+        {"id": "discard", "label": "D (Descarte)", "cartons": 25, "theme": "rose"},
+    ]
+
+    for category in classification_categories:
+        cartons = category["cartons"]
+        eggs = cartons * cartons_per_pack
+        percentage = round((eggs / daily_eggs) * 100, 1) if daily_eggs else 0.0
+        category["eggs"] = eggs
+        category["percentage"] = percentage
+
+    production_reference = {
+        "active_hens": 26800,
+        "label": _("Aves en postura activas"),
+        "target_posture_percent": 92.0,
+    }
+
+    egg_workflow = {
+        "cartons_per_pack": cartons_per_pack,
+        "batch": {
+            "label": "Lote GS-2024-11",
+            "origin": "Granja San Lucas · Galpón 3",
+            "rooms": ["Sala 1", "Sala 2"],
+            "produced_cartons": daily_cartons,
+            "produced_eggs": daily_eggs,
+            "recorded_at": date_format(today, "d M Y"),
+        },
+        "stages": [
+            {
+                "id": "transport",
+                "icon": "🚚",
+                "title": "Transporte interno",
+                "tone": "brand",
+                "status": "pending",
+                "summary": "Traslada la producción registrada hacia el centro de acopio sin perder trazabilidad.",
+                "metrics": [
+                    {"label": "Cartones cargados", "value": daily_cartons, "unit": "cartones"},
+                    {"label": "Unidades", "value": daily_eggs, "unit": "huevos"},
+                ],
+                "route": {
+                    "origin": "Galpón 3 · Salas 1 y 2",
+                    "destination": "Centro de clasificación & inspección",
+                },
+                "progress_steps": [
+                    {"id": "verified", "label": "Verificado"},
+                    {"id": "loaded", "label": "Cargado"},
+                    {"id": "departed", "label": "Iniciar transporte"},
+                    {"id": "arrival", "label": "En destino"},
+                    {"id": "unloading", "label": "Descargando"},
+                    {"id": "completed", "label": "Completado"},
+                ],
+                "checkpoints": [
+                    "Confirma estado de guacales y temperatura.",
+                    "Toma foto rápida del cargue si hay novedades.",
+                ],
+            },
+            {
+                "id": "verification",
+                "icon": "📦",
+                "title": "Verificación en acopio",
+                "tone": "sky",
+                "status": "pending",
+                "summary": "Valida que lo recibido coincide con lo transportado y reporta ajustes en línea.",
+                "metrics": [
+                    {"label": "Cartones esperados", "value": daily_cartons, "unit": "cartones"},
+                    {"label": "Huevos esperados", "value": daily_eggs, "unit": "huevos"},
+                ],
+                "fields": [
+                    {"id": "cartons_received", "label": "Cartones recibidos", "placeholder": str(daily_cartons)},
+                    {"id": "eggs_damaged", "label": "Huevos fisurados", "placeholder": "0"},
+                    {"id": "temperature", "label": "Temperatura (°C)", "placeholder": "25"},
+                ],
+                "checkpoints": [
+                    "Anota diferencias en cartones o unidades.",
+                    "Escanea QR de trazabilidad antes de firmar.",
+                ],
+            },
+            {
+                "id": "classification",
+                "icon": "🥚",
+                "title": "Clasificación por calibres",
+                "tone": "emerald",
+                "status": "pending",
+                "summary": "Distribuye los huevos por calibre y conserva la equivalencia con el lote recibido.",
+                "metrics": [
+                    {"label": "Cartones a clasificar", "value": daily_cartons, "unit": "cartones"},
+                    {"label": "Huevos", "value": daily_eggs, "unit": "huevos"},
+                ],
+                "categories": classification_categories,
+            },
+            {
+                "id": "inspection",
+                "icon": "🔍",
+                "title": "Inspección final",
+                "tone": "slate",
+                "status": "pending",
+                "summary": "Registra hallazgos sanitarios y libera el lote para despacho.",
+                "metrics": [
+                    {"label": "Lotes revisados", "value": 1, "unit": "lote"},
+                    {"label": "Cartones listos", "value": daily_cartons - 5, "unit": "cartones"},
+                    {"label": "Cartones retenidos", "value": 5, "unit": "cartones"},
+                ],
+                "fields": [
+                    {
+                        "id": "notes",
+                        "label": "Observaciones",
+                        "placeholder": "Ej: Retener 5 cartones para revisión",
+                        "multiline": True,
+                    },
+                    {"id": "released_by", "label": "Inspector", "placeholder": "Nombre del responsable"},
+                    {"id": "release_time", "label": "Hora de liberación", "placeholder": "hh:mm"},
+                ],
+                "checkpoints": [
+                    "Confirma limpieza de área y temperatura de cámara.",
+                    "Marca cartones retenidos y notifica al supervisor.",
+                ],
+            },
+        ],
+    }
+
+    tomorrow = today + timedelta(days=1)
+    day_minus_1 = today - timedelta(days=1)
+    day_minus_2 = today - timedelta(days=2)
+    day_minus_3 = today - timedelta(days=3)
+
+    transport_lot_backlog = [
+        {
+            "id": "GS-2024-11",
+            "label": "Lote GS-2024-11",
+            "farm": "Granja San Lucas",
+            "barn": "Galpón 3",
+            "rooms": ["Sala 1", "Sala 2"],
+            "cartons": 420,
+            "production_date_iso": day_minus_1.isoformat(),
+            "production_date_label": date_format(day_minus_1, "DATE_FORMAT"),
+            "status": _("Prioridad alta"),
+        },
+        {
+            "id": "PR-2024-08",
+            "label": "Lote PR-2024-08",
+            "farm": "Granja Providencia",
+            "barn": "Galpón 5",
+            "rooms": ["Sala 2"],
+            "cartons": 310,
+            "production_date_iso": day_minus_2.isoformat(),
+            "production_date_label": date_format(day_minus_2, "DATE_FORMAT"),
+            "status": _("Listo para cargar"),
+        },
+        {
+            "id": "LP-2024-03",
+            "label": "Lote LP-2024-03",
+            "farm": "Granja La Primavera",
+            "barn": "Galpón 1",
+            "rooms": [],
+            "cartons": 280,
+            "production_date_iso": day_minus_3.isoformat(),
+            "production_date_label": date_format(day_minus_3, "DATE_FORMAT"),
+            "status": _("Alerta: revisar humedad"),
+        },
+    ]
+
+    transport_total_cartons = sum(lot["cartons"] for lot in transport_lot_backlog)
+
+    transport_queue = {
+        "title": _("Lotes listos para transporte"),
+        "pending_count": len(transport_lot_backlog),
+        "total_cartons": transport_total_cartons,
+        "lots": transport_lot_backlog,
+        "transporters": [
+            {"id": "transcolina", "label": "Transcolina logística (4 camiones)", "contact": "+57 316 555 0101"},
+            {"id": "coopverde", "label": "Cooperativa Ruta Verde - Línea 2", "contact": "+57 310 889 4477"},
+            {"id": "flota-propia", "label": "Flota interna La Colina", "contact": "+57 300 111 2233"},
+        ],
+        "default_transporter_id": "transcolina",
+        "default_expected_date_iso": tomorrow.isoformat(),
+        "default_expected_date_label": date_format(tomorrow, "DATE_FORMAT"),
+        "instructions": _(
+            "Selecciona los lotes y asigna el transportador para autorizar el traslado interno."
+        ),
+    }
+
     shift_confirmation = {
         "date_label": _("Hoy, %(weekday)s %(day)s de %(month)s")
         % {"weekday": weekday_label, "day": day_number, "month": month_label},
@@ -426,6 +657,7 @@ def _build_telegram_mini_app_payload(
                 "Turno: Diurno - Posicion auxiliar operativo",
                 "Asignada por: Supervisor bioseguridad",
             ],
+            "reward_points": 25,
             "actions": [
                 {"label": "Marcar completada", "action": "complete"},
                 {"label": "Agregar evidencia", "action": "evidence"},
@@ -441,6 +673,7 @@ def _build_telegram_mini_app_payload(
                 "Turno: Nocturno - Posicion lider de turno",
                 "Asignada para: 03 Nov - Vence hoy",
             ],
+            "reward_points": 32,
             "actions": [
                 {"label": "Enviar evidencia", "action": "evidence"},
                 {"label": "Agregar nota", "action": "note"},
@@ -456,6 +689,7 @@ def _build_telegram_mini_app_payload(
                 "Horario: 16:00 - Sala formacion",
                 "Reportada por: Gabriela Melo",
             ],
+            "reward_points": 18,
             "actions": [
                 {"label": "Acepto realizarla", "action": "accept"},
                 {"label": "Dejar en pull", "action": "pull"},
@@ -470,6 +704,7 @@ def _build_telegram_mini_app_payload(
                 "Fecha: 05 Nov - Proximo turno nocturno",
                 "Generado automaticamente para balancear jornada",
             ],
+            "reward_points": 10,
             "actions": [
                 {"label": "Ver historial", "action": "history"},
                 {"label": "Solicitar cambio", "action": "request"},
@@ -571,6 +806,9 @@ def _build_telegram_mini_app_payload(
                 },
             ],
         },
+        "production_reference": production_reference,
+        "egg_workflow": egg_workflow,
+        "transport_queue": transport_queue,
         "tasks": tasks,
         "current_shift": {
             "label": "Turno nocturno - Galpon 3",
@@ -864,6 +1102,8 @@ def serialize_task_definition(task: TaskDefinition) -> dict[str, object]:
         "description": task.description,
         "status": task.status_id,
         "category": task.category_id,
+        "is_mandatory": task.is_mandatory,
+        "criticality_level": task.criticality_level,
         "task_type": task.task_type,
         "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
         "weekly_days": list(task.weekly_days or []),
@@ -1093,6 +1333,12 @@ class TaskDefinitionRow:
     category_label: str
     status_label: str
     status_is_active: bool
+    is_mandatory: bool
+    mandatory_label: str
+    mandatory_badge_class: str
+    criticality_level: str
+    criticality_label: str
+    criticality_badge_class: str
     task_type_label: str
     schedule_summary: str
     schedule_segments: Sequence[str]
@@ -1116,6 +1362,8 @@ class TaskDefinitionRow:
     group_responsible: "TaskDefinitionGroupValue"
     group_task_type: "TaskDefinitionGroupValue"
     group_evidence: "TaskDefinitionGroupValue"
+    group_mandatory: "TaskDefinitionGroupValue"
+    group_criticality: "TaskDefinitionGroupValue"
 
 
 @dataclass(frozen=True)
@@ -1128,6 +1376,8 @@ class TaskDefinitionGroupValue:
 TASK_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "status",
     "category",
+    "mandatory",
+    "criticality",
     "scope",
     "responsible",
     "scheduled_start",
@@ -1139,6 +1389,8 @@ TASK_FILTER_PARAM_NAMES: tuple[str, ...] = (
 class TaskDefinitionFilters:
     status: str = "all"
     category: str = "all"
+    mandatory: str = "all"
+    criticality: str = "all"
     scope: str = "all"
     responsible: str = "all"
     scheduled_start: str = ""
@@ -1211,6 +1463,16 @@ def apply_task_definition_filters(
     category_id = _parse_positive_int(category_value)
     if category_id is not None:
         queryset = queryset.filter(category_id=category_id)
+
+    mandatory_value = filters.mandatory
+    if mandatory_value == "required":
+        queryset = queryset.filter(is_mandatory=True)
+    elif mandatory_value == "optional":
+        queryset = queryset.filter(is_mandatory=False)
+
+    criticality_value = filters.criticality
+    if criticality_value and criticality_value not in {"", "all"}:
+        queryset = queryset.filter(criticality_level=criticality_value)
 
     responsible_value = filters.responsible
     if responsible_value and responsible_value not in {"", "all"}:
@@ -1448,6 +1710,37 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
             label=category_label,
         )
 
+        mandatory_label = _("Obligatoria") if task.is_mandatory else _("Opcional")
+        mandatory_badge_class = (
+            "tm-badge tm-badge-critical" if task.is_mandatory else "tm-badge tm-badge-neutral"
+        )
+        mandatory_key_value = "mandatory:required" if task.is_mandatory else "mandatory:optional"
+        group_mandatory = TaskDefinitionGroupValue(
+            key=mandatory_key_value,
+            label=mandatory_label,
+        )
+
+        criticality_value = task.criticality_level or TaskDefinition.CriticalityLevel.MEDIUM
+        criticality_label = (
+            task.get_criticality_level_display()
+            if getattr(task, "criticality_level", None)
+            else TaskDefinition.CriticalityLevel(criticality_value).label
+        )
+        criticality_badge_class_map = {
+            TaskDefinition.CriticalityLevel.LOW: "tm-badge tm-badge-success",
+            TaskDefinition.CriticalityLevel.MEDIUM: "tm-badge tm-badge-neutral",
+            TaskDefinition.CriticalityLevel.HIGH: "tm-badge tm-badge-brand",
+            TaskDefinition.CriticalityLevel.CRITICAL: "tm-badge tm-badge-critical",
+        }
+        criticality_badge_class = criticality_badge_class_map.get(
+            criticality_value, "tm-badge tm-badge-neutral"
+        )
+        criticality_key_value = f"criticality:{criticality_value or 'unspecified'}"
+        group_criticality = TaskDefinitionGroupValue(
+            key=criticality_key_value,
+            label=criticality_label,
+        )
+
         scope_slug = slugify(scope_label) or scope_level or "general"
         scope_key_value = f"scope:{scope_level}:{scope_slug}"
         scope_subtitle = scope_badge_label if scope_badge_label and scope_badge_label != scope_label else None
@@ -1497,9 +1790,15 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
                 update_url=reverse("task_manager:definition-update", args=[task.pk]),
                 name=task.name,
                 description=task.description,
-                category_label=task.category.name,
+                category_label=category_label,
                 status_label=status_label,
                 status_is_active=status_is_active,
+                is_mandatory=task.is_mandatory,
+                mandatory_label=mandatory_label,
+                mandatory_badge_class=mandatory_badge_class,
+                criticality_level=criticality_value,
+                criticality_label=criticality_label,
+                criticality_badge_class=criticality_badge_class,
                 task_type_label=task_type_label,
                 schedule_summary=schedule_summary,
                 schedule_segments=schedule_segments,
@@ -1524,6 +1823,8 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
                 group_responsible=group_responsible,
                 group_task_type=group_task_type,
                 group_evidence=group_evidence,
+                group_mandatory=group_mandatory,
+                group_criticality=group_criticality,
             )
         )
     return rows
@@ -1769,11 +2070,41 @@ def build_category_filter_groups(categories: Iterable[TaskCategory]) -> Sequence
     return groups
 
 
+def build_mandatory_filter_groups() -> Sequence[FilterOptionGroup]:
+    options = [
+        FilterOption("all", _("Todas las tareas")),
+        FilterOption("required", _("Solo obligatorias")),
+        FilterOption("optional", _("Solo opcionales")),
+    ]
+    return [
+        FilterOptionGroup(
+            key="mandatory",
+            label=_("Obligatoriedad"),
+            options=options,
+        )
+    ]
+
+
+def build_criticality_filter_groups() -> Sequence[FilterOptionGroup]:
+    options: list[FilterOption] = [FilterOption("all", _("Cualquier nivel"))]
+    for value, label in TaskDefinition.CriticalityLevel.choices:
+        options.append(FilterOption(value, label))
+    return [
+        FilterOptionGroup(
+            key="criticality",
+            label=_("Nivel de criticidad"),
+            options=options,
+        )
+    ]
+
+
 def build_grouping_primary_filter_groups() -> Sequence[FilterOptionGroup]:
     options = [
         FilterOption("none", _("Sin agrupación")),
         FilterOption("status", _("Estado")),
         FilterOption("category", _("Categoría")),
+        FilterOption("mandatory", _("Obligatoriedad")),
+        FilterOption("criticality", _("Nivel de criticidad")),
         FilterOption("scope", _("Lugar")),
         FilterOption("responsible", _("Responsable sugerido")),
         FilterOption("task_type", _("Tipo de planificación")),
@@ -1793,6 +2124,8 @@ def build_grouping_secondary_filter_groups() -> Sequence[FilterOptionGroup]:
         FilterOption("none", _("No aplicar")),
         FilterOption("status", _("Estado")),
         FilterOption("category", _("Categoría")),
+        FilterOption("mandatory", _("Obligatoriedad")),
+        FilterOption("criticality", _("Nivel de criticidad")),
         FilterOption("scope", _("Lugar")),
         FilterOption("responsible", _("Responsable sugerido")),
         FilterOption("task_type", _("Tipo de planificación")),

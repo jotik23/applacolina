@@ -28,6 +28,12 @@
     data-group-evidence-key="{{ row.group_evidence.key }}"
     data-group-evidence-label="{{ row.group_evidence.label|escape }}"
     data-group-evidence-subtitle="{{ row.group_evidence.subtitle|default_if_none:''|escape }}"
+    data-group-mandatory-key="{{ row.group_mandatory.key }}"
+    data-group-mandatory-label="{{ row.group_mandatory.label|escape }}"
+    data-group-mandatory-subtitle="{{ row.group_mandatory.subtitle|default_if_none:''|escape }}"
+    data-group-criticality-key="{{ row.group_criticality.key }}"
+    data-group-criticality-label="{{ row.group_criticality.label|escape }}"
+    data-group-criticality-subtitle="{{ row.group_criticality.subtitle|default_if_none:''|escape }}"
     class="align-top transform transition hover:-translate-y-[1px] odd:bg-white even:bg-slate-50/40 hover:bg-slate-100 border-l-4 border-transparent {% if row.is_one_time %}border-rose-200 hover:bg-rose-50/70{% endif %}"
   >
     <td class="px-5 py-5 align-top">
@@ -83,6 +89,12 @@
             </span>
             <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-slate-600">
               {{ row.category_label }}
+            </span>
+            <span class="{{ row.mandatory_badge_class }}">
+              {{ row.mandatory_label }}
+            </span>
+            <span class="{{ row.criticality_badge_class }}">
+              {{ row.criticality_label }}
             </span>
             <span class="text-xs font-medium text-slate-400">Creada {{ row.created_on_display }}</span>
           </div>

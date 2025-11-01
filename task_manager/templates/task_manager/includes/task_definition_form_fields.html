@@ -1,3 +1,4 @@
+{% load i18n %}
 {% with task_form=form|default:task_definition_form %}
   {% if task_form %}
     {% with top_margin=task_form_top_margin|default:"mt-6" footer_margin=task_form_footer_margin|default:"mt-6" %}
@@ -13,6 +14,21 @@
             {% endif %}
             {% with field_errors=task_form.name.errors %}
               <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="name">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
+
+          <div class="sm:col-span-2">
+            <label for="{{ task_form.description.id_for_label }}" class="text-sm font-medium text-slate-700">
+              {{ task_form.description.label }}
+            </label>
+            {{ task_form.description }}
+            {% if task_form.description.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.description.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.description.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="description">
                 {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
               </p>
             {% endwith %}
@@ -48,19 +64,37 @@
             {% endwith %}
           </div>
 
-          <div class="sm:col-span-2">
-            <label for="{{ task_form.description.id_for_label }}" class="text-sm font-medium text-slate-700">
-              {{ task_form.description.label }}
-            </label>
-            {{ task_form.description }}
-            {% if task_form.description.help_text %}
-              <p class="mt-1 text-xs text-slate-500">{{ task_form.description.help_text }}</p>
-            {% endif %}
-            {% with field_errors=task_form.description.errors %}
-              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="description">
-                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
-              </p>
-            {% endwith %}
+          <div class="sm:col-span-2 grid gap-5 sm:grid-cols-2">
+            <div>
+              <label for="{{ task_form.criticality_level.id_for_label }}" class="text-sm font-medium text-slate-700">
+                {{ task_form.criticality_level.label }}
+              </label>
+              {{ task_form.criticality_level }}
+              {% if task_form.criticality_level.help_text %}
+                <p class="mt-1 text-xs text-slate-500">{{ task_form.criticality_level.help_text }}</p>
+              {% endif %}
+              {% with field_errors=task_form.criticality_level.errors %}
+                <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="criticality_level">
+                  {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+                </p>
+              {% endwith %}
+            </div>
+            <div class="flex flex-col">
+              <span class="text-sm font-medium text-slate-700">{{ task_form.is_mandatory.label }}</span>
+              <label for="{{ task_form.is_mandatory.id_for_label }}"
+                     class="mt-2 inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand focus-within:border-brand focus-within:text-brand focus-within:ring-2 focus-within:ring-brand/20">
+                {{ task_form.is_mandatory }}
+                <span>{% trans "Marcar como obligatoria" %}</span>
+              </label>
+              {% if task_form.is_mandatory.help_text %}
+                <p class="mt-1 text-xs text-slate-500">{{ task_form.is_mandatory.help_text }}</p>
+              {% endif %}
+              {% with field_errors=task_form.is_mandatory.errors %}
+                <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="is_mandatory">
+                  {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+                </p>
+              {% endwith %}
+            </div>
           </div>
 
           <div class="sm:col-span-2">
