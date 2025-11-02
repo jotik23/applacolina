@@ -3775,6 +3775,18 @@
         }
         var requires = card.getAttribute('data-requires-confirmation') === 'true';
         var isConfirmed = card.getAttribute('data-confirmed') === 'true';
+        var storageKey = card.getAttribute('data-storage-key');
+        var storedState = null;
+        try {
+          storedState = storageKey ? window.sessionStorage.getItem(storageKey) : null;
+        } catch (error) {
+          storedState = null;
+        }
+
+        if (storedState === 'confirmed') {
+          isConfirmed = true;
+        }
+
         var content = document.querySelector('[data-mini-app-content]');
         var confirmButton = card.querySelector('[data-confirm-shift]');
         var pendingLabel = card.querySelector('[data-shift-pending-label]');
@@ -3782,6 +3794,30 @@
         var contentParent = content ? content.parentNode : null;
         var tasksSection = content ? content.querySelector('[data-daily-tasks-section]') : null;
         var calendarSection = content ? content.querySelector('[data-weekly-calendar-section]') : null;
+
+        function clearShiftConfirmationStorage() {
+          try {
+            var storage = window.sessionStorage;
+            if (!storage) {
+              return;
+            }
+            var keysToClear = [];
+            for (var index = 0; index < storage.length; index += 1) {
+              var key = storage.key(index);
+              if (key && key.indexOf('miniapp-shift-confirm::') === 0) {
+                keysToClear.push(key);
+              }
+            }
+            keysToClear.forEach(function (key) {
+              storage.removeItem(key);
+            });
+          } catch (error) {
+            // Storage cleanup is best-effort only.
+          }
+        }
+
+        window.__miniAppShiftConfirmation = window.__miniAppShiftConfirmation || {};
+        window.__miniAppShiftConfirmation.clear = clearShiftConfirmationStorage;
 
         function moveCardBeforeContent() {
           if (!contentParent || !content) {
@@ -3846,14 +3882,35 @@
 
           if (isConfirmed) {
             unlockInterface();
+            if (storageKey) {
+              try {
+                window.sessionStorage.setItem(storageKey, 'confirmed');
+              } catch (error) {
+                // Ignore storage failures (e.g., private mode).
+              }
+            }
           } else if (requires) {
             lockInterface();
+            if (storageKey) {
+              try {
+                window.sessionStorage.removeItem(storageKey);
+              } catch (error) {
+                // Ignore storage failures.
+              }
+            }
           } else {
             unlockInterface();
+            if (storageKey) {
+              try {
+                window.sessionStorage.removeItem(storageKey);
+              } catch (error) {
+                // Ignore storage failures.
+              }
+            }
           }
         }
 
-        if (requires && !isConfirmed) {
+        if (requires && !isConfirmed && storedState !== 'confirmed') {
           lockInterface();
         }
 
@@ -7916,7 +7973,17 @@
           });
         });
 
+        function clearShiftConfirmationState() {
+          if (
+            window.__miniAppShiftConfirmation &&
+            typeof window.__miniAppShiftConfirmation.clear === 'function'
+          ) {
+            window.__miniAppShiftConfirmation.clear();
+          }
+        }
+
         function redirectToLogin() {
+          clearShiftConfirmationState();
           if (loginUrl) {
             window.location.assign(loginUrl);
           } else {
@@ -7947,6 +8014,7 @@
             })
             .catch(function (error) {
               console.warn('No se pudo cerrar sesión mediante fetch.', error);
+              clearShiftConfirmationState();
               if (logoutForm) {
                 logoutForm.submit();
               } else if (logoutUrl) {
@@ -8097,6 +8165,7 @@
             .then(function () {
               isProcessingMainAction = false;
               setConfirmLoading(false);
+              clearShiftConfirmationState();
               openGratitudeDialog();
             })
             .catch(function (error) {
