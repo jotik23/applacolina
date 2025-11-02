@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple, cast
 from urllib.parse import parse_qsl
 
 from django.conf import settings
@@ -21,8 +21,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext as _, ngettext
 from django.views import View, generic
+from django.views.decorators.http import require_POST
 
 from notifications.models import TelegramBotConfig, TelegramChatLink
 from applacolina.mixins import StaffRequiredMixin
@@ -37,7 +38,7 @@ from task_manager.mini_app.features import (
 )
 
 from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
-from .models import TaskCategory, TaskDefinition, TaskStatus
+from .models import TaskAssignment, TaskAssignmentEvidence, TaskCategory, TaskDefinition, TaskStatus
 
 
 class MiniAppClient(Enum):
@@ -63,6 +64,457 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "leader_review": "task_manager.view_mini_app_leader_review_card",
     "task": "task_manager.view_mini_app_task_cards",
 }
+
+
+_TASK_CRITICALITY_TONE_MAP: dict[str, str] = {
+    TaskDefinition.CriticalityLevel.LOW: "neutral",
+    TaskDefinition.CriticalityLevel.MEDIUM: "brand",
+    TaskDefinition.CriticalityLevel.HIGH: "critical",
+    TaskDefinition.CriticalityLevel.CRITICAL: "critical",
+}
+
+_TASK_CRITICALITY_BADGE_THEME_MAP: dict[str, str] = {
+    TaskDefinition.CriticalityLevel.LOW: "neutral",
+    TaskDefinition.CriticalityLevel.MEDIUM: "brand",
+    TaskDefinition.CriticalityLevel.HIGH: "critical",
+    TaskDefinition.CriticalityLevel.CRITICAL: "critical",
+}
+
+_TASK_TYPE_BADGE_THEME_MAP: dict[str, str] = {
+    TaskDefinition.TaskType.RECURRING: "brand",
+    TaskDefinition.TaskType.ONE_TIME: "neutral",
+}
+
+_TASK_STATUS_STATE_MAP: dict[str, str] = {
+    "pendiente": "pending",
+    "en-progreso": "in_progress",
+    "progreso": "in_progress",
+    "reabierta": "reopened",
+    "re-abierta": "reopened",
+    "reabierto": "reopened",
+    "re-abierto": "reopened",
+    "rechazada": "rejected",
+    "rechazado": "rejected",
+    "rechazo": "rejected",
+    "vencido": "overdue",
+    "vencida": "overdue",
+    "completada": "completed",
+    "completado": "completed",
+    "ejecutada": "completed",
+    "ejecutado": "completed",
+}
+
+_TASK_STATE_THEME_MAP: dict[str, str] = {
+    "pending": "brand",
+    "in_progress": "sky",
+    "reopened": "amber",
+    "rejected": "rose",
+    "overdue": "critical",
+    "completed": "emerald",
+}
+
+_INCLUDE_STATES = frozenset({"pending", "in_progress", "reopened", "rejected", "overdue", "completed"})
+
+
+def _build_demo_task_cards() -> list[dict[str, object]]:
+    """Return a static set of task cards for demo views."""
+
+    today = timezone.localdate()
+    tomorrow = today + timedelta(days=1)
+
+    return [
+        {
+            "assignment_id": None,
+            "title": "Checklist apertura galpon",
+            "tone": "brand",
+            "badges": [
+                {"label": "Recurrente", "theme": "brand"},
+                {"label": "Prioridad media", "theme": "neutral"},
+            ],
+            "description": "Completar antes de iniciar el turno. Verifica ventilacion, bebederos y bioseguridad.",
+            "meta": [
+                _("Estado: %(status)s") % {"status": _("Pendiente")},
+                "Turno: Diurno - Posicion auxiliar operativo",
+                "Asignada por: Supervisor bioseguridad",
+            ],
+            "reward_points": 25,
+            "status": {
+                "state": "pending",
+                "label": _("Pendiente"),
+                "theme": "brand",
+                "details": _("Vence %(date)s") % {"date": date_format(today, "DATE_FORMAT")},
+                "overdue_days": None,
+                "due_label": date_format(today, "DATE_FORMAT"),
+            },
+            "requires_evidence": False,
+            "evidence_count": 0,
+            "due_date_iso": today.isoformat(),
+            "complete_url": "",
+            "reset_url": "",
+            "evidence_upload_url": "",
+            "actions": [
+                {"label": "Marcar completada", "action": "complete", "disabled": False},
+                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
+            ],
+        },
+        {
+            "assignment_id": None,
+            "title": "Reporte correctivo galpon 2",
+            "tone": "critical",
+            "badges": [{"label": "Unica - Vencida", "theme": "critical"}],
+            "description": "Registrar hallazgos del recorrido nocturno y adjuntar fotografias.",
+            "meta": [
+                _("Estado: %(status)s") % {"status": _("Vencida")},
+                "Turno: Nocturno - Posicion lider de turno",
+                "Asignada para: 03 Nov - Vence hoy",
+            ],
+            "reward_points": 32,
+            "status": {
+                "state": "overdue",
+                "label": _("Vencida"),
+                "theme": "critical",
+                "details": _("Retraso de 1 día"),
+                "overdue_days": 1,
+                "due_label": date_format(today - timedelta(days=1), "DATE_FORMAT"),
+            },
+            "requires_evidence": True,
+            "evidence_count": 0,
+            "due_date_iso": (today - timedelta(days=1)).isoformat(),
+            "complete_url": "",
+            "reset_url": "",
+            "evidence_upload_url": "",
+            "actions": [
+                {"label": "Marcar completada", "action": "complete", "disabled": False},
+                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
+            ],
+        },
+        {
+            "assignment_id": None,
+            "title": "Capacitacion protocolos",
+            "tone": "success",
+            "badges": [{"label": "Extra voluntaria", "theme": "success"}],
+            "description": "Participa en la sesion de actualizacion de protocolos de higiene. Suma puntos adicionales.",
+            "meta": [
+                _("Estado: %(status)s") % {"status": _("En progreso")},
+                "Horario: 16:00 - Sala formacion",
+                "Reportada por: Gabriela Melo",
+            ],
+            "reward_points": 18,
+            "status": {
+                "state": "in_progress",
+                "label": _("En progreso"),
+                "theme": "sky",
+                "details": _("Programada para %(date)s") % {"date": date_format(tomorrow, "DATE_FORMAT")},
+                "overdue_days": None,
+                "due_label": date_format(tomorrow, "DATE_FORMAT"),
+            },
+            "requires_evidence": False,
+            "evidence_count": 1,
+            "due_date_iso": tomorrow.isoformat(),
+            "complete_url": "",
+            "reset_url": "",
+            "evidence_upload_url": "",
+            "actions": [
+                {"label": "Marcar completada", "action": "complete", "disabled": False},
+                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
+            ],
+        },
+        {
+            "assignment_id": None,
+            "title": "Descanso programado",
+            "tone": "success",
+            "badges": [{"label": "Automatico", "theme": "success"}],
+            "description": "Descanso compensatorio despues de 6 dias de racha. No se asignan tareas en esta franja.",
+            "meta": [
+                _("Estado: %(status)s") % {"status": _("Completada")},
+                "Fecha: 05 Nov - Proximo turno nocturno",
+                "Generado automaticamente para balancear jornada",
+            ],
+            "reward_points": 10,
+            "status": {
+                "state": "completed",
+                "label": _("Completada"),
+                "theme": "emerald",
+                "details": _("Marcada %(date)s") % {"date": date_format(today, "DATE_FORMAT")},
+                "overdue_days": None,
+                "due_label": date_format(today, "DATE_FORMAT"),
+            },
+            "requires_evidence": False,
+            "evidence_count": 0,
+            "is_completed_today": True,
+            "completed_on_iso": today.isoformat(),
+            "due_date_iso": tomorrow.isoformat(),
+            "complete_url": "",
+            "reset_url": "",
+            "evidence_upload_url": "",
+            "actions": [
+                {"label": "Desmarcar", "action": "reset", "disabled": False},
+                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
+            ],
+        },
+    ]
+
+
+def _normalize_status_slug(name: Optional[str]) -> str:
+    if not name:
+        return ""
+    return slugify(name, allow_unicode=True)
+
+
+def _build_assignment_status_info(
+    assignment: TaskAssignment,
+    reference_date: date,
+) -> Optional[dict[str, object]]:
+    definition = assignment.task_definition
+    if assignment.completed_on:
+        if assignment.completed_on != reference_date:
+            return None
+        state = "completed"
+        status_label = _("Completada")
+        theme = _TASK_STATE_THEME_MAP.get(state, "emerald")
+        due_label = date_format(assignment.due_date, "DATE_FORMAT") if assignment.due_date else ""
+        details = _("Marcada %(date)s") % {"date": date_format(reference_date, "DATE_FORMAT")}
+        return {
+            "state": state,
+            "label": status_label,
+            "theme": theme,
+            "details": details,
+            "overdue_days": None,
+            "due_label": due_label,
+            "due_date": assignment.due_date,
+        }
+
+    status_obj = getattr(definition, "effective_status", None) or definition.status
+    status_label = (getattr(status_obj, "name", "") or "").strip()
+    status_slug = _normalize_status_slug(status_label)
+    state = _TASK_STATUS_STATE_MAP.get(status_slug)
+    due_date = assignment.due_date
+    tomorrow = reference_date + timedelta(days=1)
+    overdue_days = 0
+    if due_date and due_date < reference_date:
+        overdue_days = (reference_date - due_date).days
+
+    if getattr(definition, "is_overdue", False) and state != "overdue":
+        state = "overdue"
+        status_label = _("Vencida")
+
+    if state == "pending":
+        if due_date:
+            if due_date < reference_date:
+                state = "overdue"
+                status_label = _("Vencida")
+            elif due_date > tomorrow:
+                return None
+    elif state is None:
+        if due_date and due_date < reference_date:
+            state = "overdue"
+            status_label = _("Vencida")
+        elif due_date and due_date <= tomorrow:
+            state = "pending"
+            if not status_label:
+                status_label = _("Pendiente")
+        elif getattr(definition, "is_overdue", False):
+            state = "overdue"
+            status_label = _("Vencida")
+        else:
+            # Status not relevant for the mini-app feed.
+            return None
+
+    if state not in _INCLUDE_STATES:
+        return None
+
+    theme = _TASK_STATE_THEME_MAP.get(state, "neutral")
+    due_label = date_format(due_date, "DATE_FORMAT") if due_date else ""
+    details = ""
+    if state == "overdue":
+        if overdue_days > 0:
+            details = ngettext(
+                "Retraso de %(count)s día",
+                "Retraso de %(count)s días",
+                overdue_days,
+            ) % {"count": overdue_days}
+        elif due_date:
+            details = _("Venció %(date)s") % {"date": due_label}
+    else:
+        if due_date:
+            details = _("Programada para %(date)s") % {"date": due_label}
+
+    return {
+        "state": state,
+        "label": status_label or _("Sin estado"),
+        "theme": theme,
+        "details": details,
+        "overdue_days": overdue_days or None,
+        "due_label": due_label,
+        "due_date": due_date,
+    }
+
+
+def _serialize_task_assignment(
+    assignment: TaskAssignment,
+    *,
+    reference_date: date,
+    status_info: dict[str, object],
+    evidence_count: int,
+    requires_evidence: bool,
+) -> Optional[dict[str, object]]:
+    """Serialize a task assignment for use in the mini app feed."""
+
+    definition = assignment.task_definition
+    if not definition:
+        return None
+
+    description = (definition.description or "").strip()
+    if not description:
+        description = _("Sin descripción registrada.")
+
+    is_completed_today = assignment.completed_on is not None and assignment.completed_on == reference_date
+
+    task_type_label: Optional[str] = None
+    task_type_theme = "neutral"
+    if definition.task_type:
+        task_type_label = definition.get_task_type_display()
+        task_type_theme = _TASK_TYPE_BADGE_THEME_MAP.get(definition.task_type, "neutral")
+
+    priority_label = definition.get_criticality_level_display()
+    priority_theme = _TASK_CRITICALITY_BADGE_THEME_MAP.get(definition.criticality_level, "neutral")
+    tone = _TASK_CRITICALITY_TONE_MAP.get(definition.criticality_level, "neutral")
+
+    badges: list[dict[str, str]] = [
+        {"label": str(status_info.get("label") or ""), "theme": status_info.get("theme") or "neutral"}
+    ]
+    if evidence_count:
+        evidence_label = ngettext(
+            "%(count)s evidencia",
+            "%(count)s evidencias",
+            evidence_count,
+        ) % {"count": evidence_count}
+        badges.insert(0, {"label": evidence_label, "theme": "emerald"})
+    elif requires_evidence:
+        badges.insert(0, {"label": _("Sin evidencia"), "theme": "critical"})
+    else:
+        badges.insert(0, {"label": _("Sin evidencia adjunta"), "theme": "neutral"})
+    if task_type_label:
+        badges.append({"label": task_type_label, "theme": task_type_theme})
+    if priority_label:
+        badges.append({"label": _("Prioridad %(level)s") % {"level": priority_label}, "theme": priority_theme})
+
+    due_label = _("Hoy")
+    if assignment.due_date and assignment.due_date != reference_date:
+        due_label = date_format(assignment.due_date, "DATE_FORMAT")
+
+    meta: list[str] = [
+        _("Estado: %(status)s") % {"status": status_info.get("label") or _("Sin estado")},
+        _("Programada para %(date)s") % {"date": due_label},
+    ]
+    if definition.category_id:
+        meta.append(_("Categoría: %(category)s") % {"category": definition.category.name})
+    if definition.position_id:
+        meta.append(_("Posición: %(position)s") % {"position": definition.position.name})
+
+    if is_completed_today:
+        actions: list[dict[str, object]] = [
+            {"label": _("Desmarcar"), "action": "reset", "disabled": False},
+            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": True},
+        ]
+    else:
+        actions = [
+            {"label": _("Marcar como completada"), "action": "complete", "disabled": False},
+            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": True},
+        ]
+
+    return {
+        "assignment_id": assignment.pk,
+        "id": assignment.pk,
+        "title": definition.name,
+        "tone": tone,
+        "badges": badges,
+        "description": description,
+        "meta": meta,
+        "reward_points": None,
+        "status": {
+            "state": status_info.get("state"),
+            "label": status_info.get("label"),
+            "details": status_info.get("details"),
+            "theme": status_info.get("theme"),
+            "overdue_days": status_info.get("overdue_days"),
+            "due_label": status_info.get("due_label"),
+        },
+        "requires_evidence": requires_evidence,
+        "evidence_count": evidence_count,
+        "is_completed_today": is_completed_today,
+        "completed_on_iso": assignment.completed_on.isoformat() if is_completed_today else None,
+        "due_date_iso": assignment.due_date.isoformat() if assignment.due_date else None,
+        "complete_url": reverse("task_manager:mini-app-task-complete", kwargs={"pk": assignment.pk}),
+        "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}) if is_completed_today else None,
+        "evidence_upload_url": reverse("task_manager:mini-app-task-evidence", kwargs={"pk": assignment.pk}),
+        "actions": actions,
+    }
+
+
+def _resolve_daily_task_cards(
+    *,
+    user: Optional[UserProfile],
+    reference_date: date,
+    use_sample_tasks: bool = False,
+) -> list[dict[str, object]]:
+    """Return the task cards to display in the mini app feed."""
+
+    cards: list[dict[str, object]] = []
+
+    if user and getattr(user, "is_authenticated", False):
+        assignments = (
+            TaskAssignment.objects.filter(collaborator=user)
+            .filter(Q(completed_on__isnull=True) | Q(completed_on=reference_date))
+            .select_related(
+                "task_definition",
+                "task_definition__category",
+                "task_definition__position",
+                "task_definition__status",
+            )
+            .prefetch_related("evidences")
+            .order_by("due_date", "task_definition__display_order", "task_definition__name", "pk")
+        )
+        serialized_cards: list[tuple[tuple[int, date, int, int], dict[str, object]]] = []
+        for assignment in assignments:
+            status_info = _build_assignment_status_info(assignment, reference_date=reference_date)
+            if not status_info:
+                continue
+            prefetched = assignment._prefetched_objects_cache.get("evidences") if hasattr(assignment, "_prefetched_objects_cache") else None
+            evidence_count = len(prefetched) if prefetched is not None else assignment.evidences.count()
+            requires_evidence = (assignment.task_definition.evidence_requirement or TaskDefinition.EvidenceRequirement.NONE) != TaskDefinition.EvidenceRequirement.NONE
+            serialized = _serialize_task_assignment(
+                assignment,
+                reference_date=reference_date,
+                status_info=status_info,
+                evidence_count=evidence_count,
+                requires_evidence=requires_evidence,
+            )
+            if serialized:
+                state_priority_map = {
+                    "pending": 0,
+                    "in_progress": 1,
+                    "reopened": 2,
+                    "rejected": 3,
+                    "overdue": 4,
+                    "completed": 5,
+                }
+                state = serialized.get("status", {}).get("state") or ""
+                priority = state_priority_map.get(state, 9)
+                due_date = status_info.get("due_date") or assignment.due_date or reference_date
+                serialized_cards.append(((priority, due_date, assignment.task_definition.display_order, assignment.pk), serialized))
+
+        serialized_cards.sort(key=lambda item: item[0])
+        for _, payload in serialized_cards:
+            cards.append(payload)
+
+        if cards or not use_sample_tasks:
+            return cards
+
+    if use_sample_tasks:
+        return _build_demo_task_cards()
+
+    return cards
 
 
 def _resolve_mini_app_client(request) -> MiniAppClient:
@@ -126,6 +578,27 @@ def _default_auth_backend() -> str:
             return backends
 
     return "django.contrib.auth.backends.ModelBackend"
+
+
+def _mini_app_json_guard(request) -> Optional[JsonResponse]:
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return JsonResponse({"error": _("Debes iniciar sesión en la mini app.")}, status=401)
+    if not user.has_perm("task_manager.access_mini_app"):
+        return JsonResponse({"error": _("No tienes permisos para la mini app.")}, status=403)
+    return None
+
+
+def _get_user_assignment_for_mini_app(pk: int, *, user: UserProfile) -> TaskAssignment:
+    queryset = (
+        TaskAssignment.objects.select_related(
+            "task_definition",
+            "task_definition__status",
+        )
+        .prefetch_related("evidences")
+        .filter(collaborator=user)
+    )
+    return get_object_or_404(queryset, pk=pk)
 
 
 def _get_telegram_init_data(request) -> Optional[str]:
@@ -488,6 +961,8 @@ def _build_telegram_mini_app_payload(
     shift_confirmation: Optional[dict[str, object]] = None,
     shift_confirmation_empty: Optional[dict[str, object]] = None,
     include_shift_confirmation_stub: bool = True,
+    user: Optional[UserProfile] = None,
+    use_task_samples: bool = False,
 ) -> dict[str, object]:
     today = timezone.localdate()
     weekday_label = date_format(today, "l").capitalize()
@@ -1333,73 +1808,7 @@ def _build_telegram_mini_app_payload(
             "storage_key": f"miniapp-shift-confirm::{today.isoformat()}",
         }
 
-    tasks = [
-        {
-            "title": "Checklist apertura galpon",
-            "tone": "brand",
-            "badges": [
-                {"label": "Recurrente", "theme": "brand"},
-                {"label": "Prioridad media", "theme": "neutral"},
-            ],
-            "description": "Completar antes de iniciar el turno. Verifica ventilacion, bebederos y bioseguridad.",
-            "meta": [
-                "Turno: Diurno - Posicion auxiliar operativo",
-                "Asignada por: Supervisor bioseguridad",
-            ],
-            "reward_points": 25,
-            "actions": [
-                {"label": "Marcar completada", "action": "complete"},
-                {"label": "Agregar evidencia", "action": "evidence"},
-                {"label": "Postergar", "action": "snooze"},
-            ],
-        },
-        {
-            "title": "Reporte correctivo galpon 2",
-            "tone": "critical",
-            "badges": [{"label": "Unica - Vencida", "theme": "critical"}],
-            "description": "Registrar hallazgos del recorrido nocturno y adjuntar fotografias.",
-            "meta": [
-                "Turno: Nocturno - Posicion lider de turno",
-                "Asignada para: 03 Nov - Vence hoy",
-            ],
-            "reward_points": 32,
-            "actions": [
-                {"label": "Enviar evidencia", "action": "evidence"},
-                {"label": "Agregar nota", "action": "note"},
-                {"label": "Solicitar ayuda", "action": "assist"},
-            ],
-        },
-        {
-            "title": "Capacitacion protocolos",
-            "tone": "success",
-            "badges": [{"label": "Extra voluntaria", "theme": "success"}],
-            "description": "Participa en la sesion de actualizacion de protocolos de higiene. Suma puntos adicionales.",
-            "meta": [
-                "Horario: 16:00 - Sala formacion",
-                "Reportada por: Gabriela Melo",
-            ],
-            "reward_points": 18,
-            "actions": [
-                {"label": "Acepto realizarla", "action": "accept"},
-                {"label": "Dejar en pull", "action": "pull"},
-            ],
-        },
-        {
-            "title": "Descanso programado",
-            "tone": "neutral",
-            "badges": [{"label": "Automatico", "theme": "neutral"}],
-            "description": "Descanso compensatorio despues de 6 dias de racha. No se asignan tareas en esta franja.",
-            "meta": [
-                "Fecha: 05 Nov - Proximo turno nocturno",
-                "Generado automaticamente para balancear jornada",
-            ],
-            "reward_points": 10,
-            "actions": [
-                {"label": "Ver historial", "action": "history"},
-                {"label": "Solicitar cambio", "action": "request"},
-            ],
-        },
-    ]
+    tasks = _resolve_daily_task_cards(user=user, reference_date=today, use_sample_tasks=use_task_samples)
 
     roster_seed = [
         {
@@ -2532,6 +2941,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 shift_confirmation=shift_card_payload,
                 shift_confirmation_empty=shift_empty_payload,
                 include_shift_confirmation_stub=False,
+                user=user,
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
@@ -2569,6 +2979,7 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
             contact_handle="@demo",
             role="Vista previa",
             initials=initials,
+            use_task_samples=True,
         )
         context["telegram_integration_enabled"] = False
         context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
@@ -2700,6 +3111,7 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
                 shift_confirmation=shift_card_payload,
                 shift_confirmation_empty=shift_empty_payload,
                 include_shift_confirmation_stub=False,
+                user=user,
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-dev-logout")
         else:
@@ -2737,10 +3149,156 @@ class TaskManagerTelegramMiniAppDevDemoView(generic.TemplateView):
             contact_handle="@demo",
             role="Vista previa",
             initials=initials,
+            use_task_samples=True,
         )
         context["telegram_integration_enabled"] = False
         context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
         return context
+
+
+@require_POST
+def mini_app_task_complete_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    assignment = _get_user_assignment_for_mini_app(pk, user=user)
+
+    if assignment.completed_on:
+        return JsonResponse(
+            {
+                "status": "completed",
+                "assignment_id": assignment.pk,
+                "completed_on": assignment.completed_on.isoformat(),
+                "already_completed": True,
+                "requires_evidence": (
+                    assignment.task_definition.evidence_requirement
+                    or TaskDefinition.EvidenceRequirement.NONE
+                )
+                != TaskDefinition.EvidenceRequirement.NONE,
+            }
+        )
+
+    requires_evidence = (
+        assignment.task_definition.evidence_requirement or TaskDefinition.EvidenceRequirement.NONE
+    ) != TaskDefinition.EvidenceRequirement.NONE
+
+    if requires_evidence and not assignment.evidences.exists():
+        return JsonResponse(
+            {"error": _("Debes adjuntar evidencia antes de completar la tarea.")},
+            status=400,
+        )
+
+    completion_date = timezone.localdate()
+    if request.body:
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            payload = {}
+        else:
+            raw_completed_on = payload.get("completed_on")
+            if isinstance(raw_completed_on, str):
+                try:
+                    completion_date = datetime.fromisoformat(raw_completed_on).date()
+                except ValueError:
+                    completion_date = timezone.localdate()
+
+    assignment.completed_on = completion_date
+    assignment.save(update_fields=["completed_on", "updated_at"])
+
+    return JsonResponse(
+        {
+            "status": "completed",
+            "assignment_id": assignment.pk,
+            "completed_on": assignment.completed_on.isoformat(),
+            "requires_evidence": requires_evidence,
+            "removed": True,
+        }
+    )
+
+
+@require_POST
+def mini_app_task_evidence_upload_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    assignment = _get_user_assignment_for_mini_app(pk, user=user)
+
+    files = request.FILES.getlist("evidence")
+    if not files:
+        files = request.FILES.getlist("files")
+    if not files and request.FILES:
+        files = list(request.FILES.values())
+
+    if not files:
+        return JsonResponse({"error": _("No se recibió archivo de evidencia.")}, status=400)
+
+    note = (request.POST.get("note") or "").strip()
+    saved_files: list[dict[str, object]] = []
+
+    for uploaded_file in files:
+        evidence = TaskAssignmentEvidence(
+            assignment=assignment,
+            file=uploaded_file,
+            note=note,
+            uploaded_by=user,
+        )
+        evidence.save()
+        file_url = evidence.file.url if evidence.file and hasattr(evidence.file, "url") else ""
+        saved_files.append(
+            {
+                "id": evidence.pk,
+                "url": file_url,
+                "media_type": evidence.media_type,
+                "note": evidence.note,
+                "uploaded_at": evidence.uploaded_at.isoformat(),
+            }
+        )
+
+    evidence_count = assignment.evidences.count()
+    requires_evidence = (
+        assignment.task_definition.evidence_requirement or TaskDefinition.EvidenceRequirement.NONE
+    ) != TaskDefinition.EvidenceRequirement.NONE
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "assignment_id": assignment.pk,
+            "evidence_count": evidence_count,
+            "requires_evidence": requires_evidence,
+            "files": saved_files,
+        }
+    )
+
+
+@require_POST
+def mini_app_task_reset_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    assignment = _get_user_assignment_for_mini_app(pk, user=user)
+
+    if not assignment.completed_on:
+        return JsonResponse(
+            {"error": _("La tarea no está marcada como completada.")},
+            status=400,
+        )
+
+    assignment.completed_on = None
+    assignment.save(update_fields=["completed_on", "updated_at"])
+
+    return JsonResponse(
+        {
+            "status": "reset",
+            "assignment_id": assignment.pk,
+            "completed_on": None,
+        }
+    )
 
 
 def mini_app_logout_view(request):

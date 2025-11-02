@@ -223,6 +223,10 @@ STORAGES = {
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_URL = os.getenv("DJANGO_MEDIA_URL", "/media/")
+MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
+if not MEDIA_ROOT.is_absolute():
+    MEDIA_ROOT = BASE_DIR / MEDIA_ROOT
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

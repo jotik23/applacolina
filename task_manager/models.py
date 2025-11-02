@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 from functools import lru_cache
 from typing import Iterable, Optional
 
@@ -11,9 +12,8 @@ from django.db.models import BooleanField, Case, F, IntegerField, Q, Value, When
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from production.models import ChickenHouse, Farm, Room
+from production.models import ChickenHouse, Farm, Room, ProductionRecord
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
-from production.models import ProductionRecord
 
 
 class TaskStatus(models.Model):
@@ -453,3 +453,73 @@ class TaskAssignment(models.Model):
     def __str__(self) -> str:
         collaborator_name = str(self.collaborator) if self.collaborator_id else _("Sin responsable")
         return f"{self.task_definition} · {collaborator_name} · {self.due_date:%Y-%m-%d}"
+
+
+class TaskAssignmentEvidence(models.Model):
+    class MediaType(models.TextChoices):
+        PHOTO = "photo", _("Fotografía")
+        VIDEO = "video", _("Video")
+        OTHER = "other", _("Otro")
+
+    assignment = models.ForeignKey(
+        TaskAssignment,
+        on_delete=models.CASCADE,
+        related_name="evidences",
+        verbose_name=_("Asignación"),
+    )
+    file = models.FileField(_("Archivo"), upload_to="task_assignment_evidence/%Y/%m/%d")
+    media_type = models.CharField(
+        _("Tipo de medio"),
+        max_length=16,
+        choices=MediaType.choices,
+        default=MediaType.PHOTO,
+    )
+    note = models.CharField(_("Nota"), max_length=255, blank=True)
+    content_type = models.CharField(_("Tipo de contenido"), max_length=120, blank=True)
+    file_size = models.PositiveIntegerField(_("Tamaño (bytes)"), default=0)
+    uploaded_by = models.ForeignKey(
+        UserProfile,
+        on_delete=models.SET_NULL,
+        related_name="uploaded_task_assignment_evidence",
+        null=True,
+        blank=True,
+        verbose_name=_("Cargado por"),
+    )
+    uploaded_at = models.DateTimeField(_("Cargado en"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Evidencia de tarea")
+        verbose_name_plural = _("Evidencias de tareas")
+        ordering = ("-uploaded_at",)
+
+    def __str__(self) -> str:
+        return f"{self.assignment} · {self.file.name}"
+
+    def _detect_media_type(self, content_type: Optional[str]) -> str:
+        if not content_type:
+            return self.MediaType.OTHER
+        if content_type.startswith("image/"):
+            return self.MediaType.PHOTO
+        if content_type.startswith("video/"):
+            return self.MediaType.VIDEO
+        return self.MediaType.OTHER
+
+    def save(self, *args, **kwargs) -> None:
+        if self.file and hasattr(self.file, "file"):
+            underlying = getattr(self.file, "file", None)
+            if underlying and hasattr(underlying, "size"):
+                self.file_size = int(underlying.size)
+        if not self.content_type and hasattr(self.file, "file"):
+            content_type = getattr(self.file, "content_type", None)
+            if not content_type and getattr(self.file, "name", None):
+                guessed, _ = mimetypes.guess_type(self.file.name)
+                content_type = guessed or ""
+            self.content_type = content_type or ""
+        if self.content_type:
+            self.media_type = self._detect_media_type(self.content_type)
+        elif getattr(self.file, "name", None):
+            guessed, _ = mimetypes.guess_type(self.file.name)
+            self.content_type = guessed or ""
+            if self.content_type:
+                self.media_type = self._detect_media_type(self.content_type)
+        super().save(*args, **kwargs)

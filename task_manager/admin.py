@@ -3,7 +3,7 @@ from django.contrib import admin
 
 from personal.models import DayOfWeek
 
-from .models import TaskAssignment, TaskCategory, TaskDefinition, TaskStatus
+from .models import TaskAssignment, TaskAssignmentEvidence, TaskCategory, TaskDefinition, TaskStatus
 
 
 class TaskDefinitionAdminForm(forms.ModelForm):
@@ -124,6 +124,13 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
     )
 
 
+class TaskAssignmentEvidenceInline(admin.TabularInline):
+    model = TaskAssignmentEvidence
+    extra = 0
+    fields = ("file", "media_type", "note", "uploaded_by", "uploaded_at")
+    readonly_fields = ("media_type", "uploaded_by", "uploaded_at")
+
+
 @admin.register(TaskAssignment)
 class TaskAssignmentAdmin(admin.ModelAdmin):
     list_display = (
@@ -147,6 +154,7 @@ class TaskAssignmentAdmin(admin.ModelAdmin):
     date_hierarchy = "due_date"
     autocomplete_fields = ("task_definition", "collaborator", "production_record")
     readonly_fields = ("created_at", "updated_at")
+    inlines = (TaskAssignmentEvidenceInline,)
     fieldsets = (
         (
             None,
@@ -167,3 +175,12 @@ class TaskAssignmentAdmin(admin.ModelAdmin):
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
         ),
     )
+
+
+@admin.register(TaskAssignmentEvidence)
+class TaskAssignmentEvidenceAdmin(admin.ModelAdmin):
+    list_display = ("assignment", "media_type", "uploaded_by", "uploaded_at")
+    list_filter = ("media_type", "uploaded_at")
+    search_fields = ("assignment__task_definition__name", "uploaded_by__nombres", "uploaded_by__apellidos")
+    autocomplete_fields = ("assignment", "uploaded_by")
+    readonly_fields = ("uploaded_at", "content_type", "file_size")

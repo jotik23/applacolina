@@ -2507,9 +2507,17 @@
 
         {% for task in telegram_mini_app.tasks %}
           <article
-            class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60"
+            class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60 transition"
             data-task-card
-              data-task-title="{{ task.title }}"
+            data-task-id="{{ task.assignment_id|default:'' }}"
+            data-task-title="{{ task.title }}"
+            data-task-complete-url="{{ task.complete_url|default:'' }}"
+            data-task-evidence-url="{{ task.evidence_upload_url|default:'' }}"
+            data-task-requires-evidence="{% if task.requires_evidence %}true{% else %}false{% endif %}"
+            data-task-evidence-count="{{ task.evidence_count|default:0 }}"
+            data-task-status="{{ task.status.state|default:'' }}"
+            data-task-completed-on="{{ task.completed_on_iso|default:'' }}"
+            data-task-reset-url="{{ task.reset_url|default:'' }}"
             >
               <header class="flex flex-col gap-2">
                 <div class="flex items-start justify-between gap-3">
@@ -2522,7 +2530,7 @@
                 <div class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
                   {% for badge in task.badges %}
                     <span
-                      class="rounded-full border px-2 py-0.5 {% if badge.theme == 'brand' %}border-amber-300 bg-amber-50 text-amber-700{% elif badge.theme == 'critical' %}border-rose-300 bg-rose-50 text-rose-700{% elif badge.theme == 'success' %}border-emerald-300 bg-emerald-50 text-emerald-700{% else %}border-slate-300 bg-slate-100 text-slate-700{% endif %}"
+                      class="rounded-full border px-2 py-0.5 {% if badge.theme == 'brand' %}border-amber-300 bg-amber-50 text-amber-700{% elif badge.theme == 'critical' %}border-rose-300 bg-rose-50 text-rose-700{% elif badge.theme == 'success' %}border-emerald-300 bg-emerald-50 text-emerald-700{% elif badge.theme == 'amber' %}border-amber-300 bg-amber-50 text-amber-700{% elif badge.theme == 'sky' %}border-sky-300 bg-sky-50 text-sky-700{% elif badge.theme == 'rose' %}border-rose-300 bg-rose-50 text-rose-700{% else %}border-slate-300 bg-slate-100 text-slate-700{% endif %}"
                     >
                       {{ badge.label }}
                     </span>
@@ -2537,12 +2545,37 @@
                   <li>{{ meta }}</li>
                 {% endfor %}
               </ul>
+              {% if task.status.details %}
+                <p class="mt-2 text-xs text-slate-500" data-task-status-details>{{ task.status.details }}</p>
+              {% endif %}
+              <p class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500" data-task-evidence-summary>
+                {% if task.evidence_count %}
+                  {{ task.evidence_count }} evidencia{% if task.evidence_count|default:0 != 1 %}s{% endif %} adjunta{% if task.requires_evidence %} · requisito cumplido{% endif %}
+                {% else %}
+                  {% if task.requires_evidence %}
+                    Requiere evidencia · sin adjuntos
+                  {% else %}
+                    Sin evidencia adjunta
+                  {% endif %}
+                {% endif %}
+              </p>
+              <p class="mt-2 hidden text-xs font-semibold text-emerald-600" data-task-feedback></p>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                capture="environment"
+                class="hidden"
+                data-task-evidence-input
+                multiple
+              />
               <div class="mt-4 flex flex-wrap gap-2">
                 {% for action in task.actions %}
                   <button
                     type="button"
-                    class="rounded-full px-3 py-1 text-xs font-semibold transition {% if forloop.first %}bg-brand text-slate-900 shadow shadow-amber-200/70 hover:bg-brand-dark{% else %}border border-slate-200 text-slate-600 hover:border-brand hover:text-brand{% endif %}"
+                    class="rounded-full px-3 py-1 text-xs font-semibold transition {% if action.disabled %}border border-slate-200 text-slate-400 opacity-60 cursor-not-allowed{% elif forloop.first %}bg-brand text-slate-900 shadow shadow-amber-200/70 hover:bg-brand-dark{% else %}border border-slate-200 text-slate-600 hover:border-brand hover:text-brand{% endif %}"
                     data-task-action="{{ action.action }}"
+                    data-task-disabled="{% if action.disabled %}true{% else %}false{% endif %}"
+                    {% if action.disabled %}disabled{% endif %}
                   >
                     {{ action.label }}
                   </button>
@@ -2553,6 +2586,7 @@
         </div>
       </section>
 
+      {% if mini_app_card_permissions.production or mini_app_card_permissions.weight_registry %}
       <div
         data-mini-app-report
         class="hidden flex flex-col gap-5"
@@ -2702,6 +2736,7 @@
           </div>
         </section>
       </div>
+      {% endif %}
 
       <section class="space-y-4" data-weekly-calendar-section>
         {% with current_shift=telegram_mini_app.current_shift %}
@@ -5385,16 +5420,36 @@
           }
         }
 
-        function renderList(node, lines) {
+        function renderList(node, lines, options) {
           if (!node) {
             return;
           }
+          const normalizedLines = Array.isArray(lines)
+            ? lines
+                .map(function (line) {
+                  return line === null || line === undefined ? '' : String(line);
+                })
+                .filter(function (line) {
+                  return line.trim() !== '';
+                })
+            : [];
           node.innerHTML = '';
-          lines.forEach(function (line) {
+          if (normalizedLines.length) {
+            normalizedLines.forEach(function (line) {
+              const li = document.createElement('li');
+              li.textContent = line;
+              node.appendChild(li);
+            });
+            return;
+          }
+          if (options && options.emptyMessage) {
             const li = document.createElement('li');
-            li.textContent = line;
+            if (options.emptyClass) {
+              li.className = options.emptyClass;
+            }
+            li.textContent = options.emptyMessage;
             node.appendChild(li);
-          });
+          }
         }
 
         function getStageDefinition(stageId) {
@@ -5933,43 +5988,42 @@
         function getProductionLines() {
           let total = 0;
           const details = [];
+          const detailEntries = [];
 
           Object.keys(productionState.barnOutputs).forEach(function (label) {
             const value = productionState.barnOutputs[label];
-            total += value;
-            details.push(label + ': ' + formatNumber(value));
+            if (Number.isFinite(value)) {
+              total += value;
+              detailEntries.push({ label: label, value: value, scope: 'barn', unit: 'cartones' });
+              details.push(label + ': ' + formatNumber(value));
+            }
           });
 
           Object.keys(productionState.roomOutputs).forEach(function (label) {
             const value = productionState.roomOutputs[label];
-            total += value;
-            details.push(label + ': ' + formatNumber(value));
+            if (Number.isFinite(value)) {
+              total += value;
+              detailEntries.push({ label: label, value: value, scope: 'room', unit: 'cartones' });
+              details.push(label + ': ' + formatNumber(value));
+            }
           });
 
           return {
             total: total,
             totalLabel: total > 0 ? formatNumber(total) + ' huevos' : '—',
             detail: details,
+            detailEntries: detailEntries,
           };
         }
 
-        function getProductionSummaryLines() {
-          const lines = [];
+        function getProductionSummaryContext() {
           const consumptionInfo = getConsumptionInfo();
-          lines.push('Consumo: ' + consumptionInfo.primary);
-          if (consumptionInfo.secondary) {
-            lines.push('Equivalencia: ' + consumptionInfo.secondary);
-          }
           const mortalityValue = normalizeNumber(productionState.mortality);
           const discardValue = normalizeNumber(productionState.discard);
-          lines.push('Mortalidad: ' + (mortalityValue !== null ? formatNumber(mortalityValue) + ' aves' : '—'));
-          lines.push('Descarte: ' + (discardValue !== null ? formatNumber(discardValue) + ' aves' : '—'));
-
           const productionInfo = getProductionLines();
-          lines.push('Producción total: ' + productionInfo.totalLabel);
           const eggWeightValue = normalizeNumber(productionState.eggWeight);
-          lines.push('Peso promedio huevo: ' + (eggWeightValue !== null ? formatNumber(eggWeightValue) + ' g' : '—'));
           const baseHens = resolveActiveHens();
+          let posturePercent = null;
           if (baseHens !== null) {
             let availableHens = baseHens;
             if (mortalityValue !== null) {
@@ -5979,11 +6033,39 @@
               availableHens -= discardValue;
             }
             if (availableHens > 0 && Number.isFinite(productionInfo.total) && productionInfo.total > 0) {
-              const posturePercent = (productionInfo.total / availableHens) * 100;
-              lines.push('Postura: ' + formatPercentage(posturePercent));
-            } else {
-              lines.push('Postura: —');
+              posturePercent = (productionInfo.total / availableHens) * 100;
             }
+          }
+          return {
+            consumptionInfo: consumptionInfo,
+            mortalityValue: mortalityValue,
+            discardValue: discardValue,
+            productionInfo: productionInfo,
+            eggWeightValue: eggWeightValue,
+            baseHens: baseHens,
+            posturePercent: posturePercent,
+          };
+        }
+
+        function getProductionSummaryLines(context) {
+          const summaryContext = context || getProductionSummaryContext();
+          const lines = [];
+          const consumptionInfo = summaryContext.consumptionInfo;
+          lines.push('Consumo: ' + consumptionInfo.primary);
+          if (consumptionInfo.secondary) {
+            lines.push('Equivalencia: ' + consumptionInfo.secondary);
+          }
+          const mortalityValue = summaryContext.mortalityValue;
+          const discardValue = summaryContext.discardValue;
+          lines.push('Mortalidad: ' + (mortalityValue !== null ? formatNumber(mortalityValue) + ' aves' : '—'));
+          lines.push('Descarte: ' + (discardValue !== null ? formatNumber(discardValue) + ' aves' : '—'));
+
+          const productionInfo = summaryContext.productionInfo;
+          lines.push('Producción total: ' + productionInfo.totalLabel);
+          const eggWeightValue = summaryContext.eggWeightValue;
+          lines.push('Peso promedio huevo: ' + (eggWeightValue !== null ? formatNumber(eggWeightValue) + ' g' : '—'));
+          if (summaryContext.posturePercent !== null) {
+            lines.push('Postura: ' + formatPercentage(summaryContext.posturePercent));
           } else {
             lines.push('Postura: —');
           }
@@ -5994,7 +6076,8 @@
         }
 
         function updateProductionSummary() {
-          const lines = getProductionSummaryLines();
+          const summaryContext = getProductionSummaryContext();
+          const lines = getProductionSummaryLines(summaryContext);
           renderList(productionSummaryCardList, lines);
         }
 
@@ -6209,6 +6292,9 @@
               updateProductionSummary();
               hideProductionPanels();
 
+              const summaryContextForLog = getProductionSummaryContext();
+              const summaryLinesForLog = getProductionSummaryLines(summaryContextForLog);
+
               if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
                 telegram.HapticFeedback.notificationOccurred('success');
               }
@@ -6218,14 +6304,14 @@
                     JSON.stringify({
                       action: 'simulate-production-save',
                       section: section,
-                      summary: getProductionSummaryLines(),
+                      summary: summaryLinesForLog,
                     })
                   );
                 } catch (error) {
                   console.info('No se pudo enviar el resumen simulado a Telegram:', error);
                 }
               } else {
-              console.info('Registro guardado:', section, getProductionSummaryLines());
+                console.info('Registro guardado:', section, summaryLinesForLog);
               }
           });
         });
@@ -6648,12 +6734,441 @@
             });
           });
         }
+        const taskCards = Array.prototype.slice.call(document.querySelectorAll('[data-task-card]'));
+        const BADGE_THEME_CLASS_MAP = {
+          brand: 'border-amber-300 bg-amber-50 text-amber-700',
+          amber: 'border-amber-300 bg-amber-50 text-amber-700',
+          critical: 'border-rose-300 bg-rose-50 text-rose-700',
+          rose: 'border-rose-300 bg-rose-50 text-rose-700',
+          success: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+          emerald: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+          sky: 'border-sky-300 bg-sky-50 text-sky-700',
+          neutral: 'border-slate-300 bg-slate-100 text-slate-700',
+        };
+
+        function applyBadgeTheme(badge, theme) {
+          if (!badge) {
+            return;
+          }
+          const classes = BADGE_THEME_CLASS_MAP[theme] || BADGE_THEME_CLASS_MAP.neutral;
+          badge.className = 'rounded-full border px-2 py-0.5 ' + classes;
+        }
+
+        function formatIsoDateLabel(isoDate) {
+          if (!isoDate) {
+            return '';
+          }
+          const date = new Date(isoDate);
+          if (Number.isNaN(date.getTime())) {
+            return isoDate;
+          }
+          return date.toLocaleDateString(undefined, {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+          });
+        }
+
+        function applyCompletedCardStyles(card, completedOn) {
+          if (!card) {
+            return;
+          }
+          card.setAttribute('data-task-status', 'completed');
+          if (completedOn) {
+            card.setAttribute('data-task-completed-on', completedOn);
+          }
+          card.classList.remove('bg-white');
+          card.classList.add('bg-emerald-50/80', 'border-emerald-200');
+          const completeButton = card.querySelector('[data-task-action="complete"]');
+          if (completeButton) {
+            completeButton.remove();
+          }
+          const statusDetails = card.querySelector('[data-task-status-details]');
+          if (statusDetails) {
+            const label = completedOn ? formatIsoDateLabel(completedOn) : 'hoy';
+            statusDetails.textContent = 'Marcada ' + label;
+          }
+          const metaList = card.querySelector('ul');
+          if (metaList && metaList.firstElementChild) {
+            metaList.firstElementChild.textContent = 'Estado: Completada';
+          }
+          const badgeContainer = card.querySelector('header .flex.flex-wrap');
+          if (badgeContainer) {
+            const badgeNodes = badgeContainer.querySelectorAll('span');
+            if (badgeNodes.length > 1) {
+              badgeNodes[1].textContent = 'Completada';
+              applyBadgeTheme(badgeNodes[1], 'emerald');
+            }
+          }
+        }
+
+        function sendTaskAction(action, title, extra) {
+          const payload = Object.assign({ action: action, title: title || '' }, extra || {});
+          if (telegram && typeof telegram.sendData === 'function') {
+            try {
+              telegram.sendData(JSON.stringify(payload));
+            } catch (error) {
+              console.info('No se pudo enviar la acción a Telegram:', error);
+            }
+            return;
+          }
+          if (payload.section) {
+            console.info('Accion seleccionada:', payload.action, payload.title, 'Sección:', payload.section);
+          } else {
+            console.info('Accion seleccionada:', payload.action, payload.title, extra || '');
+          }
+        }
+
+        function showTaskFeedback(card, message, tone) {
+          if (!card) {
+            return;
+          }
+          const feedback = card.querySelector('[data-task-feedback]');
+          if (!feedback) {
+            if (tone === 'error') {
+              console.warn(message);
+            } else {
+              console.info(message);
+            }
+            return;
+          }
+          feedback.textContent = message;
+          feedback.classList.remove('hidden', 'text-emerald-600', 'text-rose-600');
+          feedback.classList.add(tone === 'error' ? 'text-rose-600' : 'text-emerald-600');
+          if (card.__feedbackTimeout) {
+            window.clearTimeout(card.__feedbackTimeout);
+          }
+          card.__feedbackTimeout = window.setTimeout(function () {
+            feedback.classList.add('hidden');
+          }, 4500);
+        }
+
+        function setButtonLoading(button, isLoading, loadingLabel) {
+          if (!button) {
+            return;
+          }
+          if (isLoading) {
+            if (!button.dataset.originalLabel) {
+              button.dataset.originalLabel = button.textContent.trim();
+            }
+            button.disabled = true;
+            if (loadingLabel) {
+              button.textContent = loadingLabel;
+            }
+            button.classList.add('opacity-70', 'pointer-events-none');
+          } else {
+            const originalLabel = button.dataset.originalLabel || button.textContent.trim();
+            button.disabled = false;
+            button.textContent = originalLabel;
+            button.classList.remove('opacity-70', 'pointer-events-none');
+          }
+        }
+
+        function updateEvidenceSummary(card, evidenceCount, requiresEvidence) {
+          if (!card) {
+            return;
+          }
+          const summary = card.querySelector('[data-task-evidence-summary]');
+          if (!summary) {
+            return;
+          }
+          const count = typeof evidenceCount === 'number' ? evidenceCount : parseInt(card.getAttribute('data-task-evidence-count') || '0', 10);
+          const requires = typeof requiresEvidence === 'boolean'
+            ? requiresEvidence
+            : card.getAttribute('data-task-requires-evidence') === 'true';
+          card.setAttribute('data-task-evidence-count', String(count));
+          card.setAttribute('data-task-requires-evidence', requires ? 'true' : 'false');
+          let badgeLabel = '';
+          let summaryText = '';
+          let badgeTheme = 'neutral';
+          if (count > 0) {
+            badgeLabel = count + ' evidencia' + (count === 1 ? '' : 's');
+            summaryText = badgeLabel + ' adjunta';
+            if (requires) {
+              summaryText += ' · requisito cumplido';
+            }
+            badgeTheme = 'emerald';
+          } else if (requires) {
+            badgeLabel = 'Sin evidencia';
+            summaryText = 'Requiere evidencia · sin adjuntos';
+            badgeTheme = 'critical';
+          } else {
+            badgeLabel = 'Sin evidencia';
+            summaryText = 'Sin evidencia adjunta';
+          }
+          summary.textContent = summaryText;
+          const badgeContainer = card.querySelector('header .flex.flex-wrap');
+          if (badgeContainer) {
+            const badgeNodes = badgeContainer.querySelectorAll('span');
+            if (badgeNodes.length) {
+              badgeNodes[0].textContent = badgeLabel;
+              applyBadgeTheme(badgeNodes[0], badgeTheme);
+            }
+          }
+        }
+
+        taskCards.forEach(function (card) {
+          updateEvidenceSummary(card);
+          if (card.getAttribute('data-task-status') === 'completed') {
+            applyCompletedCardStyles(card, card.getAttribute('data-task-completed-on') || null);
+          }
+        });
+
+        taskCards.forEach(function (card) {
+          updateEvidenceSummary(card);
+          if (card.getAttribute('data-task-status') === 'completed') {
+            applyCompletedCardStyles(card, card.getAttribute('data-task-completed-on') || null);
+          }
+        });
+
+        function parseJsonResponse(response) {
+          return response
+            .json()
+            .catch(function () {
+              return {};
+            })
+            .then(function (data) {
+              return { ok: response.ok, status: response.status, data: data };
+            });
+        }
+
+        function handleTaskComplete(card, button, title) {
+          if (!card) {
+            return;
+          }
+          const completeUrl = card.getAttribute('data-task-complete-url');
+          if (!completeUrl) {
+            showTaskFeedback(card, 'No encontramos la ruta para marcarla como completada.', 'error');
+            return;
+          }
+          const requiresEvidence = card.getAttribute('data-task-requires-evidence') === 'true';
+          const evidenceCount = parseInt(card.getAttribute('data-task-evidence-count') || '0', 10);
+          if (requiresEvidence && !evidenceCount) {
+            showTaskFeedback(card, 'Adjunta evidencia antes de completar la tarea.', 'error');
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('error');
+            }
+            return;
+          }
+          setButtonLoading(button, true, 'Procesando...');
+          fetch(completeUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: Object.assign(
+              { 'Content-Type': 'application/json' },
+              csrfToken ? { 'X-CSRFToken': csrfToken } : {}
+            ),
+            body: JSON.stringify({}),
+          })
+            .then(parseJsonResponse)
+            .then(function (result) {
+              if (!result.ok) {
+                const errorMessage =
+                  (result.data && result.data.error) || 'No se pudo completar la tarea. Intenta de nuevo.';
+                showTaskFeedback(card, errorMessage, 'error');
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('error');
+                }
+                return;
+              }
+              const data = result.data || {};
+              const assignmentId = card.getAttribute('data-task-id') || data.assignment_id || null;
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('success');
+              }
+              const completedOn = data.completed_on || null;
+              showTaskFeedback(card, '¡Tarea marcada como completada!', 'success');
+              const extra = { completedOn: completedOn, state: 'completed' };
+              if (assignmentId) {
+                extra.assignmentId = assignmentId;
+              }
+              sendTaskAction('complete', title, extra);
+              window.setTimeout(function () {
+                window.location.reload();
+              }, 300);
+            })
+            .catch(function (error) {
+              console.warn('No se pudo completar la tarea:', error);
+              showTaskFeedback(card, 'No se pudo completar la tarea. Intenta de nuevo.', 'error');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('error');
+              }
+            })
+            .finally(function () {
+              setButtonLoading(button, false);
+            });
+        }
+
+        function handleTaskReset(card, button, title) {
+          if (!card) {
+            return;
+          }
+          const resetUrl = card.getAttribute('data-task-reset-url');
+          if (!resetUrl) {
+            showTaskFeedback(card, 'No encontramos la ruta para reabrir la tarea.', 'error');
+            return;
+          }
+          setButtonLoading(button, true, 'Procesando...');
+          fetch(resetUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            body: JSON.stringify({}),
+          })
+            .then(parseJsonResponse)
+            .then(function (result) {
+              if (!result.ok) {
+                const errorMessage =
+                  (result.data && result.data.error) || 'No se pudo reabrir la tarea. Intenta de nuevo.';
+                showTaskFeedback(card, errorMessage, 'error');
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('error');
+                }
+                return;
+              }
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('success');
+              }
+              showTaskFeedback(card, 'La tarea volvió a estado pendiente.', 'success');
+              const assignmentId = card.getAttribute('data-task-id') || (result.data && result.data.assignment_id) || null;
+              const extra = { state: 'pending' };
+              if (assignmentId) {
+                extra.assignmentId = assignmentId;
+              }
+              sendTaskAction('reset', title, extra);
+              window.setTimeout(function () {
+                window.location.reload();
+              }, 300);
+            })
+            .catch(function (error) {
+              console.warn('No se pudo reabrir la tarea:', error);
+              showTaskFeedback(card, 'No se pudo reabrir la tarea. Intenta de nuevo.', 'error');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('error');
+              }
+            })
+            .finally(function () {
+              setButtonLoading(button, false);
+            });
+        }
+
+        function handleEvidenceUpload(card, input) {
+          if (!card || !input) {
+            return;
+          }
+          const files = Array.prototype.slice.call(input.files || []);
+          if (!files.length) {
+            return;
+          }
+          const evidenceUrl = card.getAttribute('data-task-evidence-url');
+          if (!evidenceUrl) {
+            showTaskFeedback(card, 'No encontramos la ruta para subir la evidencia.', 'error');
+            input.value = '';
+            return;
+          }
+          const formData = new FormData();
+          files.forEach(function (file) {
+            formData.append('evidence', file);
+          });
+          if (csrfToken) {
+            formData.append('csrfmiddlewaretoken', csrfToken);
+          }
+          const evidenceButton = card.querySelector('[data-task-action="evidence"]');
+          setButtonLoading(evidenceButton, true, 'Subiendo...');
+          fetch(evidenceUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            body: formData,
+          })
+            .then(parseJsonResponse)
+            .then(function (result) {
+              if (!result.ok) {
+                const errorMessage =
+                  (result.data && result.data.error) || 'No se pudo cargar la evidencia. Intenta de nuevo.';
+                showTaskFeedback(card, errorMessage, 'error');
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('error');
+                }
+                return;
+              }
+              const data = result.data || {};
+              const previousCount = parseInt(card.getAttribute('data-task-evidence-count') || '0', 10);
+              const evidenceCount =
+                typeof data.evidence_count === 'number' ? data.evidence_count : previousCount + files.length;
+              const requiresEvidence =
+                typeof data.requires_evidence === 'boolean'
+                  ? data.requires_evidence
+                  : card.getAttribute('data-task-requires-evidence') === 'true';
+              card.setAttribute('data-task-evidence-count', evidenceCount);
+              card.setAttribute('data-task-requires-evidence', requiresEvidence ? 'true' : 'false');
+              updateEvidenceSummary(card, evidenceCount, requiresEvidence);
+              showTaskFeedback(card, '¡Evidencia cargada!', 'success');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('success');
+              }
+              const assignmentId = card.getAttribute('data-task-id') || data.assignment_id || null;
+              const extra = { evidenceCount: evidenceCount };
+              if (assignmentId) {
+                extra.assignmentId = assignmentId;
+              }
+              if (data.files) {
+                extra.files = data.files;
+              }
+              sendTaskAction('evidence', card.getAttribute('data-task-title') || '', extra);
+            })
+            .catch(function (error) {
+              console.warn('No se pudo cargar la evidencia:', error);
+              showTaskFeedback(card, 'No se pudo cargar la evidencia. Intenta nuevamente.', 'error');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('error');
+              }
+            })
+            .finally(function () {
+              setButtonLoading(evidenceButton, false);
+              input.value = '';
+            });
+        }
+
+        taskCards.forEach(function (card) {
+          const evidenceInput = card.querySelector('[data-task-evidence-input]');
+          if (evidenceInput) {
+            evidenceInput.addEventListener('change', function () {
+              handleEvidenceUpload(card, evidenceInput);
+            });
+          }
+        });
+
         const buttons = document.querySelectorAll('[data-task-action]');
         buttons.forEach(function (button) {
           button.addEventListener('click', function (event) {
             const action = event.currentTarget.getAttribute('data-task-action');
             const card = event.currentTarget.closest('[data-task-card]');
             const title = card ? card.getAttribute('data-task-title') : '';
+            const isDisabled =
+              event.currentTarget.disabled || event.currentTarget.getAttribute('data-task-disabled') === 'true';
+            if (isDisabled) {
+              event.preventDefault();
+              return;
+            }
+            if (action === 'complete') {
+              event.preventDefault();
+              handleTaskComplete(card, event.currentTarget, title);
+              return;
+            }
+            if (action === 'reset') {
+              event.preventDefault();
+              handleTaskReset(card, event.currentTarget, title);
+              return;
+            }
+            if (action === 'evidence') {
+              event.preventDefault();
+              const input = card ? card.querySelector('[data-task-evidence-input]') : null;
+              if (input) {
+                input.click();
+              }
+              return;
+            }
             let section = null;
             if (action === 'log-production') {
               section = event.currentTarget.getAttribute('data-production-section') || 'consumption';
@@ -6671,26 +7186,11 @@
               if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
                 telegram.HapticFeedback.notificationOccurred('success');
               }
+            } else if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+              telegram.HapticFeedback.impactOccurred('soft');
             }
-            if (telegram) {
-              if (telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
-                telegram.HapticFeedback.impactOccurred('soft');
-              }
-              const payload = {
-                action: action,
-                title: title,
-              };
-              if (section) {
-                payload.section = section;
-              }
-              telegram.sendData(JSON.stringify(payload));
-            } else {
-              if (section) {
-                console.info('Accion seleccionada:', action, title, 'Sección:', section);
-              } else {
-                console.info('Accion seleccionada:', action, title);
-              }
-            }
+            const extra = section ? { section: section } : undefined;
+            sendTaskAction(action, title, extra);
           });
         });
 
