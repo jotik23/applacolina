@@ -148,6 +148,18 @@
     }
   },
   {
+    "model": "personal.positioncategory",
+    "pk": 11,
+    "fields": {
+      "code": "VACUNADOR",
+      "shift_type": "day",
+      "is_active": true,
+      "rest_max_consecutive_days": 8,
+      "rest_post_shift_days": 0,
+      "rest_monthly_days": 5
+    }
+  },
+  {
     "model": "production.farm",
     "pk": 1,
     "fields": {

@@ -202,3 +202,46 @@ class RestPeriodApiTests(TestCase):
         suggestions = operator_entry.get("suggested_positions")
         self.assertIsInstance(suggestions, list)
         self.assertTrue(any(item.get("id") == self.position.id for item in suggestions))
+
+    def test_metadata_includes_vacunador_category(self) -> None:
+        category, _created = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.VACUNADOR,
+            defaults={
+                "shift_type": ShiftType.DAY,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+                "is_active": True,
+            },
+        )
+        if not _created:
+            update_fields: list[str] = []
+            if category.shift_type != ShiftType.DAY:
+                category.shift_type = ShiftType.DAY
+                update_fields.append("shift_type")
+            if category.rest_max_consecutive_days != 8:
+                category.rest_max_consecutive_days = 8
+                update_fields.append("rest_max_consecutive_days")
+            if category.rest_post_shift_days != 0:
+                category.rest_post_shift_days = 0
+                update_fields.append("rest_post_shift_days")
+            if category.rest_monthly_days != 5:
+                category.rest_monthly_days = 5
+                update_fields.append("rest_monthly_days")
+            if not category.is_active:
+                category.is_active = True
+                update_fields.append("is_active")
+            if update_fields:
+                category.save(update_fields=update_fields)
+
+        metadata_url = reverse("personal-api:calendar-metadata")
+        response = self.client.get(metadata_url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        choice_sets = data.get("choice_sets", {})
+        categories = choice_sets.get("position_categories", [])
+        self.assertTrue(any(item.get("code") == PositionCategoryCode.VACUNADOR for item in categories))
+        matching = next(item for item in categories if item.get("code") == PositionCategoryCode.VACUNADOR)
+        self.assertEqual(matching.get("label"), category.display_name)
+        self.assertEqual(int(matching.get("value")), category.id)

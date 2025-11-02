@@ -8,6 +8,8 @@ from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set, T
 from django.db import transaction
 from django.db.models import Q
 
+from task_manager.services import suppress_task_assignment_sync, sync_task_assignments
+
 from ..models import (
     AssignmentAlertLevel,
     AssignmentDecision,
@@ -992,32 +994,34 @@ class CalendarScheduler:
 
     def _commit_decisions(self, decisions: Sequence[AssignmentDecision]) -> None:
         with transaction.atomic():
-            self._reset_auto_assignments()
+            with suppress_task_assignment_sync():
+                self._reset_auto_assignments()
 
-            new_assignments: List[ShiftAssignment] = []
-            for decision in decisions:
-                if decision.operator is None:
-                    continue
-                new_assignments.append(
-                    ShiftAssignment(
-                        calendar=self.calendar,
-                        position=decision.position,
-                        date=decision.date,
-                        operator=decision.operator,
-                        alert_level=decision.alert_level,
-                        is_auto_assigned=True,
-                        is_overtime=decision.is_overtime,
-                        overtime_points=decision.overtime_points if decision.is_overtime else 0,
-                        notes=decision.notes,
+                new_assignments: List[ShiftAssignment] = []
+                for decision in decisions:
+                    if decision.operator is None:
+                        continue
+                    new_assignments.append(
+                        ShiftAssignment(
+                            calendar=self.calendar,
+                            position=decision.position,
+                            date=decision.date,
+                            operator=decision.operator,
+                            alert_level=decision.alert_level,
+                            is_auto_assigned=True,
+                            is_overtime=decision.is_overtime,
+                            overtime_points=decision.overtime_points if decision.is_overtime else 0,
+                            notes=decision.notes,
+                        )
                     )
-                )
 
-            if new_assignments:
-                ShiftAssignment.objects.bulk_create(new_assignments)
+                if new_assignments:
+                    ShiftAssignment.objects.bulk_create(new_assignments)
 
             self._clear_workload_snapshots()
             self._clear_calendar_rest_periods()
             self._persist_calendar_rest_periods()
+            self._schedule_task_assignment_sync()
 
     def _reset_auto_assignments(self) -> None:
         self.calendar.assignments.all().delete()
@@ -1054,6 +1058,15 @@ class CalendarScheduler:
 
         if rest_records:
             OperatorRestPeriod.objects.bulk_create(rest_records, ignore_conflicts=True)
+
+    def _schedule_task_assignment_sync(self) -> None:
+        start_date = self.calendar.start_date
+        end_date = self.calendar.end_date
+
+        def _run_sync() -> None:
+            sync_task_assignments(start_date=start_date, end_date=end_date)
+
+        transaction.on_commit(_run_sync)
 
     @staticmethod
     def _merge_consecutive_days(days: Sequence[date]) -> List[Tuple[date, date]]:

@@ -413,6 +413,8 @@ class TaskAssignment(models.Model):
         on_delete=models.PROTECT,
         related_name="task_assignments",
         verbose_name=_("Colaborador"),
+        null=True,
+        blank=True,
     )
     due_date = models.DateField(_("Fecha programada"))
     completed_on = models.DateField(
@@ -435,7 +437,19 @@ class TaskAssignment(models.Model):
         verbose_name = _("Asignación de tarea")
         verbose_name_plural = _("Asignaciones de tareas")
         ordering = ("due_date", "task_definition__name")
-        unique_together = ("task_definition", "collaborator", "due_date")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("task_definition", "due_date", "collaborator"),
+                name="task_assignment_unique_with_collaborator",
+                condition=Q(collaborator__isnull=False),
+            ),
+            models.UniqueConstraint(
+                fields=("task_definition", "due_date"),
+                name="task_assignment_unique_orphan_per_day",
+                condition=Q(collaborator__isnull=True),
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.task_definition} · {self.collaborator} · {self.due_date:%Y-%m-%d}"
+        collaborator_name = str(self.collaborator) if self.collaborator_id else _("Sin responsable")
+        return f"{self.task_definition} · {collaborator_name} · {self.due_date:%Y-%m-%d}"

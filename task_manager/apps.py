@@ -33,3 +33,6 @@ class TaskManagerConfig(AppConfig):
             sender=UserProfile,
             dispatch_uid="task_manager_grant_mini_app_permission",
         )
+
+        # Ensure signal handlers are registered.
+        from . import signals  # noqa: F401

@@ -17,6 +17,7 @@ from personal.models import (
 )
 from production.models import ChickenHouse, Farm, Room
 from task_manager.mini_app.features import build_shift_confirmation_card, build_shift_confirmation_empty_card
+from task_manager.services import suppress_task_assignment_sync
 
 
 class ShiftConfirmationFeatureTests(TestCase):
@@ -105,24 +106,25 @@ class ShiftConfirmationFeatureTests(TestCase):
         self.position.handoff_position = next_position
         self.position.save(update_fields=["handoff_position"])
 
-        ShiftAssignment.objects.create(
-            calendar=calendar,
-            position=previous_position,
-            date=reference_date - timedelta(days=1),
-            operator=self.prev_operator,
-        )
-        assignment = ShiftAssignment.objects.create(
-            calendar=calendar,
-            position=self.position,
-            date=reference_date,
-            operator=self.operator,
-        )
-        ShiftAssignment.objects.create(
-            calendar=calendar,
-            position=next_position,
-            date=reference_date,
-            operator=self.next_operator,
-        )
+        with suppress_task_assignment_sync():
+            ShiftAssignment.objects.create(
+                calendar=calendar,
+                position=previous_position,
+                date=reference_date - timedelta(days=1),
+                operator=self.prev_operator,
+            )
+            assignment = ShiftAssignment.objects.create(
+                calendar=calendar,
+                position=self.position,
+                date=reference_date,
+                operator=self.operator,
+            )
+            ShiftAssignment.objects.create(
+                calendar=calendar,
+                position=next_position,
+                date=reference_date,
+                operator=self.next_operator,
+            )
 
         card = build_shift_confirmation_card(user=self.operator, reference_date=reference_date)
         self.assertIsNotNone(card)
@@ -180,24 +182,25 @@ class ShiftConfirmationFeatureTests(TestCase):
             base_calendar=base_calendar,
         )
 
-        ShiftAssignment.objects.create(
-            calendar=draft_calendar,
-            position=self.position,
-            date=reference_date - timedelta(days=1),
-            operator=self.prev_operator,
-        )
-        ShiftAssignment.objects.create(
-            calendar=base_calendar,
-            position=self.position,
-            date=reference_date,
-            operator=self.operator,
-        )
-        ShiftAssignment.objects.create(
-            calendar=modified_calendar,
-            position=self.position,
-            date=reference_date + timedelta(days=1),
-            operator=self.next_operator,
-        )
+        with suppress_task_assignment_sync():
+            ShiftAssignment.objects.create(
+                calendar=draft_calendar,
+                position=self.position,
+                date=reference_date - timedelta(days=1),
+                operator=self.prev_operator,
+            )
+            ShiftAssignment.objects.create(
+                calendar=base_calendar,
+                position=self.position,
+                date=reference_date,
+                operator=self.operator,
+            )
+            ShiftAssignment.objects.create(
+                calendar=modified_calendar,
+                position=self.position,
+                date=reference_date + timedelta(days=1),
+                operator=self.next_operator,
+            )
 
         card = build_shift_confirmation_card(user=self.operator, reference_date=reference_date)
         self.assertIsNotNone(card)
