@@ -323,6 +323,7 @@ class TaskManagerHomeView(generic.TemplateView):
             "start_value": filters.scheduled_start,
             "end_value": filters.scheduled_end,
         }
+        context["task_manager_search_filter"] = (filters.search or "").strip()
         context["task_manager_group_primary_filter"] = FilterPickerData(
             default_value=group_primary_value,
             default_label=group_primary_label,
@@ -379,6 +380,17 @@ class TaskManagerHomeView(generic.TemplateView):
                     _("Responsable"),
                     responsible_label,
                     responsible_value,
+                )
+            )
+        search_value = (filters.search or "").strip()
+        if search_value:
+            active_filters.append(
+                build_active_filter_chip(
+                    self.request,
+                    "search",
+                    _("Búsqueda"),
+                    search_value,
+                    search_value,
                 )
             )
         if schedule_filter_label:
@@ -2402,6 +2414,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
         context["telegram_integration_enabled"] = self.mini_app_client == MiniAppClient.TELEGRAM
         context["telegram_auth_error"] = self.telegram_auth_error
         context["mini_app_access_granted"] = has_access
+        context["mini_app_card_permissions"] = card_permissions
 
         return context
 
@@ -2424,6 +2437,7 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
             initials=initials,
         )
         context["telegram_integration_enabled"] = False
+        context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
         return context
 
 
@@ -2890,6 +2904,7 @@ TASK_FILTER_PARAM_NAMES: tuple[str, ...] = (
     "criticality",
     "scope",
     "responsible",
+    "search",
     "scheduled_start",
     "scheduled_end",
 )
@@ -2903,6 +2918,7 @@ class TaskDefinitionFilters:
     criticality: str = "all"
     scope: str = "all"
     responsible: str = "all"
+    search: str = ""
     scheduled_start: str = ""
     scheduled_end: str = ""
 
@@ -3050,6 +3066,11 @@ def apply_task_definition_filters(
                 queryset = queryset.filter(rooms__pk=scope_id)
         else:
             needs_distinct = False
+
+    search_value = (filters.search or "").strip()
+    if search_value:
+        filters.search = search_value
+        queryset = queryset.filter(name__icontains=search_value)
 
     schedule_start = _parse_iso_date(filters.scheduled_start)
     schedule_end = _parse_iso_date(filters.scheduled_end)

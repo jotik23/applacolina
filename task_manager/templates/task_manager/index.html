@@ -592,7 +592,7 @@
                   </a>
                 </div>
                 <div class="grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-6">
-                  <fieldset class="space-y-3">
+                  <fieldset class="space-y-3 lg:col-span-2">
                     <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</legend>
                     {% with config=task_manager_status_filter %}
                       {% include "task_manager/includes/filter_picker.html" with name="status" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
@@ -627,14 +627,14 @@
                     {% endwith %}
                   </fieldset>
 
-                  <fieldset class="space-y-3">
+                  <fieldset class="space-y-3 lg:col-span-2">
                     <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Responsable sugerido</legend>
                     {% with config=task_manager_responsible_filter %}
                       {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
                     {% endwith %}
                   </fieldset>
 
-                  <fieldset class="space-y-3">
+                  <fieldset class="space-y-3 lg:col-span-2">
                     <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fecha programada</legend>
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                       <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -658,6 +658,26 @@
                         />
                       </label>
                     </div>
+                  </fieldset>
+
+                  <fieldset class="space-y-3 lg:col-span-2">
+                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Buscar</legend>
+                    <label class="relative block">
+                      <span class="sr-only">Buscar tarea</span>
+                      <input
+                        type="search"
+                        name="search"
+                        value="{{ task_manager_search_filter }}"
+                        class="h-11 w-full rounded-full border border-slate-200 bg-white pl-4 pr-10 text-sm font-normal text-slate-600 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                        placeholder="Filtrar por nombre..."
+                        data-task-filter-search
+                      />
+                      <span class="pointer-events-none absolute inset-y-0 right-4 inline-flex items-center text-slate-400">
+                        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M12.9 14.32a8 8 0 111.414-1.414l3.387 3.386a1 1 0 01-1.414 1.415l-3.387-3.387zM10 15a5 5 0 100-10 5 5 0 000 10z" clip-rule="evenodd"></path>
+                        </svg>
+                      </span>
+                    </label>
                   </fieldset>
                 </div>
               </section>
@@ -2885,6 +2905,8 @@
 
       var filterForm = document.querySelector('[data-task-definition-filter-form]');
       if (filterForm) {
+        var searchInput = filterForm.querySelector('[data-task-filter-search]');
+        var searchDebounceTimer = null;
         var applyTaskDefinitionFilters = function () {
           var params = new URLSearchParams(window.location.search);
           params.set('tm_tab', 'tareas');
@@ -2935,10 +2957,26 @@
             params.delete('scheduled_end');
           }
 
+          if (searchInput) {
+            var searchValue = (searchInput.value || '').trim();
+            if (searchValue) {
+              params.set('search', searchValue);
+            } else {
+              params.delete('search');
+            }
+          } else {
+            params.delete('search');
+          }
+
           var query = params.toString();
           var target = window.location.pathname + (query ? '?' + query : '') + '#tm-tareas';
           window.location.assign(target);
         };
+
+        filterForm.addEventListener('submit', function (event) {
+          event.preventDefault();
+          applyTaskDefinitionFilters();
+        });
 
         filterForm.addEventListener('tm-filter-change', function () {
           applyTaskDefinitionFilters();
@@ -2950,6 +2988,43 @@
             input.addEventListener('change', function () {
               applyTaskDefinitionFilters();
             });
+          });
+        }
+
+        if (searchInput) {
+          var triggerSearchFilter = function (immediate) {
+            if (searchDebounceTimer) {
+              clearTimeout(searchDebounceTimer);
+              searchDebounceTimer = null;
+            }
+            if (immediate) {
+              applyTaskDefinitionFilters();
+            } else {
+              searchDebounceTimer = window.setTimeout(function () {
+                applyTaskDefinitionFilters();
+              }, 300);
+            }
+          };
+
+          searchInput.addEventListener('input', function () {
+            triggerSearchFilter(false);
+          });
+
+          searchInput.addEventListener('search', function () {
+            triggerSearchFilter(true);
+          });
+
+          searchInput.addEventListener('blur', function () {
+            if (searchDebounceTimer) {
+              triggerSearchFilter(true);
+            }
+          });
+
+          searchInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              triggerSearchFilter(true);
+            }
           });
         }
 
