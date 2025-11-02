@@ -271,6 +271,7 @@ class TaskDefinition(models.Model):
             ("view_mini_app_shift_confirmation_card", _("Puede ver el card de confirmación de turno en la mini app")),
             ("view_mini_app_production_card", _("Puede ver el card de producción en la mini app")),
             ("view_mini_app_production_summary_card", _("Puede ver el card de resumen de producción en la mini app")),
+            ("view_mini_app_weight_registry_card", _("Puede ver el card de control de pesos en la mini app")),
             ("view_mini_app_pending_classification_card", _("Puede ver el card de producciones pendientes en la mini app")),
             ("view_mini_app_transport_queue_card", _("Puede ver el card de cola de transporte en la mini app")),
             ("view_mini_app_egg_stage_cards", _("Puede ver los cards de etapas de huevo en la mini app")),

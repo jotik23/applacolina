@@ -46,6 +46,7 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "shift_confirmation": "task_manager.view_mini_app_shift_confirmation_card",
     "production": "task_manager.view_mini_app_production_card",
     "production_summary": "task_manager.view_mini_app_production_summary_card",
+    "weight_registry": "task_manager.view_mini_app_weight_registry_card",
     "pending_classification": "task_manager.view_mini_app_pending_classification_card",
     "transport_queue": "task_manager.view_mini_app_transport_queue_card",
     "egg_stage": "task_manager.view_mini_app_egg_stage_cards",
@@ -904,6 +905,69 @@ def _build_telegram_mini_app_payload(
         "active_hens": 26800,
         "label": _("Aves en postura activas"),
         "target_posture_percent": 92.0,
+    }
+
+    weight_registry_locations = [
+        {
+            "id": "lc-g3-s1",
+            "label": _("Granja La Colina · Galpón 3 · Sala 1"),
+            "farm": _("Granja La Colina"),
+            "barn": "Galpón 3",
+            "room": "Sala 1",
+            "birds": 1240,
+        },
+        {
+            "id": "lc-g3-s2",
+            "label": _("Granja La Colina · Galpón 3 · Sala 2"),
+            "farm": _("Granja La Colina"),
+            "barn": "Galpón 3",
+            "room": "Sala 2",
+            "birds": 1215,
+        },
+        {
+            "id": "lc-g4-s1",
+            "label": _("Granja La Colina · Galpón 4 · Sala 1"),
+            "farm": _("Granja La Colina"),
+            "barn": "Galpón 4",
+            "room": "Sala 1",
+            "birds": 980,
+        },
+        {
+            "id": "lc-g5-s1",
+            "label": _("Granja La Colina · Galpón 5 · Sala 1"),
+            "farm": _("Granja La Colina"),
+            "barn": "Galpón 5",
+            "room": "Sala 1",
+            "birds": 1325,
+        },
+    ]
+
+    weight_registry_recent_sessions = [
+        {
+            "id": "lc-g3-s1-2024-11-04",
+            "label": _("G3 · Sala 1 · 04 Nov"),
+            "avg_weight": 1845,
+            "uniformity_percent": 86,
+            "sample_size": 52,
+        },
+        {
+            "id": "lc-g4-s1-2024-11-02",
+            "label": _("G4 · Sala 1 · 02 Nov"),
+            "avg_weight": 1782,
+            "uniformity_percent": 82,
+            "sample_size": 48,
+        },
+    ]
+
+    weight_registry = {
+        "title": _("Pesaje de aves"),
+        "subtitle": _(""),
+        "unit_label": "g",
+        "min_sample_size": 30,
+        "uniformity_tolerance_percent": 10,
+        "locations": weight_registry_locations,
+        "recent_sessions": weight_registry_recent_sessions,
+        "resume_hint": _("Puedes pausar el registro."),
     }
 
     egg_workflow = {
@@ -2188,6 +2252,7 @@ def _build_telegram_mini_app_payload(
             ],
         },
         "production_reference": production_reference,
+        "weight_registry": weight_registry,
         "pending_classification": pending_classification_summary,
         "egg_workflow": egg_workflow,
         "transport_queue": transport_queue,

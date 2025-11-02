@@ -2587,6 +2587,301 @@
           {% endif %}
         {% endwith %}
 
+        {% if mini_app_card_permissions.weight_registry %}
+        {% with weight_registry=telegram_mini_app.weight_registry %}
+        {% if weight_registry %}
+          <article
+            class="rounded-3xl border border-emerald-200 bg-gradient-to-br from-white/90 via-emerald-50/80 to-sky-50/80 p-5 shadow-2xl shadow-emerald-100/70"
+            data-weight-card
+            data-weight-unit="{{ weight_registry.unit_label|default:'g' }}"
+            data-weight-tolerance="{{ weight_registry.uniformity_tolerance_percent|default:10 }}"
+            data-weight-minimum="{{ weight_registry.min_sample_size|default:30 }}"
+          >
+            <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-2">
+                <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                  <span aria-hidden="true">⚖️</span>
+                  Control de pesos
+                </p>
+                <h3 class="text-lg font-semibold text-slate-900">
+                  {{ weight_registry.title }}
+                </h3>
+                {% if weight_registry.subtitle %}
+                  <p class="text-sm text-slate-600">
+                    {{ weight_registry.subtitle }}
+                  </p>
+                {% endif %}
+              </div>
+              {% if weight_registry.resume_hint %}
+                <div class="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white/90 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 shadow-inner shadow-emerald-100/70">
+                  <span aria-hidden="true">⏸️</span>
+                  {{ weight_registry.resume_hint }}
+                </div>
+              {% endif %}
+            </header>
+
+            <div class="mt-4 space-y-5">
+              <section class="space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                    Selecciona los salones
+                  </p>
+                  <span
+                    class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600"
+                    data-weight-selected-counter
+                  >
+                    0 seleccionados
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-2" data-weight-location-list>
+                  {% for location in weight_registry.locations %}
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-2 rounded-full border border-emerald-200/60 bg-white/90 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm shadow-emerald-100/40 transition hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/60"
+                      data-weight-location="{{ location.id }}"
+                      data-weight-location-label="{{ location.label }}"
+                      data-weight-location-birds="{{ location.birds|default:'' }}"
+                      data-weight-location-farm="{{ location.farm|default:'' }}"
+                      data-weight-location-barn="{{ location.barn|default:'' }}"
+                      data-weight-location-room="{{ location.room|default:'' }}"
+                    >
+                      <span class="inline-flex flex-col items-start text-left leading-tight">
+                        <span>{{ location.label }}</span>
+                        {% if location.birds %}
+                          <span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
+                            {{ location.birds|intcomma }} aves
+                          </span>
+                        {% endif %}
+                      </span>
+                      <span
+                        class="hidden h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white shadow-sm shadow-emerald-300/70"
+                        data-weight-location-check
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </span>
+                    </button>
+                  {% endfor %}
+                </div>
+              </section>
+
+              <section class="space-y-2" data-weight-idle-actions>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-lg shadow-emerald-200/70 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+                    data-weight-start
+                  >
+                    Iniciar muestreo
+                  </button>
+                  <button
+                    type="button"
+                    class="hidden rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 shadow-sm shadow-emerald-100/70 transition hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                    data-weight-resume
+                  >
+                    Continuar registro
+                  </button>
+                </div>
+                <p class="text-xs text-slate-600" data-weight-selection-hint>
+                  Selecciona al menos un salón para comenzar.
+                </p>
+              </section>
+
+              <section
+                class="hidden space-y-4 rounded-2xl border border-emerald-100 bg-white/90 px-4 py-4 shadow-inner shadow-emerald-100/60"
+                data-weight-panel
+              >
+                <header class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+                      Captura en vivo
+                    </p>
+                    <p class="text-xs text-slate-500" data-weight-active-salons>—</p>
+                  </div>
+                  <div class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                    <span aria-hidden="true">👥</span>
+                    <span data-weight-total-count>0 aves</span>
+                  </div>
+                </header>
+
+                <div class="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 shadow-inner shadow-emerald-100/40">
+                  <label class="flex flex-col gap-2 text-xs font-semibold text-emerald-700">
+                    <span>Nuevo peso</span>
+                    <div class="flex items-center gap-2">
+                      <input
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="Ej: 1.820 o 1820"
+                        class="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/70"
+                        data-weight-input
+                      />
+                      <button
+                        type="button"
+                        class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow shadow-emerald-200/60 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+                        data-weight-add
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                  </label>
+                  <div class="grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 bg-white/90 px-2 py-2 font-semibold text-emerald-700 shadow-sm hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-quick="1.60"
+                    >
+                      1.600
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 bg-white/90 px-2 py-2 font-semibold text-emerald-700 shadow-sm hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-quick="1.65"
+                    >
+                      1.650
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 bg-white/90 px-2 py-2 font-semibold text-emerald-700 shadow-sm hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-quick="1.70"
+                    >
+                      1.700
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 bg-white/90 px-2 py-2 font-semibold text-emerald-700 shadow-sm hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-quick="1.75"
+                    >
+                      1.750
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 bg-white/90 px-2 py-2 font-semibold text-emerald-700 shadow-sm hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-quick="1.80"
+                    >
+                      1.800
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 bg-white/90 px-2 py-2 font-semibold text-emerald-700 shadow-sm hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-quick="1.85"
+                    >
+                      1.850
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Pesos registrados</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        class="rounded-full border border-transparent px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                        data-weight-copy
+                      >
+                        Copiar pesos
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-full border border-transparent px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                        data-weight-reset
+                      >
+                        Reiniciar lista
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-700 shadow-inner shadow-emerald-100/50"
+                    data-weight-empty-state
+                  >
+                    Agrega pesos para ver los indicadores.
+                  </div>
+                  <div
+                    class="hidden w-full max-h-36 flex flex-wrap gap-2 overflow-y-auto rounded-2xl border border-emerald-100 bg-white/90 p-3 shadow-inner shadow-emerald-50/70 sm:max-h-40"
+                    data-weight-list
+                  ></div>
+                </div>
+
+                <section
+                  class="hidden rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-xs text-slate-600 shadow-inner shadow-emerald-100/50"
+                  data-weight-summary
+                >
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Indicadores en vivo</p>
+                  <dl class="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <dt class="text-[11px] uppercase tracking-wide text-slate-500">Aves muestreadas</dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900" data-weight-count>—</dd>
+                    </div>
+                    <div>
+                      <dt class="text-[11px] uppercase tracking-wide text-slate-500">Promedio</dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900" data-weight-average>—</dd>
+                    </div>
+                    <div>
+                      <dt class="text-[11px] uppercase tracking-wide text-slate-500">Uniformidad (±{{ weight_registry.uniformity_tolerance_percent|default:10 }}%)</dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900" data-weight-uniformity>—</dd>
+                    </div>
+                    <div>
+                      <dt class="text-[11px] uppercase tracking-wide text-slate-500">Varianza</dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900" data-weight-variance>—</dd>
+                    </div>
+                    <div>
+                      <dt class="text-[11px] uppercase tracking-wide text-slate-500">Rango</dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900" data-weight-range>—</dd>
+                    </div>
+                  </dl>
+                  <p
+                    class="mt-3 hidden rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-amber-600 shadow-inner shadow-amber-100/60"
+                    data-weight-sample-warning
+                  >
+                    Captura al menos {{ weight_registry.min_sample_size|default:30 }} aves para un dato consistente.
+                  </p>
+                </section>
+
+                <footer class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100/60 transition hover:border-emerald-400 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
+                      data-weight-pause
+                    >
+                      Guardar y pausar
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-lg shadow-emerald-200/70 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+                      data-weight-finish
+                    >
+                      Enviar registro
+                    </button>
+                  </div>
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400" data-weight-status>Sin cambios</span>
+                </footer>
+              </section>
+            </div>
+
+            {% if weight_registry.recent_sessions %}
+              <section class="mt-5 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-xs text-slate-600 shadow-inner shadow-emerald-100/60">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Referencias recientes</p>
+                <ul class="mt-2 space-y-1" data-weight-recent-list>
+                  {% for session in weight_registry.recent_sessions %}
+                    <li class="flex flex-wrap items-center justify-between gap-2">
+                      <span>{{ session.label }}</span>
+                      <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                        {{ session.sample_size }} aves · {{ session.avg_weight|intcomma }} {{ weight_registry.unit_label|default:'g' }}
+                        <span class="hidden sm:inline">· {{ session.uniformity_percent }}%</span>
+                      </span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </section>
+            {% endif %}
+          </article>
+        {% endif %}
+        {% endwith %}
+        {% endif %}
+
         {% if mini_app_card_permissions.task %}
         {% for task in telegram_mini_app.tasks %}
           <article
@@ -4820,6 +5115,7 @@
         let productionLastFocusedElement = null;
 
         const productionCard = document.querySelector('[data-production-card]');
+        const weightCard = document.querySelector('[data-weight-card]');
         const productionCompleteBanner = productionCard
           ? productionCard.querySelector('[data-production-complete-banner]')
           : null;
@@ -5020,6 +5316,10 @@
 
         const hasIntl = typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function';
         const numberFormatter = hasIntl ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }) : null;
+        const integerFormatter = hasIntl ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }) : null;
+        const weightFormatter = hasIntl
+          ? new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+          : null;
         const percentageFormatter = hasIntl
           ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2, minimumFractionDigits: 0 })
           : null;
@@ -6284,6 +6584,975 @@
               }
           });
         });
+      }
+
+      if (weightCard) {
+        const weightLocationButtons = Array.prototype.slice.call(
+          weightCard.querySelectorAll('[data-weight-location]')
+        );
+        const weightSelectedCounter = weightCard.querySelector('[data-weight-selected-counter]');
+        const weightSelectionHint = weightCard.querySelector('[data-weight-selection-hint]');
+        const weightIdleActions = weightCard.querySelector('[data-weight-idle-actions]');
+        const weightStartButton = weightCard.querySelector('[data-weight-start]');
+        const weightResumeButton = weightCard.querySelector('[data-weight-resume]');
+        const weightPanel = weightCard.querySelector('[data-weight-panel]');
+        const weightInput = weightCard.querySelector('[data-weight-input]');
+        const weightAddButton = weightCard.querySelector('[data-weight-add]');
+        const weightQuickButtons = Array.prototype.slice.call(weightCard.querySelectorAll('[data-weight-quick]'));
+        const weightList = weightCard.querySelector('[data-weight-list]');
+        const weightEmptyState = weightCard.querySelector('[data-weight-empty-state]');
+        const weightSummary = weightCard.querySelector('[data-weight-summary]');
+        const weightSampleWarning = weightCard.querySelector('[data-weight-sample-warning]');
+        const weightAverageNode = weightCard.querySelector('[data-weight-average]');
+        const weightUniformityNode = weightCard.querySelector('[data-weight-uniformity]');
+        const weightVarianceNode = weightCard.querySelector('[data-weight-variance]');
+        const weightRangeNode = weightCard.querySelector('[data-weight-range]');
+        const weightTotalCountNode = weightCard.querySelector('[data-weight-total-count]');
+        const weightActiveSalonsNode = weightCard.querySelector('[data-weight-active-salons]');
+        const weightPauseButton = weightCard.querySelector('[data-weight-pause]');
+        const weightFinishButton = weightCard.querySelector('[data-weight-finish]');
+        const weightResetButton = weightCard.querySelector('[data-weight-reset]');
+        const weightCopyButton = weightCard.querySelector('[data-weight-copy]');
+        const weightStatusNode = weightCard.querySelector('[data-weight-status]');
+        const weightCountNode = weightCard.querySelector('[data-weight-count]');
+        const weightUnitLabel = weightCard.getAttribute('data-weight-unit') || 'g';
+        const weightTolerancePercent = Number(weightCard.getAttribute('data-weight-tolerance')) || 10;
+        const weightMinimumSample = Number(weightCard.getAttribute('data-weight-minimum')) || 30;
+        const weightSelectedCounterDefault = weightSelectedCounter ? weightSelectedCounter.textContent : '';
+        const weightStatusColorClasses = ['text-slate-400', 'text-emerald-600', 'text-amber-600', 'text-rose-600'];
+        const weightSelectedButtonActiveClasses = [
+          'border-emerald-500',
+          'bg-emerald-50',
+          'text-emerald-900',
+          'shadow-emerald-200/80',
+          'ring-1',
+          'ring-emerald-200/70',
+        ];
+        let isWeightPanelOpen = false;
+        let weightLastMetrics = null;
+
+        function toSlug(value) {
+          if (!value) {
+            return 'anon';
+          }
+          return String(value)
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        }
+
+        const weightStorageKey =
+          'tm-weight-registry-v1:' +
+          toSlug(
+            (payload &&
+              payload.user &&
+              (payload.user.contact_handle || payload.user.display_name)) ||
+              'anon'
+          );
+
+        const canUseLocalStorage = (function () {
+          try {
+            if (typeof window === 'undefined' || !window.localStorage) {
+              return false;
+            }
+            const testKey = '__tm_weight_test__';
+            window.localStorage.setItem(testKey, '1');
+            window.localStorage.removeItem(testKey);
+            return true;
+          } catch (error) {
+            return false;
+          }
+        })();
+
+        const weightState = {
+          selectedSalons: [],
+          entries: [],
+          dirty: false,
+          lastSavedAt: null,
+        };
+
+        function round(value, decimals) {
+          if (!Number.isFinite(value)) {
+            return null;
+          }
+          if (!decimals || decimals <= 0) {
+            return Math.round(value);
+          }
+          const factor = Math.pow(10, decimals);
+          return Math.round(value * factor) / factor;
+        }
+
+        function formatKgPlain(value) {
+          if (!Number.isFinite(value)) {
+            return '—';
+          }
+          if (weightFormatter) {
+            return weightFormatter.format(value);
+          }
+          return value.toFixed(2);
+        }
+
+        function formatKg(value) {
+          if (!Number.isFinite(value)) {
+            return '—';
+          }
+          return formatKgPlain(value) + ' kg';
+        }
+
+        function formatKgLabel(grams) {
+          return formatKg(grams / 1000);
+        }
+
+        function formatVariance(gramsSquared) {
+          if (!Number.isFinite(gramsSquared)) {
+            return '—';
+          }
+          const varianceKg = gramsSquared / 1000000;
+          if (weightFormatter) {
+            return weightFormatter.format(varianceKg) + ' kg²';
+          }
+          return varianceKg.toFixed(3) + ' kg²';
+        }
+
+        function formatRange(minGrams, maxGrams) {
+          if (!Number.isFinite(minGrams) || !Number.isFinite(maxGrams)) {
+            return '—';
+          }
+          return formatKg(minGrams / 1000) + ' – ' + formatKg(maxGrams / 1000);
+        }
+
+        function formatCount(value) {
+          if (!Number.isFinite(value)) {
+            return '0';
+          }
+          if (integerFormatter) {
+            return integerFormatter.format(value);
+          }
+          return String(Math.round(value));
+        }
+
+        function formatBirdCount(value) {
+          const label = formatCount(value);
+          return value === 1 ? label + ' ave' : label + ' aves';
+        }
+
+        function parseWeightInput(rawValue) {
+          if (rawValue === null || rawValue === undefined) {
+            return null;
+          }
+          const normalized = String(rawValue).trim().replace(',', '.');
+          if (!normalized) {
+            return null;
+          }
+          const numeric = Number(normalized);
+          if (!Number.isFinite(numeric) || numeric <= 0) {
+            return null;
+          }
+          let grams = numeric;
+          if (numeric < 20) {
+            grams = numeric * 1000;
+          }
+          return round(grams, 2);
+        }
+
+        function createEntryId() {
+          return 'w-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        }
+
+        function setStatus(message, tone) {
+          if (!weightStatusNode) {
+            return;
+          }
+          weightStatusColorClasses.forEach(function (cls) {
+            weightStatusNode.classList.remove(cls);
+          });
+          let toneClass = 'text-slate-400';
+          if (tone === 'info') {
+            toneClass = 'text-emerald-600';
+          } else if (tone === 'success') {
+            toneClass = 'text-emerald-600';
+          } else if (tone === 'warning') {
+            toneClass = 'text-amber-600';
+          } else if (tone === 'error') {
+            toneClass = 'text-rose-600';
+          }
+          weightStatusNode.classList.add(toneClass);
+          weightStatusNode.textContent = message;
+        }
+
+        function updateSelectedCounter() {
+          if (!weightSelectedCounter) {
+            return;
+          }
+          const count = weightState.selectedSalons.length;
+          if (!count) {
+            weightSelectedCounter.textContent = weightSelectedCounterDefault || '0 seleccionados';
+            return;
+          }
+          if (count === 1) {
+            weightSelectedCounter.textContent = '1 salón';
+            return;
+          }
+          weightSelectedCounter.textContent = formatCount(count) + ' salones';
+        }
+
+        function getActiveSalonsLabel() {
+          if (!weightState.selectedSalons.length) {
+            return 'Sin salón seleccionado';
+          }
+          const first = weightState.selectedSalons[0].label || weightState.selectedSalons[0].id;
+          if (weightState.selectedSalons.length === 1) {
+            return first;
+          }
+          const rest = weightState.selectedSalons.length - 1;
+          return first + ' +' + rest + (rest === 1 ? ' salón' : ' salones');
+        }
+
+        function updateActiveSalonsLabel() {
+          if (!weightActiveSalonsNode) {
+            return;
+          }
+          weightActiveSalonsNode.textContent = getActiveSalonsLabel();
+        }
+
+        function updateLocationButtons() {
+          const selectedIds = weightState.selectedSalons.map(function (salon) {
+            return salon.id;
+          });
+          weightLocationButtons.forEach(function (button) {
+            const id = button.getAttribute('data-weight-location');
+            const isSelected = selectedIds.indexOf(id) !== -1;
+            const check = button.querySelector('[data-weight-location-check]');
+            weightSelectedButtonActiveClasses.forEach(function (cls) {
+              if (isSelected) {
+                button.classList.add(cls);
+              } else {
+                button.classList.remove(cls);
+              }
+            });
+            if (check) {
+              check.classList.toggle('hidden', !isSelected);
+            }
+          });
+        }
+
+        function updateStartButtonState() {
+          if (!weightStartButton) {
+            return;
+          }
+          const hasSelection = weightState.selectedSalons.length > 0;
+          weightStartButton.disabled = !hasSelection;
+          weightStartButton.classList.toggle('opacity-60', !hasSelection);
+          weightStartButton.classList.toggle('pointer-events-none', !hasSelection);
+        }
+
+        function updateResumeVisibility() {
+          if (!weightResumeButton) {
+            return;
+          }
+          const shouldShow = !isWeightPanelOpen && weightState.entries.length > 0;
+          weightResumeButton.classList.toggle('hidden', !shouldShow);
+        }
+
+        function updateSelectionHint() {
+          if (!weightSelectionHint) {
+            return;
+          }
+          if (isWeightPanelOpen) {
+            weightSelectionHint.classList.add('hidden');
+            return;
+          }
+          const hasEntries = weightState.entries.length > 0;
+          const hasSelection = weightState.selectedSalons.length > 0;
+          weightSelectionHint.classList.remove('hidden');
+          if (hasEntries) {
+            weightSelectionHint.textContent = 'Registro pausado, toca continuar cuando retomes.';
+          } else if (hasSelection) {
+            weightSelectionHint.textContent = 'Listo para iniciar muestreo.';
+          } else {
+            weightSelectionHint.textContent = 'Selecciona al menos un salón para comenzar.';
+          }
+        }
+
+        function openWeightPanel(options) {
+          if (!weightPanel) {
+            return;
+          }
+          if (!weightState.selectedSalons.length) {
+            setStatus('Selecciona al menos un salón para iniciar.', 'warning');
+            return;
+          }
+          isWeightPanelOpen = true;
+          weightPanel.classList.remove('hidden');
+          if (weightIdleActions) {
+            weightIdleActions.classList.add('hidden');
+          }
+          updateActiveSalonsLabel();
+          updateSelectionHint();
+          renderWeightEntries();
+          updateResumeVisibility();
+          if (options && options.focus && weightInput) {
+            weightInput.focus();
+          }
+        }
+
+        function closeWeightPanel() {
+          if (!weightPanel) {
+            return;
+          }
+          if (!isWeightPanelOpen) {
+            return;
+          }
+          isWeightPanelOpen = false;
+          weightPanel.classList.add('hidden');
+          if (weightIdleActions) {
+            weightIdleActions.classList.remove('hidden');
+          }
+          updateResumeVisibility();
+          updateSelectionHint();
+        }
+
+        function autoPersistState(options) {
+          if (!canUseLocalStorage) {
+            return;
+          }
+          try {
+            const payloadToStore = {
+              version: 1,
+              salons: weightState.selectedSalons,
+              entries: weightState.entries,
+              updatedAt: new Date().toISOString(),
+            };
+            window.localStorage.setItem(weightStorageKey, JSON.stringify(payloadToStore));
+            weightState.lastSavedAt = Date.now();
+            if (options && options.feedback === 'explicit') {
+              weightState.dirty = false;
+              setStatus('Registro guardado en el dispositivo', 'success');
+            }
+          } catch (error) {
+            console.warn('No se pudo guardar el registro de pesos.', error);
+            if (options && options.feedback === 'explicit') {
+              setStatus('No pudimos guardar localmente', 'error');
+            }
+          }
+          updateResumeVisibility();
+        }
+
+        function clearStoredState() {
+          if (!canUseLocalStorage) {
+            return;
+          }
+          try {
+            window.localStorage.removeItem(weightStorageKey);
+          } catch (error) {
+            console.warn('No se pudo limpiar el registro de pesos.', error);
+          }
+        }
+
+        function computeWeightMetrics(entries) {
+          const total = Array.isArray(entries) ? entries.length : 0;
+          if (!total) {
+            return {
+              count: 0,
+              gramsAverage: null,
+              varianceGrams: null,
+              minGrams: null,
+              maxGrams: null,
+              uniformityPercent: null,
+              withinTolerance: 0,
+              tolerancePercent: weightTolerancePercent,
+            };
+          }
+          let sum = 0;
+          let min = entries[0].grams;
+          let max = entries[0].grams;
+          entries.forEach(function (entry) {
+            const value = entry.grams;
+            sum += value;
+            if (value < min) {
+              min = value;
+            }
+            if (value > max) {
+              max = value;
+            }
+          });
+          const average = sum / total;
+          const toleranceValue = average * (weightTolerancePercent / 100);
+          const lower = average - toleranceValue;
+          const upper = average + toleranceValue;
+          let withinTolerance = 0;
+          let varianceAccumulator = 0;
+          entries.forEach(function (entry) {
+            const value = entry.grams;
+            varianceAccumulator += Math.pow(value - average, 2);
+            if (value >= lower && value <= upper) {
+              withinTolerance += 1;
+            }
+          });
+          const variance = varianceAccumulator / total;
+          const uniformity = total ? (withinTolerance / total) * 100 : null;
+          return {
+            count: total,
+            gramsAverage: average,
+            varianceGrams: variance,
+            minGrams: min,
+            maxGrams: max,
+            uniformityPercent: uniformity,
+            withinTolerance: withinTolerance,
+            tolerancePercent: weightTolerancePercent,
+          };
+        }
+
+        function updateWeightSummary() {
+          if (!weightSummary) {
+            return;
+          }
+          weightLastMetrics = computeWeightMetrics(weightState.entries);
+          if (!weightLastMetrics || !weightLastMetrics.count) {
+            weightSummary.classList.add('hidden');
+            if (weightSampleWarning) {
+              weightSampleWarning.classList.add('hidden');
+            }
+            if (weightAverageNode) {
+              weightAverageNode.textContent = '—';
+            }
+            if (weightUniformityNode) {
+              weightUniformityNode.textContent = '—';
+            }
+            if (weightVarianceNode) {
+              weightVarianceNode.textContent = '—';
+            }
+            if (weightRangeNode) {
+              weightRangeNode.textContent = '—';
+            }
+            if (weightTotalCountNode) {
+              weightTotalCountNode.textContent = '0 aves';
+            }
+            if (weightCountNode) {
+              weightCountNode.textContent = '0 aves';
+            }
+            return;
+          }
+          weightSummary.classList.remove('hidden');
+          if (weightCountNode) {
+            weightCountNode.textContent = formatBirdCount(weightLastMetrics.count);
+          }
+          if (weightAverageNode) {
+            weightAverageNode.textContent = formatKg(weightLastMetrics.gramsAverage / 1000);
+          }
+          if (weightUniformityNode) {
+            weightUniformityNode.textContent = formatPercentage(weightLastMetrics.uniformityPercent);
+          }
+          if (weightVarianceNode) {
+            weightVarianceNode.textContent = formatVariance(weightLastMetrics.varianceGrams);
+          }
+          if (weightRangeNode) {
+            weightRangeNode.textContent = formatRange(weightLastMetrics.minGrams, weightLastMetrics.maxGrams);
+          }
+          if (weightTotalCountNode) {
+            weightTotalCountNode.textContent = formatBirdCount(weightLastMetrics.count);
+          }
+          if (weightSampleWarning) {
+            if (weightLastMetrics.count < weightMinimumSample) {
+              weightSampleWarning.textContent =
+                'Llevas ' +
+                formatCount(weightLastMetrics.count) +
+                ' aves de ' +
+                formatCount(weightMinimumSample) +
+                ' sugeridas.';
+              weightSampleWarning.classList.remove('hidden');
+            } else {
+              weightSampleWarning.classList.add('hidden');
+            }
+          }
+        }
+
+        function renderWeightEntries() {
+          if (!weightList || !weightEmptyState) {
+            return;
+          }
+          weightList.innerHTML = '';
+          if (!weightState.entries.length) {
+            weightEmptyState.classList.remove('hidden');
+            weightList.classList.add('hidden');
+            weightSummary && weightSummary.classList.add('hidden');
+            if (weightSampleWarning) {
+              weightSampleWarning.classList.add('hidden');
+            }
+            if (weightTotalCountNode) {
+              weightTotalCountNode.textContent = '0 aves';
+            }
+            if (weightCountNode) {
+              weightCountNode.textContent = '0 aves';
+            }
+            weightLastMetrics = null;
+            updateResumeVisibility();
+            updateSelectionHint();
+            return;
+          }
+          weightEmptyState.classList.add('hidden');
+          weightState.entries
+            .slice()
+            .reverse()
+            .forEach(function (entry) {
+              const badge = document.createElement('div');
+              badge.className =
+                'inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm shadow-emerald-100/60';
+              const valueButton = document.createElement('button');
+            valueButton.type = 'button';
+            valueButton.className =
+              'text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70';
+            valueButton.setAttribute('data-weight-edit', entry.id);
+            valueButton.textContent = formatKgLabel(entry.grams);
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className =
+              'inline-flex h-6 w-6 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-[11px] font-bold text-emerald-600 transition hover:border-emerald-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70';
+            removeButton.setAttribute('data-weight-remove', entry.id);
+            removeButton.setAttribute('aria-label', 'Eliminar peso');
+            removeButton.textContent = '×';
+            badge.appendChild(valueButton);
+            badge.appendChild(removeButton);
+            weightList.appendChild(badge);
+          });
+          weightList.classList.remove('hidden');
+          weightList.scrollTop = 0;
+          updateWeightSummary();
+          updateResumeVisibility();
+          updateSelectionHint();
+        }
+
+        function getWeightsClipboardPayload() {
+          if (!weightState.entries.length) {
+            return '';
+          }
+          return weightState.entries
+            .slice()
+            .reverse()
+            .map(function (entry) {
+              return String(Math.round(entry.grams));
+            })
+            .join('\n');
+        }
+
+        function copyWeightsToClipboard() {
+          const clipboardPayload = getWeightsClipboardPayload();
+          if (!clipboardPayload) {
+            return Promise.reject(new Error('empty'));
+          }
+          if (
+            typeof navigator !== 'undefined' &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.writeText === 'function'
+          ) {
+            return navigator.clipboard.writeText(clipboardPayload);
+          }
+          return new Promise(function (resolve, reject) {
+            let textarea = null;
+            try {
+              textarea = document.createElement('textarea');
+              textarea.value = clipboardPayload;
+              textarea.setAttribute('readonly', '');
+              textarea.style.position = 'fixed';
+              textarea.style.top = '-9999px';
+              textarea.style.opacity = '0';
+              document.body.appendChild(textarea);
+              textarea.select();
+              textarea.setSelectionRange(0, textarea.value.length);
+              const didCopy = document.execCommand('copy');
+              document.body.removeChild(textarea);
+              if (!didCopy) {
+                reject(new Error('copy-failed'));
+                return;
+              }
+              resolve();
+            } catch (error) {
+              if (textarea && textarea.parentNode) {
+                textarea.parentNode.removeChild(textarea);
+              }
+              reject(error);
+            }
+          });
+        }
+
+        function addWeightEntry(grams) {
+          if (!Number.isFinite(grams) || grams <= 0) {
+            return false;
+          }
+          weightState.entries.push({
+            id: createEntryId(),
+            grams: grams,
+            createdAt: new Date().toISOString(),
+          });
+          weightState.dirty = true;
+          renderWeightEntries();
+          autoPersistState({ silent: true });
+          return true;
+        }
+
+        function removeWeightEntry(entryId) {
+          const index = weightState.entries.findIndex(function (entry) {
+            return entry.id === entryId;
+          });
+          if (index === -1) {
+            return;
+          }
+          weightState.entries.splice(index, 1);
+          weightState.dirty = true;
+          renderWeightEntries();
+          autoPersistState({ silent: true });
+          setStatus('Peso eliminado', 'warning');
+        }
+
+        function editWeightEntry(entryId) {
+          const entry = weightState.entries.find(function (item) {
+            return item.id === entryId;
+          });
+          if (!entry) {
+            return;
+          }
+          const defaultValue = formatKgPlain(entry.grams / 1000).replace(/\s*kg$/, '');
+          const updated = window.prompt('Actualiza el peso', defaultValue);
+          if (updated === null) {
+            return;
+          }
+          const parsed = parseWeightInput(updated);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            setStatus('Ingresa un peso válido', 'error');
+            return;
+          }
+          entry.grams = parsed;
+          entry.updatedAt = new Date().toISOString();
+          weightState.dirty = true;
+          renderWeightEntries();
+          autoPersistState({ silent: true });
+          setStatus('Peso actualizado', 'info');
+        }
+
+        function loadWeightState() {
+          if (!canUseLocalStorage) {
+            return;
+          }
+          try {
+            const raw = window.localStorage.getItem(weightStorageKey);
+            if (!raw) {
+              return;
+            }
+            const saved = JSON.parse(raw);
+            if (saved && Array.isArray(saved.salons)) {
+              weightState.selectedSalons = saved.salons
+                .filter(function (salon) {
+                  return salon && salon.id;
+                })
+                .map(function (salon) {
+                  return {
+                    id: salon.id,
+                    label: salon.label || salon.id,
+                    barn: salon.barn || null,
+                    room: salon.room || null,
+                    farm: salon.farm || null,
+                    birds: salon.birds || null,
+                  };
+                });
+            }
+            if (saved && Array.isArray(saved.entries)) {
+              weightState.entries = saved.entries
+                .filter(function (entry) {
+                  return entry && Number.isFinite(Number(entry.grams)) && Number(entry.grams) > 0;
+                })
+                .map(function (entry) {
+                  return {
+                    id: entry.id || createEntryId(),
+                    grams: Number(entry.grams),
+                    createdAt: entry.createdAt || null,
+                  };
+                });
+            }
+            weightState.dirty = false;
+            weightState.lastSavedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) : null;
+            if (weightState.entries.length) {
+              setStatus('Registro listo para continuar', 'info');
+            }
+          } catch (error) {
+            console.warn('No se pudo cargar el registro de pesos.', error);
+          }
+        }
+
+        function handleAddWeight(valueOverride) {
+          const grams = Number.isFinite(valueOverride) ? valueOverride : parseWeightInput(weightInput ? weightInput.value : '');
+          if (!Number.isFinite(grams) || grams <= 0) {
+            setStatus('Ingresa un peso válido', 'error');
+            if (!Number.isFinite(valueOverride) && weightInput) {
+              weightInput.focus();
+            }
+            return;
+          }
+          if (addWeightEntry(grams) && weightInput) {
+            weightInput.value = '';
+            weightInput.focus();
+          }
+          setStatus('Peso agregado', 'info');
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+            telegram.HapticFeedback.impactOccurred('soft');
+          }
+        }
+
+        function handlePause() {
+          if (!weightState.entries.length) {
+            setStatus('Sin pesos pendientes por guardar', 'warning');
+            return;
+          }
+          if (!canUseLocalStorage) {
+            setStatus('Mantén la app abierta, no pudimos guardar localmente', 'error');
+            return;
+          }
+          autoPersistState({ feedback: 'explicit' });
+          closeWeightPanel();
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+            telegram.HapticFeedback.notificationOccurred('success');
+          }
+        }
+
+        function handleFinish() {
+          const count = weightState.entries.length;
+          const hasSelection = weightState.selectedSalons.length > 0;
+          if (!hasSelection) {
+            setStatus('Selecciona al menos un salón antes de enviar', 'error');
+            return;
+          }
+          if (!count) {
+            setStatus('Agrega pesos antes de enviar', 'error');
+            if (weightInput) {
+              weightInput.focus();
+            }
+            return;
+          }
+          if (count < weightMinimumSample) {
+            const proceed = window.confirm(
+              'Llevas ' +
+                formatCount(count) +
+                ' aves. ¿Quieres enviar el registro con una muestra menor a ' +
+                formatCount(weightMinimumSample) +
+                '?'
+            );
+            if (!proceed) {
+              setStatus('Completa al menos ' + formatCount(weightMinimumSample) + ' aves antes de enviar', 'warning');
+              return;
+            }
+          }
+          const metrics = computeWeightMetrics(weightState.entries);
+          const payloadToSend = {
+            action: 'weight-registry',
+            unit: weightUnitLabel,
+            tolerance_percent: weightTolerancePercent,
+            minimum_sample: weightMinimumSample,
+            salons: weightState.selectedSalons,
+            metrics: {
+              count: metrics.count,
+              average_grams: round(metrics.gramsAverage, 2),
+              average_kg: round(metrics.gramsAverage / 1000, 3),
+              variance_grams: round(metrics.varianceGrams, 2),
+              variance_kg: round(metrics.varianceGrams / 1000000, 4),
+              min_grams: round(metrics.minGrams, 2),
+              max_grams: round(metrics.maxGrams, 2),
+              uniformity_percent: round(metrics.uniformityPercent, 2),
+              within_tolerance: metrics.withinTolerance,
+              tolerance_percent: metrics.tolerancePercent,
+            },
+            entries_grams: weightState.entries.map(function (entry) {
+              return round(entry.grams, 2);
+            }),
+            saved_at: new Date().toISOString(),
+          };
+          try {
+            if (telegram && typeof telegram.sendData === 'function') {
+              telegram.sendData(JSON.stringify(payloadToSend));
+            }
+          } catch (error) {
+            console.info('No se pudo enviar el registro de pesos a Telegram:', error);
+          }
+          console.info('Registro de pesos', payloadToSend);
+          if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+            telegram.HapticFeedback.notificationOccurred('success');
+          }
+          setStatus('Registro enviado', 'success');
+          weightState.entries = [];
+          weightState.dirty = false;
+          weightState.lastSavedAt = null;
+          renderWeightEntries();
+          clearStoredState();
+          updateSelectionHint();
+        }
+
+        loadWeightState();
+        updateLocationButtons();
+        updateSelectedCounter();
+        updateStartButtonState();
+        updateActiveSalonsLabel();
+        renderWeightEntries();
+        updateResumeVisibility();
+        updateSelectionHint();
+        if (!weightState.entries.length) {
+          setStatus('Sin cambios', 'muted');
+        }
+        if (!canUseLocalStorage) {
+          setStatus('Mantén la app abierta, no guardaremos automáticamente', 'warning');
+        }
+
+        if (weightLocationButtons.length) {
+          weightLocationButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              const id = button.getAttribute('data-weight-location');
+              if (!id) {
+                return;
+              }
+              const label = button.getAttribute('data-weight-location-label') || id;
+              const existingIndex = weightState.selectedSalons.findIndex(function (salon) {
+                return salon.id === id;
+              });
+              if (existingIndex === -1) {
+                weightState.selectedSalons.push({
+                  id: id,
+                  label: label,
+                  farm: button.getAttribute('data-weight-location-farm') || null,
+                  barn: button.getAttribute('data-weight-location-barn') || null,
+                  room: button.getAttribute('data-weight-location-room') || null,
+                  birds: button.getAttribute('data-weight-location-birds') || null,
+                });
+                setStatus(label + ' agregado', 'info');
+              } else {
+                weightState.selectedSalons.splice(existingIndex, 1);
+                setStatus(label + ' retirado', 'warning');
+              }
+              weightState.dirty = true;
+              updateLocationButtons();
+              updateSelectedCounter();
+              updateActiveSalonsLabel();
+              updateStartButtonState();
+              updateSelectionHint();
+              autoPersistState({ silent: true });
+            });
+          });
+        }
+
+        if (weightStartButton) {
+          weightStartButton.addEventListener('click', function () {
+            openWeightPanel({ focus: true });
+            if (isWeightPanelOpen) {
+              setStatus('Registro en progreso', 'info');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
+              }
+            }
+          });
+        }
+
+        if (weightResumeButton) {
+          weightResumeButton.addEventListener('click', function () {
+            openWeightPanel({ focus: true });
+            if (isWeightPanelOpen) {
+              setStatus('Registro retomado', 'info');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
+              }
+            }
+          });
+        }
+
+        if (weightAddButton) {
+          weightAddButton.addEventListener('click', function () {
+            handleAddWeight();
+          });
+        }
+
+        if (weightInput) {
+          weightInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleAddWeight();
+            }
+          });
+        }
+
+        if (weightQuickButtons.length) {
+          weightQuickButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              const raw = button.getAttribute('data-weight-quick');
+              const grams = parseWeightInput(raw);
+              if (!Number.isFinite(grams) || grams <= 0) {
+                setStatus('Valor rápido inválido', 'error');
+                return;
+              }
+              handleAddWeight(grams);
+            });
+          });
+        }
+
+        if (weightList) {
+          weightList.addEventListener('click', function (event) {
+            const targetButton = event.target.closest('[data-weight-remove], [data-weight-edit]');
+            if (!targetButton) {
+              return;
+            }
+            event.preventDefault();
+            const removeId = targetButton.getAttribute('data-weight-remove');
+            const editId = targetButton.getAttribute('data-weight-edit');
+            if (removeId) {
+              removeWeightEntry(removeId);
+            } else if (editId) {
+              editWeightEntry(editId);
+            }
+          });
+        }
+
+        if (weightResetButton) {
+          weightResetButton.addEventListener('click', function () {
+            if (!weightState.entries.length) {
+              return;
+            }
+            const proceed = window.confirm('¿Vaciar la lista de pesos?');
+            if (!proceed) {
+              return;
+            }
+            weightState.entries = [];
+            weightState.dirty = true;
+            renderWeightEntries();
+            autoPersistState({ silent: true });
+            setStatus('Lista reiniciada', 'warning');
+          });
+        }
+
+        if (weightCopyButton) {
+          weightCopyButton.addEventListener('click', function () {
+            if (!weightState.entries.length) {
+              setStatus('No hay pesos para copiar', 'warning');
+              return;
+            }
+            copyWeightsToClipboard()
+              .then(function () {
+                setStatus('Pesos copiados al portapapeles', 'success');
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('success');
+                }
+              })
+              .catch(function () {
+                setStatus('No pudimos copiar los pesos', 'error');
+              });
+          });
+        }
+
+        if (weightPauseButton) {
+          weightPauseButton.addEventListener('click', function () {
+            handlePause();
+          });
+        }
+
+        if (weightFinishButton) {
+          weightFinishButton.addEventListener('click', function () {
+            handleFinish();
+          });
+        }
       }
 
         dispatchCreateTriggers.forEach(function (button) {
