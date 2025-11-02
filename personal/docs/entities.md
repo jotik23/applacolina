@@ -17,8 +17,9 @@ Representa un rol operativo disponible en un rango de fechas determinado.
 | `chicken_house` | Relación | No | Galpón específico (si aplica). |
 | `rooms` | Relación (múltiple) | No | Salones dentro del galpón (si aplica). |
 | `valid_from` / `valid_until` | Fecha | Sí / No | Ventana de vigencia. |
+| `handoff_position` | Relación | No | Posición que recibe el turno al finalizar la jornada de 12 horas. |
 
-**Impacto:** una posición se considera activa para una fecha si está dentro de su ventana de vigencia (`valid_from` ≤ fecha ≤ `valid_until` o sin fecha de retiro). El turno se infiere automáticamente según la categoría seleccionada (día, noche o mixto), por lo que no se edita manualmente.
+**Impacto:** una posición se considera activa para una fecha si está dentro de su ventana de vigencia (`valid_from` ≤ fecha ≤ `valid_until` o sin fecha de retiro). El turno se infiere automáticamente según la categoría seleccionada (día, noche o mixto), por lo que no se edita manualmente. El campo `handoff_position` enlaza la posición que recibe la entrega del turno en operaciones 24/7, lo que permite visualizar y auditar la cadena de relevos.
 
 ---
 

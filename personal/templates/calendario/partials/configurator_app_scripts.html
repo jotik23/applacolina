@@ -82,6 +82,23 @@
         return parts.join(' · ');
       };
 
+      const describeHandoffPosition = (position) => {
+        if (!position) {
+          return '';
+        }
+        const parts = [];
+        if (position.name) {
+          parts.push(position.name);
+        }
+        if (position.code) {
+          parts.push(`#${position.code}`);
+        }
+        if (position.farm?.name) {
+          parts.push(position.farm.name);
+        }
+        return parts.join(' · ');
+      };
+
       const refreshPositionHighlight = () => {
         if (state.metadata && refs.positionsBody) {
           renderPositions();
@@ -134,6 +151,7 @@
         positionFarm: app.querySelector('#position-farm'),
         positionHouse: app.querySelector('#position-house'),
         positionRooms: app.querySelector('#position-rooms'),
+        positionHandoff: app.querySelector('#position-handoff'),
         positionValidFrom: app.querySelector('#position-valid-from'),
         positionValidUntil: app.querySelector('#position-valid-until'),
         positionCancelBtn: app.querySelector('#position-cancel-btn'),
@@ -1088,6 +1106,63 @@
         updateRoomOptions(effectiveHouse, { selectedRooms, keepValue: false });
       };
 
+      const updateHandoffOptions = (
+        {
+          excludeId = null,
+          selected = '',
+          fallbackPosition = null,
+          keepValue = true,
+          farmId = null,
+        } = {}
+      ) => {
+        if (!refs.positionHandoff) {
+          return;
+        }
+        const selectedValue = selected ? String(selected) : '';
+        const targetFarm =
+          farmId !== null && farmId !== undefined && farmId !== '' ? String(farmId) : '';
+        const positions = Array.isArray(state.metadata?.positions) ? state.metadata.positions : [];
+        const items = positions
+          .filter((item) =>
+            excludeId == null ? true : Number(item.id) !== Number(excludeId)
+          )
+          .filter((item) => {
+            if (!targetFarm) {
+              return true;
+            }
+            const itemFarmId = item.farm?.id ? String(item.farm.id) : '';
+            return itemFarmId === targetFarm;
+          })
+          .map((item) => {
+            const label =
+              formatPositionLabel(item) ||
+              describeHandoffPosition(item) ||
+              `Posición ${item.id}`;
+            return {
+              value: String(item.id),
+              label,
+            };
+          });
+        if (
+          selectedValue &&
+          !items.some((item) => item.value === selectedValue) &&
+          fallbackPosition
+        ) {
+          const fallbackLabel =
+            describeHandoffPosition(fallbackPosition) || `Posición ${selectedValue}`;
+          items.unshift({
+            value: selectedValue,
+            label: fallbackLabel,
+          });
+        }
+        populateSelect(refs.positionHandoff, items, {
+          includeBlank: true,
+          blankLabel: 'Sin entrega asignada',
+          keepValue,
+          selectedValues: selectedValue ? [selectedValue] : [],
+        });
+      };
+
       const populateStaticOptions = () => {
         if (!state.metadata || state.orderLocked) {
           return;
@@ -1095,6 +1170,13 @@
 
         populateSelect(refs.positionCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
         populateSelect(refs.positionFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
+        const currentFarm = refs.positionFarm?.value || '';
+        const selectedHandoff = refs.positionHandoff?.value || '';
+        updateHandoffOptions({
+          farmId: currentFarm,
+          selected: selectedHandoff,
+          excludeId: state.editing.positionId,
+        });
 
         populateSelect(refs.operatorRoles, state.metadata.roles, { valueKey: 'id', labelKey: 'label', includeBlank: false, keepValue: false });
         if (refs.operatorSuggestedPositions) {
@@ -1118,7 +1200,7 @@
           keepValue: true,
         });
 
-        updateHouseOptions(refs.positionFarm?.value || '');
+        updateHouseOptions(currentFarm);
       };
 
       const getPositionPayload = () => ({
@@ -1129,6 +1211,7 @@
         rooms: Array.from(refs.positionRooms?.selectedOptions || []).map((option) => option.value),
         valid_from: refs.positionValidFrom?.value || '',
         valid_until: refs.positionValidUntil?.value || '',
+        handoff_position: refs.positionHandoff?.value || '',
       });
 
       const openPositionForm = (position = null) => {
@@ -1145,6 +1228,10 @@
           }
           const currentFarm = refs.positionFarm?.value || '';
           updateHouseOptions(currentFarm, { selectedHouse: '', selectedRooms: [], keepValue: false });
+          updateHandoffOptions({ excludeId: null, selected: '', farmId: currentFarm, keepValue: false });
+          if (refs.positionHandoff) {
+            refs.positionHandoff.value = '';
+          }
           if (refs.positionRooms) {
             Array.from(refs.positionRooms.options || []).forEach((option) => {
               option.selected = false;
@@ -1169,6 +1256,17 @@
             : [];
           refs.positionFarm.value = farmId;
           updateHouseOptions(farmId, { selectedHouse: houseId, selectedRooms: roomIds, keepValue: false });
+          const handoffId = position.handoff_position_id ? String(position.handoff_position_id) : '';
+          updateHandoffOptions({
+            excludeId: position.id,
+            selected: handoffId,
+            fallbackPosition: position.handoff_position || null,
+            keepValue: false,
+            farmId: farmId,
+          });
+          if (refs.positionHandoff) {
+            refs.positionHandoff.value = handoffId;
+          }
         }
         focusWrapper(refs.positionFormWrapper, refs.positionName);
       };
@@ -1182,6 +1280,11 @@
         }
         if (refs.positionCodeValue) {
           refs.positionCodeValue.textContent = '—';
+        }
+        const currentFarm = refs.positionFarm?.value || '';
+        updateHandoffOptions({ keepValue: false, farmId: currentFarm, excludeId: null, selected: '' });
+        if (refs.positionHandoff) {
+          refs.positionHandoff.value = '';
         }
       };
 
@@ -1419,7 +1522,17 @@
 
 
       refs.positionFarm?.addEventListener('change', (event) => {
-        updateHouseOptions(event.target.value, { selectedHouse: '', selectedRooms: [], keepValue: false });
+        const farmId = event.target.value || '';
+        updateHouseOptions(farmId, { selectedHouse: '', selectedRooms: [], keepValue: false });
+        updateHandoffOptions({
+          farmId,
+          excludeId: state.editing.positionId,
+          selected: '',
+          keepValue: false,
+        });
+        if (refs.positionHandoff) {
+          refs.positionHandoff.value = '';
+        }
       });
 
       refs.positionHouse?.addEventListener('change', (event) => {
@@ -1538,6 +1651,18 @@
             const farmLabel = position.farm?.name ? escapeHtml(position.farm.name) : '';
             const houseLabel = position.chicken_house?.name ? escapeHtml(position.chicken_house.name) : '';
             const roomLabels = (position.rooms || []).map((room) => escapeHtml(room.name)).join(', ');
+            const handoffId = position.handoff_position?.id ?? null;
+            let handoffLabel = '';
+            if (handoffId) {
+              const detailed =
+                state.lookups.positionsById.get(Number(handoffId)) ||
+                position.handoff_position;
+              const description =
+                describeHandoffPosition(detailed) ||
+                formatPositionLabel(detailed) ||
+                `Posición ${handoffId}`;
+              handoffLabel = escapeHtml(description);
+            }
             const isEditing = state.editing.positionId === position.id;
             const rowClassList = ['transition-colors', 'hover:bg-slate-50'];
             if (!position.is_active) {
@@ -1574,6 +1699,11 @@
                       ${
                         roomLabels
                           ? `<p class="mt-1 text-xs text-slate-500">Salones: ${roomLabels}</p>`
+                          : ''
+                      }
+                      ${
+                        handoffLabel
+                          ? `<p class="mt-1 text-xs text-slate-500">Entrega a: ${handoffLabel}</p>`
                           : ''
                       }
                     </div>

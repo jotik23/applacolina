@@ -1327,7 +1327,6 @@ def _build_telegram_mini_app_payload(
             "farm": "Granja La Colina",
             "barn": "Galpón 3",
             "rooms": ["Sala 1", "Sala 2"],
-            "handoff_from": "Camilo Ortiz",
             "handoff_to": "Lucía Pérez",
             "requires_confirmation": True,
             "confirmed": False,
@@ -3652,7 +3651,7 @@ def build_responsible_filter_groups() -> Sequence[FilterOptionGroup]:
     )
 
     positions = (
-        PositionDefinition.objects.select_related("farm", "chicken_house")
+        PositionDefinition.objects.select_related("farm", "chicken_house", "handoff_position")
         .order_by("display_order", "name")
         .only("id", "name", "farm__name", "chicken_house__name")
     )

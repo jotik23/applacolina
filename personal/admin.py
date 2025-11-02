@@ -94,12 +94,13 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
     )
     search_fields = ("code", "name")
     date_hierarchy = "valid_from"
+    autocomplete_fields = ("handoff_position",)
 
     def get_queryset(self, request) -> QuerySet:
         return (
             super()
             .get_queryset(request)
-            .select_related("farm", "chicken_house", "category")
+            .select_related("farm", "chicken_house", "category", "handoff_position")
             .prefetch_related("rooms")
         )
 

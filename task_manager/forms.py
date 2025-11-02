@@ -184,7 +184,7 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             TaskCategory.objects.filter(is_active=True).order_by("name")
         )
         self.fields["position"].queryset = (
-            PositionDefinition.objects.select_related("farm", "chicken_house")
+            PositionDefinition.objects.select_related("farm", "chicken_house", "handoff_position")
             .order_by("display_order", "name")
         )
         self.fields["collaborator"].queryset = (

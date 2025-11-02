@@ -83,9 +83,31 @@ class ShiftConfirmationFeatureTests(TestCase):
             status=CalendarStatus.APPROVED,
         )
 
+        next_position = PositionDefinition.objects.create(
+            name="Supervisor entrante",
+            code="SUP-BIO-002",
+            category=self.category,
+            farm=self.farm,
+            chicken_house=self.chicken_house,
+            valid_from=date(2024, 10, 1),
+            valid_until=date(2024, 12, 31),
+        )
+        previous_position = PositionDefinition.objects.create(
+            name="Supervisor saliente",
+            code="SUP-BIO-003",
+            category=self.category,
+            farm=self.farm,
+            chicken_house=self.chicken_house,
+            valid_from=date(2024, 10, 1),
+            valid_until=date(2024, 12, 31),
+            handoff_position=self.position,
+        )
+        self.position.handoff_position = next_position
+        self.position.save(update_fields=["handoff_position"])
+
         ShiftAssignment.objects.create(
             calendar=calendar,
-            position=self.position,
+            position=previous_position,
             date=reference_date - timedelta(days=1),
             operator=self.prev_operator,
         )
@@ -97,8 +119,8 @@ class ShiftConfirmationFeatureTests(TestCase):
         )
         ShiftAssignment.objects.create(
             calendar=calendar,
-            position=self.position,
-            date=reference_date + timedelta(days=1),
+            position=next_position,
+            date=reference_date,
             operator=self.next_operator,
         )
 
@@ -120,7 +142,6 @@ class ShiftConfirmationFeatureTests(TestCase):
         self.assertEqual(card.farm, self.farm.name)
         self.assertEqual(card.barn, self.chicken_house.name)
         self.assertEqual(card.rooms, sorted([self.room_a.name, self.room_b.name]))
-        self.assertEqual(card.handoff_from, self.prev_operator.get_full_name())
         self.assertEqual(card.handoff_to, self.next_operator.get_full_name())
         self.assertTrue(card.requires_confirmation)
         self.assertFalse(card.confirmed)
@@ -182,5 +203,4 @@ class ShiftConfirmationFeatureTests(TestCase):
         self.assertIsNotNone(card)
         assert card
 
-        self.assertEqual(card.handoff_from, self.prev_operator.get_full_name())
         self.assertEqual(card.handoff_to, self.next_operator.get_full_name())

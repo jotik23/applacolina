@@ -307,119 +307,12 @@
           {% endif %}
         </div>
       </header>
-
-      {% with shift=telegram_mini_app.shift_confirmation shift_empty=telegram_mini_app.shift_confirmation_empty %}
-{% if shift and mini_app_card_permissions.shift_confirmation %}
-      <section
-        class="rounded-3xl border border-emerald-200 bg-gradient-to-br from-white/95 via-emerald-50/90 to-sky-50/90 p-5 shadow-lg shadow-emerald-200/60"
-        data-shift-confirmation-card
-        data-requires-confirmation="{{ shift.requires_confirmation|yesno:'true,false' }}"
-        data-confirmed="{{ shift.confirmed|yesno:'true,false' }}"
-        {% if shift.storage_key %}data-storage-key="{{ shift.storage_key }}"{% endif %}
-      >
-        <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
-              <span aria-hidden="true">🗓️</span>
-              Confirma tu turno
-            </p>
-            <h2 class="text-xl font-semibold text-slate-900">{{ shift.greeting_label }}</h2>
-            <p class="mt-1 text-sm text-slate-700">
-              Tu turno es
-              <span class="font-semibold text-slate-900">{{ shift.summary_label }}</span>
-            </p>
-          </div>
-        </header>
-        <dl class="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
-          {% if shift.farm %}
-          <div>
-            <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Granja</dt>
-            <dd class="mt-1 font-semibold text-slate-900">{{ shift.farm }}</dd>
-          </div>
-          {% endif %}
-          {% if shift.barn %}
-          <div>
-            <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Galpón</dt>
-            <dd class="mt-1 font-semibold text-slate-900">{{ shift.barn }}</dd>
-          </div>
-          {% endif %}
-          {% if shift.rooms %}
-          <div class="sm:col-span-2">
-            <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Salones</dt>
-            <dd class="mt-1 font-semibold text-slate-900">{{ shift.rooms|join:", " }}</dd>
-          </div>
-          {% endif %}
-        </dl>
-        {% if shift.handoff_from or shift.handoff_to %}
-        <p class="mt-4 text-sm text-slate-700">
-          {% if shift.handoff_from and shift.handoff_to %}
-            Le recibo turno a <span class="font-semibold text-slate-900">{{ shift.handoff_from }}</span> y le entregaré turno a <span class="font-semibold text-slate-900">{{ shift.handoff_to }}</span>.
-          {% elif shift.handoff_from %}
-            Le recibo turno a <span class="font-semibold text-slate-900">{{ shift.handoff_from }}</span>.
-          {% elif shift.handoff_to %}
-            Le entregaré turno a <span class="font-semibold text-slate-900">{{ shift.handoff_to }}</span>.
-          {% endif %}
-        </p>
-        {% endif %}
-        <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-sm font-semibold uppercase tracking-wide text-emerald-600" data-shift-pending-label>Confirma tu turno para continuar.</p>
-          <p class="hidden text-sm font-semibold uppercase tracking-wide text-emerald-600" data-shift-confirmed-label>Turno confirmado</p>
-          <button
-            type="button"
-            class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200/70 transition hover:shadow-emerald-300/80 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
-            data-confirm-shift
-          >
-            Confirmar mi turno
-          </button>
-        </div>
-      {% endwith %}
-      </section>
-{% elif shift_empty and mini_app_card_permissions.shift_confirmation %}
-      <section
-        class="rounded-3xl border border-amber-200 bg-gradient-to-br from-white/95 via-amber-50/90 to-slate-50/90 p-5 shadow-lg shadow-amber-200/50"
-        data-shift-confirmation-card
-        data-requires-confirmation="true"
-        data-confirmed="false"
-        {% if shift_empty.storage_key %}data-storage-key="{{ shift_empty.storage_key }}"{% endif %}
-      >
-        <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600">
-              <span aria-hidden="true">✨</span>
-              Confirma tu turno
-            </p>
-            <h2 class="text-xl font-semibold text-slate-900">{{ shift_empty.greeting_label }}</h2>
-            <p class="mt-1 text-sm font-semibold text-slate-700">{{ shift_empty.headline }}</p>
-          </div>
-        </header>
-        <div class="mt-4 space-y-2 text-sm text-slate-700">
-          {% for line in shift_empty.body_lines %}
-          <p>{{ line }}</p>
-          {% endfor %}
-        </div>
-        <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-sm font-semibold uppercase tracking-wide text-amber-700" data-shift-pending-label>La mini app se desbloqueará cuando recibas tu turno.</p>
-          <p class="hidden text-sm font-semibold uppercase tracking-wide text-emerald-600" data-shift-confirmed-label>Gracias por confirmar.</p>
-          {% if mini_app_logout_url %}
-          <form method="post" action="{{ mini_app_logout_url }}">
-            {% csrf_token %}
-            <button
-              type="submit"
-              class="inline-flex items-center justify-center rounded-full border border-amber-200 bg-white px-6 py-3 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-100 transition hover:border-amber-300 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2"
-            >
-              {{ shift_empty.action_label }}
-            </button>
-          </form>
-          {% endif %}
-        </div>
-      </section>
-{% endif %}
-
+{% include "task_manager/includes/shift_confirmation_card.html" with shift=telegram_mini_app.shift_confirmation shift_empty=telegram_mini_app.shift_confirmation_empty %}
       <div
         data-mini-app-content
-        class="flex flex-col gap-5{% if shift and shift.requires_confirmation and not shift.confirmed %} pointer-events-none opacity-60 blur-sm{% elif shift_empty and mini_app_card_permissions.shift_confirmation %} pointer-events-none opacity-60 blur-sm{% endif %}"
-        aria-disabled="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% elif shift_empty and mini_app_card_permissions.shift_confirmation %}true{% else %}false{% endif %}"
-        data-guard-locked="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% elif shift_empty and mini_app_card_permissions.shift_confirmation %}true{% else %}false{% endif %}"
+        class="flex flex-col gap-5{% if telegram_mini_app.shift_confirmation and telegram_mini_app.shift_confirmation.requires_confirmation and not telegram_mini_app.shift_confirmation.confirmed %} pointer-events-none opacity-60 blur-sm{% elif telegram_mini_app.shift_confirmation_empty and mini_app_card_permissions.shift_confirmation %} pointer-events-none opacity-60 blur-sm{% endif %}"
+        aria-disabled="{% if telegram_mini_app.shift_confirmation and telegram_mini_app.shift_confirmation.requires_confirmation and not telegram_mini_app.shift_confirmation.confirmed %}true{% elif telegram_mini_app.shift_confirmation_empty and mini_app_card_permissions.shift_confirmation %}true{% else %}false{% endif %}"
+        data-guard-locked="{% if telegram_mini_app.shift_confirmation and telegram_mini_app.shift_confirmation.requires_confirmation and not telegram_mini_app.shift_confirmation.confirmed %}true{% elif telegram_mini_app.shift_confirmation_empty and mini_app_card_permissions.shift_confirmation %}true{% else %}false{% endif %}"
       >
 
       {% with telegram_mini_app.goals as goals %}
@@ -3491,7 +3384,6 @@
       </div>
 
       </div>
-      {% endwith %}
       {% else %}
       <section class="rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-xl shadow-slate-200/70 mini-app-blur">
         <header class="space-y-3 text-center">
@@ -3578,18 +3470,6 @@
         }
         var requires = card.getAttribute('data-requires-confirmation') === 'true';
         var isConfirmed = card.getAttribute('data-confirmed') === 'true';
-        var storageKey = card.getAttribute('data-storage-key');
-        var storedState = null;
-        try {
-          storedState = storageKey ? window.sessionStorage.getItem(storageKey) : null;
-        } catch (error) {
-          storedState = null;
-        }
-
-        if (storedState === 'confirmed') {
-          isConfirmed = true;
-        }
-
         var content = document.querySelector('[data-mini-app-content]');
         var confirmButton = card.querySelector('[data-confirm-shift]');
         var pendingLabel = card.querySelector('[data-shift-pending-label]');
@@ -3661,13 +3541,6 @@
 
           if (isConfirmed) {
             unlockInterface();
-            if (storageKey) {
-              try {
-                window.sessionStorage.setItem(storageKey, 'confirmed');
-              } catch (error) {
-                // Session storage is optional; ignore failures (e.g., private mode).
-              }
-            }
           } else if (requires) {
             lockInterface();
           } else {
@@ -3675,7 +3548,7 @@
           }
         }
 
-        if (requires && !isConfirmed && storedState !== 'confirmed') {
+        if (requires && !isConfirmed) {
           lockInterface();
         }
 

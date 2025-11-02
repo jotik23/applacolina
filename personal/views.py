@@ -1631,6 +1631,7 @@ def _choice_payload(choices: Iterable[tuple[str, str]]) -> List[dict[str, str]]:
 
 def _position_payload(position: PositionDefinition, *, reference_date: date | None = None) -> dict[str, Any]:
     active_reference = reference_date or UserProfile.colombia_today()
+    handoff = position.handoff_position
     return {
         "id": position.id,
         "name": position.name,
@@ -1662,6 +1663,16 @@ def _position_payload(position: PositionDefinition, *, reference_date: date | No
         "valid_from": position.valid_from.isoformat(),
         "valid_until": position.valid_until.isoformat() if position.valid_until else None,
         "is_active": position.is_active_on(active_reference),
+        "handoff_position": (
+            {
+                "id": handoff.id,
+                "name": handoff.name,
+                "code": handoff.code,
+            }
+            if handoff
+            else None
+        ),
+        "handoff_position_id": str(handoff.id) if handoff else "",
     }
 
 
@@ -2296,7 +2307,7 @@ class PositionReorderView(StaffRequiredMixin, View):
             return _json_error("La lista de posiciones contiene duplicados.")
 
         positions = list(
-            PositionDefinition.objects.select_related("farm", "chicken_house", "category")
+            PositionDefinition.objects.select_related("farm", "chicken_house", "category", "handoff_position")
             .prefetch_related("rooms")
             .order_by("display_order", "id")
         )
@@ -2325,7 +2336,7 @@ class PositionReorderView(StaffRequiredMixin, View):
 
         refreshed_positions = [
             _position_payload(position)
-            for position in PositionDefinition.objects.select_related("farm", "chicken_house", "category")
+            for position in PositionDefinition.objects.select_related("farm", "chicken_house", "category", "handoff_position")
             .prefetch_related("rooms")
             .order_by("display_order", "id")
         ]
@@ -2533,7 +2544,7 @@ class CalendarMetadataView(StaffRequiredMixin, View):
         farm_filter = request.GET.get("farm")
         reference_date = UserProfile.colombia_today()
 
-        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house", "category").prefetch_related("rooms")
+        position_qs = PositionDefinition.objects.select_related("farm", "chicken_house", "category", "handoff_position").prefetch_related("rooms")
         if farm_filter:
             try:
                 position_qs = position_qs.filter(farm_id=int(farm_filter))

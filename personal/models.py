@@ -416,6 +416,14 @@ class PositionDefinition(models.Model):
     )
     valid_from = models.DateField("Válido desde")
     valid_until = models.DateField("Válido hasta", null=True, blank=True)
+    handoff_position = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="handoff_sources",
+        null=True,
+        blank=True,
+        verbose_name="Entrega turno a",
+    )
 
     objects = PositionDefinitionQuerySet.as_manager()
 
@@ -443,6 +451,17 @@ class PositionDefinition(models.Model):
                     raise ValidationError("Debe seleccionar un galpón cuando se utilicen salones.")
                 if room_house_ids != {self.chicken_house_id}:
                     raise ValidationError("Todos los salones seleccionados deben pertenecer al galpón indicado.")
+
+        if self.handoff_position_id:
+            if self.pk and self.handoff_position_id == self.pk:
+                raise ValidationError(
+                    {"handoff_position": "La posición no puede entregarse turno a sí misma."}
+                )
+            handoff_farm_id = getattr(self.handoff_position, "farm_id", None)
+            if self.farm_id and handoff_farm_id and handoff_farm_id != self.farm_id:
+                raise ValidationError(
+                    {"handoff_position": "La posición de entrega debe pertenecer a la misma granja."}
+                )
 
     def save(self, *args, **kwargs) -> None:
         if not self.display_order:

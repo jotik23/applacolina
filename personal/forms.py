@@ -324,7 +324,18 @@ class PositionDefinitionForm(forms.ModelForm):
             "rooms",
             "valid_from",
             "valid_until",
+            "handoff_position",
         ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        handoff_field = self.fields.get("handoff_position")
+        if handoff_field:
+            queryset = PositionDefinition.objects.order_by("display_order", "name")
+            if self.instance.pk:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            handoff_field.queryset = queryset
+            handoff_field.required = False
 
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
@@ -344,6 +355,15 @@ class PositionDefinitionForm(forms.ModelForm):
                         "rooms",
                         "Todos los salones deben pertenecer al galpón seleccionado.",
                     )
+        handoff_position = cleaned_data.get("handoff_position")
+        farm = cleaned_data.get("farm")
+        if handoff_position and self.instance.pk and handoff_position.pk == self.instance.pk:
+            self.add_error("handoff_position", "La posición no puede entregarse turno a sí misma.")
+        if handoff_position and farm and handoff_position.farm_id != farm.id:
+            self.add_error(
+                "handoff_position",
+                "La posición de entrega debe pertenecer a la misma granja.",
+            )
         return cleaned_data
 
     @staticmethod

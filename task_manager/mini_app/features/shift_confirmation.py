@@ -34,7 +34,6 @@ class ShiftConfirmationCard:
     farm: Optional[str]
     barn: Optional[str]
     rooms: list[str]
-    handoff_from: Optional[str]
     handoff_to: Optional[str]
     requires_confirmation: bool
     confirmed: bool
@@ -72,6 +71,7 @@ def build_shift_confirmation_card(
             "position__category",
             "position__farm",
             "position__chicken_house",
+            "position__handoff_position",
         )
         .prefetch_related("position__rooms")
         .filter(
@@ -103,8 +103,7 @@ def build_shift_confirmation_card(
     barn = position.chicken_house.name if position.chicken_house_id else None
     rooms = sorted(room.name for room in position.rooms.all())
 
-    handoff_from = _resolve_adjacent_operator(position_id=position.pk, reference_date=target_date, offset=-1)
-    handoff_to = _resolve_adjacent_operator(position_id=position.pk, reference_date=target_date, offset=1)
+    handoff_to = _resolve_handoff_target_operator(position=position, reference_date=target_date)
 
     operator_name = (
         user.get_short_name()
@@ -133,7 +132,6 @@ def build_shift_confirmation_card(
         farm=farm,
         barn=barn,
         rooms=rooms,
-        handoff_from=handoff_from,
         handoff_to=handoff_to,
         requires_confirmation=True,
         confirmed=False,
@@ -142,36 +140,58 @@ def build_shift_confirmation_card(
     return card
 
 
-def _resolve_adjacent_operator(*, position_id: int, reference_date: date, offset: int) -> Optional[str]:
-    target = reference_date + timedelta(days=offset)
+def _resolve_handoff_target_operator(*, position, reference_date: date) -> Optional[str]:
+    if position and position.handoff_position_id:
+        if getattr(position, "handoff_position", None) and not position.handoff_position.is_active_on(reference_date):
+            operator: Optional[str] = None
+        else:
+            operator = _resolve_assignment_for_date(
+                position_ids=[position.handoff_position_id],
+                target_date=reference_date,
+            )
+        if operator:
+            return operator
+    return _resolve_adjacent_operator(position_id=position.pk, reference_date=reference_date, offset=1)
 
-    adjacent = (
-        ShiftAssignment.objects.select_related("operator")
+
+def _resolve_assignment_for_date(*, position_ids: list[int], target_date: date) -> Optional[str]:
+    if not position_ids:
+        return None
+
+    assignment = (
+        ShiftAssignment.objects.select_related("operator", "position")
         .filter(
-            position_id=position_id,
-            date=target,
+            position_id__in=position_ids,
+            date=target_date,
             calendar__status__in=(
                 CalendarStatus.MODIFIED,
                 CalendarStatus.APPROVED,
                 CalendarStatus.DRAFT,
             ),
-            calendar__start_date__lte=target,
-            calendar__end_date__gte=target,
+            calendar__start_date__lte=target_date,
+            calendar__end_date__gte=target_date,
         )
         .order_by(
             _STATUS_PRIORITY,
             "-calendar__updated_at",
             "-calendar__created_at",
             "calendar_id",
+            "position__display_order",
+            "position_id",
         )
         .first()
     )
 
-    if not adjacent or not adjacent.operator:
+    if not assignment or not assignment.operator:
         return None
 
-    display_name = adjacent.operator.get_full_name() or adjacent.operator.get_username()
+    display_name = assignment.operator.get_full_name() or assignment.operator.get_username()
     return display_name.strip()
+
+
+def _resolve_adjacent_operator(*, position_id: int, reference_date: date, offset: int) -> Optional[str]:
+    target = reference_date + timedelta(days=offset)
+    return _resolve_assignment_for_date(position_ids=[position_id], target_date=target)
 
 
 def _format_reference_date(target_date: date) -> str:
