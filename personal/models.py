@@ -308,6 +308,7 @@ class PositionCategoryCode(models.TextChoices):
     SUPERVISOR = "SUPERVISOR", _("Supervisor")
     LIDER_TECNICO = "LIDER_TECNICO", _("Líder técnico")
     OFICIOS_VARIOS = "OFICIOS_VARIOS", _("Oficios varios")
+    VACUNADOR = "VACUNADOR", _("Vacunador")
 
 
 class PositionCategory(models.Model):
