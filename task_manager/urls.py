@@ -1,7 +1,10 @@
 from django.urls import path
 
 from .views import (
+    mini_app_dev_logout_view,
     mini_app_logout_view,
+    telegram_mini_app_dev_demo_view,
+    telegram_mini_app_dev_view,
     telegram_mini_app_demo_view,
     telegram_mini_app_view,
     task_definition_create_view,
@@ -20,6 +23,9 @@ urlpatterns = [
     path("telegram/mini-app/", telegram_mini_app_view, name="telegram-mini-app"),
     path("telegram/mini-app/logout/", mini_app_logout_view, name="telegram-mini-app-logout"),
     path("telegram/mini-app/demo/", telegram_mini_app_demo_view, name="telegram-mini-app-demo"),
+    path("telegram/mini-app/dev/", telegram_mini_app_dev_view, name="telegram-mini-app-dev"),
+    path("telegram/mini-app/dev/logout/", mini_app_dev_logout_view, name="telegram-mini-app-dev-logout"),
+    path("telegram/mini-app/dev/demo/", telegram_mini_app_dev_demo_view, name="telegram-mini-app-dev-demo"),
     path("definitions/create/", task_definition_create_view, name="definition-create"),
     path("definitions/<int:pk>/", task_definition_detail_view, name="definition-detail"),
     path("definitions/<int:pk>/update/", task_definition_update_view, name="definition-update"),

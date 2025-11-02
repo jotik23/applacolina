@@ -2427,6 +2427,155 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
         return context
 
 
+class TaskManagerMiniAppDevView(generic.TemplateView):
+    """Render the operator experience for the mini app development variant."""
+
+    template_name = "task_manager/telegram_mini_app_dev.html"
+    form_class = MiniAppAuthenticationForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.mini_app_client = _resolve_mini_app_client(request)
+        self.telegram_auth_error: Optional[str] = None
+        self.telegram_user_payload: Optional[dict[str, object]] = None
+
+        if self.mini_app_client == MiniAppClient.TELEGRAM and not request.user.is_authenticated:
+            user, error = self._attempt_telegram_login(request)
+            if user:
+                backend = _default_auth_backend()
+                user.backend = backend  # type: ignore[attr-defined]
+                login(request, user)
+            else:
+                self.telegram_auth_error = error
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request=request, data=request.POST)
+        if form.is_valid():
+            login(request, form.get_user())
+            return redirect(request.path)
+
+        return self.render_to_response(self.get_context_data(form=form))
+
+    def _attempt_telegram_login(self, request) -> Tuple[Optional[UserProfile], Optional[str]]:
+        init_data = _get_telegram_init_data(request)
+        if not init_data:
+            return None, _("No se recibieron las credenciales de Telegram.")
+
+        bot = _resolve_default_mini_app_bot()
+        if not bot:
+            return None, _("No hay un bot de Telegram activo configurado para la mini app.")
+
+        try:
+            payload = _verify_telegram_signature(init_data, bot_token=bot.token)
+            user_payload = _extract_telegram_user(payload)
+        except ValueError as exc:
+            return None, str(exc)
+
+        telegram_user_id = user_payload.get("id")
+        chat_link = (
+            TelegramChatLink.objects.filter(bot=bot, telegram_user_id=telegram_user_id)
+            .select_related("user")
+            .first()
+        )
+
+        if not chat_link:
+            return None, _("No encontramos un chat verificado asociado a tu cuenta de Telegram.")
+
+        if chat_link.status != TelegramChatLink.Status.VERIFIED:
+            return None, _("Tu chat de Telegram aún no ha sido verificado.")
+
+        user = chat_link.user
+        if not getattr(user, "is_active", False):
+            return None, _("Tu cuenta está inactiva. Contacta al administrador.")
+
+        if not user.has_perm("task_manager.access_mini_app"):
+            return None, _("No tienes permisos para acceder a la mini app.")
+
+        self.telegram_user_payload = user_payload
+        self._refresh_chat_link_metadata(chat_link, user_payload)
+        return user, None
+
+    def _refresh_chat_link_metadata(self, chat_link: TelegramChatLink, user_payload: Mapping[str, object]) -> None:
+        update_fields: list[str] = []
+        for attr in ("username", "first_name", "last_name", "language_code"):
+            value = user_payload.get(attr)
+            if value is None:
+                continue
+            if getattr(chat_link, attr) != value:
+                setattr(chat_link, attr, value)
+                update_fields.append(attr)
+
+        chat_link.last_interaction_at = timezone.now()
+        update_fields.append("last_interaction_at")
+
+        if update_fields:
+            if "updated_at" not in update_fields:
+                update_fields.append("updated_at")
+            chat_link.save(update_fields=update_fields)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        user = getattr(self.request, "user", None)
+
+        has_authenticated_user = getattr(user, "is_authenticated", False)
+        has_access = has_authenticated_user and user.has_perm("task_manager.access_mini_app")
+
+        if has_access:
+            display_name = (user.get_full_name() or user.get_username() or "Operario").strip()
+            phone_number = getattr(user, "telefono", "") or ""
+            phone_number = str(phone_number).strip()
+            contact_handle = f"@{phone_number}" if phone_number else "@Sin teléfono"
+            role_label = _resolve_primary_group_label(user) or "Operario"
+            initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+            context["telegram_mini_app"] = _build_telegram_mini_app_payload(
+                date_label=date_format(today, "DATE_FORMAT"),
+                display_name=display_name,
+                contact_handle=contact_handle,
+                role=role_label,
+                initials=initials,
+            )
+            context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-dev-logout")
+        else:
+            context["telegram_mini_app"] = None
+            context["mini_app_logout_url"] = None
+
+        if not has_access:
+            form = kwargs.get("form") or self.form_class(request=self.request)
+            context["mini_app_form"] = form
+        else:
+            context["mini_app_form"] = None
+
+        context["mini_app_client"] = self.mini_app_client.value
+        context["telegram_integration_enabled"] = self.mini_app_client == MiniAppClient.TELEGRAM
+        context["telegram_auth_error"] = self.telegram_auth_error
+        context["mini_app_access_granted"] = has_access
+
+        return context
+
+
+class TaskManagerTelegramMiniAppDevDemoView(generic.TemplateView):
+    """Render a simplified, unauthenticated preview of the Telegram mini app (dev)."""
+
+    template_name = "task_manager/telegram_mini_app_dev.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        display_name = "Operario demo"
+        initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+        context["telegram_mini_app"] = _build_telegram_mini_app_payload(
+            date_label=date_format(today, "DATE_FORMAT"),
+            display_name=display_name,
+            contact_handle="@demo",
+            role="Vista previa",
+            initials=initials,
+        )
+        context["telegram_integration_enabled"] = False
+        return context
+
+
 def mini_app_logout_view(request):
     if request.method == "POST":
         logout(request)
@@ -2437,6 +2586,18 @@ def mini_app_logout_view(request):
 
 telegram_mini_app_view = TaskManagerMiniAppView.as_view()
 telegram_mini_app_demo_view = TaskManagerTelegramMiniAppDemoView.as_view()
+
+
+def mini_app_dev_logout_view(request):
+    if request.method == "POST":
+        logout(request)
+        return redirect("task_manager:telegram-mini-app-dev")
+
+    return redirect("task_manager:telegram-mini-app-dev")
+
+
+telegram_mini_app_dev_view = TaskManagerMiniAppDevView.as_view()
+telegram_mini_app_dev_demo_view = TaskManagerTelegramMiniAppDevDemoView.as_view()
 
 
 def _task_definition_redirect_url(task_id: int) -> str:
