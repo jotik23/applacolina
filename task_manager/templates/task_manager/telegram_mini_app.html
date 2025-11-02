@@ -586,430 +586,9 @@
         </div>
 
         <div class="space-y-4">
-          {% if mini_app_card_permissions.production %}
-          <article
-            class="relative overflow-hidden rounded-3xl border border-rose-200 bg-gradient-to-br from-white via-rose-50/95 to-amber-50/80 p-5 shadow-2xl shadow-rose-200/70"
-            data-task-card
-            data-task-title="Registro de producción diario"
-            data-production-card
-            data-production-active-hens="{{ telegram_mini_app.production_reference.active_hens|default:'' }}"
-          >
-            <div class="pointer-events-none absolute inset-y-0 right-0 hidden w-32 bg-gradient-to-l from-rose-100/80 via-transparent to-transparent sm:block"></div>
-            <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div class="space-y-2">
-                <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
-                  <span aria-hidden="true">🚨</span>
-                  Tarea crítica del día
-                </p>
-                <h3 class="text-lg font-semibold text-slate-900">Registro de producción diario</h3>
-                <div class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
-                  <span class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-rose-700">Crítica</span>
-                  <span class="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-700">Registro obligatorio</span>
-                  <span class="rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-slate-700">Producción</span>
-                </div>
-              </div>
-              <div class="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
-                <span class="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-700 shadow-sm shadow-rose-200/60">
-                  <span class="h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true"></span>
-                  Prioridad máxima
-                </span>
-              </div>
-            </header>
-            <div class="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                data-task-action="log-production"
-                data-production-section="consumption"
-                data-production-trigger
-              >
-                <span aria-hidden="true">🍽️</span>
-                Registrar consumo
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                data-task-action="log-production"
-                data-production-section="mortality"
-                data-production-trigger
-              >
-                <span aria-hidden="true">🩺</span>
-                Registrar mortalidad
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                data-task-action="log-production"
-                data-production-section="discard"
-                data-production-trigger
-              >
-                <span aria-hidden="true">♻️</span>
-                Registrar descarte
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                data-task-action="log-production"
-                data-production-section="production"
-                data-production-trigger
-              >
-                <span aria-hidden="true">📦</span>
-                Registrar producción
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition hover:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                data-task-action="log-production"
-                data-production-section="egg-weight"
-                data-production-trigger
-              >
-                <span aria-hidden="true">⚖️</span>
-                Registrar peso huevo
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-emerald-200 px-4 py-2 text-xs font-semibold text-emerald-600 shadow-sm shadow-emerald-100/40 transition hover:border-emerald-400 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                data-task-action="complete-production"
-              >
-                <span aria-hidden="true">✅</span>
-                Marcar como completada
-              </button>
-            </div>
-            <div
-              class="mt-4 rounded-2xl border border-rose-100 bg-white/80 p-4 text-xs text-slate-600 shadow-inner shadow-rose-100/50"
-              data-production-summary-card
-            >
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Resumen de tus registros</p>
-                <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
-                  <span aria-hidden="true">✨</span>
-                  En vivo
-                </span>
-              </div>
-              <ul class="mt-2 space-y-1 text-xs text-slate-600" data-production-summary-card-list>
-                <li>Consumo: —</li>
-                <li>Mortalidad: —</li>
-                <li>Descarte: —</li>
-                <li>Producción total: —</li>
-                <li>Peso promedio huevo: —</li>
-                <li>Porcentaje de postura: —</li>
-              </ul>
-            </div>
-            <div class="mt-4 space-y-3" data-production-editor>
-              <div
-                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
-                data-production-panel
-                data-section="consumption"
-              >
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <h4 class="text-sm font-semibold text-slate-900">Consumo</h4>
-                  <div class="inline-flex rounded-full bg-slate-100 p-1 text-xs font-semibold text-slate-600" data-consumption-toggle>
-                    <button
-                      type="button"
-                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm shadow-white/50 ring-1 ring-slate-200 transition data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:ring-rose-400"
-                      data-consumption-option
-                      data-unit="kg"
-                      data-state="active"
-                    >
-                      Kg
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-600 transition data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-rose-200/60 data-[state=active]:ring-rose-400"
-                      data-consumption-option
-                      data-unit="bultos"
-                    >
-                      Bultos
-                    </button>
-                  </div>
-                </div>
-                <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label
-                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 sm:col-span-2"
-                    data-consumption-panel
-                    data-unit="kg"
-                  >
-                    <span class="text-xs font-semibold text-slate-700">Total (kg)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      inputmode="decimal"
-                      placeholder="0"
-                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                      data-consumption-input
-                      data-unit="kg"
-                    />
-                  </label>
-                  <label
-                    class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 hidden sm:col-span-2"
-                    data-consumption-panel
-                    data-unit="bultos"
-                  >
-                    <span class="text-xs font-semibold text-slate-700">Total (bultos)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      inputmode="decimal"
-                      placeholder="0"
-                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                      data-consumption-input
-                      data-unit="bultos"
-                    />
-                  </label>
-                </div>
-                <div class="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
-                    data-production-save
-                    data-section="consumption"
-                  >
-                    Guardar consumo
-                  </button>
-                </div>
-              </div>
-              <div
-                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
-                data-production-panel
-                data-section="mortality"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <h4 class="text-sm font-semibold text-slate-900">Mortalidad</h4>
-                </div>
-                <label class="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  <span class="text-xs font-semibold text-slate-700">Aves</span>
-                  <input
-                    type="number"
-                    min="0"
-                    inputmode="numeric"
-                    placeholder="0"
-                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                    data-production-input="mortality"
-                  />
-                </label>
-                <div class="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
-                    data-production-save
-                    data-section="mortality"
-                  >
-                    Guardar mortalidad
-                  </button>
-                </div>
-              </div>
-              <div
-                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
-                data-production-panel
-                data-section="discard"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <h4 class="text-sm font-semibold text-slate-900">Descarte</h4>
-                </div>
-                <label class="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  <span class="text-xs font-semibold text-slate-700">Aves</span>
-                  <input
-                    type="number"
-                    min="0"
-                    inputmode="numeric"
-                    placeholder="0"
-                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                    data-production-input="discard"
-                  />
-                </label>
-                <div class="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
-                    data-production-save
-                    data-section="discard"
-                  >
-                    Guardar descarte
-                  </button>
-                </div>
-              </div>
-              <div
-                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
-                data-production-panel
-                data-section="egg-weight"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <h4 class="text-sm font-semibold text-slate-900">Peso promedio del huevo</h4>
-                </div>
-                <label class="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  <span class="text-xs font-semibold text-slate-700">Peso en gramos</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    inputmode="decimal"
-                    placeholder="0"
-                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-200/60"
-                    data-production-input="egg-weight"
-                  />
-                </label>
-                <div class="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    class="rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-200/70 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300/60"
-                    data-production-save
-                    data-section="egg-weight"
-                  >
-                    Guardar peso promedio
-                  </button>
-                </div>
-              </div>
-              <div
-                class="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-inner shadow-slate-100/60"
-                data-production-panel
-                data-section="production"
-              >
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <h4 class="text-sm font-semibold text-slate-900">Producción</h4>
-                  <div
-                    class="inline-flex rounded-full bg-slate-100 p-1 text-xs font-semibold text-slate-600"
-                    data-production-mode-toggle
-                  >
-                    <button
-                      type="button"
-                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm shadow-white/50 ring-1 ring-slate-200 transition data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:ring-emerald-300"
-                      data-production-mode-option
-                      data-mode="barn"
-                      data-state="active"
-                    >
-                      Galpón
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-full px-3 py-1 text-xs font-semibold text-slate-600 transition data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-emerald-200/60 data-[state=active]:ring-emerald-300"
-                      data-production-mode-option
-                      data-mode="room"
-                    >
-                      Salón
-                    </button>
-                  </div>
-                </div>
-                <div class="mt-3 space-y-3">
-                  <div class="grid gap-3 sm:grid-cols-2" data-production-output-panel data-mode="barn">
-                    <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                      <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
-                        Galpón 3
-                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        inputmode="numeric"
-                        placeholder="0"
-                        class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                        data-production-output
-                        data-barn="Galpón 3"
-                      />
-                    </label>
-                    <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                      <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
-                        Galpón 4
-                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        inputmode="numeric"
-                        placeholder="0"
-                        class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                        data-production-output
-                        data-barn="Galpón 4"
-                      />
-                    </label>
-                  </div>
-                  <div class="hidden space-y-3" data-production-output-panel data-mode="room">
-                    <div class="grid gap-3 sm:grid-cols-2">
-                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
-                          Galpón 3 · Sala 1
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          inputmode="numeric"
-                          placeholder="0"
-                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                          data-production-output
-                          data-room="Galpón 3 · Sala 1"
-                        />
-                      </label>
-                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
-                          Galpón 3 · Sala 2
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          inputmode="numeric"
-                          placeholder="0"
-                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                          data-production-output
-                          data-room="Galpón 3 · Sala 2"
-                        />
-                      </label>
-                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
-                          Galpón 4 · Sala 1
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          inputmode="numeric"
-                          placeholder="0"
-                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                          data-production-output
-                          data-room="Galpón 4 · Sala 1"
-                        />
-                      </label>
-                      <label class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                        <span class="flex items-center justify-between text-xs font-semibold text-slate-700">
-                          Galpón 4 · Sala 2
-                          <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Cartones</span>
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          inputmode="numeric"
-                          placeholder="0"
-                          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
-                          data-production-output
-                          data-room="Galpón 4 · Sala 2"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div class="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    class="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-200/70 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
-                    data-production-save
-                    data-section="production"
-                  >
-                    Guardar producción
-                  </button>
-                </div>
-              </div>
-            </div>
-          <div
-            class="mt-4 hidden rounded-2xl border border-emerald-200 bg-emerald-50/90 p-3 text-xs text-emerald-700 shadow-inner shadow-emerald-100/60"
-            data-production-complete-banner
-          >
-            <p class="font-semibold text-emerald-700">¡Registro listo!</p>
-            <p>Datos registrados. Si necesitas cambios, abre de nuevo la sección y ajusta.</p>
-          </div>
-        </article>
-        {% endif %}
+          {% include "task_manager/includes/mini_app_production_card.html" %}
 
-        {% with pending=telegram_mini_app.pending_classification %}
+          {% with pending=telegram_mini_app.pending_classification %}
           {% if pending and mini_app_card_permissions.pending_classification %}
             <article
               class="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/85 to-rose-50/65 p-5 shadow-xl shadow-slate-200/60"
@@ -5314,6 +4893,14 @@
             ? new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: '2-digit', month: 'short' })
             : null;
         const BULTO_IN_KG = 40;
+        const PRODUCTION_FIELD_LABELS = {
+          production: 'Producción total',
+          consumption: 'Consumo balanceado',
+          mortality: 'Mortalidad',
+          discard: 'Descarte',
+          average_egg_weight: 'Peso promedio del huevo',
+        };
+        let productionSaveInFlight = false;
         const productionState = {
           unit: 'kg',
           consumptionKg: '',
@@ -5368,6 +4955,236 @@
             return parsedAttribute;
           }
           return null;
+        }
+
+        function getProductionLots() {
+          if (!productionCard) {
+            return [];
+          }
+          return Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-lot]'));
+        }
+
+        function collectProductionEntry(lotNode) {
+          if (!lotNode) {
+            return null;
+          }
+          const batchId = lotNode.getAttribute('data-batch-id');
+          if (!batchId) {
+            showTaskFeedback(productionCard, 'No se pudo identificar el lote para registrar.', 'error');
+            return null;
+          }
+          const entry = {};
+          const numericBatch = parseInt(batchId, 10);
+          entry.bird_batch = Number.isFinite(numericBatch) ? numericBatch : batchId;
+          const required = ['production', 'consumption', 'mortality', 'discard'];
+          const optional = ['average_egg_weight'];
+          const fields = required.concat(optional);
+          let hasError = false;
+          fields.forEach(function (field) {
+            const input = lotNode.querySelector('[data-production-field=\"' + field + '\"]');
+            if (!input) {
+              return;
+            }
+            input.classList.remove('border-rose-300');
+            const value = typeof input.value === 'string' ? input.value.trim() : '';
+            if (!value && required.indexOf(field) !== -1) {
+              const label = PRODUCTION_FIELD_LABELS[field] || 'este campo';
+              const lotLabelNode = lotNode.querySelector('h4');
+              const lotLabel = lotLabelNode ? lotLabelNode.textContent.trim() : '';
+              const message = lotLabel
+                ? 'Completa ' + label + ' para ' + lotLabel + '.'
+                : 'Completa ' + label + ' antes de guardar.';
+              showTaskFeedback(productionCard, message, 'error');
+              input.classList.add('border-rose-300');
+              if (typeof input.focus === 'function') {
+                input.focus();
+              }
+              hasError = true;
+              return;
+            }
+            if (value !== '') {
+              entry[field] = value;
+            }
+          });
+          if (hasError) {
+            return null;
+          }
+          return entry;
+        }
+
+        function updateProductionFromResponse(productionPayload) {
+          if (!productionCard || !productionPayload) {
+            return;
+          }
+          if (productionPayload.submit_url) {
+            productionCard.setAttribute('data-production-submit-url', productionPayload.submit_url);
+          }
+          if (productionPayload.date) {
+            productionCard.setAttribute('data-production-date', productionPayload.date);
+          }
+          const lotNodes = getProductionLots();
+          const lotMap = {};
+          lotNodes.forEach(function (node) {
+            const id = node.getAttribute('data-batch-id');
+            if (id) {
+              lotMap[id] = node;
+            }
+          });
+          const lots = Array.isArray(productionPayload.lots) ? productionPayload.lots : [];
+          lots.forEach(function (lot) {
+            if (!lot || typeof lot.id === 'undefined') {
+              return;
+            }
+            const node = lotMap[String(lot.id)];
+            if (!node) {
+              return;
+            }
+            const record = lot.record || null;
+            const fieldValues = record
+              ? {
+                  production: record.production || '',
+                  consumption: record.consumption || '',
+                  mortality:
+                    record.mortality === 0 || record.mortality ? String(record.mortality) : '',
+                  discard: record.discard === 0 || record.discard ? String(record.discard) : '',
+                  average_egg_weight: record.average_egg_weight || '',
+                }
+              : {
+                  production: '',
+                  consumption: '',
+                  mortality: '',
+                  discard: '',
+                  average_egg_weight: '',
+                };
+            Object.keys(fieldValues).forEach(function (field) {
+              const input = node.querySelector('[data-production-field=\"' + field + '\"]');
+              if (input) {
+                input.value = fieldValues[field];
+                input.classList.remove('border-rose-300');
+              }
+            });
+            const lastContainer = node.querySelector('[data-production-last]');
+            if (lastContainer) {
+              if (record && record.last_updated_label) {
+                let html =
+                  'Última actualización: <span data-production-last-label>' +
+                  record.last_updated_label +
+                  '</span>';
+                if (record.last_actor) {
+                  html += ' · <span data-production-last-user>' + record.last_actor + '</span>';
+                }
+                lastContainer.innerHTML = html;
+                lastContainer.classList.remove('text-rose-500');
+              } else {
+                lastContainer.textContent = 'Sin registros previos para este lote.';
+                lastContainer.classList.add('text-rose-500');
+              }
+            }
+          });
+        }
+
+        function applyProductionSuccessStyles(button) {
+          if (!button) {
+            return;
+          }
+          if (!button.dataset.originalLabel) {
+            button.dataset.originalLabel = button.textContent.trim();
+          }
+          button.classList.remove(
+            'border-rose-200',
+            'bg-rose-600',
+            'shadow-rose-200/70',
+            'hover:bg-rose-700',
+            'focus:ring-rose-300/60'
+          );
+          button.classList.add(
+            'border-transparent',
+            'bg-emerald-500',
+            'shadow-emerald-200/70',
+            'hover:bg-emerald-600',
+            'focus:ring-emerald-300/60'
+          );
+          button.innerHTML = '<span aria-hidden=\"true\">💾</span><span>Guardar cambios</span>';
+          button.dataset.originalLabel = 'Guardar cambios';
+          button.disabled = false;
+        }
+
+        async function handleProductionComplete(button, title) {
+          if (productionSaveInFlight) {
+            return;
+          }
+          if (!productionCard) {
+            return;
+          }
+          const submitUrl = productionCard.getAttribute('data-production-submit-url');
+          if (!submitUrl) {
+            showTaskFeedback(productionCard, 'No encontramos la ruta para guardar los registros.', 'error');
+            return;
+          }
+          const lotNodes = getProductionLots();
+          if (!lotNodes.length) {
+            showTaskFeedback(productionCard, 'No hay lotes activos para registrar.', 'error');
+            return;
+          }
+          const entries = [];
+          for (let index = 0; index < lotNodes.length; index += 1) {
+            const lotEntry = collectProductionEntry(lotNodes[index]);
+            if (!lotEntry) {
+              return;
+            }
+            entries.push(lotEntry);
+          }
+          const payload = {
+            date: productionCard.getAttribute('data-production-date') || null,
+            lots: entries,
+          };
+          productionSaveInFlight = true;
+          setButtonLoading(button, true, 'Guardando...');
+          try {
+            const response = await fetch(submitUrl, {
+              method: 'POST',
+              credentials: 'include',
+              headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                csrfToken ? { 'X-CSRFToken': csrfToken } : {}
+              ),
+              body: JSON.stringify(payload),
+            });
+            const result = await parseJsonResponse(response);
+            if (result.status === 401 || result.status === 403) {
+              redirectToLogin();
+              return;
+            }
+            if (!result.ok || (result.data && result.data.error)) {
+              const errorMessage =
+                (result.data && result.data.error) || 'No fue posible guardar los registros. Intenta de nuevo.';
+              showTaskFeedback(productionCard, errorMessage, 'error');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('error');
+              }
+              return;
+            }
+            const data = result.data || {};
+            if (data.production) {
+              updateProductionFromResponse(data.production);
+            }
+            markProductionComplete();
+            applyProductionSuccessStyles(button);
+            showTaskFeedback(productionCard, 'Registros guardados correctamente.', 'success');
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('success');
+            }
+            sendTaskAction('complete-production', title || '', { section: 'production' });
+          } catch (error) {
+            console.warn('No se pudo guardar el registro de producción:', error);
+            showTaskFeedback(productionCard, 'No fue posible guardar los registros. Intenta de nuevo.', 'error');
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+              telegram.HapticFeedback.notificationOccurred('error');
+            }
+          } finally {
+            productionSaveInFlight = false;
+            setButtonLoading(button, false);
+          }
         }
 
         function formatDateLabel(value) {
@@ -8438,23 +8255,15 @@
               return;
             }
             let section = null;
+            if (action === 'complete-production') {
+              event.preventDefault();
+              handleProductionComplete(event.currentTarget, title);
+              return;
+            }
             if (action === 'log-production') {
               section = event.currentTarget.getAttribute('data-production-section') || 'consumption';
             }
-            if (action === 'complete-production') {
-              hideProductionPanels();
-              markProductionComplete();
-              if (!event.currentTarget.dataset.defaultLabel) {
-                event.currentTarget.dataset.defaultLabel = event.currentTarget.textContent.trim();
-              }
-              event.currentTarget.classList.remove('border', 'border-rose-200', 'hover:border-rose-400', 'hover:text-rose-600');
-              event.currentTarget.classList.add('bg-emerald-500', 'text-white', 'border-transparent');
-              event.currentTarget.innerHTML = '<span aria-hidden="true">✅</span><span>Completada</span>';
-              event.currentTarget.disabled = true;
-              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
-                telegram.HapticFeedback.notificationOccurred('success');
-              }
-            } else if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
+            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred) {
               telegram.HapticFeedback.impactOccurred('soft');
             }
             const extra = section ? { section: section } : undefined;

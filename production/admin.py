@@ -61,8 +61,14 @@ class BirdBatchRoomAllocationInline(admin.TabularInline):
 class ProductionRecordInline(admin.TabularInline):
     model = ProductionRecord
     extra = 1
-    fields = ("date", "production", "consumption", "mortality", "discard")
+    fields = ("date", "production", "consumption", "mortality", "discard", "average_egg_weight")
     ordering = ("-date",)
+
+    def save_model(self, request, obj, form, change):
+        if not obj.created_by:
+            obj.created_by = request.user
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(Farm)
@@ -116,10 +122,20 @@ class ProductionRecordAdmin(admin.ModelAdmin):
         "consumption",
         "mortality",
         "discard",
+        "average_egg_weight",
+        "updated_by",
+        "updated_at",
     )
     list_filter = ("bird_batch", "date")
     search_fields = ("bird_batch__id", "bird_batch__farm__name", "date")
     ordering = ("-date",)
+    readonly_fields = ("created_by", "updated_by", "recorded_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        if not obj.created_by:
+            obj.created_by = request.user
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(Room)

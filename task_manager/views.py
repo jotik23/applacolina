@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.contrib.auth import login, logout
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q, QuerySet
@@ -33,8 +34,11 @@ from production.models import ChickenHouse, Farm, Room
 from task_manager.mini_app.features import (
     build_shift_confirmation_card,
     build_shift_confirmation_empty_card,
+    build_production_registry,
+    persist_production_records,
     serialize_shift_confirmation_card,
     serialize_shift_confirmation_empty_card,
+    serialize_production_registry,
 )
 
 from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
@@ -589,6 +593,20 @@ def _mini_app_json_guard(request) -> Optional[JsonResponse]:
     return None
 
 
+def _extract_validation_message(exc: ValidationError) -> str:
+    if hasattr(exc, "message_dict") and exc.message_dict:
+        parts = []
+        for field, messages in exc.message_dict.items():
+            joined = ", ".join(str(msg) for msg in messages if msg)
+            if joined:
+                parts.append(f"{field}: {joined}")
+        if parts:
+            return " · ".join(parts)
+    if hasattr(exc, "messages") and exc.messages:
+        return " · ".join(str(msg) for msg in exc.messages if msg)
+    return str(exc)
+
+
 def _get_user_assignment_for_mini_app(pk: int, *, user: UserProfile) -> TaskAssignment:
     queryset = (
         TaskAssignment.objects.select_related(
@@ -963,6 +981,7 @@ def _build_telegram_mini_app_payload(
     include_shift_confirmation_stub: bool = True,
     user: Optional[UserProfile] = None,
     use_task_samples: bool = False,
+    production: Optional[dict[str, object]] = None,
 ) -> dict[str, object]:
     today = timezone.localdate()
     weekday_label = date_format(today, "l").capitalize()
@@ -1387,9 +1406,8 @@ def _build_telegram_mini_app_payload(
         category["percentage"] = percentage
 
     production_reference = {
-        "active_hens": 26800,
+        "active_hens": production.get("active_hens", 0) if production else 0,
         "label": _("Aves en postura activas"),
-        "target_posture_percent": 92.0,
     }
 
     weight_registry_locations = [
@@ -2681,6 +2699,7 @@ def _build_telegram_mini_app_payload(
             ],
         },
         "production_reference": production_reference,
+        "production": production,
         "weight_registry": weight_registry,
         "pending_classification": pending_classification_summary,
         "egg_workflow": egg_workflow,
@@ -2932,6 +2951,26 @@ class TaskManagerMiniAppView(generic.TemplateView):
                     shift_empty = build_shift_confirmation_empty_card(user=user, reference_date=today)
                     if shift_empty:
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
+            production_payload: Optional[dict[str, object]] = None
+            if card_permissions.get("production"):
+                registry = build_production_registry(user=user, reference_date=today)
+                if registry:
+                    production_payload = serialize_production_registry(registry)
+                submit_url = reverse("task_manager:mini-app-production-records")
+                if production_payload is not None:
+                    production_payload["submit_url"] = submit_url
+                else:
+                    production_payload = {
+                        "submit_url": submit_url,
+                        "lots": [],
+                        "active_hens": 0,
+                        "date": today.isoformat(),
+                        "date_label": date_format(today, "DATE_FORMAT"),
+                        "weekday_label": date_format(today, "l").capitalize(),
+                        "position_label": None,
+                        "chicken_house": None,
+                        "farm": None,
+                    }
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
@@ -2942,6 +2981,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 shift_confirmation_empty=shift_empty_payload,
                 include_shift_confirmation_stub=False,
                 user=user,
+                production=production_payload,
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
@@ -3297,6 +3337,69 @@ def mini_app_task_reset_view(request, pk: int):
             "status": "reset",
             "assignment_id": assignment.pk,
             "completed_on": None,
+        }
+    )
+
+
+@require_POST
+def mini_app_production_record_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_production_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para registrar la producción diaria.")},
+            status=403,
+        )
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    date_str = payload.get("date")
+    target_date = None
+    if date_str:
+        try:
+            target_date = date.fromisoformat(str(date_str))
+        except ValueError:
+            return JsonResponse({"error": _("La fecha del registro no es válida.")}, status=400)
+
+    registry = build_production_registry(user=user, reference_date=target_date or timezone.localdate())
+    if not registry:
+        return JsonResponse(
+            {"error": _("No encontramos lotes activos asociados a tu posición actual.")},
+            status=404,
+        )
+
+    if target_date and registry.date != target_date:
+        return JsonResponse(
+            {"error": _("La fecha enviada no coincide con el turno activo para registro.")},
+            status=400,
+        )
+
+    entries = payload.get("lots")
+    if not isinstance(entries, list):
+        return JsonResponse({"error": _("Debes enviar los registros por lote.")}, status=400)
+
+    try:
+        persist_production_records(registry=registry, entries=entries, user=user)
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    updated_registry = build_production_registry(user=user, reference_date=registry.date)
+    response_payload = None
+    if updated_registry:
+        response_payload = serialize_production_registry(updated_registry)
+        response_payload["submit_url"] = reverse("task_manager:mini-app-production-records")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "production": response_payload,
         }
     )
 

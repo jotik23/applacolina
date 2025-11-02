@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 class Farm(models.Model):
@@ -141,11 +143,42 @@ class ProductionRecord(models.Model):
     )
     mortality = models.PositiveIntegerField(verbose_name="Mortalidad")
     discard = models.PositiveIntegerField(verbose_name="Descarte")
+    average_egg_weight = models.DecimalField(
+        verbose_name="Peso promedio huevo (g)",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    recorded_at = models.DateTimeField("Registrado en", default=timezone.now, editable=False)
+    updated_at = models.DateTimeField("Actualizado en", auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="production_records_created",
+        null=True,
+        blank=True,
+        verbose_name="Registrado por",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="production_records_updated",
+        null=True,
+        blank=True,
+        verbose_name="Última modificación por",
+    )
 
     class Meta:
         verbose_name = "Registro de produccion"
         verbose_name_plural = "Registros de produccion"
         ordering = ("-date",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("bird_batch", "date"),
+                name="uniq_production_record_per_batch_date",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} · {self.production} · {self.bird_batch}"
