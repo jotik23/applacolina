@@ -296,6 +296,14 @@
               </div>
             </div>
           </div>
+          {% else %}
+          <div class="flex w-full items-center justify-center py-4 sm:flex-1">
+            <img
+              src="{% static 'task_manager/img/mini_app_motivation_placeholder.png' %}"
+              alt="La Colina Granjas"
+              class="h-24 w-24 object-contain drop-shadow-md sm:h-28 sm:w-28"
+            />
+          </div>
           {% endif %}
         </div>
       </header>

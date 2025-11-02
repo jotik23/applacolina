@@ -8,7 +8,6 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from django import forms
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, Q
@@ -18,6 +17,8 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views import View
+
+from applacolina.mixins import StaffRequiredMixin
 
 from .forms import (
     AssignmentCreateForm,
@@ -56,10 +57,16 @@ class CalendarPortalView(LoginView):
     redirect_authenticated_user = True
 
     def get_success_url(self):
-        return self.get_redirect_url() or reverse_lazy("personal:dashboard")
+        redirect_to = self.get_redirect_url()
+        if redirect_to:
+            return redirect_to
+        user = getattr(self.request, "user", None)
+        if user and getattr(user, "is_staff", False):
+            return reverse("personal:dashboard")
+        return reverse("task_manager:telegram-mini-app")
 
 
-class CalendarLogoutView(LoginRequiredMixin, LogoutView):
+class CalendarLogoutView(StaffRequiredMixin, LogoutView):
     # Explicitly allow GET requests; Django 5 restricts logout to POST by default.
     http_method_names = ["get", "head", "options", "post"]
     next_page = reverse_lazy("portal:login")
@@ -1799,7 +1806,7 @@ def _assignment_payload(assignment: Optional[ShiftAssignment]) -> Optional[dict[
 # ---------------------------------------------------------------------------
 
 
-class CalendarConfiguratorView(LoginRequiredMixin, View):
+class CalendarConfiguratorView(StaffRequiredMixin, View):
     template_name = "calendario/configurator.html"
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
@@ -1817,14 +1824,14 @@ class CalendarConfiguratorView(LoginRequiredMixin, View):
         )
 
 
-class CalendarDashboardView(LoginRequiredMixin, View):
+class CalendarDashboardView(StaffRequiredMixin, View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
         return redirect(_resolve_calendar_home_url())
 
 
-class CalendarCreateView(LoginRequiredMixin, View):
+class CalendarCreateView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -1870,7 +1877,7 @@ class CalendarCreateView(LoginRequiredMixin, View):
             status=201,
         )
 
-class CalendarDetailView(LoginRequiredMixin, View):
+class CalendarDetailView(StaffRequiredMixin, View):
     template_name = "calendario/calendar_detail.html"
 
     def get(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> Any:
@@ -2086,7 +2093,7 @@ class CalendarDetailView(LoginRequiredMixin, View):
         return redirect(reverse("personal:calendar-detail", args=[calendar.id]))
 
 
-class CalendarDeleteView(LoginRequiredMixin, View):
+class CalendarDeleteView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> Any:
@@ -2114,7 +2121,7 @@ class CalendarDeleteView(LoginRequiredMixin, View):
 # ---------------------------------------------------------------------------
 
 
-class CalendarGenerateView(LoginRequiredMixin, View):
+class CalendarGenerateView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2195,7 +2202,7 @@ class CalendarGenerateView(LoginRequiredMixin, View):
         return JsonResponse(response_payload, status=201)
 
 
-class OperatorCollectionView(LoginRequiredMixin, View):
+class OperatorCollectionView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2215,7 +2222,7 @@ class OperatorCollectionView(LoginRequiredMixin, View):
         return JsonResponse({"operator": _operator_payload(operator, reference_date=reference_date)}, status=201)
 
 
-class OperatorDetailView(LoginRequiredMixin, View):
+class OperatorDetailView(StaffRequiredMixin, View):
     http_method_names = ["patch"]
 
     def patch(self, request: HttpRequest, operator_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2251,7 +2258,7 @@ class OperatorDetailView(LoginRequiredMixin, View):
         return JsonResponse({"operator": _operator_payload(operator, reference_date=reference_date)})
 
 
-class PositionCollectionView(LoginRequiredMixin, View):
+class PositionCollectionView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2267,7 +2274,7 @@ class PositionCollectionView(LoginRequiredMixin, View):
         return JsonResponse({"position": _position_payload(position)}, status=201)
 
 
-class PositionReorderView(LoginRequiredMixin, View):
+class PositionReorderView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2324,7 +2331,7 @@ class PositionReorderView(LoginRequiredMixin, View):
         return JsonResponse({"positions": refreshed_positions})
 
 
-class PositionDetailView(LoginRequiredMixin, View):
+class PositionDetailView(StaffRequiredMixin, View):
     http_method_names = ["patch", "delete"]
 
     def patch(self, request: HttpRequest, position_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2352,7 +2359,7 @@ class PositionDetailView(LoginRequiredMixin, View):
         return JsonResponse({"status": "deleted"})
 
 
-class RestPeriodCollectionView(LoginRequiredMixin, View):
+class RestPeriodCollectionView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2400,7 +2407,7 @@ class RestPeriodCollectionView(LoginRequiredMixin, View):
         )
 
 
-class RestPeriodDetailView(LoginRequiredMixin, View):
+class RestPeriodDetailView(StaffRequiredMixin, View):
     http_method_names = ["patch", "delete"]
 
     def patch(self, request: HttpRequest, rest_period_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2472,7 +2479,7 @@ class RestPeriodDetailView(LoginRequiredMixin, View):
         )
 
 
-class CalendarApproveView(LoginRequiredMixin, View):
+class CalendarApproveView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2492,7 +2499,7 @@ class CalendarApproveView(LoginRequiredMixin, View):
         )
 
 
-class CalendarListView(LoginRequiredMixin, View):
+class CalendarListView(StaffRequiredMixin, View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2517,7 +2524,7 @@ class CalendarListView(LoginRequiredMixin, View):
         return JsonResponse({"results": response})
 
 
-class CalendarMetadataView(LoginRequiredMixin, View):
+class CalendarMetadataView(StaffRequiredMixin, View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2641,7 +2648,7 @@ class CalendarMetadataView(LoginRequiredMixin, View):
         return JsonResponse(response_payload)
 
 
-class CalendarSummaryView(LoginRequiredMixin, View):
+class CalendarSummaryView(StaffRequiredMixin, View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2713,7 +2720,7 @@ class CalendarSummaryView(LoginRequiredMixin, View):
         return JsonResponse(response_payload)
 
 
-class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
+class CalendarAssignmentCollectionView(StaffRequiredMixin, View):
     http_method_names = ["get", "post"]
 
     def get(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2814,7 +2821,7 @@ class CalendarAssignmentCollectionView(LoginRequiredMixin, View):
         return JsonResponse({"assignment": _assignment_payload(assignment)}, status=201)
 
 
-class CalendarAssignmentDetailView(LoginRequiredMixin, View):
+class CalendarAssignmentDetailView(StaffRequiredMixin, View):
     http_method_names = ["delete"]
 
     def delete(self, request: HttpRequest, calendar_id: int, assignment_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
@@ -2836,7 +2843,7 @@ class CalendarAssignmentDetailView(LoginRequiredMixin, View):
         return JsonResponse({"status": "deleted"})
 
 
-class CalendarEligibleOperatorsView(LoginRequiredMixin, View):
+class CalendarEligibleOperatorsView(StaffRequiredMixin, View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:

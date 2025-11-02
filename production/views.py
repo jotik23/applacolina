@@ -4,6 +4,8 @@ from typing import List, TypedDict
 from django.views.generic import TemplateView
 from django.utils import timezone
 
+from applacolina.mixins import StaffRequiredMixin
+
 
 class ProductionStats(TypedDict):
     name: str
@@ -39,7 +41,7 @@ class FarmOverview(TypedDict):
     barns: List[GalponMetrics]
 
 
-class ProductionHomeView(TemplateView):
+class ProductionHomeView(StaffRequiredMixin, TemplateView):
     """Render the landing page for the poultry production module."""
 
     template_name = "production/index.html"

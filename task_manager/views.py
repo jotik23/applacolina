@@ -11,7 +11,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.contrib.auth import login, logout
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q, QuerySet
@@ -26,6 +25,7 @@ from django.utils.translation import gettext as _
 from django.views import View, generic
 
 from notifications.models import TelegramBotConfig, TelegramChatLink
+from applacolina.mixins import StaffRequiredMixin
 
 from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
 from .models import TaskCategory, TaskDefinition, TaskStatus
@@ -180,7 +180,7 @@ def _resolve_primary_group_label(user: UserProfile) -> Optional[str]:
     return group.name if group else None
 
 
-class TaskManagerHomeView(generic.TemplateView):
+class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
     """Render a placeholder landing page for the task manager module."""
 
     template_name = "task_manager/index.html"
@@ -2675,7 +2675,7 @@ def serialize_task_definition(task: TaskDefinition) -> dict[str, object]:
     }
 
 
-class TaskDefinitionCreateView(LoginRequiredMixin, View):
+class TaskDefinitionCreateView(StaffRequiredMixin, View):
     """Persist a task definition from the quick-create side panel."""
 
     http_method_names = ["post"]
@@ -2701,7 +2701,7 @@ class TaskDefinitionCreateView(LoginRequiredMixin, View):
 task_definition_create_view = TaskDefinitionCreateView.as_view()
 
 
-class TaskDefinitionDetailView(LoginRequiredMixin, View):
+class TaskDefinitionDetailView(StaffRequiredMixin, View):
     """Return the serialized representation of a task definition."""
 
     http_method_names = ["get"]
@@ -2718,7 +2718,7 @@ class TaskDefinitionDetailView(LoginRequiredMixin, View):
 task_definition_detail_view = TaskDefinitionDetailView.as_view()
 
 
-class TaskDefinitionUpdateView(LoginRequiredMixin, View):
+class TaskDefinitionUpdateView(StaffRequiredMixin, View):
     """Update an existing task definition from the quick-create side panel."""
 
     http_method_names = ["post"]
@@ -2745,7 +2745,7 @@ class TaskDefinitionUpdateView(LoginRequiredMixin, View):
 task_definition_update_view = TaskDefinitionUpdateView.as_view()
 
 
-class TaskDefinitionDeleteView(LoginRequiredMixin, View):
+class TaskDefinitionDeleteView(StaffRequiredMixin, View):
     """Delete an existing task definition after confirmation."""
 
     http_method_names = ["post"]
@@ -2765,7 +2765,7 @@ class TaskDefinitionDeleteView(LoginRequiredMixin, View):
 task_definition_delete_view = TaskDefinitionDeleteView.as_view()
 
 
-class TaskDefinitionListView(LoginRequiredMixin, View):
+class TaskDefinitionListView(StaffRequiredMixin, View):
     """Return rendered task rows for incremental loading."""
 
     http_method_names = ["get"]
@@ -2810,7 +2810,7 @@ class TaskDefinitionListView(LoginRequiredMixin, View):
 task_definition_list_view = TaskDefinitionListView.as_view()
 
 
-class TaskDefinitionReorderView(LoginRequiredMixin, View):
+class TaskDefinitionReorderView(StaffRequiredMixin, View):
     """Persist manual ordering for task definitions."""
 
     http_method_names = ["post"]
