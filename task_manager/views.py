@@ -39,6 +39,22 @@ class MiniAppClient(Enum):
     WEB = "web"
 
 
+MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
+    "motivation": "task_manager.view_mini_app_motivation_card",
+    "shift_confirmation": "task_manager.view_mini_app_shift_confirmation_card",
+    "production": "task_manager.view_mini_app_production_card",
+    "production_summary": "task_manager.view_mini_app_production_summary_card",
+    "pending_classification": "task_manager.view_mini_app_pending_classification_card",
+    "transport_queue": "task_manager.view_mini_app_transport_queue_card",
+    "egg_stage": "task_manager.view_mini_app_egg_stage_cards",
+    "dispatch_form": "task_manager.view_mini_app_dispatch_form_card",
+    "dispatch_detail": "task_manager.view_mini_app_dispatch_detail_card",
+    "daily_roster": "task_manager.view_mini_app_daily_roster_card",
+    "leader_review": "task_manager.view_mini_app_leader_review_card",
+    "task": "task_manager.view_mini_app_task_cards",
+}
+
+
 def _resolve_mini_app_client(request) -> MiniAppClient:
     """Infer the client origin (Telegram, embedded app, or browser)."""
 
@@ -60,6 +76,19 @@ def _resolve_mini_app_client(request) -> MiniAppClient:
         return MiniAppClient.EMBEDDED
 
     return MiniAppClient.WEB
+
+
+def _resolve_mini_app_card_permissions(user, *, force_allow: bool = False) -> dict[str, bool]:
+    """Return the set of card permissions granted for the current user."""
+
+    if force_allow:
+        return {key: True for key in MINI_APP_CARD_PERMISSION_MAP}
+
+    flags = {key: False for key in MINI_APP_CARD_PERMISSION_MAP}
+    if not user or not getattr(user, "is_authenticated", False):
+        return flags
+
+    return {key: user.has_perm(permission) for key, permission in MINI_APP_CARD_PERMISSION_MAP.items()}
 
 
 def _resolve_default_mini_app_bot() -> Optional[TelegramBotConfig]:
@@ -2384,6 +2413,10 @@ class TaskManagerMiniAppView(generic.TemplateView):
 
         has_authenticated_user = getattr(user, "is_authenticated", False)
         has_access = has_authenticated_user and user.has_perm("task_manager.access_mini_app")
+        card_permissions = _resolve_mini_app_card_permissions(user)
+
+        if not has_access:
+            card_permissions = {key: False for key in MINI_APP_CARD_PERMISSION_MAP}
 
         if has_access:
             display_name = (user.get_full_name() or user.get_username() or "Operario").strip()

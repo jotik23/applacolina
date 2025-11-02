@@ -3,7 +3,7 @@ from __future__ import annotations
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.db.models import Q, QuerySet
 
 from . import models
@@ -15,6 +15,17 @@ try:
     admin.site.unregister(Group)
 except admin.sites.NotRegistered:  # pragma: no cover - defensive
     pass
+
+try:
+    admin.site.unregister(Permission)
+except admin.sites.NotRegistered:  # pragma: no cover - defensive
+    pass
+
+
+@admin.register(Permission)
+class RolePermissionAdmin(admin.ModelAdmin):
+    search_fields = ("name", "codename")
+    list_display = ("name", "content_type", "codename")
 
 
 @admin.register(UserGroup)
@@ -265,6 +276,8 @@ class OperatorRestPeriodAdmin(admin.ModelAdmin):
 class RolePermissionInline(admin.TabularInline):
     model = models.RolePermission
     extra = 0
+    autocomplete_fields = ("permission",)
+    fields = ("permission",)
 
 
 @admin.register(models.Role)
@@ -274,7 +287,7 @@ class RoleAdmin(admin.ModelAdmin):
     inlines = [RolePermissionInline]
 
     def permisos_count(self, obj: models.Role) -> int:
-        return obj.role_permissions.count()
+        return obj.permissions.count()
 
     permisos_count.short_description = "Cantidad de permisos"
 

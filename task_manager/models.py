@@ -262,6 +262,18 @@ class TaskDefinition(models.Model):
         ordering = ("display_order", "name", "pk")
         permissions = [
             ("access_mini_app", _("Puede acceder a la mini app de tareas")),
+            ("view_mini_app_motivation_card", _("Puede ver el card de motivación en la mini app")),
+            ("view_mini_app_shift_confirmation_card", _("Puede ver el card de confirmación de turno en la mini app")),
+            ("view_mini_app_production_card", _("Puede ver el card de producción en la mini app")),
+            ("view_mini_app_production_summary_card", _("Puede ver el card de resumen de producción en la mini app")),
+            ("view_mini_app_pending_classification_card", _("Puede ver el card de producciones pendientes en la mini app")),
+            ("view_mini_app_transport_queue_card", _("Puede ver el card de cola de transporte en la mini app")),
+            ("view_mini_app_egg_stage_cards", _("Puede ver los cards de etapas de huevo en la mini app")),
+            ("view_mini_app_dispatch_form_card", _("Puede ver el card de formulario de despacho en la mini app")),
+            ("view_mini_app_dispatch_detail_card", _("Puede ver el card de detalle de despacho en la mini app")),
+            ("view_mini_app_daily_roster_card", _("Puede ver el card de asignaciones diarias en la mini app")),
+            ("view_mini_app_leader_review_card", _("Puede ver el card de revisión de tareas en la mini app")),
+            ("view_mini_app_task_cards", _("Puede ver los cards de tareas en la mini app")),
         ]
 
     def __str__(self) -> str:

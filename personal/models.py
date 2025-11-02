@@ -87,6 +87,13 @@ class Role(models.Model):
         unique=True,
         choices=RoleName.choices,
     )
+    permissions = models.ManyToManyField(
+        Permission,
+        through="RolePermission",
+        related_name="roles",
+        blank=True,
+        verbose_name=_("Permisos"),
+    )
 
     class Meta:
         verbose_name = "Rol"
@@ -99,31 +106,27 @@ class Role(models.Model):
 
 
 class RolePermission(models.Model):
-    class PermissionCode(models.TextChoices):
-        VIEW_USERS = "view_users", "Ver usuarios"
-        MANAGE_USERS = "manage_users", "Gestionar usuarios"
-        VIEW_ROLES = "view_roles", "Ver roles"
-        MANAGE_ROLES = "manage_roles", "Gestionar roles"
-
     role = models.ForeignKey(
         Role,
         on_delete=models.CASCADE,
         related_name="role_permissions",
     )
-    permission_code = models.CharField(
-        max_length=64,
-        choices=PermissionCode.choices,
+    permission = models.ForeignKey(
+        Permission,
+        on_delete=models.CASCADE,
+        related_name="role_permissions",
     )
 
     class Meta:
         verbose_name = "Permiso por rol"
         verbose_name_plural = "Permisos por rol"
-        unique_together = ("role", "permission_code")
-        ordering = ["role__name", "permission_code"]
+        unique_together = ("role", "permission")
+        ordering = ["role__name", "permission__content_type__app_label", "permission__codename"]
         db_table = "users_rolepermission"
 
     def __str__(self) -> str:
-        return f"{self.role.get_name_display()} - {self.get_permission_code_display()}"
+        permission_name = getattr(self.permission, "name", "")
+        return f"{self.role.get_name_display()} - {permission_name or self.permission.codename}"
 
 
 class RestDayOfWeek(models.IntegerChoices):
