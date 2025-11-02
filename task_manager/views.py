@@ -21,7 +21,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
-from django.utils.text import slugify
+from django.utils.text import capfirst, slugify
 from django.utils.translation import gettext as _, ngettext
 from django.views import View, generic
 from django.views.decorators.http import require_POST
@@ -29,7 +29,15 @@ from django.views.decorators.http import require_POST
 from notifications.models import TelegramBotConfig, TelegramChatLink
 from applacolina.mixins import StaffRequiredMixin
 
-from personal.models import DayOfWeek, PositionDefinition, UserProfile
+from personal.models import (
+    CalendarStatus,
+    DayOfWeek,
+    OperatorRestPeriod,
+    PositionDefinition,
+    RestPeriodStatus,
+    ShiftAssignment,
+    UserProfile,
+)
 from production.models import ChickenHouse, Farm, Room
 from task_manager.mini_app.features import (
     build_shift_confirmation_card,
@@ -119,6 +127,22 @@ _TASK_STATE_THEME_MAP: dict[str, str] = {
 }
 
 _INCLUDE_STATES = frozenset({"pending", "in_progress", "reopened", "rejected", "overdue", "completed"})
+
+_CALENDAR_STATUS_BADGE_CLASS: dict[str | None, str] = {
+    CalendarStatus.DRAFT: "border border-amber-200 bg-amber-50 text-amber-700",
+    CalendarStatus.APPROVED: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    CalendarStatus.MODIFIED: "border border-sky-200 bg-sky-50 text-sky-700",
+    "manual": "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    None: "border border-slate-200 bg-slate-50 text-slate-600",
+}
+
+_CALENDAR_STATUS_THEME: dict[str | None, str] = {
+    CalendarStatus.DRAFT: "amber",
+    CalendarStatus.APPROVED: "emerald",
+    CalendarStatus.MODIFIED: "sky",
+    "manual": "emerald",
+    None: "slate",
+}
 
 
 def _build_demo_task_cards() -> list[dict[str, object]]:
@@ -258,6 +282,325 @@ def _build_demo_task_cards() -> list[dict[str, object]]:
             ],
         },
     ]
+
+
+def _format_compact_date_label(target_date: date) -> str:
+    """Return a compact date label like '05 Nov' honoring locale conventions."""
+
+    day_label = date_format(target_date, "d")
+    month_label = capfirst(date_format(target_date, "M").strip("."))
+    return f"{day_label} {month_label}"
+
+
+def _build_daily_assignment_day_payload(
+    *,
+    target_date: date,
+    reference_date: date,
+    calendar_status_key: Optional[str],
+    calendar_status_label: str,
+    is_rest: bool,
+    role_label: Optional[str],
+    farm_label: Optional[str],
+    barn_label: Optional[str],
+    shift_type_label: Optional[str],
+    rest_label: Optional[str],
+    rest_notes: Optional[str],
+    assignment_notes: Optional[str],
+    alerts: Optional[Iterable[str]] = None,
+) -> dict[str, object]:
+    today = timezone.localdate()
+    weekday_label = date_format(target_date, "l").capitalize()
+    weekday_short = date_format(target_date, "D").strip(".").capitalize()
+    date_label = _format_compact_date_label(target_date)
+    location_parts: list[str] = []
+    if farm_label:
+        location_parts.append(farm_label)
+    if barn_label:
+        location_parts.append(barn_label)
+    location_label = " · ".join(location_parts) if location_parts else None
+
+    badge_class = _CALENDAR_STATUS_BADGE_CLASS.get(calendar_status_key, _CALENDAR_STATUS_BADGE_CLASS[None])
+    calendar_theme = _CALENDAR_STATUS_THEME.get(calendar_status_key, _CALENDAR_STATUS_THEME[None])
+
+    payload = {
+        "date_iso": target_date.isoformat(),
+        "weekday_label": weekday_label,
+        "weekday_short_label": weekday_short,
+        "date_label": date_label,
+        "is_today": target_date == today,
+        "calendar_status": calendar_status_label,
+        "calendar_status_key": calendar_status_key,
+        "calendar_status_badge_class": badge_class,
+        "calendar_status_theme": calendar_theme,
+        "is_rest": is_rest,
+        "role_label": role_label,
+        "farm_label": farm_label,
+        "barn_label": barn_label,
+        "location_label": location_label,
+        "shift_type_label": shift_type_label,
+        "rest_label": rest_label,
+        "rest_notes": rest_notes,
+        "assignment_notes": assignment_notes,
+        "alerts": [alert for alert in (alerts or []) if alert],
+    }
+    # Preserve reference to initial comparison day for consumers that rely on it.
+    payload["is_reference_day"] = target_date == reference_date
+    return payload
+
+
+def _build_sample_daily_assignment_schedule(
+    *,
+    reference_date: date,
+    max_days: int = 6,
+) -> dict[str, object]:
+    """Provide a deterministic sample schedule for demo and fallback contexts."""
+
+    samples = [
+        {
+            "offset": 0,
+            "calendar_status_key": CalendarStatus.APPROVED,
+            "calendar_status_label": CalendarStatus.APPROVED.label,
+            "is_rest": False,
+            "role_label": "Auxiliar operativo - Galpón 3",
+            "farm_label": "Granja La Colina",
+            "barn_label": "Galpón 3",
+            "shift_type_label": "Turno diurno",
+            "assignment_notes": _("Ingreso programado a las 06:00."),
+        },
+        {
+            "offset": 1,
+            "calendar_status_key": CalendarStatus.APPROVED,
+            "calendar_status_label": CalendarStatus.APPROVED.label,
+            "is_rest": False,
+            "role_label": "Apoyo sanitario - Galpón 2",
+            "farm_label": "Granja La Colina",
+            "barn_label": "Galpón 2",
+            "shift_type_label": "Turno diurno",
+        },
+        {
+            "offset": 2,
+            "calendar_status_key": CalendarStatus.APPROVED,
+            "calendar_status_label": CalendarStatus.APPROVED.label,
+            "is_rest": True,
+            "rest_label": _("Descanso programado"),
+            "rest_notes": _("Rota al turno nocturno al finalizar el descanso."),
+        },
+        {
+            "offset": 3,
+            "calendar_status_key": CalendarStatus.MODIFIED,
+            "calendar_status_label": CalendarStatus.MODIFIED.label,
+            "is_rest": False,
+            "role_label": "Supervisor de bioseguridad",
+            "farm_label": "Granja La Primavera",
+            "barn_label": "Galpón 1",
+            "shift_type_label": "Turno nocturno",
+            "assignment_notes": _("Cambio realizado por ajuste operativo."),
+        },
+        {
+            "offset": 4,
+            "calendar_status_key": CalendarStatus.MODIFIED,
+            "calendar_status_label": CalendarStatus.MODIFIED.label,
+            "is_rest": False,
+            "role_label": "Registro y trazabilidad",
+            "farm_label": "Granja La Primavera",
+            "barn_label": None,
+            "shift_type_label": "Turno nocturno",
+        },
+        {
+            "offset": 5,
+            "calendar_status_key": "manual",
+            "calendar_status_label": _("Manual"),
+            "is_rest": True,
+            "rest_label": _("Descanso flexible"),
+            "rest_notes": _("Acordado con el líder de turno."),
+        },
+    ][:max_days]
+
+    days: list[dict[str, object]] = []
+    for entry in samples:
+        target_date = reference_date + timedelta(days=entry["offset"])
+        day_payload = _build_daily_assignment_day_payload(
+            target_date=target_date,
+            reference_date=reference_date,
+            calendar_status_key=entry.get("calendar_status_key"),
+            calendar_status_label=entry.get("calendar_status_label") or "",
+            is_rest=entry.get("is_rest", False),
+            role_label=entry.get("role_label"),
+            farm_label=entry.get("farm_label"),
+            barn_label=entry.get("barn_label"),
+            shift_type_label=entry.get("shift_type_label"),
+            rest_label=entry.get("rest_label"),
+            rest_notes=entry.get("rest_notes"),
+            assignment_notes=entry.get("assignment_notes"),
+        )
+        days.append(day_payload)
+
+    for index, day in enumerate(days):
+        day["index"] = index
+
+    initial_index = next((day["index"] for day in days if day.get("is_today")), 0) if days else 0
+    initial_day = days[initial_index] if days else None
+
+    return {
+        "current_date_iso": reference_date.isoformat(),
+        "initial_index": initial_index,
+        "initial_day": initial_day,
+        "days": days,
+    }
+
+
+def _resolve_operator_daily_assignments(
+    *,
+    user: Optional[UserProfile],
+    reference_date: date,
+    max_days: int = 6,
+    use_samples: bool = False,
+) -> dict[str, object]:
+    """Return the next available assignment/rest days for the operator."""
+
+    if use_samples or not user:
+        return _build_sample_daily_assignment_schedule(reference_date=reference_date, max_days=max_days)
+
+    search_horizon = reference_date + timedelta(days=45)
+
+    assignments_qs = (
+        ShiftAssignment.objects.select_related(
+            "calendar",
+            "position",
+            "position__category",
+            "position__farm",
+            "position__chicken_house",
+        )
+        .filter(
+            operator=user,
+            date__gte=reference_date,
+            date__lte=search_horizon,
+        )
+        .order_by("date", "calendar__start_date", "position__display_order", "position__code")
+    )
+
+    assignments_by_day: dict[date, list[ShiftAssignment]] = {}
+    for assignment in assignments_qs:
+        assignments_by_day.setdefault(assignment.date, []).append(assignment)
+
+    # Consider manual and calendar-generated rests except cancelled ones.
+    rest_periods = (
+        OperatorRestPeriod.objects.select_related("calendar")
+        .filter(
+            operator=user,
+            start_date__lte=search_horizon,
+            end_date__gte=reference_date,
+        )
+        .exclude(status__in=[RestPeriodStatus.CANCELLED, RestPeriodStatus.EXPIRED])
+        .order_by("start_date", "id")
+    )
+
+    rest_by_day: dict[date, OperatorRestPeriod] = {}
+    for period in rest_periods:
+        current = max(period.start_date, reference_date)
+        limit = min(period.end_date, search_horizon)
+        while current <= limit:
+            rest_by_day.setdefault(current, period)
+            current += timedelta(days=1)
+
+    days: list[dict[str, object]] = []
+    cursor = reference_date
+    horizon_limit = search_horizon
+
+    while cursor <= horizon_limit and len(days) < max_days:
+        day_assignments = assignments_by_day.get(cursor, [])
+        rest_period = rest_by_day.get(cursor)
+        if not day_assignments and not rest_period:
+            cursor += timedelta(days=1)
+            continue
+
+        assignment = day_assignments[0] if day_assignments else None
+        alerts: list[str] = []
+        calendar = getattr(assignment, "calendar", None)
+        calendar_status_key: Optional[str] = getattr(calendar, "status", None)
+        calendar_status_label = calendar.get_status_display() if calendar else _("Sin estado")
+
+        if rest_period and not calendar_status_label:
+            period_calendar = getattr(rest_period, "calendar", None)
+            if period_calendar:
+                calendar_status_key = period_calendar.status
+                calendar_status_label = period_calendar.get_status_display()
+            else:
+                calendar_status_key = "manual"
+                calendar_status_label = _("Manual")
+
+        if assignment and rest_period:
+            alerts.append(
+                _("Tienes un descanso y un turno asignado el mismo día. Consulta a tu líder para validar.")
+            )
+
+        role_label: Optional[str] = None
+        farm_label: Optional[str] = None
+        barn_label: Optional[str] = None
+        shift_type_label: Optional[str] = None
+        assignment_notes: Optional[str] = None
+
+        if assignment:
+            position = getattr(assignment, "position", None)
+            assignment_notes = assignment.notes or ""
+            if position:
+                if getattr(position, "name", None):
+                    role_label = position.name
+                elif getattr(position, "code", None):
+                    role_label = position.code
+                farm = getattr(position, "farm", None)
+                if farm and getattr(farm, "name", None):
+                    farm_label = farm.name
+                barn = getattr(position, "chicken_house", None)
+                if barn and getattr(barn, "name", None):
+                    barn_label = barn.name
+                category = getattr(position, "category", None)
+                if category and getattr(category, "shift_type", None):
+                    try:
+                        shift_type_label = category.get_shift_type_display()  # type: ignore[attr-defined]
+                    except AttributeError:
+                        shift_type_label = getattr(category, "shift_type", None)
+
+        rest_label: Optional[str] = None
+        rest_notes: Optional[str] = None
+        if rest_period:
+            status_display = rest_period.get_status_display()
+            rest_label = status_display or _("Descanso")
+            rest_notes = rest_period.notes or ""
+            if not calendar_status_label:
+                calendar_status_label = _("Manual")
+                calendar_status_key = "manual"
+
+        day_payload = _build_daily_assignment_day_payload(
+            target_date=cursor,
+            reference_date=reference_date,
+            calendar_status_key=calendar_status_key,
+            calendar_status_label=calendar_status_label,
+            is_rest=bool(rest_period) and not assignment,
+            role_label=role_label,
+            farm_label=farm_label,
+            barn_label=barn_label,
+            shift_type_label=shift_type_label,
+            rest_label=rest_label,
+            rest_notes=rest_notes,
+            assignment_notes=assignment_notes,
+            alerts=alerts,
+        )
+        days.append(day_payload)
+        cursor += timedelta(days=1)
+
+    for index, day in enumerate(days):
+        day["index"] = index
+
+    initial_index = next((day["index"] for day in days if day.get("is_today")), 0) if days else 0
+    initial_day = days[initial_index] if days else None
+
+    return {
+        "current_date_iso": reference_date.isoformat(),
+        "initial_index": initial_index,
+        "initial_day": initial_day,
+        "days": days,
+    }
 
 
 def _normalize_status_slug(name: Optional[str]) -> str:
@@ -1829,293 +2172,12 @@ def _build_telegram_mini_app_payload(
 
     tasks = _resolve_daily_task_cards(user=user, reference_date=today, use_sample_tasks=use_task_samples)
 
-    roster_seed = [
-        {
-            "date": day_minus_2,
-            "assignments": [
-                {
-                    "position_label": "Supervisor de bioseguridad",
-                    "collaborator": "Mateo Rojas",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Granja La Colina · Galpón 3",
-                    "status": "completed",
-                    "status_label": _("Ejecutado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Operario sanitario - Galpón 2",
-                    "collaborator": "Luisa Méndez",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Sanidad",
-                    "location": "Galpón 2 · Línea A",
-                    "status": "completed",
-                    "status_label": _("Ejecutado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Registro y trazabilidad",
-                    "collaborator": "Andrés Villa",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Control de producción",
-                    "location": "Sala de control",
-                    "status": "completed",
-                    "status_label": _("Ejecutado"),
-                    "status_theme": "emerald",
-                },
-            ],
-            "rests": [
-                {
-                    "collaborator": "Camilo Ortiz",
-                    "reason": _("Descanso compensatorio"),
-                    "notes": _("Retorna al turno nocturno el 05 Nov."),
-                }
-            ],
-        },
-        {
-            "date": day_minus_1,
-            "assignments": [
-                {
-                    "position_label": "Líder de turno - Galpón 3",
-                    "collaborator": "Gabriela Melo",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Granja La Colina",
-                    "status": "completed",
-                    "status_label": _("Ejecutado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Auxiliar operativo - Galpón 3",
-                    "collaborator": "Luis Fernando Gil",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Galpón 3 · Sala 1",
-                    "status": "completed",
-                    "status_label": _("Ejecutado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Respaldo polivalente",
-                    "collaborator": "María Fernanda Ruiz",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Apoyo transversal",
-                    "location": "Rotativo",
-                    "status": "completed",
-                    "status_label": _("Ejecutado"),
-                    "status_theme": "emerald",
-                },
-            ],
-            "rests": [
-                {
-                    "collaborator": "Lucía Pérez",
-                    "reason": _("Descanso por rotación"),
-                    "notes": _("Reincorpora 06 Nov en turno diurno."),
-                }
-            ],
-        },
-        {
-            "date": today,
-            "assignments": [
-                {
-                    "position_label": "Líder de turno - Galpón 3",
-                    "collaborator": "Gabriela Melo",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Granja La Colina",
-                    "status": "confirmed",
-                    "status_label": _("Confirmado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Auxiliar operativo - Galpón 3",
-                    "collaborator": "Luis Fernando Gil",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Galpón 3 · Sala 1",
-                    "status": "confirmed",
-                    "status_label": _("Confirmado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Apoyo sanitario - Galpón 2",
-                    "collaborator": "Sandra Leal",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Sanidad",
-                    "location": "Galpón 2 · Línea B",
-                    "status": "pending",
-                    "status_label": _("Por confirmar"),
-                    "status_theme": "amber",
-                    "notes": _("Confirma asistencia antes de las 18:00."),
-                },
-                {
-                    "position_label": "Limpieza profunda - Galpón 4",
-                    "collaborator": None,
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Servicios generales",
-                    "location": "Galpón 4",
-                    "status": "vacant",
-                    "status_label": _("Vacante"),
-                    "status_theme": "rose",
-                    "notes": _("Se requiere apoyo de la cuadrilla diurna."),
-                },
-            ],
-            "rests": [
-                {
-                    "collaborator": "Lucía Pérez",
-                    "reason": _("Descanso por rotación"),
-                    "notes": _("Regresa al turno diurno el 06 Nov."),
-                },
-                {
-                    "collaborator": "Carlos Jiménez",
-                    "reason": _("Descanso programado"),
-                },
-            ],
-            "alerts": [
-                _("Cobertura parcial en limpieza del galpón 4."),
-            ],
-        },
-        {
-            "date": tomorrow,
-            "assignments": [
-                {
-                    "position_label": "Líder de turno - Galpón 3",
-                    "collaborator": "Gabriela Melo",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Granja La Colina",
-                    "status": "confirmed",
-                    "status_label": _("Confirmado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Auxiliar operativo - Galpón 3",
-                    "collaborator": "Luis Fernando Gil",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Galpón 3 · Sala 2",
-                    "status": "confirmed",
-                    "status_label": _("Confirmado"),
-                    "status_theme": "emerald",
-                },
-                {
-                    "position_label": "Limpieza profunda - Galpón 4",
-                    "collaborator": "Equipo apoyo externo",
-                    "shift_label": "Noche · 22:00 – 06:00",
-                    "category": "Servicios generales",
-                    "location": "Galpón 4",
-                    "status": "pending",
-                    "status_label": _("Por confirmar"),
-                    "status_theme": "amber",
-                },
-            ],
-            "rests": [
-                {
-                    "collaborator": "Sandra Leal",
-                    "reason": _("Descanso compensatorio"),
-                }
-            ],
-        },
-        {
-            "date": day_plus_2,
-            "assignments": [
-                {
-                    "position_label": "Líder de turno - Galpón 3",
-                    "collaborator": "Camilo Ortiz",
-                    "shift_label": "Día · 06:00 – 14:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Granja La Colina",
-                    "status": "planned",
-                    "status_label": _("Planificado"),
-                    "status_theme": "sky",
-                },
-                {
-                    "position_label": "Auxiliar operativo - Galpón 3",
-                    "collaborator": "Luis Fernando Gil",
-                    "shift_label": "Día · 06:00 – 14:00",
-                    "category": "Operaciones - Bioseguridad",
-                    "location": "Galpón 3 · Sala 1",
-                    "status": "planned",
-                    "status_label": _("Planificado"),
-                    "status_theme": "sky",
-                },
-                {
-                    "position_label": "Apoyo sanitario - Galpón 2",
-                    "collaborator": "Sandra Leal",
-                    "shift_label": "Día · 06:00 – 14:00",
-                    "category": "Operaciones - Sanidad",
-                    "location": "Galpón 2 · Línea B",
-                    "status": "planned",
-                    "status_label": _("Planificado"),
-                    "status_theme": "sky",
-                },
-            ],
-            "rests": [
-                {
-                    "collaborator": "Gabriela Melo",
-                    "reason": _("Descanso post-turno nocturno"),
-                }
-            ],
-        },
-    ]
-
-    daily_assignment_days: list[dict[str, object]] = []
-    for index, day_entry in enumerate(roster_seed):
-        date_obj = day_entry["date"]
-        assignments = day_entry.get("assignments", [])
-        rest_entries = day_entry.get("rests", [])
-        alerts = day_entry.get("alerts", [])
-        badge_theme_map = {
-            "emerald": "border border-emerald-200 bg-emerald-50 text-emerald-700",
-            "amber": "border border-amber-200 bg-amber-50 text-amber-700",
-            "rose": "border border-rose-200 bg-rose-50 text-rose-700",
-            "sky": "border border-sky-200 bg-sky-50 text-sky-700",
-        }
-        for assignment in assignments:
-            theme = assignment.get("status_theme")
-            default_class = "border border-slate-200 bg-slate-50 text-slate-600"
-            assignment.setdefault("status_badge_class", badge_theme_map.get(theme, default_class))
-            assignment.setdefault("status_label", assignment.get("status_label") or _("Sin estado"))
-        assigned_count = sum(1 for assignment in assignments if assignment.get("collaborator"))
-        vacant_count = sum(1 for assignment in assignments if not assignment.get("collaborator"))
-        rest_count = len(rest_entries)
-        summary_parts = []
-        if assigned_count:
-            summary_parts.append(
-                _("%(count)s posiciones cubiertas") % {"count": assigned_count}
-            )
-        else:
-            summary_parts.append(_("Sin posiciones cubiertas"))
-        if rest_count:
-            summary_parts.append(_("%(count)s en descanso") % {"count": rest_count})
-        if vacant_count:
-            summary_parts.append(_("%(count)s vacantes") % {"count": vacant_count})
-        summary = " · ".join(summary_parts)
-        daily_assignment_days.append(
-            {
-                "index": index,
-                "date_iso": date_obj.isoformat(),
-                "date_label": date_format(date_obj, "DATE_FORMAT"),
-                "weekday_label": date_format(date_obj, "l").capitalize(),
-                "short_label": date_format(date_obj, "D").strip(".").capitalize(),
-                "is_today": date_obj == today,
-                "assignments": assignments,
-                "rests": rest_entries,
-                "alerts": alerts,
-                "summary": summary,
-            }
-        )
-
-    initial_day_index = next(
-        (day["index"] for day in daily_assignment_days if day.get("is_today")), 0
+    daily_assignment_schedule = _resolve_operator_daily_assignments(
+        user=user,
+        reference_date=today,
+        max_days=6,
+        use_samples=use_task_samples,
     )
-    initial_day = daily_assignment_days[initial_day_index] if daily_assignment_days else None
-    daily_assignment_schedule = {
-        "initial_index": initial_day_index,
-        "current_date_iso": today.isoformat(),
-        "initial_day": initial_day,
-        "days": daily_assignment_days,
-    }
 
     leader_review_days = [
         {

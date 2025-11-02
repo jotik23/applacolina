@@ -1,4 +1,4 @@
-{% load static humanize %}
+{% load static humanize i18n %}
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-gradient-to-br from-sky-50 via-white to-amber-50">
   <head>
@@ -2739,84 +2739,8 @@
       {% endif %}
 
       <section class="space-y-4" data-weekly-calendar-section>
-        {% with current_shift=telegram_mini_app.current_shift %}
-        {% with week=current_shift.week %}
-        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
-          <header class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 class="text-sm font-semibold text-slate-900">Mi calendario de turnos</h2>
-            </div>
-            <div class="flex flex-col items-end gap-1 text-right text-xs text-slate-500">
-              <span class="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-700">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.16 0 4.15.76 5.71 2.03" />
-                </svg>
-                {{ current_shift.next }}
-              </span>
-              {% if week %}
-                <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  {{ week.range_label }}
-                </span>
-              {% endif %}
-            </div>
-          </header>
-
-          {% if week and week.days %}
-          <ul class="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-            {% for day in week.days %}
-              <li
-                class="rounded-2xl border p-3 transition {% if day.is_rest %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-[11px] font-semibold uppercase tracking-wide {% if day.is_rest %}text-emerald-600{% else %}text-slate-500{% endif %}">
-                    {{ day.weekday }}
-                  </span>
-                  <span class="text-[11px] font-semibold text-slate-400">{{ day.date_label }}</span>
-                </div>
-                {% if day.is_rest %}
-                  <div class="mt-3 flex items-start gap-2 text-sm font-semibold text-emerald-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75h4.5M3 18h18M4.5 18V9.75a4.5 4.5 0 0 1 4.5-4.5h6a4.5 4.5 0 0 1 4.5 4.5V18" />
-                    </svg>
-                    <div>
-                      <p>{{ day.shift_label }}</p>
-                      <p class="mt-1 text-[11px] font-normal text-emerald-600">{{ day.category }}</p>
-                    </div>
-                  </div>
-                {% else %}
-                  <p class="mt-3 text-sm font-semibold text-slate-900">{{ day.shift_label }}</p>
-                  <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-brand">{{ day.category }}</p>
-                  {% if day.farm or day.barn %}
-                    <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                      {% if day.farm %}
-                        <span class="inline-flex items-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21V9m0 0 7.5 12M12 9 4.5 21" />
-                          </svg>
-                          {{ day.farm }}
-                        </span>
-                      {% endif %}
-                      {% if day.farm and day.barn %}
-                        <span class="text-slate-300">•</span>
-                      {% endif %}
-                      {% if day.barn %}
-                        <span class="inline-flex items-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9.75 12 4.5l7.5 5.25V18a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 18V9.75Z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 21v-7.5h4.5V21" />
-                          </svg>
-                          {{ day.barn }}
-                        </span>
-                      {% endif %}
-                    </div>
-                  {% endif %}
-                {% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-          {% endif %}
-        </div>
-        {% endwith %}
+        {% with roster=telegram_mini_app.daily_assignments %}
+          {% include "task_manager/includes/mini_app_next_days_card.html" with roster=roster %}
         {% endwith %}
 
         {% with roster=telegram_mini_app.daily_assignments %}
@@ -2862,82 +2786,68 @@
             </div>
           </header>
           <div class="mt-4 space-y-4" data-roster-days>
-            {% for day in roster.days %}
-            <article
-              data-roster-day
-              data-index="{{ forloop.counter0 }}"
-              data-date="{{ day.date_iso }}"
-              data-weekday="{{ day.weekday_label }}"
-              data-date-label="{{ day.date_label }}"
-              class="space-y-4{% if forloop.counter0 != roster.initial_index %} hidden{% endif %}"
-            >
-              <div>
-                <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Turnos asignados</h3>
-                {% if day.assignments %}
-                <ul class="mt-2 space-y-2">
-                  {% for assignment in day.assignments %}
-                  <li class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p class="text-sm font-semibold text-slate-900">{{ assignment.position_label }}</p>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-brand">{{ assignment.category }}</p>
-                        <p class="mt-1 text-xs text-slate-500">{{ assignment.location }}</p>
-                        <p class="text-xs text-slate-500">{{ assignment.shift_label }}</p>
-                      </div>
-                      <div class="flex flex-col items-end gap-1 text-right">
-                        {% if assignment.collaborator %}
-                          <p class="text-sm font-semibold text-slate-900">{{ assignment.collaborator }}</p>
-                        {% else %}
-                          <p class="text-sm font-semibold text-rose-600">Sin asignar</p>
-                        {% endif %}
-                        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {{ assignment.status_badge_class }}">
-                          {{ assignment.status_label }}
-                        </span>
-                      </div>
-                    </div>
-                    {% if assignment.notes %}
-                      <p class="mt-2 text-xs text-slate-500">{{ assignment.notes }}</p>
+            {% trans "Sin rol asignado" as fallback_role %}
+            {% trans "No hay asignaciones próximas." as no_assignments_message %}
+            {% if roster.days %}
+              {% for day in roster.days %}
+              <article
+                data-roster-day
+                data-index="{{ forloop.counter0 }}"
+                data-date="{{ day.date_iso }}"
+                data-weekday="{{ day.weekday_label }}"
+                data-date-label="{{ day.date_label }}"
+                class="space-y-4{% if forloop.counter0 != roster.initial_index %} hidden{% endif %}"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ day.weekday_label }}</p>
+                    <p class="text-sm font-semibold text-slate-900">{{ day.date_label }}</p>
+                  </div>
+                  <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {{ day.calendar_status_badge_class }}">
+                    {{ day.calendar_status }}
+                  </span>
+                </div>
+                {% if day.is_rest %}
+                  <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700">
+                    <p class="text-sm font-semibold">{{ day.rest_label }}</p>
+                    {% if day.rest_notes %}
+                      <p class="mt-1 text-xs">{{ day.rest_notes }}</p>
                     {% endif %}
-                  </li>
-                  {% endfor %}
-                </ul>
+                  </div>
                 {% else %}
-                  <p class="mt-2 text-xs text-slate-500">No hay turnos programados.</p>
-                {% endif %}
-              </div>
-              <div>
-                <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Descansos del día</h3>
-                {% if day.rests %}
-                <ul class="mt-2 space-y-2">
-                  {% for rest in day.rests %}
-                  <li class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p class="text-sm font-semibold text-emerald-700">{{ rest.collaborator }}</p>
-                        <p class="text-xs text-emerald-600">{{ rest.reason }}</p>
-                      </div>
-                      {% if rest.notes %}
-                        <p class="text-xs text-emerald-600">{{ rest.notes }}</p>
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p class="text-sm font-semibold text-slate-900">{{ day.role_label|default:fallback_role }}</p>
+                    {% if day.location_label %}
+                      <p class="mt-1 text-xs text-slate-500">{{ day.location_label }}</p>
+                    {% else %}
+                      {% if day.farm_label or day.barn_label %}
+                      <p class="mt-1 text-xs text-slate-500">
+                        {% if day.farm_label %}{{ day.farm_label }}{% if day.barn_label %} · {{ day.barn_label }}{% endif %}{% elif day.barn_label %}{{ day.barn_label }}{% endif %}
+                      </p>
                       {% endif %}
-                    </div>
-                  </li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                  <p class="mt-2 text-xs text-slate-500">No hay descansos programados.</p>
+                    {% endif %}
+                    {% if day.shift_type_label %}
+                      <p class="text-xs text-slate-500">{{ day.shift_type_label }}</p>
+                    {% endif %}
+                    {% if day.assignment_notes %}
+                      <p class="mt-2 text-xs text-slate-500">{{ day.assignment_notes }}</p>
+                    {% endif %}
+                  </div>
                 {% endif %}
-              </div>
-              {% if day.alerts %}
-              <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                <ul class="list-disc space-y-1 pl-4 text-xs text-amber-700">
-                  {% for alert in day.alerts %}
-                  <li>{{ alert }}</li>
-                  {% endfor %}
-                </ul>
-              </div>
-              {% endif %}
-            </article>
-            {% endfor %}
+                {% if day.alerts %}
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                  <ul class="list-disc space-y-1 pl-4 text-xs text-amber-700">
+                    {% for alert in day.alerts %}
+                    <li>{{ alert }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+                {% endif %}
+              </article>
+              {% endfor %}
+            {% else %}
+              <p class="text-xs text-slate-500">{{ no_assignments_message }}</p>
+            {% endif %}
           </div>
         </div>
         {% endif %}
