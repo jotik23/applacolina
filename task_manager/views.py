@@ -66,6 +66,7 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "dispatch_detail": "task_manager.view_mini_app_dispatch_detail_card",
     "daily_roster": "task_manager.view_mini_app_daily_roster_card",
     "leader_review": "task_manager.view_mini_app_leader_review_card",
+    "suggestions": "task_manager.view_mini_app_suggestions_card",
     "task": "task_manager.view_mini_app_task_cards",
 }
 

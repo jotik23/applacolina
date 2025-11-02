@@ -279,6 +279,7 @@ class TaskDefinition(models.Model):
             ("view_mini_app_dispatch_detail_card", _("Puede ver el card de detalle de despacho en la mini app")),
             ("view_mini_app_daily_roster_card", _("Puede ver el card de asignaciones diarias en la mini app")),
             ("view_mini_app_leader_review_card", _("Puede ver el card de revisión de tareas en la mini app")),
+            ("view_mini_app_suggestions_card", _("Puede ver el card de sugerencias enviadas en la mini app")),
             ("view_mini_app_task_cards", _("Puede ver los cards de tareas en la mini app")),
         ]
 

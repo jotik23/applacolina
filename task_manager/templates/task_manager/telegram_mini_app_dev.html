@@ -2943,8 +2943,21 @@
         {% endif %}
         {% endwith %}
 
-        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60">
-          <h2 class="text-sm font-semibold text-slate-900">Sugerencias enviadas</h2>
+        {% if mini_app_card_permissions.suggestions %}
+        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60" data-suggestions-card>
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-slate-900">Sugerencias enviadas</h2>
+            <button
+              type="button"
+              class="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-slate-900 shadow-lg shadow-amber-200/70 transition hover:bg-brand-dark"
+              data-report-trigger
+              data-report-task="{{ telegram_mini_app.tasks.0.title|default:'' }}"
+              data-report-points="{{ telegram_mini_app.tasks.0.reward_points|default:'15' }}"
+              data-report-source="suggestions-card"
+            >
+              Reportar tarea
+            </button>
+          </div>
           <ul class="mt-2 space-y-2 text-xs text-slate-700">
             {% for suggestion in telegram_mini_app.suggestions %}
               <li class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -2985,6 +2998,7 @@
             {% endfor %}
           </ul>
         </div>
+        {% endif %}
 
       {% with review=telegram_mini_app.leader_review %}
       {% if review %}
