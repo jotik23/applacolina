@@ -1689,6 +1689,7 @@ def _operator_payload(
         else None,
         "automatic_rest_days": list(operator.automatic_rest_days or []),
         "automatic_rest_day_labels": operator.automatic_rest_day_labels(),
+        "has_access_key": operator.has_usable_password(),
         "suggested_positions": [
             {
                 "id": position.id,
@@ -2233,7 +2234,7 @@ class OperatorDetailView(StaffRequiredMixin, View):
 
         # Merge current operator values with incoming payload so the form receives a complete dataset.
         form_fields = list(OperatorProfileForm._meta.fields)  # type: ignore[attr-defined]
-        form_data: dict[str, Any] = {}
+        form_data: dict[str, Any] = {"access_key": ""}
         for field_name in form_fields:
             if field_name == "roles":
                 form_data[field_name] = list(operator.roles.values_list("pk", flat=True))

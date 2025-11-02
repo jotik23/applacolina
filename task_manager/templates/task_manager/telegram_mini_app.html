@@ -308,8 +308,8 @@
         </div>
       </header>
 
-      {% with shift=telegram_mini_app.shift_confirmation %}
-      {% if shift and mini_app_card_permissions.shift_confirmation %}
+      {% with shift=telegram_mini_app.shift_confirmation shift_empty=telegram_mini_app.shift_confirmation_empty %}
+        {% if shift and mini_app_card_permissions.shift_confirmation %}
       <section
         class="rounded-3xl border border-emerald-200 bg-gradient-to-br from-white/95 via-emerald-50/90 to-sky-50/90 p-5 shadow-lg shadow-emerald-200/60"
         data-shift-confirmation-card
@@ -323,18 +323,12 @@
               <span aria-hidden="true">🗓️</span>
               Confirma tu turno
             </p>
-            <h2 class="text-xl font-semibold text-slate-900">{{ shift.date_label }}</h2>
+            <h2 class="text-xl font-semibold text-slate-900">{{ shift.greeting_label }}</h2>
             <p class="mt-1 text-sm text-slate-700">
-              Mi turno
-              <span class="font-semibold text-slate-900">{{ shift.category_label }} · {{ shift.position_label }}</span>
+              Tu turno es
+              <span class="font-semibold text-slate-900">{{ shift.summary_label }}</span>
             </p>
           </div>
-          <span
-            data-shift-status
-            class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700"
-          >
-            Pendiente
-          </span>
         </header>
         <dl class="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
           {% if shift.farm %}
@@ -379,13 +373,52 @@
           </button>
         </div>
       </section>
-      {% endif %}
+        {% elif shift_empty and mini_app_card_permissions.shift_confirmation %}
+      <section
+        class="rounded-3xl border border-amber-200 bg-gradient-to-br from-white/95 via-amber-50/90 to-slate-50/90 p-5 shadow-lg shadow-amber-200/50"
+        data-shift-confirmation-card
+        data-requires-confirmation="true"
+        data-confirmed="false"
+        {% if shift_empty.storage_key %}data-storage-key="{{ shift_empty.storage_key }}"{% endif %}
+      >
+        <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600">
+              <span aria-hidden="true">✨</span>
+              Confirma tu turno
+            </p>
+            <h2 class="text-xl font-semibold text-slate-900">{{ shift_empty.greeting_label }}</h2>
+            <p class="mt-1 text-sm font-semibold text-slate-700">{{ shift_empty.headline }}</p>
+          </div>
+        </header>
+        <div class="mt-4 space-y-2 text-sm text-slate-700">
+          {% for line in shift_empty.body_lines %}
+          <p>{{ line }}</p>
+          {% endfor %}
+        </div>
+        <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-sm font-semibold uppercase tracking-wide text-amber-700" data-shift-pending-label>La mini app se desbloqueará cuando se te asigne un turno.</p>
+          <p class="hidden text-sm font-semibold uppercase tracking-wide text-emerald-600" data-shift-confirmed-label>Gracias por confirmar.</p>
+          {% if mini_app_logout_url %}
+          <form method="post" action="{{ mini_app_logout_url }}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="inline-flex items-center justify-center rounded-full border border-amber-200 bg-white px-6 py-3 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-100 transition hover:border-amber-300 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2"
+            >
+              {{ shift_empty.action_label }}
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </section>
+        {% endif %}
 
       <div
         data-mini-app-content
-        class="flex flex-col gap-5{% if shift and shift.requires_confirmation and not shift.confirmed %} pointer-events-none opacity-60 blur-sm{% endif %}"
-        aria-disabled="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% else %}false{% endif %}"
-        data-guard-locked="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% else %}false{% endif %}"
+        class="flex flex-col gap-5{% if shift and shift.requires_confirmation and not shift.confirmed %} pointer-events-none opacity-60 blur-sm{% elif shift_empty and mini_app_card_permissions.shift_confirmation %} pointer-events-none opacity-60 blur-sm{% endif %}"
+        aria-disabled="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% elif shift_empty and mini_app_card_permissions.shift_confirmation %}true{% else %}false{% endif %}"
+        data-guard-locked="{% if shift and shift.requires_confirmation and not shift.confirmed %}true{% elif shift_empty and mini_app_card_permissions.shift_confirmation %}true{% else %}false{% endif %}"
       >
       {% with telegram_mini_app.goals as goals %}
       {% with telegram_mini_app.scorecard as scorecard %}
@@ -3866,7 +3899,6 @@
         var confirmButton = card.querySelector('[data-confirm-shift]');
         var pendingLabel = card.querySelector('[data-shift-pending-label]');
         var confirmedLabel = card.querySelector('[data-shift-confirmed-label]');
-        var statusBadge = card.querySelector('[data-shift-status]');
         var contentParent = content ? content.parentNode : null;
         var tasksSection = content ? content.querySelector('[data-daily-tasks-section]') : null;
         var calendarSection = content ? content.querySelector('[data-weekly-calendar-section]') : null;
@@ -3917,13 +3949,6 @@
             moveCardAfterTasks();
           } else {
             moveCardBeforeContent();
-          }
-
-          if (statusBadge) {
-            statusBadge.textContent = isConfirmed ? 'Turno confirmado' : 'Pendiente';
-            statusBadge.className = isConfirmed
-              ? 'inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700'
-              : 'inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700';
           }
 
           if (pendingLabel) {

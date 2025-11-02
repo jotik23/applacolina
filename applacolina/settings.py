@@ -229,6 +229,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+TEST_RUNNER = "applacolina.test_runner.NonInteractiveDiscoverRunner"
+
 LOGIN_URL = 'portal:login'
 LOGIN_REDIRECT_URL = 'personal:dashboard'
 LOGOUT_REDIRECT_URL = 'portal:login'

@@ -152,6 +152,7 @@
         operatorFirstName: app.querySelector('#operator-first-name'),
         operatorLastName: app.querySelector('#operator-last-name'),
         operatorPhone: app.querySelector('#operator-phone'),
+        operatorAccessKey: app.querySelector('#operator-access-key'),
         operatorEmploymentStart: app.querySelector('#operator-employment-start'),
         operatorEmploymentEnd: app.querySelector('#operator-employment-end'),
         operatorRestDays: app.querySelector('#operator-rest-days'),
@@ -1187,6 +1188,7 @@
       const getOperatorPayload = () => {
         const employmentStartValue = refs.operatorEmploymentStart?.value || '';
         const employmentEndValue = refs.operatorEmploymentEnd?.value || '';
+        const accessKeyValue = refs.operatorAccessKey?.value || '';
         return {
           cedula: refs.operatorDocument?.value.trim() || '',
           telefono: refs.operatorPhone?.value.trim() || '',
@@ -1194,6 +1196,7 @@
           apellidos: refs.operatorLastName?.value.trim() || '',
           employment_start_date: employmentStartValue,
           employment_end_date: employmentEndValue,
+          access_key: accessKeyValue.trim(),
           automatic_rest_days: getSelectedRestDays(),
           roles: Array.from(refs.operatorRoles?.selectedOptions || []).map((option) => option.value),
           suggested_positions: Array.from(refs.operatorSuggestedPositions?.selectedOptions || [])
@@ -1227,6 +1230,9 @@
           }
           if (refs.operatorEmploymentEnd) {
             refs.operatorEmploymentEnd.value = '';
+          }
+          if (refs.operatorAccessKey) {
+            refs.operatorAccessKey.value = '';
           }
           if (refs.operatorRoles) {
             Array.from(refs.operatorRoles.options).forEach((option) => {
@@ -1262,6 +1268,9 @@
           if (refs.operatorEmploymentEnd) {
             refs.operatorEmploymentEnd.value = operator.employment_end || '';
           }
+          if (refs.operatorAccessKey) {
+            refs.operatorAccessKey.value = '';
+          }
           if (refs.operatorRoles) {
             const operatorRoles = new Set((operator.roles || []).map((role) => String(role.id)));
             Array.from(refs.operatorRoles.options).forEach((option) => {
@@ -1290,6 +1299,9 @@
           Array.from(refs.operatorSuggestedPositions.options || []).forEach((option) => {
             option.selected = false;
           });
+        }
+        if (refs.operatorAccessKey) {
+          refs.operatorAccessKey.value = '';
         }
         setSelectedRestDays([]);
         setOperatorRestContext(null);

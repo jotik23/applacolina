@@ -395,6 +395,12 @@ class PositionDefinitionForm(forms.ModelForm):
 
 
 class OperatorProfileForm(forms.ModelForm):
+    access_key = forms.CharField(
+        label="Clave de acceso",
+        required=False,
+        strip=False,
+        max_length=128,
+    )
     roles = forms.ModelMultipleChoiceField(
         queryset=Role.objects.order_by("name"),
         required=False,
@@ -449,6 +455,10 @@ class OperatorProfileForm(forms.ModelForm):
         if rest_field and existing_values:
             rest_field.initial = [str(value) for value in existing_values]
 
+    def clean_access_key(self) -> str:
+        value = self.cleaned_data.get("access_key") or ""
+        return value.strip()
+
     def clean_cedula(self) -> str:
         cedula = self.cleaned_data.get("cedula", "")
         return cedula.strip()
@@ -463,7 +473,10 @@ class OperatorProfileForm(forms.ModelForm):
 
     def save(self, commit: bool = True) -> UserProfile:
         instance: UserProfile = super().save(commit=False)
-        if not instance.pk:
+        access_key = self.cleaned_data.get("access_key") or ""
+        if access_key:
+            instance.set_password(access_key)
+        elif not instance.pk:
             instance.set_unusable_password()
 
         if commit:

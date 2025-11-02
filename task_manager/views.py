@@ -27,10 +27,17 @@ from django.views import View, generic
 from notifications.models import TelegramBotConfig, TelegramChatLink
 from applacolina.mixins import StaffRequiredMixin
 
-from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
-from .models import TaskCategory, TaskDefinition, TaskStatus
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
 from production.models import ChickenHouse, Farm, Room
+from task_manager.mini_app.features import (
+    build_shift_confirmation_card,
+    build_shift_confirmation_empty_card,
+    serialize_shift_confirmation_card,
+    serialize_shift_confirmation_empty_card,
+)
+
+from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
+from .models import TaskCategory, TaskDefinition, TaskStatus
 
 
 class MiniAppClient(Enum):
@@ -478,6 +485,9 @@ def _build_telegram_mini_app_payload(
     contact_handle: str,
     role: str,
     initials: str,
+    shift_confirmation: Optional[dict[str, object]] = None,
+    shift_confirmation_empty: Optional[dict[str, object]] = None,
+    include_shift_confirmation_stub: bool = True,
 ) -> dict[str, object]:
     today = timezone.localdate()
     weekday_label = date_format(today, "l").capitalize()
@@ -1298,20 +1308,31 @@ def _build_telegram_mini_app_payload(
         ],
     }
 
-    shift_confirmation = {
-        "date_label": _("Hoy, %(weekday)s %(day)s de %(month)s")
-        % {"weekday": weekday_label, "day": day_number, "month": month_label},
-        "category_label": "Operaciones - Bioseguridad",
-        "position_label": "Auxiliar operativo",
-        "farm": "Granja La Colina",
-        "barn": "Galpón 3",
-        "rooms": ["Sala 1", "Sala 2"],
-        "handoff_from": "Camilo Ortiz",
-        "handoff_to": "Lucía Pérez",
-        "requires_confirmation": True,
-        "confirmed": False,
-        "storage_key": f"miniapp-shift-confirm::{today.isoformat()}",
-    }
+    shift_confirmation_payload = shift_confirmation
+    shift_confirmation_empty_payload = shift_confirmation_empty
+
+    if shift_confirmation_payload is None and shift_confirmation_empty_payload is None and include_shift_confirmation_stub:
+        default_summary = "Operaciones - Bioseguridad · Auxiliar operativo"
+        shift_confirmation_payload = {
+            "assignment_id": None,
+            "calendar_id": None,
+            "date": today.isoformat(),
+            "greeting_label": _("Hola %(name)s, es %(weekday)s %(day)s de %(month)s")
+            % {"name": display_name, "weekday": weekday_label, "day": day_number, "month": month_label},
+            "date_label": _("Hoy, %(weekday)s %(day)s de %(month)s")
+            % {"weekday": weekday_label, "day": day_number, "month": month_label},
+            "summary_label": default_summary,
+            "category_label": "Operaciones - Bioseguridad",
+            "position_label": "Auxiliar operativo",
+            "farm": "Granja La Colina",
+            "barn": "Galpón 3",
+            "rooms": ["Sala 1", "Sala 2"],
+            "handoff_from": "Camilo Ortiz",
+            "handoff_to": "Lucía Pérez",
+            "requires_confirmation": True,
+            "confirmed": False,
+            "storage_key": f"miniapp-shift-confirm::{today.isoformat()}",
+        }
 
     tasks = [
         {
@@ -2331,7 +2352,8 @@ def _build_telegram_mini_app_payload(
                 ],
             },
         },
-        "shift_confirmation": shift_confirmation,
+        "shift_confirmation": shift_confirmation_payload,
+        "shift_confirmation_empty": shift_confirmation_empty_payload,
         "scorecard": {
             "points": 122,
             "streak": "Racha vigente: 6 dias cumplidos",
@@ -2492,12 +2514,25 @@ class TaskManagerMiniAppView(generic.TemplateView):
             contact_handle = f"@{phone_number}" if phone_number else "@Sin teléfono"
             role_label = _resolve_primary_group_label(user) or "Operario"
             initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+            shift_card_payload: Optional[dict[str, object]] = None
+            shift_empty_payload: Optional[dict[str, object]] = None
+            if card_permissions.get("shift_confirmation"):
+                shift_card = build_shift_confirmation_card(user=user, reference_date=today)
+                if shift_card:
+                    shift_card_payload = serialize_shift_confirmation_card(shift_card)
+                else:
+                    shift_empty = build_shift_confirmation_empty_card(user=user, reference_date=today)
+                    if shift_empty:
+                        shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
                 contact_handle=contact_handle,
                 role=role_label,
                 initials=initials,
+                shift_confirmation=shift_card_payload,
+                shift_confirmation_empty=shift_empty_payload,
+                include_shift_confirmation_stub=False,
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
@@ -2635,6 +2670,10 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
 
         has_authenticated_user = getattr(user, "is_authenticated", False)
         has_access = has_authenticated_user and user.has_perm("task_manager.access_mini_app")
+        card_permissions = _resolve_mini_app_card_permissions(user)
+
+        if not has_access:
+            card_permissions = {key: False for key in MINI_APP_CARD_PERMISSION_MAP}
 
         if has_access:
             display_name = (user.get_full_name() or user.get_username() or "Operario").strip()
@@ -2643,12 +2682,25 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
             contact_handle = f"@{phone_number}" if phone_number else "@Sin teléfono"
             role_label = _resolve_primary_group_label(user) or "Operario"
             initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
+            shift_card_payload: Optional[dict[str, object]] = None
+            shift_empty_payload: Optional[dict[str, object]] = None
+            if card_permissions.get("shift_confirmation"):
+                shift_card = build_shift_confirmation_card(user=user, reference_date=today)
+                if shift_card:
+                    shift_card_payload = serialize_shift_confirmation_card(shift_card)
+                else:
+                    shift_empty = build_shift_confirmation_empty_card(user=user, reference_date=today)
+                    if shift_empty:
+                        shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
                 contact_handle=contact_handle,
                 role=role_label,
                 initials=initials,
+                shift_confirmation=shift_card_payload,
+                shift_confirmation_empty=shift_empty_payload,
+                include_shift_confirmation_stub=False,
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-dev-logout")
         else:
@@ -2665,6 +2717,7 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
         context["telegram_integration_enabled"] = self.mini_app_client == MiniAppClient.TELEGRAM
         context["telegram_auth_error"] = self.telegram_auth_error
         context["mini_app_access_granted"] = has_access
+        context["mini_app_card_permissions"] = card_permissions
 
         return context
 
@@ -2687,6 +2740,7 @@ class TaskManagerTelegramMiniAppDevDemoView(generic.TemplateView):
             initials=initials,
         )
         context["telegram_integration_enabled"] = False
+        context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
         return context
 
 
