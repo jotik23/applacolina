@@ -190,36 +190,6 @@
           </div>
 
           <div>
-            <label for="{{ task_form.farms.id_for_label }}" class="text-sm font-medium text-slate-700">
-              {{ task_form.farms.label }}
-            </label>
-            {{ task_form.farms }}
-            {% if task_form.farms.help_text %}
-              <p class="mt-1 text-xs text-slate-500">{{ task_form.farms.help_text }}</p>
-            {% endif %}
-            {% with field_errors=task_form.farms.errors %}
-              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="farms">
-                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
-              </p>
-            {% endwith %}
-          </div>
-
-          <div>
-            <label for="{{ task_form.chicken_houses.id_for_label }}" class="text-sm font-medium text-slate-700">
-              {{ task_form.chicken_houses.label }}
-            </label>
-            {{ task_form.chicken_houses }}
-            {% if task_form.chicken_houses.help_text %}
-              <p class="mt-1 text-xs text-slate-500">{{ task_form.chicken_houses.help_text }}</p>
-            {% endif %}
-            {% with field_errors=task_form.chicken_houses.errors %}
-              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="chicken_houses">
-                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
-              </p>
-            {% endwith %}
-          </div>
-
-          <div>
             <label for="{{ task_form.rooms.id_for_label }}" class="text-sm font-medium text-slate-700">
               {{ task_form.rooms.label }}
             </label>

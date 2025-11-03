@@ -1,10 +1,21 @@
+from collections import defaultdict
 from datetime import date, timedelta
-from typing import List, TypedDict
+from decimal import Decimal
+from typing import Dict, List, Optional, Tuple, TypedDict
 
-from django.views.generic import TemplateView
+from django.db.models import Max, Prefetch, Q, Sum
+from django.db.models.functions import Coalesce, TruncWeek
 from django.utils import timezone
+from django.views.generic import TemplateView
 
 from applacolina.mixins import StaffRequiredMixin
+from production.models import (
+    BirdBatch,
+    BirdBatchRoomAllocation,
+    ProductionRecord,
+    WeightSampleSession,
+)
+from production.services.reference_tables import get_reference_targets
 
 
 class ScorecardMetric(TypedDict):
@@ -45,11 +56,13 @@ class BarnAllocation(TypedDict):
     initial_birds: int
     current_birds: int
     occupancy_rate: float
-    feed_today_grams: int
-    weekly_feed_kg: int
+    feed_today_grams: Optional[float]
+    weekly_feed_kg: float
     mortality_week: int
     mortality_percentage: float
-    last_update: date
+    mortality_cumulative: int
+    mortality_cumulative_percentage: float
+    last_update: Optional[date]
 
 
 class LotOverview(TypedDict):
@@ -62,12 +75,12 @@ class LotOverview(TypedDict):
     bird_balance: int
     barn_count: int
     barn_names_display: str
-    uniformity: float
-    avg_weight: float
-    target_weight: float
-    feed_today_grams: int
-    weekly_feed_kg: int
-    total_feed_to_date_kg: int
+    uniformity: Optional[float]
+    avg_weight: Optional[float]
+    target_weight: Optional[float]
+    feed_today_grams: Optional[float]
+    weekly_feed_kg: float
+    total_feed_to_date_kg: float
     barns: List[BarnAllocation]
     mortality: List[MortalityRecord]
     weight_trend: List[WeightTrendPoint]
@@ -75,17 +88,28 @@ class LotOverview(TypedDict):
     egg_mix: List[EggSizeRecord]
     alerts: List[str]
     notes: str
+    daily_snapshot: List["DailySnapshotMetric"]
+
+
+class DailySnapshotMetric(TypedDict):
+    label: str
+    slug: str
+    unit: str
+    decimals: int
+    actual: Optional[float]
+    target: Optional[float]
+    delta: Optional[float]
+    status: Optional[str]
 
 
 class FarmSummary(TypedDict):
-    location: str
-    total_birds: int
+    total_initial_birds: int
     current_birds: int
-    posture_percent: float
     mortality_percent: float
-    average_uniformity: float
-    eggs_per_day: int
-    feed_weekly_kg: float
+    weekly_consumption: float
+    average_uniformity: Optional[float]
+    average_weight: Optional[float]
+    lot_count: int
 
 
 class FarmOverview(TypedDict):
@@ -117,474 +141,693 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        base_date = date.today()
-        farms: List[FarmOverview] = [
-            {
-                "name": "Granja San Lucas",
-                "code": "GS-01",
-                "summary": FarmSummary(
-                    location="Madrid, Cundinamarca",
-                    total_birds=184_000,
-                    current_birds=178_450,
-                    posture_percent=92.4,
-                    mortality_percent=0.8,
-                    average_uniformity=91.2,
-                    eggs_per_day=172_100,
-                    feed_weekly_kg=131_500,
-                ),
-                "lots": [
-                    LotOverview(
-                        label="Lote 1A",
-                        breed="Hy-Line Brown",
-                        birth_date=base_date - timedelta(weeks=38),
-                        age_weeks=38,
-                        initial_birds=9_200,
-                        current_birds=9_020,
-                        bird_balance=180,
-                        uniformity=91.8,
-                        avg_weight=1.78,
-                        target_weight=1.80,
-                        feed_today_grams=112,
-                        weekly_feed_kg=7_020,
-                        total_feed_to_date_kg=312_480,
-                        barns=[
-                            BarnAllocation(
-                                name="Galpón 1",
-                                segment="Nave central",
-                                initial_birds=4_600,
-                                current_birds=4_520,
-                                occupancy_rate=98.3,
-                                feed_today_grams=112,
-                                weekly_feed_kg=3_520,
-                                mortality_week=6,
-                                mortality_percentage=0.13,
-                                last_update=base_date - timedelta(days=1),
-                            ),
-                            BarnAllocation(
-                                name="Galpón 4",
-                                segment="Extensión oriente",
-                                initial_birds=4_600,
-                                current_birds=4_500,
-                                occupancy_rate=97.8,
-                                feed_today_grams=112,
-                                weekly_feed_kg=3_500,
-                                mortality_week=6,
-                                mortality_percentage=0.13,
-                                last_update=base_date - timedelta(days=1),
-                            ),
-                        ],
-                        mortality=[
-                            MortalityRecord(label="Semana actual", quantity=12, percentage=0.13),
-                            MortalityRecord(label="Últimas 4 semanas", quantity=46, percentage=0.50),
-                            MortalityRecord(label="Año en curso", quantity=180, percentage=1.96),
-                        ],
-                        weight_trend=[
-                            WeightTrendPoint(week=36, actual_weight=1.74, projected_weight=1.75),
-                            WeightTrendPoint(week=37, actual_weight=1.76, projected_weight=1.78),
-                            WeightTrendPoint(week=38, actual_weight=1.78, projected_weight=1.80),
-                        ],
-                        consumption_history=[
-                            ConsumptionRecord(week=36, feed_kg=6_930, grams_per_bird=108),
-                            ConsumptionRecord(week=37, feed_kg=6_980, grams_per_bird=110),
-                            ConsumptionRecord(week=38, feed_kg=7_020, grams_per_bird=112),
-                        ],
-                        egg_mix=[
-                            EggSizeRecord(size="M", percentage=34.0, avg_weight=61),
-                            EggSizeRecord(size="L", percentage=39.0, avg_weight=64),
-                            EggSizeRecord(size="XL", percentage=19.0, avg_weight=69),
-                            EggSizeRecord(size="Jumbo", percentage=8.0, avg_weight=72),
-                        ],
-                        alerts=[
-                            "Seguimiento de uniformidad: -0.7 pts vs meta semanal",
-                        ],
-                        notes="Curva de peso alineada al plan; se recomiendan ajustes menores en consumo vespertino.",
-                    ),
-                    LotOverview(
-                        label="Lote 1B",
-                        breed="Hy-Line Brown",
-                        birth_date=base_date - timedelta(weeks=38, days=3),
-                        age_weeks=38,
-                        initial_birds=9_200,
-                        current_birds=9_010,
-                        bird_balance=190,
-                        uniformity=92.6,
-                        avg_weight=1.79,
-                        target_weight=1.80,
-                        feed_today_grams=111,
-                        weekly_feed_kg=6_980,
-                        total_feed_to_date_kg=311_940,
-                        barns=[
-                            BarnAllocation(
-                                name="Galpón 2",
-                                segment="Sector occidente",
-                                initial_birds=4_600,
-                                current_birds=4_510,
-                                occupancy_rate=98.0,
-                                feed_today_grams=111,
-                                weekly_feed_kg=3_490,
-                                mortality_week=7,
-                                mortality_percentage=0.16,
-                                last_update=base_date - timedelta(days=1),
-                            ),
-                            BarnAllocation(
-                                name="Galpón 3",
-                                segment="Sector norte",
-                                initial_birds=4_600,
-                                current_birds=4_500,
-                                occupancy_rate=97.8,
-                                feed_today_grams=111,
-                                weekly_feed_kg=3_490,
-                                mortality_week=7,
-                                mortality_percentage=0.16,
-                                last_update=base_date - timedelta(days=1),
-                            ),
-                        ],
-                        mortality=[
-                            MortalityRecord(label="Semana actual", quantity=14, percentage=0.15),
-                            MortalityRecord(label="Últimas 4 semanas", quantity=49, percentage=0.53),
-                            MortalityRecord(label="Año en curso", quantity=190, percentage=2.07),
-                        ],
-                        weight_trend=[
-                            WeightTrendPoint(week=36, actual_weight=1.73, projected_weight=1.75),
-                            WeightTrendPoint(week=37, actual_weight=1.77, projected_weight=1.78),
-                            WeightTrendPoint(week=38, actual_weight=1.79, projected_weight=1.80),
-                        ],
-                        consumption_history=[
-                            ConsumptionRecord(week=36, feed_kg=6_920, grams_per_bird=107),
-                            ConsumptionRecord(week=37, feed_kg=6_950, grams_per_bird=109),
-                            ConsumptionRecord(week=38, feed_kg=6_980, grams_per_bird=111),
-                        ],
-                        egg_mix=[
-                            EggSizeRecord(size="M", percentage=32.0, avg_weight=60),
-                            EggSizeRecord(size="L", percentage=41.0, avg_weight=64),
-                            EggSizeRecord(size="XL", percentage=20.0, avg_weight=69),
-                            EggSizeRecord(size="Jumbo", percentage=7.0, avg_weight=73),
-                        ],
-                        alerts=[
-                            "Revisión de ventilación programada por ligera variación en consumo.",
-                        ],
-                        notes="Lote estable; preparar transición a programa de luz 14 h para semana 40.",
-                    ),
-                    LotOverview(
-                        label="Lote 2A",
-                        breed="Lohmann LSL",
-                        birth_date=base_date - timedelta(weeks=22),
-                        age_weeks=22,
-                        initial_birds=8_700,
-                        current_birds=8_560,
-                        bird_balance=140,
-                        uniformity=88.5,
-                        avg_weight=1.42,
-                        target_weight=1.45,
-                        feed_today_grams=104,
-                        weekly_feed_kg=5_460,
-                        total_feed_to_date_kg=204_320,
-                        barns=[
-                            BarnAllocation(
-                                name="Galpón 5",
-                                segment="Juveniles ala norte",
-                                initial_birds=4_350,
-                                current_birds=4_280,
-                                occupancy_rate=98.4,
-                                feed_today_grams=104,
-                                weekly_feed_kg=2_730,
-                                mortality_week=9,
-                                mortality_percentage=0.21,
-                                last_update=base_date - timedelta(days=2),
-                            ),
-                            BarnAllocation(
-                                name="Galpón 6",
-                                segment="Juveniles ala sur",
-                                initial_birds=4_350,
-                                current_birds=4_280,
-                                occupancy_rate=98.4,
-                                feed_today_grams=104,
-                                weekly_feed_kg=2_730,
-                                mortality_week=9,
-                                mortality_percentage=0.21,
-                                last_update=base_date - timedelta(days=2),
-                            ),
-                        ],
-                        mortality=[
-                            MortalityRecord(label="Semana actual", quantity=18, percentage=0.21),
-                            MortalityRecord(label="Últimas 4 semanas", quantity=65, percentage=0.74),
-                            MortalityRecord(label="Año en curso", quantity=140, percentage=1.61),
-                        ],
-                        weight_trend=[
-                            WeightTrendPoint(week=20, actual_weight=1.37, projected_weight=1.38),
-                            WeightTrendPoint(week=21, actual_weight=1.40, projected_weight=1.42),
-                            WeightTrendPoint(week=22, actual_weight=1.42, projected_weight=1.45),
-                        ],
-                        consumption_history=[
-                            ConsumptionRecord(week=20, feed_kg=5_360, grams_per_bird=100),
-                            ConsumptionRecord(week=21, feed_kg=5_410, grams_per_bird=102.5),
-                            ConsumptionRecord(week=22, feed_kg=5_460, grams_per_bird=104),
-                        ],
-                        egg_mix=[
-                            EggSizeRecord(size="M", percentage=46.0, avg_weight=58),
-                            EggSizeRecord(size="L", percentage=31.0, avg_weight=61),
-                            EggSizeRecord(size="XL", percentage=14.0, avg_weight=66),
-                            EggSizeRecord(size="Huevos pequeños", percentage=9.0, avg_weight=52),
-                        ],
-                        alerts=[
-                            "Uniformidad por debajo del objetivo de 90%. Revisar densidad en comederos.",
-                        ],
-                        notes="Ajustar curva de alimentación a partir de la semana 23 según plan técnico.",
-                    ),
-                    LotOverview(
-                        label="Lote 2B",
-                        breed="Lohmann LSL",
-                        birth_date=base_date - timedelta(weeks=22, days=5),
-                        age_weeks=22,
-                        initial_birds=8_700,
-                        current_birds=8_540,
-                        bird_balance=160,
-                        uniformity=89.3,
-                        avg_weight=1.41,
-                        target_weight=1.45,
-                        feed_today_grams=103,
-                        weekly_feed_kg=5_420,
-                        total_feed_to_date_kg=203_660,
-                        barns=[
-                            BarnAllocation(
-                                name="Galpón 7",
-                                segment="Juveniles transición",
-                                initial_birds=4_350,
-                                current_birds=4_270,
-                                occupancy_rate=98.2,
-                                feed_today_grams=103,
-                                weekly_feed_kg=2_710,
-                                mortality_week=10,
-                                mortality_percentage=0.24,
-                                last_update=base_date - timedelta(days=2),
-                            ),
-                            BarnAllocation(
-                                name="Galpón 8",
-                                segment="Recrudecidos",
-                                initial_birds=4_350,
-                                current_birds=4_270,
-                                occupancy_rate=98.2,
-                                feed_today_grams=103,
-                                weekly_feed_kg=2_710,
-                                mortality_week=10,
-                                mortality_percentage=0.24,
-                                last_update=base_date - timedelta(days=2),
-                            ),
-                        ],
-                        mortality=[
-                            MortalityRecord(label="Semana actual", quantity=20, percentage=0.23),
-                            MortalityRecord(label="Últimas 4 semanas", quantity=67, percentage=0.77),
-                            MortalityRecord(label="Año en curso", quantity=160, percentage=1.84),
-                        ],
-                        weight_trend=[
-                            WeightTrendPoint(week=20, actual_weight=1.36, projected_weight=1.38),
-                            WeightTrendPoint(week=21, actual_weight=1.39, projected_weight=1.42),
-                            WeightTrendPoint(week=22, actual_weight=1.41, projected_weight=1.45),
-                        ],
-                        consumption_history=[
-                            ConsumptionRecord(week=20, feed_kg=5_320, grams_per_bird=99),
-                            ConsumptionRecord(week=21, feed_kg=5_380, grams_per_bird=101.5),
-                            ConsumptionRecord(week=22, feed_kg=5_420, grams_per_bird=103),
-                        ],
-                        egg_mix=[
-                            EggSizeRecord(size="M", percentage=45.0, avg_weight=57),
-                            EggSizeRecord(size="L", percentage=33.0, avg_weight=61),
-                            EggSizeRecord(size="XL", percentage=15.0, avg_weight=65),
-                            EggSizeRecord(size="Huevos pequeños", percentage=7.0, avg_weight=51),
-                        ],
-                        alerts=[
-                            "Planificar traslado a área de postura intensiva en 2 semanas.",
-                        ],
-                        notes="Preparar seguimiento de consumo de agua junto al nuevo sistema IoT.",
-                    ),
-                ],
-            },
-            {
-                "name": "Granja El Porvenir",
-                "code": "GP-08",
-                "summary": FarmSummary(
-                    location="Ubaté, Cundinamarca",
-                    total_birds=96_500,
-                    current_birds=94_380,
-                    posture_percent=88.1,
-                    mortality_percent=1.1,
-                    average_uniformity=89.4,
-                    eggs_per_day=87_950,
-                    feed_weekly_kg=72_800,
-                ),
-                "lots": [
-                    LotOverview(
-                        label="Lote 3A",
-                        breed="ISA Brown",
-                        birth_date=base_date - timedelta(weeks=58),
-                        age_weeks=58,
-                        initial_birds=7_800,
-                        current_birds=7_640,
-                        bird_balance=160,
-                        uniformity=86.3,
-                        avg_weight=1.91,
-                        target_weight=1.94,
-                        feed_today_grams=118,
-                        weekly_feed_kg=7_140,
-                        total_feed_to_date_kg=412_680,
-                        barns=[
-                            BarnAllocation(
-                                name="Galpón 9",
-                                segment="Producción alta",
-                                initial_birds=3_900,
-                                current_birds=3_820,
-                                occupancy_rate=97.9,
-                                feed_today_grams=118,
-                                weekly_feed_kg=3_570,
-                                mortality_week=13,
-                                mortality_percentage=0.34,
-                                last_update=base_date,
-                            ),
-                            BarnAllocation(
-                                name="Galpón 10",
-                                segment="Producción baja",
-                                initial_birds=3_900,
-                                current_birds=3_820,
-                                occupancy_rate=97.9,
-                                feed_today_grams=118,
-                                weekly_feed_kg=3_570,
-                                mortality_week=13,
-                                mortality_percentage=0.34,
-                                last_update=base_date,
-                            ),
-                        ],
-                        mortality=[
-                            MortalityRecord(label="Semana actual", quantity=26, percentage=0.33),
-                            MortalityRecord(label="Últimas 4 semanas", quantity=92, percentage=1.18),
-                            MortalityRecord(label="Año en curso", quantity=260, percentage=3.33),
-                        ],
-                        weight_trend=[
-                            WeightTrendPoint(week=56, actual_weight=1.88, projected_weight=1.92),
-                            WeightTrendPoint(week=57, actual_weight=1.90, projected_weight=1.93),
-                            WeightTrendPoint(week=58, actual_weight=1.91, projected_weight=1.94),
-                        ],
-                        consumption_history=[
-                            ConsumptionRecord(week=56, feed_kg=7_100, grams_per_bird=116),
-                            ConsumptionRecord(week=57, feed_kg=7_120, grams_per_bird=117),
-                            ConsumptionRecord(week=58, feed_kg=7_140, grams_per_bird=118),
-                        ],
-                        egg_mix=[
-                            EggSizeRecord(size="L", percentage=38.0, avg_weight=65),
-                            EggSizeRecord(size="XL", percentage=34.0, avg_weight=70),
-                            EggSizeRecord(size="Jumbo", percentage=16.0, avg_weight=74),
-                            EggSizeRecord(size="Doble yema", percentage=12.0, avg_weight=82),
-                        ],
-                        alerts=[
-                            "Plan de renovación de lote en 6 semanas.",
-                            "Monitorear mortalidad: +0.2 pts vs promedio histórico.",
-                        ],
-                        notes="Ante el próximo reemplazo preparar cronograma de desinfección profunda.",
-                    ),
-                ],
-            },
-        ]
+        today = timezone.localdate()
+        week_start = today - timedelta(days=6)
+        four_week_start = today - timedelta(days=27)
+        year_start = date(today.year, 1, 1)
+        history_start = today - timedelta(days=28)
 
+        batches = list(
+            BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE)
+            .select_related("farm")
+            .prefetch_related(
+                Prefetch(
+                    "allocations",
+                    queryset=BirdBatchRoomAllocation.objects.select_related("room__chicken_house"),
+                )
+            )
+        )
+
+        if not batches:
+            context.update(
+                {
+                    "farms": [],
+                    "global_metrics": [
+                        ScorecardMetric(
+                            label="Aves activas",
+                            value="0",
+                            delta=0.0,
+                            is_positive=True,
+                            description="Sin lotes activos registrados.",
+                        ),
+                        ScorecardMetric(
+                            label="Consumo semanal total (kg)",
+                            value="0",
+                            delta=0.0,
+                            is_positive=True,
+                            description="No hay consumo registrado.",
+                        ),
+                        ScorecardMetric(
+                            label="Uniformidad promedio",
+                            value="--",
+                            delta=0.0,
+                            is_positive=True,
+                            description="Sin datos de sesiones de pesaje.",
+                        ),
+                        ScorecardMetric(
+                            label="Peso vivo promedio (kg)",
+                            value="--",
+                            delta=0.0,
+                            is_positive=True,
+                            description="Sin datos de peso registrados.",
+                        ),
+                    ],
+                    "filters": FilterConfig(
+                        farms=[],
+                        barns=[],
+                        ranges=[
+                            "Últimas 4 semanas",
+                            "Últimos 3 meses",
+                            "Ciclo completo",
+                            "Personalizado…",
+                        ],
+                        breeds=[],
+                        egg_sizes=["Huevos pequeños", "M", "L", "XL", "Jumbo", "Doble yema"],
+                    ),
+                    "upcoming_milestones": [],
+                    "total_lots": 0,
+                    "total_barn_allocations": 0,
+                    "total_initial_birds": 0,
+                    "total_current_birds": 0,
+                    "total_feed_to_date": 0,
+                    "dashboard_generated_at": timezone.now(),
+                }
+            )
+            return context
+
+        batch_ids = [batch.id for batch in batches]
+        batch_id_set = set(batch_ids)
+
+        room_batch_map: Dict[int, set[int]] = defaultdict(set)
+        for batch in batches:
+            for allocation in batch.allocations.all():
+                room_batch_map[allocation.room_id].add(batch.id)
+        room_ids = set(room_batch_map.keys())
+
+        production_aggregates = (
+            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids)
+            .values("bird_batch_id")
+            .annotate(
+                total_consumption=Coalesce(Sum("consumption"), Decimal("0")),
+                weekly_consumption=Coalesce(
+                    Sum("consumption", filter=Q(date__range=(week_start, today))), Decimal("0")
+                ),
+                total_mortality=Coalesce(Sum("mortality"), 0),
+                total_discard=Coalesce(Sum("discard"), 0),
+                weekly_mortality=Coalesce(
+                    Sum("mortality", filter=Q(date__range=(week_start, today))), 0
+                ),
+                four_week_mortality=Coalesce(
+                    Sum("mortality", filter=Q(date__range=(four_week_start, today))), 0
+                ),
+                yearly_mortality=Coalesce(Sum("mortality", filter=Q(date__gte=year_start)), 0),
+                latest_record_date=Max("date"),
+            )
+        )
+        production_map = {entry["bird_batch_id"]: entry for entry in production_aggregates}
+
+        latest_record_map: Dict[int, ProductionRecord] = {}
+        for record in (
+            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids)
+            .order_by("-date", "-id")
+            .iterator()
+        ):
+            if record.bird_batch_id not in latest_record_map:
+                latest_record_map[record.bird_batch_id] = record
+            if len(latest_record_map) == len(batch_ids):
+                break
+
+        daily_records_map: Dict[int, ProductionRecord] = {
+            record.bird_batch_id: record
+            for record in ProductionRecord.objects.filter(
+                bird_batch_id__in=batch_ids, date=today
+            ).select_related("bird_batch")
+        }
+
+        weekly_history_map: Dict[int, List[Dict[str, object]]] = defaultdict(list)
+        weekly_history_qs = (
+            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids, date__gte=history_start)
+            .annotate(week_start=TruncWeek("date"))
+            .values("bird_batch_id", "week_start")
+            .annotate(feed_kg=Coalesce(Sum("consumption"), Decimal("0")))
+            .order_by("bird_batch_id", "-week_start")
+        )
+        for entry in weekly_history_qs:
+            week_start_date = entry["week_start"]
+            if not week_start_date:
+                continue
+            batch_id = entry["bird_batch_id"]
+            if len(weekly_history_map[batch_id]) >= 4:
+                continue
+            weekly_history_map[batch_id].append(
+                {
+                    "week_start": week_start_date,
+                    "week": week_start_date.isocalendar().week,
+                    "feed_kg": float(entry["feed_kg"] or 0),
+                }
+            )
+
+        weight_sessions_qs = (
+            WeightSampleSession.objects.filter(
+                Q(production_record__bird_batch_id__in=batch_ids) | Q(room_id__in=room_ids)
+            )
+            .select_related("production_record__bird_batch", "room__chicken_house")
+            .prefetch_related("room__allocations")
+            .order_by("-date", "-id")
+        )
+
+        weight_data: Dict[int, Dict[str, object]] = defaultdict(
+            lambda: {
+                "uniformity_weight_sum": Decimal("0"),
+                "uniformity_sample_sum": 0,
+                "weight_weight_sum": Decimal("0"),
+                "weight_sample_sum": 0,
+                "sessions": [],
+            }
+        )
+        room_last_update_map: Dict[tuple[int, int], date] = {}
+
+        for session in weight_sessions_qs:
+            batch_id: Optional[int] = None
+            if session.production_record_id and session.production_record.bird_batch_id in batch_id_set:
+                batch_id = session.production_record.bird_batch_id
+            else:
+                room_batches = room_batch_map.get(session.room_id)
+                if room_batches and len(room_batches) == 1:
+                    batch_id = next(iter(room_batches))
+
+            if batch_id is None or batch_id not in batch_id_set:
+                continue
+
+            session_data = weight_data[batch_id]
+            sample_size = session.sample_size or 0
+
+            if sample_size > 0:
+                if session.uniformity_percent is not None:
+                    session_data["uniformity_weight_sum"] += Decimal(session.uniformity_percent) * sample_size
+                    session_data["uniformity_sample_sum"] += sample_size
+                if session.average_grams is not None:
+                    session_data["weight_weight_sum"] += Decimal(session.average_grams) * sample_size
+                    session_data["weight_sample_sum"] += sample_size
+
+            if session.average_grams is not None and len(session_data["sessions"]) < 3:
+                session_data["sessions"].append(session)
+
+            key = (batch_id, session.room_id)
+            if key not in room_last_update_map or session.date > room_last_update_map[key]:
+                room_last_update_map[key] = session.date
+
+        def evaluate_delta(
+            actual_value: Optional[float],
+            target_value: Optional[float],
+            tolerance_value: float,
+        ) -> Tuple[Optional[float], Optional[str]]:
+            if actual_value is None or target_value is None:
+                return None, None
+            delta_value = round(actual_value - target_value, 2)
+            if abs(delta_value) <= tolerance_value:
+                status = "ok"
+            elif delta_value > 0:
+                status = "high"
+            else:
+                status = "low"
+            return delta_value, status
+
+        farms_map: Dict[int, Dict[str, object]] = {}
         all_lots: List[LotOverview] = []
         total_barn_allocations = 0
-        for farm in farms:
-            for lot in farm["lots"]:
-                lot["bird_balance"] = lot["initial_birds"] - lot["current_birds"]
-                lot["barn_count"] = len(lot["barns"])
-                barn_names = [allocation["name"] for allocation in lot["barns"]]
-                lot["barn_names_display"] = ", ".join(barn_names) if barn_names else "Sin asignación"
-                total_barn_allocations += lot["barn_count"]
-                all_lots.append(lot)
+
+        for batch in batches:
+            stats = production_map.get(batch.id, {})
+            total_mortality = int(stats.get("total_mortality", 0) or 0)
+            total_discard = int(stats.get("total_discard", 0) or 0)
+            bird_balance = total_mortality + total_discard
+            current_birds = max(batch.initial_quantity - bird_balance, 0)
+
+            weekly_consumption = float(stats.get("weekly_consumption") or Decimal("0"))
+            total_consumption = float(stats.get("total_consumption") or Decimal("0"))
+            weekly_mortality = int(stats.get("weekly_mortality", 0) or 0)
+            four_week_mortality = int(stats.get("four_week_mortality", 0) or 0)
+            yearly_mortality = int(stats.get("yearly_mortality", 0) or 0)
+            latest_record_date = stats.get("latest_record_date")
+
+            uniformity_info = weight_data.get(batch.id)
+            uniformity = None
+            avg_weight = None
+            trend_sessions = []
+            if uniformity_info:
+                if uniformity_info["uniformity_sample_sum"]:
+                    uniformity = float(
+                        uniformity_info["uniformity_weight_sum"]
+                        / Decimal(uniformity_info["uniformity_sample_sum"])
+                    )
+                if uniformity_info["weight_sample_sum"]:
+                    avg_weight = float(
+                        (
+                            uniformity_info["weight_weight_sum"]
+                            / Decimal(uniformity_info["weight_sample_sum"])
+                        )
+                        / Decimal("1000")
+                    )
+                trend_sessions = list(uniformity_info["sessions"])
+
+            weight_trend: List[WeightTrendPoint] = []
+            for session in reversed(trend_sessions):
+                if session.average_grams is None:
+                    continue
+                weight_kg = round(float(session.average_grams) / 1000, 2)
+                weight_trend.append(
+                    WeightTrendPoint(
+                        week=session.date.isocalendar().week,
+                        actual_weight=weight_kg,
+                        projected_weight=weight_kg,
+                    )
+                )
+
+            history_entries = weekly_history_map.get(batch.id, [])
+            consumption_history: List[ConsumptionRecord] = []
+            for entry in history_entries[:3]:
+                feed_kg = entry["feed_kg"]
+                grams_per_bird = (
+                    round((feed_kg * 1000) / (current_birds * 7), 2)
+                    if current_birds and feed_kg
+                    else 0.0
+                )
+                consumption_history.append(
+                    ConsumptionRecord(
+                        week=entry["week"],
+                        feed_kg=round(feed_kg, 2),
+                        grams_per_bird=grams_per_bird,
+                    )
+                )
+            consumption_history = list(reversed(consumption_history))
+
+            latest_record = latest_record_map.get(batch.id)
+            daily_record = daily_records_map.get(batch.id)
+            actual_record = daily_record or latest_record
+
+            consumption_actual = (
+                float(actual_record.consumption)
+                if actual_record and actual_record.consumption is not None
+                else None
+            )
+            mortality_actual = (
+                float(actual_record.mortality)
+                if actual_record and actual_record.mortality is not None
+                else None
+            )
+            discard_actual = (
+                float(actual_record.discard)
+                if actual_record and actual_record.discard is not None
+                else None
+            )
+            egg_weight_actual = (
+                float(actual_record.average_egg_weight)
+                if actual_record and actual_record.average_egg_weight is not None
+                else None
+            )
+            production_actual = (
+                float(actual_record.production)
+                if actual_record and actual_record.production is not None
+                else None
+            )
+
+            reference_targets = get_reference_targets(
+                batch.breed,
+                (today - batch.birth_date).days // 7 if batch.birth_date else 0,
+                current_birds or batch.initial_quantity,
+            )
+
+            feed_today_grams: Optional[float] = None
+            if consumption_actual is not None and current_birds:
+                feed_today_grams = round(consumption_actual * 1000 / current_birds, 2)
+
+            egg_mix: List[EggSizeRecord] = []
+            if egg_weight_actual is not None:
+                egg_mix.append(
+                    EggSizeRecord(
+                        size="Promedio",
+                        percentage=100.0,
+                        avg_weight=egg_weight_actual,
+                    )
+                )
+
+            mortality_records: List[MortalityRecord] = [
+                MortalityRecord(
+                    label="Semana actual",
+                    quantity=weekly_mortality,
+                    percentage=round(
+                        (weekly_mortality / batch.initial_quantity) * 100, 2
+                    )
+                    if batch.initial_quantity
+                    else 0.0,
+                ),
+                MortalityRecord(
+                    label="Últimas 4 semanas",
+                    quantity=four_week_mortality,
+                    percentage=round(
+                        (four_week_mortality / batch.initial_quantity) * 100, 2
+                    )
+                    if batch.initial_quantity
+                    else 0.0,
+                ),
+                MortalityRecord(
+                    label="Año en curso",
+                    quantity=yearly_mortality,
+                    percentage=round(
+                        (yearly_mortality / batch.initial_quantity) * 100, 2
+                    )
+                    if batch.initial_quantity
+                    else 0.0,
+                ),
+            ]
+
+            daily_snapshot: List[DailySnapshotMetric] = []
+
+            consumption_target = reference_targets["consumption_kg"]
+            consumption_delta, consumption_status = evaluate_delta(
+                consumption_actual,
+                consumption_target,
+                tolerance_value=max(consumption_target * 0.05, 5.0),
+            )
+            daily_snapshot.append(
+                DailySnapshotMetric(
+                    label="Consumo diario",
+                    slug="consumption",
+                    unit="kg",
+                    decimals=1,
+                    actual=consumption_actual,
+                    target=consumption_target,
+                    delta=consumption_delta,
+                    status=consumption_status,
+                )
+            )
+
+            mortality_target = reference_targets["mortality_birds"]
+            mortality_delta, mortality_status = evaluate_delta(
+                mortality_actual,
+                mortality_target,
+                tolerance_value=max(mortality_target * 0.25, 1.0),
+            )
+            daily_snapshot.append(
+                DailySnapshotMetric(
+                    label="Mortalidad",
+                    slug="mortality",
+                    unit="aves",
+                    decimals=1,
+                    actual=mortality_actual,
+                    target=mortality_target,
+                    delta=mortality_delta,
+                    status=mortality_status,
+                )
+            )
+
+            discard_target = reference_targets["discard_birds"]
+            discard_delta, discard_status = evaluate_delta(
+                discard_actual,
+                discard_target,
+                tolerance_value=max(discard_target * 0.25, 1.0),
+            )
+            daily_snapshot.append(
+                DailySnapshotMetric(
+                    label="Descarte",
+                    slug="discard",
+                    unit="aves",
+                    decimals=1,
+                    actual=discard_actual,
+                    target=discard_target,
+                    delta=discard_delta,
+                    status=discard_status,
+                )
+            )
+
+            egg_target = reference_targets["egg_weight_g"]
+            egg_delta, egg_status = evaluate_delta(
+                egg_weight_actual,
+                egg_target,
+                tolerance_value=1.2,
+            )
+            daily_snapshot.append(
+                DailySnapshotMetric(
+                    label="Peso huevo",
+                    slug="egg_weight",
+                    unit="g",
+                    decimals=1,
+                    actual=egg_weight_actual,
+                    target=egg_target,
+                    delta=egg_delta,
+                    status=egg_status,
+                )
+            )
+
+            production_target = reference_targets["production_percent"]
+            production_delta, production_status = evaluate_delta(
+                production_actual,
+                production_target,
+                tolerance_value=2.0,
+            )
+            daily_snapshot.append(
+                DailySnapshotMetric(
+                    label="Producción",
+                    slug="production",
+                    unit="%",
+                    decimals=1,
+                    actual=production_actual,
+                    target=production_target,
+                    delta=production_delta,
+                    status=production_status,
+                )
+            )
+
+            alerts: List[str] = []
+            if consumption_status == "high" and consumption_delta is not None:
+                alerts.append(
+                    f"Consumo diario +{consumption_delta:.1f} kg sobre la tabla."
+                )
+            if consumption_status == "low" and consumption_delta is not None:
+                alerts.append(
+                    f"Consumo diario {consumption_delta:.1f} kg por debajo del objetivo."
+                )
+            if uniformity is not None and uniformity < 85:
+                alerts.append(f"Uniformidad promedio {uniformity:.1f}% por debajo del objetivo.")
+            if mortality_status == "high" and mortality_delta is not None:
+                alerts.append(
+                    f"Mortalidad diaria +{mortality_delta:.0f} aves sobre la tabla."
+                )
+            if discard_status == "high" and discard_delta is not None:
+                alerts.append(
+                    f"Descarte diario +{discard_delta:.0f} aves respecto a la tabla."
+                )
+            if production_status == "low" and production_delta is not None:
+                alerts.append(
+                    f"Producción diaria {production_delta:.1f}% por debajo del objetivo."
+                )
+            if batch.initial_quantity and current_birds / batch.initial_quantity < 0.9:
+                alerts.append("Saldo de aves por debajo del 90% del lote inicial.")
+
+            notes = (
+                f"Último registro de producción: {actual_record.date:%d %b %Y}."
+                if actual_record
+                else "Sin registros de producción disponibles."
+            )
+
+            barns_list: List[BarnAllocation] = []
+            barn_names: List[str] = []
+
+            for allocation in batch.allocations.all():
+                share = allocation.quantity / batch.initial_quantity if batch.initial_quantity else 0
+                allocation_current = int(round(current_birds * share))
+                occupancy_rate = (
+                    round((allocation_current / allocation.quantity) * 100, 1)
+                    if allocation.quantity
+                    else 0.0
+                )
+                weekly_feed_alloc = round(weekly_consumption * share, 2)
+                mortality_week_alloc = int(round(weekly_mortality * share))
+                mortality_percentage_alloc = (
+                    round((mortality_week_alloc / allocation.quantity) * 100, 2)
+                    if allocation.quantity
+                    else 0.0
+                )
+                mortality_cumulative_alloc = int(round(total_mortality * share))
+                mortality_cumulative_percentage_alloc = (
+                    round((mortality_cumulative_alloc / allocation.quantity) * 100, 2)
+                    if allocation.quantity
+                    else 0.0
+                )
+                last_update = room_last_update_map.get(
+                    (batch.id, allocation.room_id), latest_record_date
+                )
+                barns_list.append(
+                    BarnAllocation(
+                        name=allocation.room.chicken_house.name,
+                        segment=allocation.room.name,
+                        initial_birds=allocation.quantity,
+                        current_birds=allocation_current,
+                        occupancy_rate=occupancy_rate,
+                        feed_today_grams=feed_today_grams,
+                        weekly_feed_kg=weekly_feed_alloc,
+                        mortality_week=mortality_week_alloc,
+                        mortality_percentage=mortality_percentage_alloc,
+                        mortality_cumulative=mortality_cumulative_alloc,
+                        mortality_cumulative_percentage=mortality_cumulative_percentage_alloc,
+                        last_update=last_update,
+                    )
+                )
+                barn_names.append(f"{allocation.room.chicken_house.name} · {allocation.room.name}")
+
+            total_barn_allocations += len(barns_list)
+            barn_names_display = ", ".join(barn_names) if barn_names else "Sin asignación"
+
+            lot_data: LotOverview = {
+                "label": f"Lote #{batch.id}",
+                "breed": batch.breed,
+                "birth_date": batch.birth_date,
+                "age_weeks": (today - batch.birth_date).days // 7 if batch.birth_date else 0,
+                "initial_birds": batch.initial_quantity,
+                "current_birds": current_birds,
+                "bird_balance": batch.initial_quantity - current_birds,
+                "barn_count": len(barns_list),
+                "barn_names_display": barn_names_display,
+                "uniformity": round(uniformity, 2) if uniformity is not None else None,
+                "avg_weight": round(avg_weight, 2) if avg_weight is not None else None,
+                "target_weight": None,
+                "feed_today_grams": feed_today_grams,
+                "weekly_feed_kg": round(weekly_consumption, 2),
+                "total_feed_to_date_kg": round(total_consumption, 2),
+                "barns": barns_list,
+                "mortality": mortality_records,
+                "weight_trend": weight_trend,
+                "consumption_history": consumption_history,
+                "egg_mix": egg_mix,
+                "alerts": alerts,
+                "notes": notes,
+                "daily_snapshot": daily_snapshot,
+            }
+
+            all_lots.append(lot_data)
+            farm_bucket = farms_map.setdefault(
+                batch.farm_id,
+                {
+                    "farm": batch.farm,
+                    "lots": [],
+                },
+            )
+            farm_bucket["lots"].append(lot_data)
+
+        farms_context: List[FarmOverview] = []
+        for farm_id, info in farms_map.items():
+            farm = info["farm"]
+            lots = info["lots"]
+            total_initial = sum(lot["initial_birds"] for lot in lots)
+            total_current = sum(lot["current_birds"] for lot in lots)
+            weekly_consumption_sum = round(sum(lot["weekly_feed_kg"] for lot in lots), 2)
+            mortality_percent = (
+                round(((total_initial - total_current) / total_initial) * 100, 2)
+                if total_initial
+                else 0.0
+            )
+            uniformity_values = [lot["uniformity"] for lot in lots if lot["uniformity"] is not None]
+            average_uniformity = (
+                round(sum(uniformity_values) / len(uniformity_values), 2)
+                if uniformity_values
+                else None
+            )
+            weight_values = [lot["avg_weight"] for lot in lots if lot["avg_weight"] is not None]
+            average_weight = (
+                round(sum(weight_values) / len(weight_values), 2)
+                if weight_values
+                else None
+            )
+
+            farm_summary: FarmSummary = {
+                "total_initial_birds": total_initial,
+                "current_birds": total_current,
+                "mortality_percent": mortality_percent,
+                "weekly_consumption": weekly_consumption_sum,
+                "average_uniformity": average_uniformity,
+                "average_weight": average_weight,
+                "lot_count": len(lots),
+            }
+            farms_context.append(
+                {
+                    "name": farm.name,
+                    "code": f"F-{farm.id}",
+                    "summary": farm_summary,
+                    "lots": lots,
+                }
+            )
+        farms_context.sort(key=lambda farm: farm["name"])
 
         total_lots = len(all_lots)
         total_initial_birds = sum(lot["initial_birds"] for lot in all_lots)
         total_current_birds = sum(lot["current_birds"] for lot in all_lots)
-        total_weekly_feed = sum(lot["weekly_feed_kg"] for lot in all_lots)
-        total_feed_to_date = int(sum(lot["total_feed_to_date_kg"] for lot in all_lots))
-        average_uniformity = (
-            round(sum(lot["uniformity"] for lot in all_lots) / total_lots, 1)
-            if total_lots
-            else 0.0
-        )
-        average_weight = (
-            round(sum(lot["avg_weight"] for lot in all_lots) / total_lots, 2)
-            if total_lots
-            else 0.0
-        )
+        total_weekly_feed = round(sum(lot["weekly_feed_kg"] for lot in all_lots), 2)
+        total_feed_to_date = round(sum(lot["total_feed_to_date_kg"] for lot in all_lots), 2)
 
         global_metrics: List[ScorecardMetric] = [
             ScorecardMetric(
                 label="Aves activas",
-                value=f"{total_current_birds:,}".replace(",", "."),
-                delta=1.2,
+                value=f"{total_current_birds:,}",
+                delta=0.0,
                 is_positive=True,
-                description="Variación quincenal contra plan operativo.",
+                description="Inventario vivo total en lotes activos.",
             ),
             ScorecardMetric(
                 label="Consumo semanal total (kg)",
-                value=f"{int(total_weekly_feed):,}".replace(",", "."),
-                delta=0.8,
+                value=f"{total_weekly_feed:,.1f}",
+                delta=0.0,
                 is_positive=True,
-                description="Incremento controlado en línea con fase de postura.",
-            ),
-            ScorecardMetric(
-                label="Uniformidad promedio",
-                value=f"{average_uniformity}%",
-                delta=-0.4,
-                is_positive=False,
-                description="Seguimiento semanal sobre desviación estándar de peso.",
-            ),
-            ScorecardMetric(
-                label="Peso vivo promedio (kg)",
-                value=f"{average_weight}",
-                delta=0.02,
-                is_positive=True,
-                description="Comparativo con proyección genética del ciclo.",
+                description="Suma del consumo registrado en los últimos 7 días.",
             ),
         ]
 
-        upcoming_milestones: List[UpcomingMilestone] = [
-            UpcomingMilestone(
-                title="Renovación Lote 3A",
-                detail="Preparar retiro y limpieza profunda · Granja El Porvenir",
-                due_on=base_date + timedelta(weeks=6),
-            ),
-            UpcomingMilestone(
-                title="Auditoría de bioseguridad",
-                detail="Verificación de protocolos · Granja San Lucas · Galpón 2",
-                due_on=base_date + timedelta(days=10),
-            ),
-            UpcomingMilestone(
-                title="Instalación sensores ambientales",
-                detail="Integración IoT para consumo y confort térmico · Galpón 1",
-                due_on=base_date + timedelta(days=21),
-            ),
-        ]
-
-        barn_options = sorted(
+        farm_names = sorted({farm["name"] for farm in farms_context})
+        barn_filter_names = sorted(
             {
                 f'{allocation["name"]} · {farm["name"]}'
-                for farm in farms
+                for farm in farms_context
                 for lot in farm["lots"]
                 for allocation in lot["barns"]
             }
         )
+        breed_names = sorted({lot["breed"] for lot in all_lots})
 
         filters = FilterConfig(
-            farms=[farm["name"] for farm in farms],
-            barns=barn_options,
+            farms=farm_names,
+            barns=barn_filter_names,
             ranges=[
                 "Últimas 4 semanas",
                 "Últimos 3 meses",
                 "Ciclo completo",
                 "Personalizado…",
             ],
-            breeds=sorted({lot["breed"] for lot in all_lots}),
+            breeds=breed_names,
             egg_sizes=["Huevos pequeños", "M", "L", "XL", "Jumbo", "Doble yema"],
         )
 
+        upcoming_milestones: List[UpcomingMilestone] = []
+        for farm in farms_context:
+            for lot in farm["lots"]:
+                latest_updates = [
+                    allocation["last_update"] for allocation in lot["barns"] if allocation["last_update"]
+                ]
+                if not latest_updates:
+                    continue
+                next_due = max(latest_updates) + timedelta(days=7)
+                upcoming_milestones.append(
+                    UpcomingMilestone(
+                        title=f"Seguimiento de pesaje {lot['label']}",
+                        detail=f"{farm['name']} · {lot['barn_names_display']}",
+                        due_on=next_due,
+                    )
+                )
+        upcoming_milestones.sort(key=lambda milestone: milestone["due_on"])
+        upcoming_milestones = upcoming_milestones[:3]
+
         context.update(
             {
-                "farms": farms,
+                "farms": farms_context,
                 "global_metrics": global_metrics,
                 "filters": filters,
                 "upcoming_milestones": upcoming_milestones,

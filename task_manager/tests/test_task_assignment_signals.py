@@ -15,7 +15,7 @@ from personal.models import (
     ShiftType,
     UserProfile,
 )
-from production.models import Farm
+from production.models import ChickenHouse, Farm, Room
 from task_manager.models import TaskCategory, TaskDefinition, TaskStatus
 
 
@@ -24,6 +24,16 @@ class TaskAssignmentSignalTests(TestCase):
         self.status = TaskStatus.objects.create(name="Activa", is_active=True)
         self.category = TaskCategory.objects.create(name="General", is_active=True)
         self.farm = Farm.objects.create(name="El Vergel")
+        self.chicken_house = ChickenHouse.objects.create(
+            farm=self.farm,
+            name="Galpón 1",
+            area_m2=100,
+        )
+        self.room = Room.objects.create(
+            chicken_house=self.chicken_house,
+            name="Sala 1",
+            area_m2=50,
+        )
         self.position_category = PositionCategory.objects.create(
             code=PositionCategoryCode.SUPERVISOR,
             shift_type=ShiftType.DAY,
@@ -33,8 +43,10 @@ class TaskAssignmentSignalTests(TestCase):
             code="SUP-GEN-001",
             category=self.position_category,
             farm=self.farm,
+            chicken_house=self.chicken_house,
             valid_from=date(2024, 1, 1),
         )
+        self.position.rooms.add(self.room)
         self.operator = UserProfile.objects.create_user(
             "123456789",
             password=None,
@@ -71,7 +83,7 @@ class TaskAssignmentSignalTests(TestCase):
             scheduled_for=date(2024, 1, 7),
         )
         schedule_mock.reset_mock()
-        task.farms.add(self.farm)
+        task.rooms.add(self.room)
         schedule_mock.assert_called()
 
     @mock.patch("task_manager.signals._schedule_range_sync")

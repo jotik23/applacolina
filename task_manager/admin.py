@@ -67,7 +67,7 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
         "record_format",
     )
     search_fields = ("name", "description")
-    filter_horizontal = ("farms", "chicken_houses", "rooms")
+    filter_horizontal = ("rooms",)
     autocomplete_fields = ("status", "category", "position", "collaborator")
     readonly_fields = ("created_at", "updated_at")
     fieldsets = (
@@ -102,8 +102,6 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
                 "fields": (
                     "position",
                     "collaborator",
-                    "farms",
-                    "chicken_houses",
                     "rooms",
                 )
             },
@@ -162,6 +160,7 @@ class TaskAssignmentAdmin(admin.ModelAdmin):
                 "fields": (
                     "task_definition",
                     "collaborator",
+                    "previous_collaborator",
                     "due_date",
                 )
             },

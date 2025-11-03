@@ -533,6 +533,12 @@ def _serialize_task_assignment(
     if definition.category_id:
         meta.append(_("Categoría: %(category)s") % {"category": definition.category.name})
 
+    previous_label: Optional[str] = None
+    previous_collaborator = getattr(assignment, "previous_collaborator", None)
+    if previous_collaborator and previous_collaborator.pk != assignment.collaborator_id:
+        previous_label = previous_collaborator.get_full_name()
+        meta.append(_("Asignada inicialmente a %(name)s") % {"name": previous_label})
+
     if is_completed_today:
         actions: list[dict[str, object]] = [
             {"label": _("Desmarcar"), "action": "reset", "disabled": False},
@@ -566,6 +572,7 @@ def _serialize_task_assignment(
         "is_completed_today": is_completed_today,
         "completed_on_iso": assignment.completed_on.isoformat() if is_completed_today else None,
         "due_date_iso": assignment.due_date.isoformat() if assignment.due_date else None,
+        "reassigned_from": previous_label,
         "complete_url": reverse("task_manager:mini-app-task-complete", kwargs={"pk": assignment.pk}),
         "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}) if is_completed_today else None,
         "evidence_upload_url": reverse("task_manager:mini-app-task-evidence", kwargs={"pk": assignment.pk}),
@@ -591,6 +598,7 @@ def _resolve_daily_task_cards(
                 "task_definition__category",
                 "task_definition__position",
                 "task_definition__status",
+                "previous_collaborator",
             )
             .prefetch_related("evidences")
             .order_by("due_date", "task_definition__display_order", "task_definition__name", "pk")
@@ -3128,8 +3136,6 @@ def serialize_task_definition(task: TaskDefinition) -> dict[str, object]:
         "month_days": list(task.month_days or []),
         "position": task.position_id,
         "collaborator": task.collaborator_id,
-        "farms": list(task.farms.values_list("pk", flat=True)),
-        "chicken_houses": list(task.chicken_houses.values_list("pk", flat=True)),
         "rooms": list(task.rooms.values_list("pk", flat=True)),
         "evidence_requirement": task.evidence_requirement,
         "record_format": task.record_format,
@@ -3438,9 +3444,8 @@ def get_task_definition_queryset(
             "collaborator",
         )
         .prefetch_related(
-            "farms",
-            "chicken_houses__farm",
             "rooms__chicken_house__farm",
+            "position__rooms__chicken_house__farm",
         )
         .order_by("display_order", "name", "pk")
     )
@@ -3519,45 +3524,44 @@ def apply_task_definition_filters(
 
         if prefix == "general":
             queryset = queryset.filter(
-                farms__isnull=True,
-                chicken_houses__isnull=True,
                 rooms__isnull=True,
+                position__rooms__isnull=True,
                 position__farm__isnull=True,
                 position__chicken_house__isnull=True,
             )
         elif prefix == "farm":
+            base_filter = Q(rooms__chicken_house__farm__isnull=False) | Q(
+                position__rooms__chicken_house__farm__isnull=False
+            ) | Q(position__farm__isnull=False)
             if scope_id is None:
-                queryset = queryset.filter(
-                    Q(farms__isnull=False)
-                    | Q(chicken_houses__farm__isnull=False)
-                    | Q(rooms__chicken_house__farm__isnull=False)
-                    | Q(position__farm__isnull=False)
-                )
+                queryset = queryset.filter(base_filter)
             else:
                 queryset = queryset.filter(
-                    Q(farms__pk=scope_id)
-                    | Q(chicken_houses__farm__pk=scope_id)
-                    | Q(rooms__chicken_house__farm__pk=scope_id)
+                    Q(rooms__chicken_house__farm__pk=scope_id)
+                    | Q(position__rooms__chicken_house__farm__pk=scope_id)
                     | Q(position__farm_id=scope_id)
                 )
         elif prefix == "house":
+            base_filter = Q(rooms__chicken_house__isnull=False) | Q(
+                position__rooms__chicken_house__isnull=False
+            ) | Q(position__chicken_house__isnull=False)
             if scope_id is None:
-                queryset = queryset.filter(
-                    Q(chicken_houses__isnull=False)
-                    | Q(rooms__chicken_house__isnull=False)
-                    | Q(position__chicken_house__isnull=False)
-                )
+                queryset = queryset.filter(base_filter)
             else:
                 queryset = queryset.filter(
-                    Q(chicken_houses__pk=scope_id)
-                    | Q(rooms__chicken_house__pk=scope_id)
+                    Q(rooms__chicken_house__pk=scope_id)
+                    | Q(position__rooms__chicken_house__pk=scope_id)
                     | Q(position__chicken_house_id=scope_id)
                 )
         elif prefix == "room":
             if scope_id is None:
-                queryset = queryset.filter(rooms__isnull=False)
+                queryset = queryset.filter(
+                    Q(rooms__isnull=False) | Q(position__rooms__isnull=False)
+                )
             else:
-                queryset = queryset.filter(rooms__pk=scope_id)
+                queryset = queryset.filter(
+                    Q(rooms__pk=scope_id) | Q(position__rooms__pk=scope_id)
+                )
         else:
             needs_distinct = False
 
@@ -4362,23 +4366,41 @@ def get_task_type_label(task: TaskDefinition) -> str:
 
 
 def format_task_scope(task: TaskDefinition) -> tuple[str, str, str]:
-    rooms = list(task.rooms.all())
+    rooms = list(
+        task.rooms.select_related("chicken_house__farm").all()
+    )
+    if not rooms and task.position_id:
+        rooms = list(
+            task.position.rooms.select_related("chicken_house__farm").all()
+        )
+
     if rooms:
-        return summarize_related_scope(
-            (f"{room.chicken_house.farm.name} · {room.chicken_house.name} · {room.name}" for room in rooms),
-            _("Salón"),
-        ), "room", _("Salones")
+        label_list: list[str] = []
+        for room in rooms:
+            components: list[str] = []
+            house = getattr(room, "chicken_house", None)
+            farm = getattr(house, "farm", None) if house else None
+            if farm and getattr(farm, "name", ""):
+                components.append(farm.name)
+            if house and getattr(house, "name", ""):
+                components.append(house.name)
+            if getattr(room, "name", ""):
+                components.append(room.name)
+            if not components:
+                components.append(_("Sin ubicación"))
+            label_list.append(" · ".join(components))
+        labels = (label for label in label_list)
+        return summarize_related_scope(labels, _("Salón")), "room", _("Salones")
 
-    chicken_houses = list(task.chicken_houses.all())
-    if chicken_houses:
-        return summarize_related_scope(
-            (f"{house.farm.name} · {house.name}" for house in chicken_houses),
-            _("Galpón"),
-        ), "house", _("Galpones")
+    position = task.position
+    if position and position.chicken_house:
+        house = position.chicken_house
+        farm = house.farm
+        label = f"{farm.name} · {house.name}" if farm else house.name
+        return label, "house", _("Galpones")
 
-    farms = list(task.farms.all())
-    if farms:
-        return summarize_related_scope((farm.name for farm in farms), _("Granja")), "farm", _("Granjas")
+    if position and position.farm:
+        return position.farm.name, "farm", _("Granjas")
 
     return _("Cobertura general"), "general", _("General")
 

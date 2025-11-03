@@ -1815,7 +1815,7 @@
             }
           });
 
-          var multiValueFields = ['weekly_days', 'month_days', 'farms', 'chicken_houses', 'rooms'];
+          var multiValueFields = ['weekly_days', 'month_days', 'rooms'];
           multiValueFields.forEach(function (fieldName) {
             var field = taskCreateForm.querySelector('[name=\"' + fieldName + '\"]');
             if (!field || !field.options) {

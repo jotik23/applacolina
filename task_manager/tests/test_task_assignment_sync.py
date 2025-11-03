@@ -47,6 +47,16 @@ class TaskAssignmentSynchronizationTests(TestCase):
         )
         self.position.rooms.set([self.room])
 
+        self.second_position = PositionDefinition.objects.create(
+            name="Supervisor suplente",
+            code="SUP-DAY-ALT",
+            category=self.category,
+            farm=self.farm,
+            chicken_house=self.chicken_house,
+            valid_from=date(2024, 1, 1),
+        )
+        self.second_position.rooms.set([self.room])
+
         self.calendar = ShiftCalendar.objects.create(
             name="Enero 2024",
             start_date=date(2024, 1, 1),
@@ -60,6 +70,14 @@ class TaskAssignmentSynchronizationTests(TestCase):
             nombres="Laura",
             apellidos="García",
             telefono="3110000000",
+        )
+
+        self.backup_operator = UserProfile.objects.create_user(
+            "3020103040",
+            password=None,
+            nombres="Carlos",
+            apellidos="Ramírez",
+            telefono="3125550000",
         )
 
         self.status = TaskStatus.objects.create(name="Activa", is_active=True)
@@ -139,22 +157,6 @@ class TaskAssignmentSynchronizationTests(TestCase):
     def test_sync_replicates_tasks_for_each_matching_scope(self):
         due_date = date(2024, 1, 10)  # Wednesday
 
-        second_operator = UserProfile.objects.create_user(
-            "1098765432",
-            password=None,
-            nombres="Mateo",
-            apellidos="López",
-            telefono="3120000000",
-        )
-        second_position = PositionDefinition.objects.create(
-            name="Auxiliar de supervisión",
-            code="SUP-DAY-002",
-            category=self.category,
-            farm=self.farm,
-            chicken_house=self.chicken_house,
-            valid_from=date(2024, 1, 1),
-        )
-
         with suppress_task_assignment_sync():
             ShiftAssignment.objects.create(
                 calendar=self.calendar,
@@ -164,9 +166,9 @@ class TaskAssignmentSynchronizationTests(TestCase):
             )
             ShiftAssignment.objects.create(
                 calendar=self.calendar,
-                position=second_position,
+                position=self.second_position,
                 date=due_date,
-                operator=second_operator,
+                operator=self.backup_operator,
             )
 
         task = self._create_task_definition(
@@ -174,14 +176,20 @@ class TaskAssignmentSynchronizationTests(TestCase):
             weekly_days=[DayOfWeek.WEDNESDAY],
         )
         with suppress_task_assignment_sync():
-            task.farms.set([self.farm])
+            second_room = Room.objects.create(
+                chicken_house=self.chicken_house,
+                name="Sala B",
+                area_m2=110,
+            )
+            self.second_position.rooms.set([second_room])
+            task.rooms.set([self.room, second_room])
 
         sync_task_assignments(start_date=due_date, end_date=due_date)
 
         assignments = TaskAssignment.objects.filter(task_definition=task, due_date=due_date).order_by("collaborator_id")
         self.assertEqual(assignments.count(), 2)
         collaborator_ids = list(assignments.values_list("collaborator_id", flat=True))
-        self.assertEqual(collaborator_ids, sorted([self.operator.pk, second_operator.pk]))
+        self.assertEqual(collaborator_ids, sorted([self.operator.pk, self.backup_operator.pk]))
 
     def test_sync_creates_orphan_for_one_time_task_without_shift(self):
         due_date = date(2024, 1, 5)
@@ -196,6 +204,7 @@ class TaskAssignmentSynchronizationTests(TestCase):
 
         assignment = TaskAssignment.objects.get(task_definition=task, due_date=due_date)
         self.assertIsNone(assignment.collaborator)
+        self.assertIsNone(assignment.previous_collaborator)
 
     def test_sync_uses_collaborator_fallback_when_scope_allows(self):
         due_date = date(2024, 1, 20)
@@ -220,3 +229,42 @@ class TaskAssignmentSynchronizationTests(TestCase):
 
         assignment = TaskAssignment.objects.get(task_definition=task, due_date=due_date)
         self.assertEqual(assignment.collaborator, collaborator)
+
+    def test_sync_reassigns_to_new_operator_with_overlapping_rooms(self):
+        due_date = date(2024, 1, 8)
+
+        with suppress_task_assignment_sync():
+            shift = ShiftAssignment.objects.create(
+                calendar=self.calendar,
+                position=self.position,
+                date=due_date,
+                operator=self.operator,
+            )
+
+        task = self._create_task_definition(
+            name="Revisión de puertas",
+            weekly_days=[DayOfWeek.MONDAY],
+        )
+        with suppress_task_assignment_sync():
+            task.rooms.set([self.room])
+
+        sync_task_assignments(start_date=due_date, end_date=due_date)
+
+        assignment = TaskAssignment.objects.get(task_definition=task, due_date=due_date)
+        self.assertEqual(assignment.collaborator, self.operator)
+        self.assertIsNone(assignment.previous_collaborator)
+
+        with suppress_task_assignment_sync():
+            shift.delete()
+            ShiftAssignment.objects.create(
+                calendar=self.calendar,
+                position=self.second_position,
+                date=due_date,
+                operator=self.backup_operator,
+            )
+
+        sync_task_assignments(start_date=due_date, end_date=due_date)
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.collaborator, self.backup_operator)
+        self.assertEqual(assignment.previous_collaborator, self.operator)

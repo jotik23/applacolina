@@ -12,7 +12,7 @@ from django.db.models import BooleanField, Case, F, IntegerField, Q, Value, When
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from production.models import ChickenHouse, Farm, Room, ProductionRecord
+from production.models import Room, ProductionRecord
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
 
 
@@ -234,18 +234,6 @@ class TaskDefinition(models.Model):
         default=RecordFormat.NONE,
         help_text=_("Selecciona el formato de registro obligatorio para cerrar la tarea."),
     )
-    farms = models.ManyToManyField(
-        Farm,
-        related_name="task_definitions",
-        verbose_name=_("Granjas"),
-        blank=True,
-    )
-    chicken_houses = models.ManyToManyField(
-        ChickenHouse,
-        related_name="task_definitions",
-        verbose_name=_("Galpones"),
-        blank=True,
-    )
     rooms = models.ManyToManyField(
         Room,
         related_name="task_definitions",
@@ -415,6 +403,14 @@ class TaskAssignment(models.Model):
         on_delete=models.PROTECT,
         related_name="task_assignments",
         verbose_name=_("Colaborador"),
+        null=True,
+        blank=True,
+    )
+    previous_collaborator = models.ForeignKey(
+        UserProfile,
+        on_delete=models.SET_NULL,
+        related_name="previous_task_assignments",
+        verbose_name=_("Colaborador previo"),
         null=True,
         blank=True,
     )

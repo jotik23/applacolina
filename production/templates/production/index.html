@@ -106,37 +106,45 @@
                 <div>
                   <h2 class="text-2xl font-semibold text-slate-900">{{ farm.name }}</h2>
                   <p class="mt-1 text-sm text-slate-500">
-                    Código {{ farm.code }} · {{ farm.summary.location }}
+                    Código {{ farm.code }} · {{ farm.summary.lot_count }} lote{{ farm.summary.lot_count|pluralize:"s" }}
                   </p>
                 </div>
-                <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-3 lg:grid-cols-4">
+                <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-3 lg:grid-cols-6">
                   <div>
                     <dt class="font-semibold text-slate-500">Aves iniciales</dt>
-                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.total_birds|intcomma }}</dd>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.total_initial_birds|intcomma }}</dd>
                   </div>
                   <div>
                     <dt class="font-semibold text-slate-500">Aves actuales</dt>
                     <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.current_birds|intcomma }}</dd>
                   </div>
                   <div>
-                    <dt class="font-semibold text-slate-500">Postura promedio</dt>
-                    <dd class="mt-1 text-lg font-semibold text-emerald-600">{{ farm.summary.posture_percent }}%</dd>
+                    <dt class="font-semibold text-slate-500">Consumo semanal</dt>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.weekly_consumption|floatformat:1 }} kg</dd>
                   </div>
                   <div>
                     <dt class="font-semibold text-slate-500">Mortalidad acumulada</dt>
-                    <dd class="mt-1 text-lg font-semibold text-amber-600">{{ farm.summary.mortality_percent }}%</dd>
+                    <dd class="mt-1 text-lg font-semibold text-amber-600">{{ farm.summary.mortality_percent|floatformat:2 }}%</dd>
                   </div>
                   <div>
                     <dt class="font-semibold text-slate-500">Uniformidad media</dt>
-                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.average_uniformity }}%</dd>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">
+                      {% if farm.summary.average_uniformity %}
+                        {{ farm.summary.average_uniformity|floatformat:1 }}%
+                      {% else %}
+                        --
+                      {% endif %}
+                    </dd>
                   </div>
                   <div>
-                    <dt class="font-semibold text-slate-500">Huevos/día</dt>
-                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.eggs_per_day|intcomma }}</dd>
-                  </div>
-                  <div>
-                    <dt class="font-semibold text-slate-500">Consumo semanal</dt>
-                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.feed_weekly_kg|intcomma }} kg</dd>
+                    <dt class="font-semibold text-slate-500">Peso vivo promedio</dt>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">
+                      {% if farm.summary.average_weight %}
+                        {{ farm.summary.average_weight|floatformat:2 }} kg
+                      {% else %}
+                        --
+                      {% endif %}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -144,9 +152,9 @@
 
             <div class="space-y-6 p-6">
               {% for lot in farm.lots %}
-                <article class="rounded-xl border border-slate-200/70 bg-slate-50/80 shadow-inner">
+                <article class="rounded-xl border border-slate-200/70 bg-white shadow-sm ring-1 ring-emerald-100/60">
                   <details class="group">
-                    <summary class="flex cursor-pointer flex-col gap-4 bg-white/90 px-5 py-4 transition hover:bg-emerald-50 sm:flex-row sm:items-center sm:justify-between">
+                    <summary class="flex cursor-pointer flex-col gap-4 rounded-xl border-l-4 border-emerald-200/80 bg-emerald-50/50 px-5 py-4 transition hover:border-emerald-300 hover:bg-emerald-50/80 sm:flex-row sm:items-center sm:justify-between">
                       <div class="space-y-2">
                         <div class="flex items-center gap-3">
                           <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
@@ -154,10 +162,6 @@
                           </span>
                           <span class="text-xs text-slate-500">{{ lot.breed }} · {{ lot.age_weeks }} semanas · Nacido {{ lot.birth_date|date:"d M Y" }}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400">
-                          Distribuido en {{ lot.barn_count }} galpón{{ lot.barn_count|pluralize }}:
-                          <span class="font-semibold text-slate-500">{{ lot.barn_names_display }}</span>
-                        </p>
                         <p class="text-xs text-slate-500">{{ lot.notes }}</p>
                       </div>
                       <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-6">
@@ -171,24 +175,95 @@
                         </div>
                         <div>
                           <dt class="font-semibold uppercase tracking-wide text-slate-500">Uniformidad</dt>
-                          <dd class="mt-1 text-base font-semibold text-emerald-600">{{ lot.uniformity }}%</dd>
+                          <dd class="mt-1 text-base font-semibold text-emerald-600">
+                            {% if lot.uniformity %}
+                              {{ lot.uniformity|floatformat:1 }}%
+                            {% else %}
+                              --
+                            {% endif %}
+                          </dd>
                         </div>
                         <div>
                           <dt class="font-semibold uppercase tracking-wide text-slate-500">Peso promedio</dt>
-                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.avg_weight }} kg</dd>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">
+                            {% if lot.avg_weight %}
+                              {{ lot.avg_weight|floatformat:2 }} kg
+                            {% else %}
+                              --
+                            {% endif %}
+                          </dd>
                         </div>
                         <div>
                           <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo diario</dt>
-                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.feed_today_grams }} g/ave</dd>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">
+                            {% if lot.feed_today_grams %}
+                              {{ lot.feed_today_grams|floatformat:1 }} g/ave
+                            {% else %}
+                              --
+                            {% endif %}
+                          </dd>
                         </div>
                         <div>
                           <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo semanal</dt>
-                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.weekly_feed_kg|intcomma }} kg</dd>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.weekly_feed_kg|floatformat:1 }} kg</dd>
                         </div>
                       </dl>
                     </summary>
 
                     <div class="space-y-6 bg-white px-5 py-6 text-sm text-slate-600">
+                      <section class="rounded-xl border border-emerald-100/70 bg-emerald-50/40 p-4 shadow-sm ring-1 ring-emerald-100 sm:p-5">
+                        <header class="mb-3 text-xs font-semibold uppercase tracking-wide text-emerald-700/80">Indicadores del día</header>
+                        <div class="overflow-hidden rounded-lg border border-emerald-100/70">
+                          <div class="grid gap-px bg-emerald-100/50 sm:grid-cols-5">
+                            {% for metric in lot.daily_snapshot %}
+                              <article class="flex flex-col gap-2 bg-white p-4">
+                                <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                  <span>{{ metric.label }}</span>
+                                  {% if metric.status %}
+                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold {% if metric.status == 'ok' %}bg-emerald-50 text-emerald-700{% elif metric.status == 'high' %}bg-rose-50 text-rose-700{% elif metric.status == 'low' %}bg-sky-50 text-sky-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                                      {% if metric.status == 'ok' %}OK{% elif metric.status == 'high' %}↑{% elif metric.status == 'low' %}↓{% else %}--{% endif %}
+                                    </span>
+                                  {% endif %}
+                                </div>
+                                <div class="flex items-end justify-between gap-4">
+                                  <div class="space-y-1">
+                                    <p class="text-[11px] uppercase tracking-wide text-slate-400">Real</p>
+                                    <p class="text-base font-semibold text-slate-900">
+                                      {% if metric.actual is not None %}
+                                        {{ metric.actual|floatformat:metric.decimals }}
+                                      {% else %}
+                                        --
+                                      {% endif %}
+                                      <span class="text-xs font-semibold text-slate-400">{{ metric.unit }}</span>
+                                    </p>
+                                  </div>
+                                  <div class="text-right">
+                                    <p class="text-[11px] uppercase tracking-wide text-slate-400">Tabla</p>
+                                    <p class="text-sm font-semibold text-slate-700">
+                                      {% if metric.target is not None %}
+                                        {{ metric.target|floatformat:metric.decimals }}
+                                      {% else %}
+                                        --
+                                      {% endif %}
+                                      <span class="text-[10px] font-semibold text-slate-400">{{ metric.unit }}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                                <div>
+                                  {% if metric.delta is not None %}
+                                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold {% if metric.status == 'ok' %}bg-emerald-50 text-emerald-700{% elif metric.status == 'high' %}bg-rose-50 text-rose-700{% elif metric.status == 'low' %}bg-sky-50 text-sky-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                                      Δ {% if metric.delta > 0 %}+{% endif %}{{ metric.delta|floatformat:metric.decimals }} {{ metric.unit }}
+                                    </span>
+                                  {% else %}
+                                    <span class="text-[10px] text-slate-400">Sin referencia</span>
+                                  {% endif %}
+                                </div>
+                              </article>
+                            {% endfor %}
+                          </div>
+                        </div>
+                      </section>
+
                       <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
                         <header class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
                           <span>Distribución por galpón</span>
@@ -206,6 +281,7 @@
                                 <th scope="col" class="px-4 py-3">Consumo diario</th>
                                 <th scope="col" class="px-4 py-3">Consumo semanal</th>
                                 <th scope="col" class="px-4 py-3">Mort. semana</th>
+                                <th scope="col" class="px-4 py-3">Mort. acumulada</th>
                                 <th scope="col" class="px-4 py-3">Actualizado</th>
                               </tr>
                             </thead>
@@ -216,15 +292,28 @@
                                   <td class="px-4 py-3">{{ barn.segment }}</td>
                                   <td class="px-4 py-3">{{ barn.initial_birds|intcomma }}</td>
                                   <td class="px-4 py-3">{{ barn.current_birds|intcomma }}</td>
-                                  <td class="px-4 py-3">{{ barn.occupancy_rate }}%</td>
-                                  <td class="px-4 py-3">{{ barn.feed_today_grams }} g/ave</td>
-                                  <td class="px-4 py-3">{{ barn.weekly_feed_kg|intcomma }} kg</td>
-                                  <td class="px-4 py-3">{{ barn.mortality_week|intcomma }} aves ({{ barn.mortality_percentage }}%)</td>
-                                  <td class="px-4 py-3 text-xs text-slate-500">{{ barn.last_update|date:"d M Y" }}</td>
+                                  <td class="px-4 py-3">{{ barn.occupancy_rate|floatformat:1 }}%</td>
+                                  <td class="px-4 py-3">
+                                    {% if barn.feed_today_grams %}
+                                      {{ barn.feed_today_grams|floatformat:1 }} g/ave
+                                    {% else %}
+                                      --
+                                    {% endif %}
+                                  </td>
+                                  <td class="px-4 py-3">{{ barn.weekly_feed_kg|floatformat:1 }} kg</td>
+                                  <td class="px-4 py-3">{{ barn.mortality_week|floatformat:1 }} aves ({{ barn.mortality_percentage|floatformat:2 }}%)</td>
+                                  <td class="px-4 py-3">{{ barn.mortality_cumulative|intcomma }} aves ({{ barn.mortality_cumulative_percentage|floatformat:2 }}%)</td>
+                                  <td class="px-4 py-3 text-xs text-slate-500">
+                                    {% if barn.last_update %}
+                                      {{ barn.last_update|date:"d M Y" }}
+                                    {% else %}
+                                      --
+                                    {% endif %}
+                                  </td>
                                 </tr>
                               {% empty %}
                                 <tr>
-                                  <td colspan="9" class="px-4 py-3 text-center text-xs text-slate-500">
+                                  <td colspan="10" class="px-4 py-3 text-center text-xs text-slate-500">
                                     Sin galpones asociados a este lote.
                                   </td>
                                 </tr>
@@ -233,60 +322,6 @@
                           </table>
                         </div>
                       </section>
-
-                      <div class="grid gap-6 lg:grid-cols-3">
-                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
-                          <header class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            <span>Evolución de peso</span>
-                            <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600">Objetivo {{ lot.target_weight }} kg</span>
-                          </header>
-                          <ul class="space-y-3">
-                            {% for point in lot.weight_trend %}
-                              <li class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-                                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semana {{ point.week }}</span>
-                                <span class="text-sm font-semibold text-slate-800">
-                                  {{ point.actual_weight }} kg
-                                  <span class="text-xs text-slate-400">/ {{ point.projected_weight }} kg</span>
-                                </span>
-                              </li>
-                            {% endfor %}
-                          </ul>
-                        </section>
-
-                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
-                          <header class="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Consumo y eficiencia
-                          </header>
-                          <ul class="space-y-3">
-                            {% for record in lot.consumption_history %}
-                              <li class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-                                <div class="flex flex-col">
-                                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semana {{ record.week }}</span>
-                                  <span class="text-[11px] text-slate-400">Gramos ave/día: {{ record.grams_per_bird }}</span>
-                                </div>
-                                <span class="text-sm font-semibold text-slate-800">{{ record.feed_kg|intcomma }} kg</span>
-                              </li>
-                            {% endfor %}
-                          </ul>
-                        </section>
-
-                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
-                          <header class="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Mortalidad por periodo
-                          </header>
-                          <ul class="space-y-3">
-                            {% for record in lot.mortality %}
-                              <li class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-                                <div class="flex flex-col">
-                                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ record.label }}</span>
-                                  <span class="text-[11px] text-slate-400">{{ record.percentage }}%</span>
-                                </div>
-                                <span class="text-sm font-semibold text-slate-800">{{ record.quantity|intcomma }} aves</span>
-                              </li>
-                            {% endfor %}
-                          </ul>
-                        </section>
-                      </div>
 
                       <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
                         <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
@@ -299,12 +334,14 @@
                               <div>
                                 <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
                                   <span>{{ egg.size }}</span>
-                                  <span>{{ egg.percentage }}% · {{ egg.avg_weight }} g</span>
+                                  <span>{{ egg.percentage|floatformat:1 }}% · {{ egg.avg_weight|floatformat:1 }} g</span>
                                 </div>
                                 <div class="mt-2 h-2 w-full rounded-full bg-slate-200">
                                   <div class="h-full rounded-full bg-amber-500" style="width: {{ egg.percentage }}%;"></div>
                                 </div>
                               </div>
+                            {% empty %}
+                              <p class="text-xs text-slate-400">Sin registros recientes de pesaje de huevo.</p>
                             {% endfor %}
                           </div>
                         </section>
@@ -377,13 +414,13 @@
             </div>
             <div class="space-y-1">
               <dt class="text-xs uppercase tracking-wide text-slate-400">Consumo acumulado</dt>
-              <dd class="text-2xl font-semibold text-white">{{ total_feed_to_date|intcomma }} kg</dd>
+              <dd class="text-2xl font-semibold text-white">{{ total_feed_to_date|floatformat:1 }} kg</dd>
               <dd class="text-xs text-slate-400">Desde el inicio de cada lote</dd>
             </div>
             <div class="space-y-1">
               <dt class="text-xs uppercase tracking-wide text-slate-400">Lotes en monitoreo</dt>
               <dd class="text-2xl font-semibold text-white">{{ farms|length }} granjas · {{ total_lots }} lotes</dd>
-              <dd class="text-xs text-slate-400">Aves activas: {{ total_current_birds|intcomma }} · Galpones vinculados: {{ total_barn_allocations }}</dd>
+              <dd class="text-xs text-slate-400">Galpones vinculados: {{ total_barn_allocations }}</dd>
             </div>
           </dl>
         </div>

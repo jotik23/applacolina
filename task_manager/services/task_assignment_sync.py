@@ -8,6 +8,7 @@ import threading
 from typing import DefaultDict, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
 from django.db import transaction
+from django.db.utils import IntegrityError
 from django.db.models import Case, IntegerField, Value, When
 
 from personal.models import CalendarStatus, ShiftAssignment, UserProfile
@@ -45,8 +46,6 @@ class AssignmentSnapshot:
     date: date
     operator_id: Optional[int]
     position_id: Optional[int]
-    farm_id: Optional[int]
-    chicken_house_id: Optional[int]
     room_ids: frozenset[int]
 
 
@@ -62,8 +61,6 @@ class TaskRule:
 
     def __init__(self, task: TaskDefinition):
         self.task = task
-        self._farm_ids: frozenset[int] = frozenset(task.farms.values_list("id", flat=True))
-        self._house_ids: frozenset[int] = frozenset(task.chicken_houses.values_list("id", flat=True))
         self._room_ids: frozenset[int] = frozenset(task.rooms.values_list("id", flat=True))
         self._weekly_days: frozenset[int] = frozenset(task.weekly_days or [])
         self._month_days: frozenset[int] = frozenset(task.month_days or [])
@@ -120,7 +117,7 @@ class TaskRule:
         if not collaborator:
             return None
 
-        if any((self.position_id, self._farm_ids, self._house_ids, self._room_ids)):
+        if any((self.position_id, self._room_ids)):
             # When there is contextual scope we only assign if a shift matches it.
             return None
 
@@ -137,16 +134,15 @@ class TaskRule:
         if self.collaborator_id and snapshot.operator_id != self.collaborator_id:
             return False
 
-        if self._farm_ids and snapshot.farm_id not in self._farm_ids:
-            return False
-
-        if self._house_ids and snapshot.chicken_house_id not in self._house_ids:
-            return False
-
         if self._room_ids and snapshot.room_ids.isdisjoint(self._room_ids):
             return False
 
         return True
+
+    def overlaps_rooms(self, snapshot: AssignmentSnapshot) -> bool:
+        if not self._room_ids or not snapshot.room_ids:
+            return False
+        return not snapshot.room_ids.isdisjoint(self._room_ids)
 
     def _matches_recurring_date(self, current: date) -> bool:
         matches = False
@@ -217,7 +213,7 @@ class TaskAssignmentSynchronizer:
     def _load_task_rules(self) -> Iterator[TaskRule]:
         queryset = (
             TaskDefinition.objects.select_related("position", "collaborator", "status")
-            .prefetch_related("farms", "chicken_houses", "rooms")
+            .prefetch_related("rooms")
             .filter(status__is_active=True)
         )
         for task in queryset:
@@ -267,8 +263,6 @@ class TaskAssignmentSynchronizer:
                 date=assignment.date,
                 operator_id=assignment.operator_id,
                 position_id=assignment.position_id,
-                farm_id=getattr(assignment.position.farm, "pk", None),
-                chicken_house_id=getattr(assignment.position.chicken_house, "pk", None),
                 room_ids=room_ids,
             )
             assignments_by_date[assignment.date].append(snapshot)
@@ -289,6 +283,25 @@ class TaskAssignmentSynchronizer:
 
                 if matched_snapshots:
                     for snapshot in matched_snapshots:
+                        key = (rule.task.pk, due_date, snapshot.operator_id)
+                        targets[key] = AssignmentTarget(
+                            task_definition_id=rule.task.pk,
+                            due_date=due_date,
+                            collaborator_id=snapshot.operator_id,
+                        )
+                    continue
+
+                overlapping_snapshots = [
+                    snapshot
+                    for snapshot in snapshots
+                    if snapshot.operator_id is not None and rule.overlaps_rooms(snapshot)
+                ]
+                if overlapping_snapshots:
+                    seen_operator_ids: set[int] = set()
+                    for snapshot in overlapping_snapshots:
+                        if snapshot.operator_id in seen_operator_ids:
+                            continue
+                        seen_operator_ids.add(snapshot.operator_id)
                         key = (rule.task.pk, due_date, snapshot.operator_id)
                         targets[key] = AssignmentTarget(
                             task_definition_id=rule.task.pk,
@@ -351,8 +364,7 @@ class TaskAssignmentSynchronizer:
                     )
                     if reusable:
                         previous_key = (reusable.task_definition_id, reusable.due_date, reusable.collaborator_id)
-                        reusable.collaborator_id = target.collaborator_id
-                        reusable.save(update_fields=["collaborator", "updated_at"])
+                        self._set_assignment_collaborator(reusable, target.collaborator_id)
                         matched_ids.add(reusable.pk)
                         existing_by_key.pop(previous_key, None)
                         existing_by_key[(reusable.task_definition_id, reusable.due_date, reusable.collaborator_id)] = reusable
@@ -365,8 +377,7 @@ class TaskAssignmentSynchronizer:
                     )
                     if reusable and reusable.collaborator_id is not None:
                         previous_key = (reusable.task_definition_id, reusable.due_date, reusable.collaborator_id)
-                        reusable.collaborator = None
-                        reusable.save(update_fields=["collaborator", "updated_at"])
+                        self._set_assignment_collaborator(reusable, None)
                         matched_ids.add(reusable.pk)
                         existing_by_key.pop(previous_key, None)
                         existing_by_key[(reusable.task_definition_id, reusable.due_date, None)] = reusable
@@ -389,8 +400,37 @@ class TaskAssignmentSynchronizer:
                 continue
             if assignment.collaborator_id is None:
                 continue
-            assignment.collaborator = None
-            assignment.save(update_fields=["collaborator", "updated_at"])
+            existing_orphans = TaskAssignment.objects.filter(
+                task_definition_id=assignment.task_definition_id,
+                due_date=assignment.due_date,
+                collaborator__isnull=True,
+            ).exclude(pk=assignment.pk)
+            if existing_orphans.exists():
+                existing_orphan = existing_orphans.first()
+                if existing_orphan and assignment.collaborator_id is not None and existing_orphan.previous_collaborator_id is None:
+                    existing_orphan.previous_collaborator_id = assignment.collaborator_id
+                    existing_orphan.save(update_fields=["previous_collaborator", "updated_at"])
+                assignment.delete()
+                continue
+            self._set_assignment_collaborator(assignment, None)
+
+    @staticmethod
+    def _set_assignment_collaborator(assignment: TaskAssignment, collaborator_id: Optional[int]) -> None:
+        if assignment.collaborator_id == collaborator_id:
+            return
+
+        update_fields: list[str] = ["updated_at"]
+
+        if assignment.collaborator_id is not None:
+            assignment.previous_collaborator_id = assignment.collaborator_id
+            update_fields.append("previous_collaborator")
+        elif assignment.previous_collaborator_id is not None and assignment.previous_collaborator_id == collaborator_id:
+            assignment.previous_collaborator = None
+            update_fields.append("previous_collaborator")
+
+        assignment.collaborator_id = collaborator_id
+        update_fields.append("collaborator")
+        assignment.save(update_fields=update_fields)
 
     def _orphan_existing_without_targets(self, task_rules: Sequence[TaskRule]) -> None:
         task_ids = {rule.task.pk for rule in task_rules}
@@ -403,8 +443,7 @@ class TaskAssignmentSynchronizer:
         )
         with transaction.atomic():
             for assignment in queryset:
-                assignment.collaborator = None
-                assignment.save(update_fields=["collaborator", "updated_at"])
+                self._set_assignment_collaborator(assignment, None)
 
 
 def sync_task_assignments(*, start_date: date, end_date: date) -> None:

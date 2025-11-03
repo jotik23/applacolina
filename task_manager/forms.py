@@ -7,7 +7,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.utils.translation import gettext_lazy as _
 
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
-from production.models import ChickenHouse, Farm, Room
+from production.models import Room
 
 from .models import TaskCategory, TaskDefinition, TaskStatus
 
@@ -64,8 +64,6 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "month_days",
             "position",
             "collaborator",
-            "farms",
-            "chicken_houses",
             "rooms",
             "evidence_requirement",
             "record_format",
@@ -116,8 +114,6 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
                     "class": FIELD_INPUT_CLASSES,
                 }
             ),
-            "farms": forms.SelectMultiple(attrs={"class": MULTISELECT_CLASSES}),
-            "chicken_houses": forms.SelectMultiple(attrs={"class": MULTISELECT_CLASSES}),
             "rooms": forms.SelectMultiple(attrs={"class": MULTISELECT_CLASSES}),
             "evidence_requirement": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
             "record_format": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
@@ -133,8 +129,6 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "scheduled_for": _("Fecha puntual"),
             "position": _("Posición prioritaria"),
             "collaborator": _("Colaborador sugerido"),
-            "farms": _("Granjas"),
-            "chicken_houses": _("Galpones"),
             "rooms": _("Salones"),
             "evidence_requirement": _("Evidencia multimedia"),
             "record_format": _("Formato de registro"),
@@ -153,9 +147,9 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "criticality_level": _(
                 "Indica la severidad del impacto operativo si la tarea se omite."
             ),
-            "farms": _("Limita la tarea a una o varias granjas específicas."),
-            "chicken_houses": _("Filtra por galpones concretos dentro de las granjas."),
-            "rooms": _("Puedes asociar salones específicos si aplica."),
+            "rooms": _(
+                "Selecciona los salones donde aplica la tarea. La granja y el galpón se infieren automáticamente."
+            ),
             "evidence_requirement": _(
                 "Define si se debe cargar una foto o video para cerrar la tarea."
             ),
@@ -189,10 +183,6 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
         )
         self.fields["collaborator"].queryset = (
             UserProfile.objects.filter(is_active=True).order_by("apellidos", "nombres")
-        )
-        self.fields["farms"].queryset = Farm.objects.order_by("name")
-        self.fields["chicken_houses"].queryset = ChickenHouse.objects.select_related("farm").order_by(
-            "farm__name", "name"
         )
         self.fields["rooms"].queryset = Room.objects.select_related(
             "chicken_house", "chicken_house__farm"

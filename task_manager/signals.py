@@ -77,8 +77,6 @@ def handle_task_definition_change(sender, instance: TaskDefinition, raw: bool = 
     _sync_task_definition(instance)
 
 
-@receiver(m2m_changed, sender=TaskDefinition.farms.through)
-@receiver(m2m_changed, sender=TaskDefinition.chicken_houses.through)
 @receiver(m2m_changed, sender=TaskDefinition.rooms.through)
 def handle_task_definition_scope_change(sender, instance: TaskDefinition, action: str, **kwargs) -> None:
     if not action or not action.startswith("post_"):
