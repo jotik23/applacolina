@@ -2,17 +2,26 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple, TypedDict
+from urllib.parse import urlencode
 
-from django.db.models import Max, Prefetch, Q, Sum
+from django.contrib import messages
+from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Avg, Count, Max, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncWeek
+from django.shortcuts import redirect
+from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import TemplateView
+from django.views.generic import DeleteView, TemplateView, UpdateView
 
 from applacolina.mixins import StaffRequiredMixin
+from production.forms import ChickenHouseForm, FarmForm, RoomForm
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
+    ChickenHouse,
+    Farm,
     ProductionRecord,
+    Room,
     WeightSampleSession,
 )
 from production.services.reference_tables import get_reference_targets
@@ -837,9 +846,259 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 "total_current_birds": total_current_birds,
                 "total_feed_to_date": total_feed_to_date,
                 "dashboard_generated_at": timezone.now(),
+                "active_submenu": "overview",
             }
         )
         return context
 
 
+class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
+    """Catalogue and management hub for farms, chicken houses and rooms."""
+
+    template_name = "production/infrastructure.html"
+    form_registry = {
+        "farm": ("_farm_form", FarmForm),
+        "chicken_house": ("_chicken_house_form", ChickenHouseForm),
+        "room": ("_room_form", RoomForm),
+    }
+
+    def post(self, request, *args, **kwargs):
+        form_key = request.POST.get("form_type", "")
+        registry_entry = self.form_registry.get(form_key)
+        if not registry_entry:
+            messages.error(request, "No se pudo determinar el formulario enviado.")
+            return redirect("production:infrastructure")
+
+        form_attr, form_class = registry_entry
+        form = form_class(request.POST)
+        setattr(self, "_selected_panel", form_key)
+
+        if form.is_valid():
+            instance = form.save()
+            messages.success(request, self._success_message(form_key, instance))
+            return redirect(self._build_success_redirect(form_key, instance))
+
+        setattr(self, form_attr, form)
+        return self.get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["active_submenu"] = "infrastructure"
+        context["selected_panel"] = self._resolve_selected_panel()
+        context["farms"] = self._fetch_farms()
+        context["infrastructure_stats"] = self._compute_stats()
+        context["farm_form"] = self._get_form_instance("farm")
+        context["chicken_house_form"] = self._get_form_instance("chicken_house")
+        context["room_form"] = self._get_form_instance("room")
+        context["dashboard_generated_at"] = timezone.now()
+        return context
+
+    def _resolve_selected_panel(self) -> str:
+        if hasattr(self, "_selected_panel"):
+            return getattr(self, "_selected_panel")
+        candidate = self.request.GET.get("panel", "summary")
+        if candidate in self.form_registry:
+            return candidate
+        return "summary"
+
+    def _fetch_farms(self):
+        chicken_house_prefetch = Prefetch(
+            "chicken_houses",
+            queryset=ChickenHouse.objects.prefetch_related("rooms").order_by("name"),
+        )
+        return (
+            Farm.objects.annotate(
+                chicken_house_count=Count("chicken_houses", distinct=True),
+                room_count=Count("chicken_houses__rooms", distinct=True),
+            )
+            .prefetch_related(chicken_house_prefetch)
+            .order_by("name")
+        )
+
+    def _compute_stats(self) -> Dict[str, Optional[Decimal]]:
+        total_house_area = ChickenHouse.objects.aggregate(
+            total=Coalesce(Sum("area_m2"), Decimal("0"))
+        )["total"]
+        avg_room_area = Room.objects.aggregate(avg=Avg("area_m2"))["avg"]
+        farms_without_barns = (
+            Farm.objects.annotate(barn_count=Count("chicken_houses"))
+            .filter(barn_count=0)
+            .count()
+        )
+        largest_barn = (
+            ChickenHouse.objects.select_related("farm")
+            .order_by("-area_m2")
+            .first()
+        )
+
+        return {
+            "total_farms": Farm.objects.count(),
+            "total_chicken_houses": ChickenHouse.objects.count(),
+            "total_rooms": Room.objects.count(),
+            "total_house_area": total_house_area,
+            "avg_room_area": avg_room_area,
+            "farms_without_barns": farms_without_barns,
+            "largest_barn": largest_barn,
+        }
+
+    def _get_form_instance(self, form_key: str):
+        form_attr, form_class = self.form_registry[form_key]
+        existing_form = getattr(self, form_attr, None)
+        if existing_form is not None:
+            return existing_form
+
+        initial = self._build_initial_data(form_key)
+        form = form_class(initial=initial)
+        setattr(self, form_attr, form)
+        return form
+
+    def _build_initial_data(self, form_key: str) -> Dict[str, int]:
+        if form_key == "chicken_house":
+            farm_id = self._safe_pk_lookup(Farm, self.request.GET.get("farm"))
+            return {"farm": farm_id} if farm_id else {}
+        if form_key == "room":
+            chicken_house_id = self._safe_pk_lookup(ChickenHouse, self.request.GET.get("chicken_house"))
+            if chicken_house_id:
+                return {"chicken_house": chicken_house_id}
+            farm_id = self._safe_pk_lookup(Farm, self.request.GET.get("farm"))
+            if farm_id:
+                first_chicken_house = (
+                    ChickenHouse.objects.filter(farm_id=farm_id).order_by("name").first()
+                )
+                if first_chicken_house:
+                    return {"chicken_house": first_chicken_house.pk}
+        return {}
+
+    def _safe_pk_lookup(self, model, raw_value: Optional[str]) -> Optional[int]:
+        try:
+            pk_value = int(raw_value) if raw_value is not None else None
+        except (TypeError, ValueError):
+            return None
+        if pk_value is None:
+            return None
+        if model.objects.filter(pk=pk_value).exists():
+            return pk_value
+        return None
+
+    def _success_message(self, form_key: str, instance) -> str:
+        if form_key == "farm":
+            return f'Se agregó la granja "{instance.name}".'
+        if form_key == "chicken_house":
+            return f'Se registró el galpón "{instance.name}" en {instance.farm.name}.'
+        if form_key == "room":
+            return (
+                f'Se creó el salón "{instance.name}" en {instance.chicken_house.name} '
+                f'({instance.chicken_house.farm.name}).'
+            )
+        return "Cambios guardados correctamente."
+
+    def _build_success_redirect(self, form_key: str, instance) -> str:
+        base_url = str(reverse_lazy("production:infrastructure"))
+        params: Dict[str, str] = {"panel": form_key}
+        if form_key == "chicken_house":
+            params["farm"] = str(instance.farm_id)
+        elif form_key == "room":
+            params["chicken_house"] = str(instance.chicken_house_id)
+            params["farm"] = str(instance.chicken_house.farm_id)
+        return f"{base_url}?{urlencode(params)}"
+
+
+class InfrastructureFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
+    template_name = "production/infrastructure_form.html"
+    success_url = reverse_lazy("production:infrastructure")
+    page_title: str = ""
+    submit_label: str = ""
+    entity_label: str = ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("active_submenu", "infrastructure")
+        context["page_title"] = self.page_title
+        context["submit_label"] = self.submit_label
+        context["entity_label"] = self.entity_label
+        context["breadcrumbs"] = [
+            {"label": "Infraestructura", "url": reverse_lazy("production:infrastructure")},
+            {"label": self.page_title, "url": ""},
+        ]
+        return context
+
+
+class FarmUpdateView(InfrastructureFormViewMixin, UpdateView):
+    model = Farm
+    form_class = FarmForm
+    page_title = "Editar granja"
+    submit_label = "Guardar cambios"
+    entity_label = "granja"
+    success_message = 'Se actualizó la granja "%(name)s" correctamente.'
+
+
+class ChickenHouseUpdateView(InfrastructureFormViewMixin, UpdateView):
+    model = ChickenHouse
+    form_class = ChickenHouseForm
+    page_title = "Editar galpón"
+    submit_label = "Guardar cambios"
+    entity_label = "galpón"
+    success_message = 'Se actualizó el galpón "%(name)s" correctamente.'
+
+
+class RoomUpdateView(InfrastructureFormViewMixin, UpdateView):
+    model = Room
+    form_class = RoomForm
+    page_title = "Editar salón"
+    submit_label = "Guardar cambios"
+    entity_label = "salón"
+    success_message = 'Se actualizó el salón "%(name)s" correctamente.'
+
+
+class InfrastructureDeleteView(StaffRequiredMixin, DeleteView):
+    template_name = "production/infrastructure_confirm_delete.html"
+    success_url = reverse_lazy("production:infrastructure")
+    entity_label: str = ""
+    success_message: str = ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("active_submenu", "infrastructure")
+        context["entity_label"] = self.entity_label
+        context["object_display"] = str(self.object)
+        context["breadcrumbs"] = [
+            {"label": "Infraestructura", "url": reverse_lazy("production:infrastructure")},
+            {"label": f"Eliminar {self.entity_label}", "url": ""},
+        ]
+        return context
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        object_display = str(self.object)
+        response = super().delete(request, *args, **kwargs)
+        if self.success_message:
+            messages.success(request, self.success_message % {"object": object_display})
+        return response
+
+
+class FarmDeleteView(InfrastructureDeleteView):
+    model = Farm
+    entity_label = "granja"
+    success_message = 'Se eliminó la granja "%(object)s" correctamente.'
+
+
+class ChickenHouseDeleteView(InfrastructureDeleteView):
+    model = ChickenHouse
+    entity_label = "galpón"
+    success_message = 'Se eliminó el galpón "%(object)s" correctamente.'
+
+
+class RoomDeleteView(InfrastructureDeleteView):
+    model = Room
+    entity_label = "salón"
+    success_message = 'Se eliminó el salón "%(object)s" correctamente.'
+
+
 production_home_view = ProductionHomeView.as_view()
+infrastructure_home_view = InfrastructureHomeView.as_view()
+farm_update_view = FarmUpdateView.as_view()
+chicken_house_update_view = ChickenHouseUpdateView.as_view()
+room_update_view = RoomUpdateView.as_view()
+farm_delete_view = FarmDeleteView.as_view()
+chicken_house_delete_view = ChickenHouseDeleteView.as_view()
+room_delete_view = RoomDeleteView.as_view()
