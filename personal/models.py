@@ -444,13 +444,21 @@ class PositionDefinition(models.Model):
         if self.chicken_house and self.chicken_house.farm_id != self.farm_id:
             raise ValidationError("El galpón seleccionado debe pertenecer a la granja indicada.")
 
-        if self.pk:
+        pending_rooms = getattr(self, "_pending_rooms_for_validation", None)
+        if pending_rooms is not None:
+            room_house_ids = {
+                room.chicken_house_id
+                for room in pending_rooms
+                if getattr(room, "chicken_house_id", None) is not None
+            }
+        else:
             room_house_ids = set(self.rooms.values_list("chicken_house_id", flat=True))
-            if room_house_ids:
-                if not self.chicken_house_id:
-                    raise ValidationError("Debe seleccionar un galpón cuando se utilicen salones.")
-                if room_house_ids != {self.chicken_house_id}:
-                    raise ValidationError("Todos los salones seleccionados deben pertenecer al galpón indicado.")
+
+        if room_house_ids:
+            if not self.chicken_house_id:
+                raise ValidationError("Debe seleccionar un galpón cuando se utilicen salones.")
+            if room_house_ids != {self.chicken_house_id}:
+                raise ValidationError("Todos los salones seleccionados deben pertenecer al galpón indicado.")
 
         if self.handoff_position_id:
             if self.pk and self.handoff_position_id == self.pk:

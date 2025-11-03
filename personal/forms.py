@@ -341,15 +341,16 @@ class PositionDefinitionForm(forms.ModelForm):
         cleaned_data = super().clean()
         category = cleaned_data.get("category")
         chicken_house = cleaned_data.get("chicken_house")
-        rooms = cleaned_data.get("rooms")  # type: ignore[assignment]
-        if rooms:
+        rooms_value = cleaned_data.get("rooms")  # type: ignore[assignment]
+        selected_rooms: list[Room] = list(rooms_value) if rooms_value is not None else []
+        if selected_rooms:
             if not chicken_house:
                 self.add_error(
                     "rooms",
                     "Debe seleccionar un galpón para asociar salones a la posición.",
                 )
             else:
-                invalid_rooms = [room for room in rooms if room.chicken_house_id != chicken_house.id]
+                invalid_rooms = [room for room in selected_rooms if room.chicken_house_id != chicken_house.id]
                 if invalid_rooms:
                     self.add_error(
                         "rooms",
@@ -364,6 +365,8 @@ class PositionDefinitionForm(forms.ModelForm):
                 "handoff_position",
                 "La posición de entrega debe pertenecer a la misma granja.",
             )
+        if rooms_value is not None:
+            self.instance._pending_rooms_for_validation = selected_rooms
         return cleaned_data
 
     @staticmethod
@@ -389,29 +392,33 @@ class PositionDefinitionForm(forms.ModelForm):
                 instance.code = self._generate_code()
             return instance
 
-        if is_new:
-            while True:
-                try:
-                    with transaction.atomic():
-                        if not instance.display_order:
-                            max_order = (
-                                PositionDefinition.objects.aggregate(
-                                    max_order=Max("display_order")
-                                ).get("max_order")
-                                or 0
-                            )
-                            instance.display_order = max_order + 1
-                        if not instance.code:
-                            instance.code = self._generate_code()
-                        instance.save()
-                    break
-                except IntegrityError:
-                    instance.code = None
-        else:
-            instance.save()
+        try:
+            if is_new:
+                while True:
+                    try:
+                        with transaction.atomic():
+                            if not instance.display_order:
+                                max_order = (
+                                    PositionDefinition.objects.aggregate(
+                                        max_order=Max("display_order")
+                                    ).get("max_order")
+                                    or 0
+                                )
+                                instance.display_order = max_order + 1
+                            if not instance.code:
+                                instance.code = self._generate_code()
+                            instance.save()
+                        break
+                    except IntegrityError:
+                        instance.code = None
+            else:
+                instance.save()
 
-        self.save_m2m()
-        return instance
+            self.save_m2m()
+            return instance
+        finally:
+            if hasattr(instance, "_pending_rooms_for_validation"):
+                delattr(instance, "_pending_rooms_for_validation")
 
 
 class OperatorProfileForm(forms.ModelForm):
