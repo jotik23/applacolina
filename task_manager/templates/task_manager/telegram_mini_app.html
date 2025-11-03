@@ -2128,17 +2128,6 @@
                 {% if task.status.details %}
                 <p class="text-xs text-slate-600" data-task-status-details>{{ task.status.details }}</p>
                 {% endif %}
-                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-600" data-task-evidence-summary>
-                  {% if task.evidence_count %}
-                    {{ task.evidence_count }} evidencia{% if task.evidence_count|default:0 != 1 %}s{% endif %} adjunta{% if task.requires_evidence %} · requisito cumplido{% endif %}
-                  {% else %}
-                    {% if task.requires_evidence %}
-                      Requiere evidencia · sin adjuntos
-                    {% else %}
-                      Sin evidencia adjunta
-                    {% endif %}
-                  {% endif %}
-                </p>
                 <p class="hidden text-xs font-semibold text-emerald-600" data-task-feedback></p>
               </div>
               {% else %}
@@ -2153,17 +2142,6 @@
               {% if task.status.details %}
                 <p class="mt-2 text-xs text-slate-500" data-task-status-details>{{ task.status.details }}</p>
               {% endif %}
-              <p class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500" data-task-evidence-summary>
-                {% if task.evidence_count %}
-                  {{ task.evidence_count }} evidencia{% if task.evidence_count|default:0 != 1 %}s{% endif %} adjunta{% if task.requires_evidence %} · requisito cumplido{% endif %}
-                {% else %}
-                  {% if task.requires_evidence %}
-                    Requiere evidencia · sin adjuntos
-                  {% else %}
-                    Sin evidencia adjunta
-                  {% endif %}
-                {% endif %}
-              </p>
               <p class="mt-2 hidden text-xs font-semibold text-emerald-600" data-task-feedback></p>
               {% endif %}
               <input

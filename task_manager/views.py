@@ -148,145 +148,6 @@ _CALENDAR_STATUS_THEME: dict[str | None, str] = {
 }
 
 
-def _build_demo_task_cards() -> list[dict[str, object]]:
-    """Return a static set of task cards for demo views."""
-
-    today = timezone.localdate()
-    tomorrow = today + timedelta(days=1)
-
-    return [
-        {
-            "assignment_id": None,
-            "title": "Checklist apertura galpon",
-            "tone": "brand",
-            "badges": [
-                {"label": "Recurrente", "theme": "brand"},
-                {"label": "Prioridad media", "theme": "neutral"},
-            ],
-            "description": "Completar antes de iniciar el turno. Verifica ventilacion, bebederos y bioseguridad.",
-            "meta": [
-                _("Estado: %(status)s") % {"status": _("Pendiente")},
-                "Turno: Diurno - Posicion auxiliar operativo",
-                "Asignada por: Supervisor bioseguridad",
-            ],
-            "reward_points": 25,
-            "status": {
-                "state": "pending",
-                "label": _("Pendiente"),
-                "theme": "brand",
-                "details": _("Vence %(date)s") % {"date": date_format(today, "DATE_FORMAT")},
-                "overdue_days": None,
-                "due_label": date_format(today, "DATE_FORMAT"),
-            },
-            "requires_evidence": False,
-            "evidence_count": 0,
-            "due_date_iso": today.isoformat(),
-            "complete_url": "",
-            "reset_url": "",
-            "evidence_upload_url": "",
-            "actions": [
-                {"label": "Marcar completada", "action": "complete", "disabled": False},
-                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
-            ],
-        },
-        {
-            "assignment_id": None,
-            "title": "Reporte correctivo galpon 2",
-            "tone": "critical",
-            "badges": [{"label": "Unica - Vencida", "theme": "critical"}],
-            "description": "Registrar hallazgos del recorrido nocturno y adjuntar fotografias.",
-            "meta": [
-                _("Estado: %(status)s") % {"status": _("Vencida")},
-                "Turno: Nocturno - Posicion lider de turno",
-                "Asignada para: 03 Nov - Vence hoy",
-            ],
-            "reward_points": 32,
-            "status": {
-                "state": "overdue",
-                "label": _("Vencida"),
-                "theme": "critical",
-                "details": _("Retraso de 1 día"),
-                "overdue_days": 1,
-                "due_label": date_format(today - timedelta(days=1), "DATE_FORMAT"),
-            },
-            "requires_evidence": True,
-            "evidence_count": 0,
-            "due_date_iso": (today - timedelta(days=1)).isoformat(),
-            "complete_url": "",
-            "reset_url": "",
-            "evidence_upload_url": "",
-            "actions": [
-                {"label": "Marcar completada", "action": "complete", "disabled": False},
-                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
-            ],
-        },
-        {
-            "assignment_id": None,
-            "title": "Capacitacion protocolos",
-            "tone": "success",
-            "badges": [{"label": "Extra voluntaria", "theme": "success"}],
-            "description": "Participa en la sesion de actualizacion de protocolos de higiene. Suma puntos adicionales.",
-            "meta": [
-                _("Estado: %(status)s") % {"status": _("En progreso")},
-                "Horario: 16:00 - Sala formacion",
-                "Reportada por: Gabriela Melo",
-            ],
-            "reward_points": 18,
-            "status": {
-                "state": "in_progress",
-                "label": _("En progreso"),
-                "theme": "sky",
-                "details": _("Programada para %(date)s") % {"date": date_format(tomorrow, "DATE_FORMAT")},
-                "overdue_days": None,
-                "due_label": date_format(tomorrow, "DATE_FORMAT"),
-            },
-            "requires_evidence": False,
-            "evidence_count": 1,
-            "due_date_iso": tomorrow.isoformat(),
-            "complete_url": "",
-            "reset_url": "",
-            "evidence_upload_url": "",
-            "actions": [
-                {"label": "Marcar completada", "action": "complete", "disabled": False},
-                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
-            ],
-        },
-        {
-            "assignment_id": None,
-            "title": "Descanso programado",
-            "tone": "success",
-            "badges": [{"label": "Automatico", "theme": "success"}],
-            "description": "Descanso compensatorio despues de 6 dias de racha. No se asignan tareas en esta franja.",
-            "meta": [
-                _("Estado: %(status)s") % {"status": _("Completada")},
-                "Fecha: 05 Nov - Proximo turno nocturno",
-                "Generado automaticamente para balancear jornada",
-            ],
-            "reward_points": 10,
-            "status": {
-                "state": "completed",
-                "label": _("Completada"),
-                "theme": "emerald",
-                "details": _("Marcada %(date)s") % {"date": date_format(today, "DATE_FORMAT")},
-                "overdue_days": None,
-                "due_label": date_format(today, "DATE_FORMAT"),
-            },
-            "requires_evidence": False,
-            "evidence_count": 0,
-            "is_completed_today": True,
-            "completed_on_iso": today.isoformat(),
-            "due_date_iso": tomorrow.isoformat(),
-            "complete_url": "",
-            "reset_url": "",
-            "evidence_upload_url": "",
-            "actions": [
-                {"label": "Desmarcar", "action": "reset", "disabled": False},
-                {"label": "Agregar evidencia", "action": "evidence", "disabled": True},
-            ],
-        },
-    ]
-
-
 def _format_compact_date_label(target_date: date) -> str:
     """Return a compact date label like '05 Nov' honoring locale conventions."""
 
@@ -754,14 +615,9 @@ def _serialize_task_assignment(
     if assignment.due_date and assignment.due_date != reference_date:
         due_label = date_format(assignment.due_date, "DATE_FORMAT")
 
-    meta: list[str] = [
-        _("Estado: %(status)s") % {"status": status_info.get("label") or _("Sin estado")},
-        _("Programada para %(date)s") % {"date": due_label},
-    ]
+    meta: list[str] = []
     if definition.category_id:
         meta.append(_("Categoría: %(category)s") % {"category": definition.category.name})
-    if definition.position_id:
-        meta.append(_("Posición: %(position)s") % {"position": definition.position.name})
 
     if is_completed_today:
         actions: list[dict[str, object]] = [
@@ -859,11 +715,9 @@ def _resolve_daily_task_cards(
         for _, payload in serialized_cards:
             cards.append(payload)
 
-        if cards or not use_sample_tasks:
+        if cards:
             return cards
 
-    if use_sample_tasks:
-        return _build_demo_task_cards()
 
     return cards
 
