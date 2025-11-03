@@ -1,0 +1,283 @@
+{% extends "calendario/base.html" %}
+{% load humanize %}
+
+{% block title %}Indicadores del día{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+  <section class="space-y-6">
+
+    {% if farms %}
+      {% for farm in farms %}
+        <section class="space-y-5 rounded-2xl border border-slate-200/60 bg-white/90 p-6 shadow-sm ring-1 ring-emerald-100/30">
+                    <header class="overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-200 via-emerald-100 to-white p-6 shadow-lg ring-1 ring-emerald-200/50">
+            <div class="flex flex-col gap-4 text-slate-700 lg:flex-row lg:items-start lg:justify-between">
+              <div class="space-y-2">
+                <h2 class="text-2xl font-semibold tracking-tight text-emerald-800">{{ farm.name }}</h2>
+                <p class="text-sm font-medium text-emerald-700/80">
+                  Código {{ farm.code }} · {{ farm.summary.lot_count }} lote{{ farm.summary.lot_count|pluralize:"s" }} activos · Inventario actual {{ farm.summary.current_birds|intcomma }} aves
+                </p>
+              </div>
+              <dl class="grid gap-4 text-sm text-emerald-900/80 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="rounded-xl border border-emerald-200 bg-white/70 p-4 shadow-sm">
+                  <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700/70">Producción de hoy</dt>
+                  <dd class="mt-2 text-xl font-semibold text-emerald-900">
+                    {{ farm.summary.total_daily_production_cartons|floatformat:1 }} cartones
+                  </dd>
+                </div>
+                <div class="rounded-xl border border-emerald-200 bg-white/70 p-4 shadow-sm">
+                  <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700/70">Consumo del día</dt>
+                  <dd class="mt-2 text-xl font-semibold text-emerald-900">
+                    {{ farm.summary.total_daily_consumption_kg|floatformat:1 }} kg
+                  </dd>
+                  <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600/80">
+                    {{ farm.summary.total_daily_consumption_bags|floatformat:2 }} bultos 40 kg
+                  </p>
+                </div>
+                <div class="rounded-xl border border-emerald-200 bg-white/70 p-4 shadow-sm">
+                  <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700/70">Mortalidad de hoy</dt>
+                  <dd class="mt-2 text-xl font-semibold text-emerald-900">
+                    {{ farm.summary.total_daily_mortality|floatformat:1 }} aves
+                  </dd>
+                </div>
+                <div class="rounded-xl border border-emerald-200 bg-white/70 p-4 shadow-sm">
+                  <dt class="text-xs font-semibold uppercase tracking-wide text-emerald-700/70">Descarte del día</dt>
+                  <dd class="mt-2 text-xl font-semibold text-emerald-900">
+                    {{ farm.summary.total_daily_discard|floatformat:1 }} aves
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </header>
+
+          <div class="space-y-4">
+            {% for lot in farm.lots %}
+              {% with consumption=lot.daily_snapshot_map.consumption mortality=lot.daily_snapshot_map.mortality discard=lot.daily_snapshot_map.discard egg=lot.daily_snapshot_map.egg_weight production=lot.daily_snapshot_map.production %}
+                <a id="lot-{{ lot.id }}" href="{% url 'production:index' %}?lot={{ lot.id }}#lot-{{ lot.id }}" class="block rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm ring-1 ring-slate-200/50 transition hover:border-emerald-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/80 {% if focused_lot_id == lot.id %}border-emerald-400 ring-emerald-200/80{% endif %}">
+                  <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="flex flex-wrap items-center gap-3">
+                        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                          {{ lot.label }}
+                        </span>
+                        <span class="text-xs text-slate-500">{{ lot.breed }} · {{ lot.age_weeks }} semanas · Nacido {{ lot.birth_date|date:"d M Y" }}</span>
+                      </div>
+                      {% if lot.notes %}
+                        <p class="text-xs text-slate-500">{{ lot.notes }}</p>
+                      {% endif %}
+                    </div>
+                                                            <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+                      <article class="flex h-full flex-col justify-between rounded-lg border border-slate-200/70 bg-slate-50 px-4 py-3 shadow-sm">
+                        <div>
+                          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario</h3>
+                          <p class="mt-2 text-xl font-semibold text-slate-900">{{ lot.current_birds|intcomma }}</p>
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Aves activas</p>
+                        </div>
+                        <div class="mt-4">
+                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cartones estimados</p>
+                          <p class="mt-1 text-lg font-semibold text-slate-900">
+                            {% if lot.daily_rollup.production_cartons_today is not None %}
+                              {{ lot.daily_rollup.production_cartons_today|floatformat:1 }}
+                            {% else %}
+                              --
+                            {% endif %}
+                          </p>
+                        </div>
+                      </article>
+
+                      <article class="flex h-full flex-col justify-between rounded-lg border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
+                        <header class="flex items-start justify-between">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción</span>
+                          {% if production.status %}
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {% if production.status == 'high' %}bg-emerald-100 text-emerald-700{% elif production.status == 'low' %}bg-rose-100 text-rose-700{% elif production.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                              {% if production.status == 'high' %}Sobre{% elif production.status == 'low' %}Bajo{% elif production.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                            </span>
+                          {% endif %}
+                        </header>
+                        <p class="mt-2 text-xl font-semibold text-slate-900">
+                          {% if production.actual is not None %}
+                            {{ production.actual|floatformat:production.decimals }} {{ production.unit }}
+                          {% else %}
+                            --
+                          {% endif %}
+                        </p>
+                        <p class="mt-1 text-[11px] text-slate-500">
+                          {% if lot.daily_rollup.production_cartons_today is not None %}
+                            {{ lot.daily_rollup.production_cartons_today|floatformat:1 }} cartones estimados{% if lot.daily_rollup.production_cartons_previous is not None %} · ayer {{ lot.daily_rollup.production_cartons_previous|floatformat:1 }}{% endif %}
+                          {% else %}
+                            Registra producción diaria para estimar cartones.
+                          {% endif %}
+                        </p>
+                        <div class="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span>vs ayer</span>
+                          <span class="{% if production.previous_delta is not None %}{% if production.previous_delta > 0 %}text-emerald-600{% elif production.previous_delta < 0 %}text-rose-600{% else %}text-slate-600{% endif %}{% else %}text-slate-400{% endif %}">
+                            {% if production.previous_delta is not None %}
+                              {% if production.previous_delta > 0 %}+{% endif %}{{ production.previous_delta|floatformat:production.decimals }} {{ production.unit }}
+                            {% else %}
+                              --
+                            {% endif %}
+                          </span>
+                        </div>
+                      </article>
+
+                      <article class="flex h-full flex-col justify-between rounded-lg border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
+                        <header class="flex items-start justify-between">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Peso huevo</span>
+                          {% if egg.status %}
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {% if egg.status == 'high' %}bg-emerald-100 text-emerald-700{% elif egg.status == 'low' %}bg-rose-100 text-rose-700{% elif egg.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                              {% if egg.status == 'high' %}Sobre{% elif egg.status == 'low' %}Bajo{% elif egg.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                            </span>
+                          {% endif %}
+                        </header>
+                        <p class="mt-2 text-xl font-semibold text-slate-900">
+                          {% if egg.actual is not None %}
+                            {{ egg.actual|floatformat:egg.decimals }} {{ egg.unit }}
+                          {% else %}
+                            --
+                          {% endif %}
+                        </p>
+                        <p class="mt-1 text-[11px] text-slate-500">
+                          {% if egg.previous is not None %}
+                            Ayer {{ egg.previous|floatformat:egg.decimals }} {{ egg.unit }}
+                          {% else %}
+                            Sin dato del día anterior.
+                          {% endif %}
+                        </p>
+                        <div class="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span>vs ayer</span>
+                          <span class="{% if egg.previous_delta is not None %}{% if egg.previous_delta > 0 %}text-emerald-600{% elif egg.previous_delta < 0 %}text-rose-600{% else %}text-slate-600{% endif %}{% else %}text-slate-400{% endif %}">
+                            {% if egg.previous_delta is not None %}
+                              {% if egg.previous_delta > 0 %}+{% endif %}{{ egg.previous_delta|floatformat:egg.decimals }} {{ egg.unit }}
+                            {% else %}
+                              --
+                            {% endif %}
+                          </span>
+                        </div>
+                      </article>
+
+                      <article class="flex h-full flex-col justify-between rounded-lg border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
+                        <header class="flex items-start justify-between">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo</span>
+                          {% if consumption.status %}
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {% if consumption.status == 'high' %}bg-rose-100 text-rose-700{% elif consumption.status == 'low' %}bg-sky-100 text-sky-700{% elif consumption.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                              {% if consumption.status == 'high' %}Sobre{% elif consumption.status == 'low' %}Bajo{% elif consumption.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                            </span>
+                          {% endif %}
+                        </header>
+                        <p class="mt-2 text-xl font-semibold text-slate-900">
+                          {% if consumption.actual is not None %}
+                            {{ consumption.actual|floatformat:consumption.decimals }} {{ consumption.unit }}
+                          {% else %}
+                            --
+                          {% endif %}
+                        </p>
+                        <p class="mt-1 text-[11px] text-slate-500">
+                          {% if lot.daily_rollup.consumption_bags_today is not None %}
+                            {{ lot.daily_rollup.consumption_bags_today|floatformat:2 }} bultos 40 kg{% if lot.daily_rollup.consumption_bags_previous is not None %} · ayer {{ lot.daily_rollup.consumption_bags_previous|floatformat:2 }}{% endif %}
+                          {% else %}
+                            Sin registro diario.
+                          {% endif %}
+                        </p>
+                        <div class="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span>vs ayer</span>
+                          <span class="{% if consumption.previous_delta is not None %}{% if consumption.previous_delta > 0 %}text-rose-600{% elif consumption.previous_delta < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}{% else %}text-slate-400{% endif %}">
+                            {% if consumption.previous_delta is not None %}
+                              {% if consumption.previous_delta > 0 %}+{% endif %}{{ consumption.previous_delta|floatformat:consumption.decimals }} {{ consumption.unit }}
+                            {% else %}
+                              --
+                            {% endif %}
+                          </span>
+                        </div>
+                      </article>
+
+                      <article class="flex h-full flex-col justify-between rounded-lg border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
+                        <header class="flex items-start justify-between">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Mortalidad</span>
+                          {% if mortality.status %}
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {% if mortality.status == 'high' %}bg-rose-100 text-rose-700{% elif mortality.status == 'low' %}bg-sky-100 text-sky-700{% elif mortality.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                              {% if mortality.status == 'high' %}Sobre{% elif mortality.status == 'low' %}Bajo{% elif mortality.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                            </span>
+                          {% endif %}
+                        </header>
+                        <p class="mt-2 text-xl font-semibold text-slate-900">
+                          {% if mortality.actual is not None %}
+                            {{ mortality.actual|floatformat:mortality.decimals }} {{ mortality.unit }}
+                          {% else %}
+                            --
+                          {% endif %}
+                        </p>
+                        <p class="mt-1 text-[11px] text-slate-500">
+                          {% if mortality.previous is not None %}
+                            Ayer {{ mortality.previous|floatformat:mortality.decimals }} {{ mortality.unit }}
+                          {% else %}
+                            Sin dato del día anterior.
+                          {% endif %}
+                        </p>
+                        <div class="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span>vs ayer</span>
+                          <span class="{% if mortality.previous_delta is not None %}{% if mortality.previous_delta > 0 %}text-rose-600{% elif mortality.previous_delta < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}{% else %}text-slate-400{% endif %}">
+                            {% if mortality.previous_delta is not None %}
+                              {% if mortality.previous_delta > 0 %}+{% endif %}{{ mortality.previous_delta|floatformat:mortality.decimals }} {{ mortality.unit }}
+                            {% else %}
+                              --
+                            {% endif %}
+                          </span>
+                        </div>
+                      </article>
+
+                      <article class="flex h-full flex-col justify-between rounded-lg border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
+                        <header class="flex items-start justify-between">
+                          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Descarte</span>
+                          {% if discard.status %}
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide {% if discard.status == 'high' %}bg-rose-100 text-rose-700{% elif discard.status == 'low' %}bg-sky-100 text-sky-700{% elif discard.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                              {% if discard.status == 'high' %}Sobre{% elif discard.status == 'low' %}Bajo{% elif discard.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                            </span>
+                          {% endif %}
+                        </header>
+                        <p class="mt-2 text-xl font-semibold text-slate-900">
+                          {% if discard.actual is not None %}
+                            {{ discard.actual|floatformat:discard.decimals }} {{ discard.unit }}
+                          {% else %}
+                            --
+                          {% endif %}
+                        </p>
+                        <p class="mt-1 text-[11px] text-slate-500">
+                          {% if discard.previous is not None %}
+                            Ayer {{ discard.previous|floatformat:discard.decimals }} {{ discard.unit }}
+                          {% else %}
+                            Sin dato del día anterior.
+                          {% endif %}
+                        </p>
+                        <div class="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          <span>vs ayer</span>
+                          <span class="{% if discard.previous_delta is not None %}{% if discard.previous_delta > 0 %}text-rose-600{% elif discard.previous_delta < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}{% else %}text-slate-400{% endif %}">
+                            {% if discard.previous_delta is not None %}
+                              {% if discard.previous_delta > 0 %}+{% endif %}{{ discard.previous_delta|floatformat:discard.decimals }} {{ discard.unit }}
+                            {% else %}
+                              --
+                            {% endif %}
+                          </span>
+                        </div>
+                      </article>
+                    </div>
+
+
+                  </div>
+                </a>
+            {% endwith %}
+            {% empty %}
+              <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                No hay lotes activos registrados en esta granja.
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
+    {% else %}
+      <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500 shadow-sm">
+        <h2 class="text-xl font-semibold text-slate-800">Sin datos de producción</h2>
+        <p class="mt-2 text-sm">Cuando registres lotes y sus indicadores diarios, verás el resumen consolidado aquí.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

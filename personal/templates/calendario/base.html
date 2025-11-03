@@ -22,7 +22,7 @@
     </script>
   </head>
   <body
-    class="min-h-full bg-slate-100 text-slate-800"
+    class="min-h-screen bg-slate-100 text-slate-800 flex flex-col"
     data-calendar-list-url="{% url 'personal-api:calendar-list' %}"
     data-calendar-detail-template="{% url 'personal:calendar-detail' 0 %}"
     data-calendar-create-url="{% url 'personal:calendar-create' %}"
@@ -392,11 +392,11 @@
                   </svg>
                 </a>
                 <a
-                  href="{% url 'personal:configurator' %}?step=rules"
+                  href="{% url 'personal:configurator' %}?step=collaborators"
                   class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
                   data-mobile-nav-close
                 >
-                  Calendarios
+                  Colaboradores
                   <svg class="h-3.5 w-3.5 text-brand" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path d="M5.5 2A1.5 1.5 0 004 3.5V5h12V3.5A1.5 1.5 0 0014.5 2h-9zM16 6H4v10.5A1.5 1.5 0 005.5 18h9a1.5 1.5 0 001.5-1.5V6z" />
                   </svg>
@@ -634,7 +634,7 @@
       </div>
     {% endif %}
 
-    <main class="mx-auto mt-6 max-w-[3000px] px-3 pb-16 sm:px-4 lg:px-6">
+    <main class="mx-auto mt-6 max-w-[3000px] flex-1 px-3 pb-16 sm:px-4 lg:px-6">
       {% block content %}{% endblock %}
     </main>
 
@@ -810,12 +810,7 @@
       </div>
     </div>
 
-    <footer class="border-t border-slate-200 bg-white/70 py-6">
-      <div class="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-xs text-slate-500 sm:flex-row sm:px-6 lg:px-8">
-        <span>Calendario operativo · La Colina</span>
-        <span>Diseñado para monitorear turnos, descansos y sobrecargas de manera justa.</span>
-      </div>
-    </footer>
+    {% include "calendario/includes/footer.html" %}
     <script>
       (function () {
         function toArray(collection) {

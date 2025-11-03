@@ -74,7 +74,15 @@ class BarnAllocation(TypedDict):
     last_update: Optional[date]
 
 
+class DailyIndicatorAggregate(TypedDict):
+    consumption_bags_today: Optional[float]
+    consumption_bags_previous: Optional[float]
+    production_cartons_today: Optional[float]
+    production_cartons_previous: Optional[float]
+
+
 class LotOverview(TypedDict):
+    id: int
     label: str
     breed: str
     birth_date: date
@@ -98,6 +106,8 @@ class LotOverview(TypedDict):
     alerts: List[str]
     notes: str
     daily_snapshot: List["DailySnapshotMetric"]
+    daily_snapshot_map: Dict[str, "DailySnapshotMetric"]
+    daily_rollup: DailyIndicatorAggregate
 
 
 class DailySnapshotMetric(TypedDict):
@@ -108,17 +118,20 @@ class DailySnapshotMetric(TypedDict):
     actual: Optional[float]
     target: Optional[float]
     delta: Optional[float]
+    previous: Optional[float]
+    previous_delta: Optional[float]
     status: Optional[str]
 
 
 class FarmSummary(TypedDict):
     total_initial_birds: int
     current_birds: int
-    mortality_percent: float
-    weekly_consumption: float
-    average_uniformity: Optional[float]
-    average_weight: Optional[float]
     lot_count: int
+    total_daily_production_cartons: float
+    total_daily_consumption_kg: float
+    total_daily_consumption_bags: float
+    total_daily_mortality: float
+    total_daily_discard: float
 
 
 class FarmOverview(TypedDict):
@@ -206,7 +219,13 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
+        focused_lot_id: Optional[int] = None
+        lot_param = self.request.GET.get("lot") if self.request else None
+        if lot_param and lot_param.isdigit():
+            focused_lot_id = int(lot_param)
+
         today = timezone.localdate()
+        yesterday = today - timedelta(days=1)
         week_start = today - timedelta(days=6)
         four_week_start = today - timedelta(days=27)
         year_start = date(today.year, 1, 1)
@@ -276,6 +295,9 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                     "total_current_birds": 0,
                     "total_feed_to_date": 0,
                     "dashboard_generated_at": timezone.now(),
+                    "today": today,
+                    "yesterday": yesterday,
+                    "focused_lot_id": focused_lot_id,
                 }
             )
             return context
@@ -336,6 +358,13 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             record.bird_batch_id: record
             for record in ProductionRecord.objects.filter(
                 bird_batch_id__in=batch_ids, date=today
+            ).select_related("bird_batch")
+        }
+
+        yesterday_records_map: Dict[int, ProductionRecord] = {
+            record.bird_batch_id: record
+            for record in ProductionRecord.objects.filter(
+                bird_batch_id__in=batch_ids, date=yesterday
             ).select_related("bird_batch")
         }
 
@@ -428,6 +457,15 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 status = "low"
             return delta_value, status
 
+        def compute_previous_delta(
+            actual_value: Optional[float],
+            previous_value: Optional[float],
+            decimals: int,
+        ) -> Optional[float]:
+            if actual_value is None or previous_value is None:
+                return None
+            return round(actual_value - previous_value, decimals)
+
         farms_map: Dict[int, Dict[str, object]] = {}
         all_lots: List[LotOverview] = []
         total_barn_allocations = 0
@@ -500,10 +538,16 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             latest_record = latest_record_map.get(batch.id)
             daily_record = daily_records_map.get(batch.id)
             actual_record = daily_record or latest_record
+            previous_record = yesterday_records_map.get(batch.id)
 
             consumption_actual = (
                 float(actual_record.consumption)
                 if actual_record and actual_record.consumption is not None
+                else None
+            )
+            consumption_previous = (
+                float(previous_record.consumption)
+                if previous_record and previous_record.consumption is not None
                 else None
             )
             mortality_actual = (
@@ -511,9 +555,19 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 if actual_record and actual_record.mortality is not None
                 else None
             )
+            mortality_previous = (
+                float(previous_record.mortality)
+                if previous_record and previous_record.mortality is not None
+                else None
+            )
             discard_actual = (
                 float(actual_record.discard)
                 if actual_record and actual_record.discard is not None
+                else None
+            )
+            discard_previous = (
+                float(previous_record.discard)
+                if previous_record and previous_record.discard is not None
                 else None
             )
             egg_weight_actual = (
@@ -521,9 +575,19 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 if actual_record and actual_record.average_egg_weight is not None
                 else None
             )
+            egg_weight_previous = (
+                float(previous_record.average_egg_weight)
+                if previous_record and previous_record.average_egg_weight is not None
+                else None
+            )
             production_actual = (
                 float(actual_record.production)
                 if actual_record and actual_record.production is not None
+                else None
+            )
+            production_previous = (
+                float(previous_record.production)
+                if previous_record and previous_record.production is not None
                 else None
             )
 
@@ -594,6 +658,8 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                     actual=consumption_actual,
                     target=consumption_target,
                     delta=consumption_delta,
+                    previous=consumption_previous,
+                    previous_delta=compute_previous_delta(consumption_actual, consumption_previous, 1),
                     status=consumption_status,
                 )
             )
@@ -613,6 +679,8 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                     actual=mortality_actual,
                     target=mortality_target,
                     delta=mortality_delta,
+                    previous=mortality_previous,
+                    previous_delta=compute_previous_delta(mortality_actual, mortality_previous, 1),
                     status=mortality_status,
                 )
             )
@@ -632,6 +700,8 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                     actual=discard_actual,
                     target=discard_target,
                     delta=discard_delta,
+                    previous=discard_previous,
+                    previous_delta=compute_previous_delta(discard_actual, discard_previous, 1),
                     status=discard_status,
                 )
             )
@@ -651,6 +721,8 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                     actual=egg_weight_actual,
                     target=egg_target,
                     delta=egg_delta,
+                    previous=egg_weight_previous,
+                    previous_delta=compute_previous_delta(egg_weight_actual, egg_weight_previous, 1),
                     status=egg_status,
                 )
             )
@@ -670,9 +742,35 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                     actual=production_actual,
                     target=production_target,
                     delta=production_delta,
+                    previous=production_previous,
+                    previous_delta=compute_previous_delta(production_actual, production_previous, 1),
                     status=production_status,
                 )
             )
+
+            consumption_bags_today = (
+                round(consumption_actual / 40, 2) if consumption_actual is not None else None
+            )
+            consumption_bags_previous = (
+                round(consumption_previous / 40, 2) if consumption_previous is not None else None
+            )
+            production_cartons_today: Optional[float] = None
+            production_cartons_previous: Optional[float] = None
+            if production_actual is not None and current_birds:
+                eggs_today = (production_actual / 100) * current_birds
+                production_cartons_today = round(eggs_today / 30, 1)
+            if production_previous is not None and current_birds:
+                eggs_previous = (production_previous / 100) * current_birds
+                production_cartons_previous = round(eggs_previous / 30, 1)
+
+            daily_rollup: DailyIndicatorAggregate = {
+                "consumption_bags_today": consumption_bags_today,
+                "consumption_bags_previous": consumption_bags_previous,
+                "production_cartons_today": production_cartons_today,
+                "production_cartons_previous": production_cartons_previous,
+            }
+
+            daily_snapshot_map = {metric["slug"]: metric for metric in daily_snapshot}
 
             alerts: List[str] = []
             if consumption_status == "high" and consumption_delta is not None:
@@ -755,6 +853,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             barn_names_display = ", ".join(barn_names) if barn_names else "Sin asignación"
 
             lot_data: LotOverview = {
+                "id": batch.pk,
                 "label": resolve_batch_label(batch, label_map),
                 "breed": batch.breed,
                 "birth_date": batch.birth_date,
@@ -778,6 +877,8 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 "alerts": alerts,
                 "notes": notes,
                 "daily_snapshot": daily_snapshot,
+                "daily_snapshot_map": daily_snapshot_map,
+                "daily_rollup": daily_rollup,
             }
 
             all_lots.append(lot_data)
@@ -786,43 +887,50 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 {
                     "farm": batch.farm,
                     "lots": [],
+                    "aggregates": {
+                        "production_cartons": 0.0,
+                        "consumption_kg": 0.0,
+                        "consumption_bags": 0.0,
+                        "mortality": 0.0,
+                        "discard": 0.0,
+                    },
                 },
             )
+            aggregates = farm_bucket["aggregates"]
+            if production_cartons_today is not None:
+                aggregates["production_cartons"] += production_cartons_today
+            if consumption_actual is not None:
+                aggregates["consumption_kg"] += consumption_actual
+            if consumption_bags_today is not None:
+                aggregates["consumption_bags"] += consumption_bags_today
+            if mortality_actual is not None:
+                aggregates["mortality"] += mortality_actual
+            if discard_actual is not None:
+                aggregates["discard"] += discard_actual
             farm_bucket["lots"].append(lot_data)
 
         farms_context: List[FarmOverview] = []
         for farm_id, info in farms_map.items():
             farm = info["farm"]
             lots = info["lots"]
+            aggregates = info.get("aggregates", {})
             total_initial = sum(lot["initial_birds"] for lot in lots)
             total_current = sum(lot["current_birds"] for lot in lots)
-            weekly_consumption_sum = round(sum(lot["weekly_feed_kg"] for lot in lots), 2)
-            mortality_percent = (
-                round(((total_initial - total_current) / total_initial) * 100, 2)
-                if total_initial
-                else 0.0
-            )
-            uniformity_values = [lot["uniformity"] for lot in lots if lot["uniformity"] is not None]
-            average_uniformity = (
-                round(sum(uniformity_values) / len(uniformity_values), 2)
-                if uniformity_values
-                else None
-            )
-            weight_values = [lot["avg_weight"] for lot in lots if lot["avg_weight"] is not None]
-            average_weight = (
-                round(sum(weight_values) / len(weight_values), 2)
-                if weight_values
-                else None
-            )
+            total_daily_production_cartons = round(float(aggregates.get("production_cartons", 0.0)), 1)
+            total_daily_consumption_kg = round(float(aggregates.get("consumption_kg", 0.0)), 2)
+            total_daily_consumption_bags = round(float(aggregates.get("consumption_bags", 0.0)), 2)
+            total_daily_mortality = float(aggregates.get("mortality", 0.0))
+            total_daily_discard = float(aggregates.get("discard", 0.0))
 
             farm_summary: FarmSummary = {
                 "total_initial_birds": total_initial,
                 "current_birds": total_current,
-                "mortality_percent": mortality_percent,
-                "weekly_consumption": weekly_consumption_sum,
-                "average_uniformity": average_uniformity,
-                "average_weight": average_weight,
                 "lot_count": len(lots),
+                "total_daily_production_cartons": total_daily_production_cartons,
+                "total_daily_consumption_kg": total_daily_consumption_kg,
+                "total_daily_consumption_bags": total_daily_consumption_bags,
+                "total_daily_mortality": float(round(total_daily_mortality, 1)),
+                "total_daily_discard": float(round(total_daily_discard, 1)),
             }
             farms_context.append(
                 {
@@ -913,8 +1021,22 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 "total_feed_to_date": total_feed_to_date,
                 "dashboard_generated_at": timezone.now(),
                 "active_submenu": "overview",
+                "today": today,
+                "yesterday": yesterday,
+                "focused_lot_id": focused_lot_id,
             }
         )
+        return context
+
+
+class DailyIndicatorsView(ProductionHomeView):
+    """Present a consolidated snapshot of daily lot indicators."""
+
+    template_name = "production/daily_indicators.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["active_submenu"] = "daily_indicators"
         return context
 
 
@@ -1544,6 +1666,7 @@ class BatchAllocationDeleteView(StaffRequiredMixin, DeleteView):
 
 
 production_home_view = ProductionHomeView.as_view()
+daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
 farm_update_view = FarmUpdateView.as_view()
 chicken_house_update_view = ChickenHouseUpdateView.as_view()

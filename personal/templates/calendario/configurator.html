@@ -26,79 +26,10 @@
       <div class="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs font-medium">
         <button type="button" data-step-trigger="1" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">1. Posiciones</button>
         <button type="button" data-step-trigger="2" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">2. Colaboradores</button>
-        <button type="button" data-step-trigger="3" class="rounded border border-transparent px-4 py-2 text-slate-600 hover:bg-slate-100">3. Generar borrador</button>
-          <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
+        <div id="metadata-status" class="rounded border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">Cargando información…</div>
       </div>
 
       <div class="space-y-10">
-        <section data-step-index="3" class="hidden rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
-          <header class="flex flex-col gap-1">
-            <h2 class="text-xl font-semibold text-slate-900">3. Genera calendario en borrador</h2>
-            <p class="text-sm text-slate-600">Ingresa rangos completos (al menos una semana) para que el motor respete descansos y rotaciones.</p>
-          </header>
-
-          <div class="mt-6 space-y-6">
-            <form id="calendar-basics-form" class="space-y-4">
-              <div class="grid gap-4 md:grid-cols-3">
-                <label class="flex flex-col text-sm text-slate-600">
-                  Nombre
-                  <input id="calendar-name" type="text" required placeholder="Semana 42 - Colina" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-                <label class="flex flex-col text-sm text-slate-600">
-                  Fecha de inicio
-                  <input id="calendar-start" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-                <label class="flex flex-col text-sm text-slate-600">
-                  Fecha de cierre
-                  <input id="calendar-end" type="date" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
-                </label>
-              </div>
-
-              <label class="flex flex-col text-sm text-slate-600">
-                Notas internas (se guardan junto con el calendario)
-                <textarea id="calendar-notes" rows="3" placeholder="Observaciones relevantes, feriados, eventos especiales…" class="mt-1 resize-y rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></textarea>
-              </label>
-            </form>
-
-            <div class="grid gap-6 lg:grid-cols-2">
-              <div class="space-y-4">
-                <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  <p class="font-semibold text-slate-900">Antes de generar</p>
-                  <ul class="mt-2 list-disc pl-4">
-                    <li>Verifica que el rango de fechas sea correcto.</li>
-                    <li>Confirma que las posiciones activas y los colaboradores estén actualizados.</li>
-                    <li>Asegúrate de registrar los días de descanso automático directamente en cada colaborador.</li>
-                  </ul>
-                </div>
-
-                <button id="generate-calendar-btn" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded bg-brand px-4 py-3 text-sm font-semibold text-white shadow hover:bg-brand-dark">
-                  Generar calendario sugerido
-                </button>
-
-                <div id="calendar-feedback" class="hidden rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></div>
-              </div>
-
-              <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-sm font-semibold text-slate-800">Resumen del borrador</h3>
-                  <button type="button" id="reload-summary-btn" class="hidden rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">Actualizar resumen</button>
-                </div>
-                <div id="summary-preview" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                  <p class="text-slate-500">El resumen aparecerá después de generar el calendario.</p>
-                </div>
-                <div class="flex flex-wrap gap-2" id="calendar-actions" hidden>
-                  <a id="open-calendar-detail" href="#" class="inline-flex items-center gap-2 rounded border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/10">Abrir detalle de calendario</a>
-                  <a href="{{ calendar_home_url }}" class="inline-flex items-center gap-2 rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Ir al calendario</a>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-6 flex items-center justify-start">
-              <button type="button" data-action="prev" data-prev-step="2" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
-            </div>
-          </div>
-        </section>
-
         <section data-step-index="1" class="rounded-xl border border-slate-200 bg-white/95 p-6 shadow-sm">
           <header class="flex flex-col gap-1">
             <h2 class="text-xl font-semibold text-slate-900">1. Puestos de trabajo vigentes</h2>
@@ -390,9 +321,8 @@
               </form>
             </div>
 
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-start">
               <button type="button" data-action="prev" data-prev-step="1" class="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Volver</button>
-            <button type="button" data-action="next" data-next-step="3" class="inline-flex items-center rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-dark">Continuar</button>
             </div>
           </div>
         </section>

@@ -5,6 +5,7 @@ from .views import (
     batch_management_view,
     chicken_house_delete_view,
     chicken_house_update_view,
+    daily_indicators_view,
     farm_delete_view,
     farm_update_view,
     infrastructure_home_view,
@@ -18,6 +19,7 @@ from .views import (
 app_name = "production"
 
 urlpatterns = [
+    path("indicadores-dia/", daily_indicators_view, name="daily-indicators"),
     path("", production_home_view, name="index"),
     path("lotes/", batch_management_view, name="batches"),
     path("lotes/<int:pk>/editar/", bird_batch_update_view, name="batch-update"),

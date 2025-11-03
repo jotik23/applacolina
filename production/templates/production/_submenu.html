@@ -1,6 +1,14 @@
 <nav class="mb-8 border-b border-slate-200/70">
   <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
     <a
+      href="{% url 'production:daily-indicators' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'daily_indicators' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'daily_indicators' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'daily_indicators' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Indicadores del día
+    </a>
+    <a
       href="{% url 'production:index' %}"
       class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'overview' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'overview' %}aria-current="page"{% endif %}

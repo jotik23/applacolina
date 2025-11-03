@@ -253,7 +253,7 @@
       );
       const sortedSteps = Array.from(availableSteps).sort((a, b) => a - b);
       const stepSlugMap = view === 'configurator'
-        ? { 1: 'positions', 2: 'collaborators', 3: 'rules', 4: 'draft' }
+        ? { 1: 'positions', 2: 'collaborators' }
         : {};
       const slugToStep = new Map(
         Object.entries(stepSlugMap).map(([step, slug]) => [slug, Number(step)])
@@ -262,9 +262,10 @@
         slugToStep.set('position', 1);
         slugToStep.set('posiciones', 1);
         slugToStep.set('collaboradores', 2);
-        slugToStep.set('rules', 3);
-        slugToStep.set('reglas', 3);
-        slugToStep.set('borrador', 4);
+        slugToStep.set('rules', 2);
+        slugToStep.set('reglas', 2);
+        slugToStep.set('draft', 2);
+        slugToStep.set('borrador', 2);
       }
       if (refs.positionIncludeInactive) {
         state.filters.includeInactivePositions = refs.positionIncludeInactive.checked;
