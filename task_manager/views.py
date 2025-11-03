@@ -223,118 +223,21 @@ def _build_daily_assignment_day_payload(
     return payload
 
 
-def _build_sample_daily_assignment_schedule(
-    *,
-    reference_date: date,
-    max_days: int = 6,
-) -> dict[str, object]:
-    """Provide a deterministic sample schedule for demo and fallback contexts."""
-
-    samples = [
-        {
-            "offset": 0,
-            "calendar_status_key": CalendarStatus.APPROVED,
-            "calendar_status_label": CalendarStatus.APPROVED.label,
-            "is_rest": False,
-            "role_label": "Auxiliar operativo - Galpón 3",
-            "farm_label": "Granja La Colina",
-            "barn_label": "Galpón 3",
-            "shift_type_label": "Turno diurno",
-            "assignment_notes": _("Ingreso programado a las 06:00."),
-        },
-        {
-            "offset": 1,
-            "calendar_status_key": CalendarStatus.APPROVED,
-            "calendar_status_label": CalendarStatus.APPROVED.label,
-            "is_rest": False,
-            "role_label": "Apoyo sanitario - Galpón 2",
-            "farm_label": "Granja La Colina",
-            "barn_label": "Galpón 2",
-            "shift_type_label": "Turno diurno",
-        },
-        {
-            "offset": 2,
-            "calendar_status_key": CalendarStatus.APPROVED,
-            "calendar_status_label": CalendarStatus.APPROVED.label,
-            "is_rest": True,
-            "rest_label": _("Descanso programado"),
-            "rest_notes": _("Rota al turno nocturno al finalizar el descanso."),
-        },
-        {
-            "offset": 3,
-            "calendar_status_key": CalendarStatus.MODIFIED,
-            "calendar_status_label": CalendarStatus.MODIFIED.label,
-            "is_rest": False,
-            "role_label": "Supervisor de bioseguridad",
-            "farm_label": "Granja La Primavera",
-            "barn_label": "Galpón 1",
-            "shift_type_label": "Turno nocturno",
-            "assignment_notes": _("Cambio realizado por ajuste operativo."),
-        },
-        {
-            "offset": 4,
-            "calendar_status_key": CalendarStatus.MODIFIED,
-            "calendar_status_label": CalendarStatus.MODIFIED.label,
-            "is_rest": False,
-            "role_label": "Registro y trazabilidad",
-            "farm_label": "Granja La Primavera",
-            "barn_label": None,
-            "shift_type_label": "Turno nocturno",
-        },
-        {
-            "offset": 5,
-            "calendar_status_key": "manual",
-            "calendar_status_label": _("Manual"),
-            "is_rest": True,
-            "rest_label": _("Descanso flexible"),
-            "rest_notes": _("Acordado con el líder de turno."),
-        },
-    ][:max_days]
-
-    days: list[dict[str, object]] = []
-    for entry in samples:
-        target_date = reference_date + timedelta(days=entry["offset"])
-        day_payload = _build_daily_assignment_day_payload(
-            target_date=target_date,
-            reference_date=reference_date,
-            calendar_status_key=entry.get("calendar_status_key"),
-            calendar_status_label=entry.get("calendar_status_label") or "",
-            is_rest=entry.get("is_rest", False),
-            role_label=entry.get("role_label"),
-            farm_label=entry.get("farm_label"),
-            barn_label=entry.get("barn_label"),
-            shift_type_label=entry.get("shift_type_label"),
-            rest_label=entry.get("rest_label"),
-            rest_notes=entry.get("rest_notes"),
-            assignment_notes=entry.get("assignment_notes"),
-        )
-        days.append(day_payload)
-
-    for index, day in enumerate(days):
-        day["index"] = index
-
-    initial_index = next((day["index"] for day in days if day.get("is_today")), 0) if days else 0
-    initial_day = days[initial_index] if days else None
-
-    return {
-        "current_date_iso": reference_date.isoformat(),
-        "initial_index": initial_index,
-        "initial_day": initial_day,
-        "days": days,
-    }
-
-
 def _resolve_operator_daily_assignments(
     *,
     user: Optional[UserProfile],
     reference_date: date,
     max_days: int = 6,
-    use_samples: bool = False,
 ) -> dict[str, object]:
     """Return the next available assignment/rest days for the operator."""
 
-    if use_samples or not user:
-        return _build_sample_daily_assignment_schedule(reference_date=reference_date, max_days=max_days)
+    if not user or not getattr(user, "is_authenticated", False):
+        return {
+            "current_date_iso": reference_date.isoformat(),
+            "initial_index": 0,
+            "initial_day": None,
+            "days": [],
+        }
 
     search_horizon = reference_date + timedelta(days=45)
 
@@ -674,7 +577,6 @@ def _resolve_daily_task_cards(
     *,
     user: Optional[UserProfile],
     reference_date: date,
-    use_sample_tasks: bool = False,
 ) -> list[dict[str, object]]:
     """Return the task cards to display in the mini app feed."""
 
@@ -1192,7 +1094,6 @@ def _build_telegram_mini_app_payload(
     shift_confirmation_empty: Optional[dict[str, object]] = None,
     include_shift_confirmation_stub: bool = True,
     user: Optional[UserProfile] = None,
-    use_task_samples: bool = False,
     production: Optional[dict[str, object]] = None,
     weight_registry: Optional[dict[str, object]] = None,
     include_weight_registry: bool = True,
@@ -1624,79 +1525,7 @@ def _build_telegram_mini_app_payload(
         "label": _("Aves en postura activas"),
     }
 
-    weight_registry_locations = [
-        {
-            "id": "lc-g3-s1",
-            "label": _("Granja La Colina · Galpón 3 · Sala 1"),
-            "farm": _("Granja La Colina"),
-            "barn": "Galpón 3",
-            "room": "Sala 1",
-            "birds": 1240,
-        },
-        {
-            "id": "lc-g3-s2",
-            "label": _("Granja La Colina · Galpón 3 · Sala 2"),
-            "farm": _("Granja La Colina"),
-            "barn": "Galpón 3",
-            "room": "Sala 2",
-            "birds": 1215,
-        },
-        {
-            "id": "lc-g4-s1",
-            "label": _("Granja La Colina · Galpón 4 · Sala 1"),
-            "farm": _("Granja La Colina"),
-            "barn": "Galpón 4",
-            "room": "Sala 1",
-            "birds": 980,
-        },
-        {
-            "id": "lc-g5-s1",
-            "label": _("Granja La Colina · Galpón 5 · Sala 1"),
-            "farm": _("Granja La Colina"),
-            "barn": "Galpón 5",
-            "room": "Sala 1",
-            "birds": 1325,
-        },
-    ]
-
-    weight_registry_recent_sessions = [
-        {
-            "id": "lc-g3-s1-2024-11-04",
-            "label": _("G3 · Sala 1 · 04 Nov"),
-            "avg_weight": 1845,
-            "uniformity_percent": 86,
-            "sample_size": 52,
-        },
-        {
-            "id": "lc-g4-s1-2024-11-02",
-            "label": _("G4 · Sala 1 · 02 Nov"),
-            "avg_weight": 1782,
-            "uniformity_percent": 82,
-            "sample_size": 48,
-        },
-    ]
-
-    default_today = timezone.localdate()
-    default_weight_registry = {
-        "date": default_today.isoformat(),
-        "date_label": date_format(default_today, "DATE_FORMAT"),
-        "task_assignment_id": 0,
-        "task_definition_id": 0,
-        "production_record_id": None,
-        "context_token": uuid.uuid4().hex,
-        "title": _("Pesaje de aves"),
-        "subtitle": _(""),
-        "unit_label": "g",
-        "min_sample_size": 30,
-        "uniformity_tolerance_percent": 10,
-        "locations": weight_registry_locations,
-        "sessions": [],
-        "recent_sessions": weight_registry_recent_sessions,
-        "resume_hint": _("Puedes pausar el registro."),
-    }
-    weight_registry_payload = weight_registry
-    if include_weight_registry and weight_registry_payload is None and use_task_samples:
-        weight_registry_payload = default_weight_registry
+    weight_registry_payload = weight_registry if include_weight_registry else None
 
     egg_workflow = {
         "cartons_per_pack": cartons_per_pack,
@@ -2051,13 +1880,12 @@ def _build_telegram_mini_app_payload(
             "storage_key": f"miniapp-shift-confirm::{today.isoformat()}",
         }
 
-    tasks = _resolve_daily_task_cards(user=user, reference_date=today, use_sample_tasks=use_task_samples)
+    tasks = _resolve_daily_task_cards(user=user, reference_date=today)
 
     daily_assignment_schedule = _resolve_operator_daily_assignments(
         user=user,
         reference_date=today,
         max_days=6,
-        use_samples=use_task_samples,
     )
 
     leader_review_days = [
@@ -2977,191 +2805,6 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
             contact_handle="@demo",
             role="Vista previa",
             initials=initials,
-            use_task_samples=True,
-        )
-        context["telegram_integration_enabled"] = False
-        context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
-        return context
-
-
-class TaskManagerMiniAppDevView(generic.TemplateView):
-    """Render the operator experience for the mini app development variant."""
-
-    template_name = "task_manager/telegram_mini_app_dev.html"
-    form_class = MiniAppAuthenticationForm
-
-    def dispatch(self, request, *args, **kwargs):
-        self.mini_app_client = _resolve_mini_app_client(request)
-        self.telegram_auth_error: Optional[str] = None
-        self.telegram_user_payload: Optional[dict[str, object]] = None
-
-        if self.mini_app_client == MiniAppClient.TELEGRAM and not request.user.is_authenticated:
-            user, error = self._attempt_telegram_login(request)
-            if user:
-                backend = _default_auth_backend()
-                user.backend = backend  # type: ignore[attr-defined]
-                login(request, user)
-            else:
-                self.telegram_auth_error = error
-
-        return super().dispatch(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        form = self.form_class(request=request, data=request.POST)
-        if form.is_valid():
-            login(request, form.get_user())
-            return redirect(request.path)
-
-        return self.render_to_response(self.get_context_data(form=form))
-
-    def _attempt_telegram_login(self, request) -> Tuple[Optional[UserProfile], Optional[str]]:
-        init_data = _get_telegram_init_data(request)
-        if not init_data:
-            return None, _("No se recibieron las credenciales de Telegram.")
-
-        bot = _resolve_default_mini_app_bot()
-        if not bot:
-            return None, _("No hay un bot de Telegram activo configurado para la mini app.")
-
-        try:
-            payload = _verify_telegram_signature(init_data, bot_token=bot.token)
-            user_payload = _extract_telegram_user(payload)
-        except ValueError as exc:
-            return None, str(exc)
-
-        telegram_user_id = user_payload.get("id")
-        chat_link = (
-            TelegramChatLink.objects.filter(bot=bot, telegram_user_id=telegram_user_id)
-            .select_related("user")
-            .first()
-        )
-
-        if not chat_link:
-            return None, _("No encontramos un chat verificado asociado a tu cuenta de Telegram.")
-
-        if chat_link.status != TelegramChatLink.Status.VERIFIED:
-            return None, _("Tu chat de Telegram aún no ha sido verificado.")
-
-        user = chat_link.user
-        if not getattr(user, "is_active", False):
-            return None, _("Tu cuenta está inactiva. Contacta al administrador.")
-
-        if not user.has_perm("task_manager.access_mini_app"):
-            return None, _("No tienes permisos para acceder a la mini app.")
-
-        self.telegram_user_payload = user_payload
-        self._refresh_chat_link_metadata(chat_link, user_payload)
-        return user, None
-
-    def _refresh_chat_link_metadata(self, chat_link: TelegramChatLink, user_payload: Mapping[str, object]) -> None:
-        update_fields: list[str] = []
-        for attr in ("username", "first_name", "last_name", "language_code"):
-            value = user_payload.get(attr)
-            if value is None:
-                continue
-            if getattr(chat_link, attr) != value:
-                setattr(chat_link, attr, value)
-                update_fields.append(attr)
-
-        chat_link.last_interaction_at = timezone.now()
-        update_fields.append("last_interaction_at")
-
-        if update_fields:
-            if "updated_at" not in update_fields:
-                update_fields.append("updated_at")
-            chat_link.save(update_fields=update_fields)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        today = timezone.localdate()
-        user = getattr(self.request, "user", None)
-
-        has_authenticated_user = getattr(user, "is_authenticated", False)
-        has_access = has_authenticated_user and user.has_perm("task_manager.access_mini_app")
-        card_permissions = _resolve_mini_app_card_permissions(user)
-
-        if not has_access:
-            card_permissions = {key: False for key in MINI_APP_CARD_PERMISSION_MAP}
-
-        if has_access:
-            display_name = (user.get_full_name() or user.get_username() or "Operario").strip()
-            phone_number = getattr(user, "telefono", "") or ""
-            phone_number = str(phone_number).strip()
-            contact_handle = f"@{phone_number}" if phone_number else "@Sin teléfono"
-            role_label = _resolve_primary_group_label(user) or "Operario"
-            initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
-            shift_card_payload: Optional[dict[str, object]] = None
-            shift_empty_payload: Optional[dict[str, object]] = None
-            if card_permissions.get("shift_confirmation"):
-                shift_card = build_shift_confirmation_card(user=user, reference_date=today)
-                if shift_card:
-                    shift_card_payload = serialize_shift_confirmation_card(shift_card)
-                else:
-                    shift_empty = build_shift_confirmation_empty_card(user=user, reference_date=today)
-                    if shift_empty:
-                        shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
-            session_token = _resolve_mini_app_session_token(self.request)
-            weight_registry_payload: Optional[dict[str, object]] = None
-            if card_permissions.get("weight_registry"):
-                weight_registry_session = build_weight_registry(
-                    user=user,
-                    reference_date=today,
-                    session_token=session_token,
-                )
-                weight_submit_url = reverse("task_manager:mini-app-weight-registry")
-                if weight_registry_session:
-                    weight_registry_payload = serialize_weight_registry(weight_registry_session)
-                    weight_registry_payload["submit_url"] = weight_submit_url
-            context["telegram_mini_app"] = _build_telegram_mini_app_payload(
-                date_label=date_format(today, "DATE_FORMAT"),
-                display_name=display_name,
-                contact_handle=contact_handle,
-                role=role_label,
-                initials=initials,
-                shift_confirmation=shift_card_payload,
-                shift_confirmation_empty=shift_empty_payload,
-                include_shift_confirmation_stub=False,
-                user=user,
-                weight_registry=weight_registry_payload,
-                include_weight_registry=bool(card_permissions.get("weight_registry")),
-            )
-            context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-dev-logout")
-        else:
-            context["telegram_mini_app"] = None
-            context["mini_app_logout_url"] = None
-
-        if not has_access:
-            form = kwargs.get("form") or self.form_class(request=self.request)
-            context["mini_app_form"] = form
-        else:
-            context["mini_app_form"] = None
-
-        context["mini_app_client"] = self.mini_app_client.value
-        context["telegram_integration_enabled"] = self.mini_app_client == MiniAppClient.TELEGRAM
-        context["telegram_auth_error"] = self.telegram_auth_error
-        context["mini_app_access_granted"] = has_access
-        context["mini_app_card_permissions"] = card_permissions
-
-        return context
-
-
-class TaskManagerTelegramMiniAppDevDemoView(generic.TemplateView):
-    """Render a simplified, unauthenticated preview of the Telegram mini app (dev)."""
-
-    template_name = "task_manager/telegram_mini_app_dev.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        today = timezone.localdate()
-        display_name = "Operario demo"
-        initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
-        context["telegram_mini_app"] = _build_telegram_mini_app_payload(
-            date_label=date_format(today, "DATE_FORMAT"),
-            display_name=display_name,
-            contact_handle="@demo",
-            role="Vista previa",
-            initials=initials,
-            use_task_samples=True,
         )
         context["telegram_integration_enabled"] = False
         context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
@@ -3463,18 +3106,6 @@ def mini_app_logout_view(request):
 
 telegram_mini_app_view = TaskManagerMiniAppView.as_view()
 telegram_mini_app_demo_view = TaskManagerTelegramMiniAppDemoView.as_view()
-
-
-def mini_app_dev_logout_view(request):
-    if request.method == "POST":
-        logout(request)
-        return redirect("task_manager:telegram-mini-app-dev")
-
-    return redirect("task_manager:telegram-mini-app-dev")
-
-
-telegram_mini_app_dev_view = TaskManagerMiniAppDevView.as_view()
-telegram_mini_app_dev_demo_view = TaskManagerTelegramMiniAppDevDemoView.as_view()
 
 
 def _task_definition_redirect_url(task_id: int) -> str:
