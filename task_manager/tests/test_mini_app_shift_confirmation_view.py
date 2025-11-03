@@ -26,7 +26,6 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
             name="Galpón Uno",
-            area_m2=280.0,
         )
         self.room = Room.objects.create(
             chicken_house=self.chicken_house,
@@ -134,4 +133,3 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         self.assertIsNone(payload["shift_confirmation"])
         self.assertIsNone(payload["shift_confirmation_empty"])
         self.assertNotContains(response, "data-shift-confirmation-card")
-

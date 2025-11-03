@@ -33,7 +33,6 @@ class MiniAppProductionViewTests(TestCase):
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
             name="Galpón A",
-            area_m2=250.0,
         )
         self.room = Room.objects.create(
             chicken_house=self.chicken_house,

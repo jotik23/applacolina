@@ -148,15 +148,6 @@
                 <p class="text-xs font-semibold text-rose-600">{{ chicken_house_form.name.errors|join:", " }}</p>
               {% endif %}
             </div>
-            <div class="space-y-2">
-              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ chicken_house_form.area_m2.id_for_label }}">
-                {{ chicken_house_form.area_m2.label }}
-              </label>
-              {{ chicken_house_form.area_m2 }}
-              {% if chicken_house_form.area_m2.errors %}
-                <p class="text-xs font-semibold text-rose-600">{{ chicken_house_form.area_m2.errors|join:", " }}</p>
-              {% endif %}
-            </div>
             <button
               type="submit"
               class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
@@ -223,7 +214,8 @@
                   {% with barn_total=farm.chicken_house_count room_total=farm.room_count %}
                     <p class="mt-1 text-sm text-slate-500">
                       {{ barn_total }} {% if barn_total == 1 %}galpón{% else %}galpones{% endif %} ·
-                      {{ room_total }} {% if room_total == 1 %}salón{% else %}salones{% endif %}
+                      {{ room_total }} {% if room_total == 1 %}salón{% else %}salones{% endif %} ·
+                      {{ farm.area_m2|floatformat:1 }} m²
                     </p>
                   {% endwith %}
                 </div>
@@ -408,15 +400,6 @@
               {{ chicken_house_form.name }}
               {% if chicken_house_form.name.errors %}
                 <p class="text-xs font-semibold text-rose-600">{{ chicken_house_form.name.errors|join:", " }}</p>
-              {% endif %}
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ chicken_house_form.area_m2.id_for_label }}">
-                {{ chicken_house_form.area_m2.label }}
-              </label>
-              {{ chicken_house_form.area_m2 }}
-              {% if chicken_house_form.area_m2.errors %}
-                <p class="text-xs font-semibold text-rose-600">{{ chicken_house_form.area_m2.errors|join:", " }}</p>
               {% endif %}
             </div>
             <button

@@ -178,8 +178,7 @@
     "pk": 1,
     "fields": {
       "farm": 1,
-      "name": "Galpón Principal",
-      "area_m2": "1200.00"
+      "name": "Galpón Principal"
     }
   },
   {

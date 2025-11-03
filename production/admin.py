@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 from django.contrib import admin
 from django.core.exceptions import ValidationError
-from django.db.models import Count
+from django.db.models import Count, Sum
+from django.db.models.functions import Coalesce
 from django.forms import BaseInlineFormSet
 
 from .models import (
@@ -76,7 +79,7 @@ class ProductionRecordInline(admin.TabularInline):
 @admin.register(Farm)
 class FarmAdmin(admin.ModelAdmin):
     inlines = (ChickenHouseInline,)
-    list_display = ("name", "chicken_houses_count", "rooms_count")
+    list_display = ("name", "farm_area", "chicken_houses_count", "rooms_count")
     search_fields = ("name",)
 
     def get_queryset(self, request):
@@ -84,7 +87,12 @@ class FarmAdmin(admin.ModelAdmin):
         return queryset.annotate(
             chicken_houses_total=Count("chicken_houses", distinct=True),
             rooms_total=Count("chicken_houses__rooms", distinct=True),
+            total_area=Coalesce(Sum("chicken_houses__rooms__area_m2"), Decimal("0")),
         )
+
+    @admin.display(ordering="total_area", description="Área (m²)")
+    def farm_area(self, obj):
+        return obj.total_area
 
     def chicken_houses_count(self, obj):
         return obj.chicken_houses_total
@@ -102,9 +110,17 @@ class FarmAdmin(admin.ModelAdmin):
 @admin.register(ChickenHouse)
 class ChickenHouseAdmin(admin.ModelAdmin):
     inlines = (RoomInline,)
-    list_display = ("name", "farm", "area_m2")
+    list_display = ("name", "farm", "calculated_area")
     search_fields = ("name", "farm__name")
     list_filter = ("farm",)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.annotate(total_area=Coalesce(Sum("rooms__area_m2"), Decimal("0")))
+
+    @admin.display(ordering="total_area", description="Área (m²)")
+    def calculated_area(self, obj):
+        return obj.total_area
 
 
 @admin.register(BirdBatch)

@@ -1,7 +1,9 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 
@@ -16,6 +18,18 @@ class Farm(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def area_m2(self) -> Decimal:
+        """Aggregate the farm area from all related rooms."""
+        if hasattr(self, "_prefetched_objects_cache") and "chicken_houses" in self._prefetched_objects_cache:
+            total_area = Decimal("0")
+            for chicken_house in self.chicken_houses.all():
+                total_area += chicken_house.area_m2
+            return total_area
+
+        aggregated_area = self.chicken_houses.aggregate(total=Sum("rooms__area_m2"))
+        return aggregated_area.get("total") or Decimal("0")
+
 
 class ChickenHouse(models.Model):
     farm = models.ForeignKey(
@@ -25,7 +39,6 @@ class ChickenHouse(models.Model):
         verbose_name="Granja",
     )
     name = models.CharField("Nombre", max_length=150)
-    area_m2 = models.DecimalField("Area (m2)", max_digits=10, decimal_places=2)
 
     class Meta:
         verbose_name = "Galpon"
@@ -35,6 +48,18 @@ class ChickenHouse(models.Model):
 
     def __str__(self) -> str:
         return f"{self.farm.name} - {self.name}"
+
+    @property
+    def area_m2(self) -> Decimal:
+        """Aggregate the barn area from its rooms."""
+        if hasattr(self, "_prefetched_objects_cache") and "rooms" in self._prefetched_objects_cache:
+            total_area = Decimal("0")
+            for room in self.rooms.all():
+                total_area += room.area_m2
+            return total_area
+
+        aggregated_area = self.rooms.aggregate(total=Sum("area_m2"))
+        return aggregated_area.get("total") or Decimal("0")
 
 
 class Room(models.Model):

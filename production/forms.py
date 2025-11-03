@@ -50,11 +50,10 @@ class FarmForm(BaseInfrastructureForm):
 class ChickenHouseForm(BaseInfrastructureForm):
     class Meta:
         model = ChickenHouse
-        fields = ["farm", "name", "area_m2"]
+        fields = ["farm", "name"]
         labels = {
             "farm": "Granja",
             "name": "Nombre del galpón",
-            "area_m2": "Área del galpón (m²)",
         }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

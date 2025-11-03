@@ -1230,7 +1230,7 @@ class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
         )
 
     def _compute_stats(self) -> Dict[str, Optional[Decimal]]:
-        total_house_area = ChickenHouse.objects.aggregate(
+        total_house_area = Room.objects.aggregate(
             total=Coalesce(Sum("area_m2"), Decimal("0"))
         )["total"]
         avg_room_area = Room.objects.aggregate(avg=Avg("area_m2"))["avg"]
@@ -1241,7 +1241,8 @@ class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
         )
         largest_barn = (
             ChickenHouse.objects.select_related("farm")
-            .order_by("-area_m2")
+            .annotate(total_area=Coalesce(Sum("rooms__area_m2"), Decimal("0")))
+            .order_by("-total_area", "name")
             .first()
         )
 

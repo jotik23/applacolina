@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -45,7 +47,6 @@ class InfrastructureViewTests(TestCase):
                 "form_type": "chicken_house",
                 "farm": farm.pk,
                 "name": "Galpón A",
-                "area_m2": "1200.5",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -55,7 +56,7 @@ class InfrastructureViewTests(TestCase):
 
     def test_create_room(self) -> None:
         farm = Farm.objects.create(name="Granja Central")
-        barn = ChickenHouse.objects.create(farm=farm, name="Galpón A", area_m2=1200)
+        barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
         response = self.client.post(
             reverse("production:infrastructure"),
             {
@@ -72,7 +73,7 @@ class InfrastructureViewTests(TestCase):
 
     def test_update_views_render(self) -> None:
         farm = Farm.objects.create(name="Granja Central")
-        barn = ChickenHouse.objects.create(farm=farm, name="Galpón A", area_m2=100)
+        barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
         room = Room.objects.create(chicken_house=barn, name="Salón 1", area_m2=50)
 
         urls = {
@@ -89,9 +90,29 @@ class InfrastructureViewTests(TestCase):
 
     def test_delete_room_flow(self) -> None:
         farm = Farm.objects.create(name="Granja Central")
-        barn = ChickenHouse.objects.create(farm=farm, name="Galpón A", area_m2=100)
+        barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
         room = Room.objects.create(chicken_house=barn, name="Salón 1", area_m2=50)
 
         response = self.client.post(reverse("production:room-delete", args=[room.pk]))
         self.assertRedirects(response, reverse("production:infrastructure"))
         self.assertFalse(Room.objects.filter(pk=room.pk).exists())
+
+    def test_stats_compute_area_from_rooms(self) -> None:
+        farm = Farm.objects.create(name="Granja Central")
+        primary_barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
+        secondary_barn = ChickenHouse.objects.create(farm=farm, name="Galpón B")
+        Room.objects.create(chicken_house=primary_barn, name="Salón 1", area_m2=50)
+        Room.objects.create(chicken_house=secondary_barn, name="Salón 2", area_m2=75)
+
+        response = self.client.get(reverse("production:infrastructure"))
+        stats = response.context["infrastructure_stats"]
+
+        self.assertEqual(stats["total_house_area"], Decimal("125"))
+        self.assertEqual(stats["largest_barn"], secondary_barn)
+
+        farms = response.context["farms"]
+        context_farm = farms.get(pk=farm.pk)
+        self.assertEqual(context_farm.area_m2, Decimal("125"))
+        barns = {barn.name: barn for barn in context_farm.chicken_houses.all()}
+        self.assertEqual(barns["Galpón A"].area_m2, Decimal("50"))
+        self.assertEqual(barns["Galpón B"].area_m2, Decimal("75"))

@@ -26,7 +26,6 @@ class ShiftConfirmationFeatureTests(TestCase):
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
             name="Galpón Principal",
-            area_m2=320.0,
         )
         self.room_a = Room.objects.create(
             chicken_house=self.chicken_house,

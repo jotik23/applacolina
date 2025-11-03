@@ -27,7 +27,6 @@ class TaskAssignmentSignalTests(TestCase):
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
             name="Galpón 1",
-            area_m2=100,
         )
         self.room = Room.objects.create(
             chicken_house=self.chicken_house,
