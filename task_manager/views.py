@@ -43,10 +43,13 @@ from task_manager.mini_app.features import (
     build_shift_confirmation_card,
     build_shift_confirmation_empty_card,
     build_production_registry,
+    build_weight_registry,
     persist_production_records,
+    persist_weight_registry,
     serialize_shift_confirmation_card,
     serialize_shift_confirmation_empty_card,
     serialize_production_registry,
+    serialize_weight_registry,
 )
 
 from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
@@ -1326,6 +1329,8 @@ def _build_telegram_mini_app_payload(
     user: Optional[UserProfile] = None,
     use_task_samples: bool = False,
     production: Optional[dict[str, object]] = None,
+    weight_registry: Optional[dict[str, object]] = None,
+    include_weight_registry: bool = True,
 ) -> dict[str, object]:
     today = timezone.localdate()
     weekday_label = date_format(today, "l").capitalize()
@@ -1806,7 +1811,7 @@ def _build_telegram_mini_app_payload(
         },
     ]
 
-    weight_registry = {
+    default_weight_registry = {
         "title": _("Pesaje de aves"),
         "subtitle": _(""),
         "unit_label": "g",
@@ -1816,6 +1821,10 @@ def _build_telegram_mini_app_payload(
         "recent_sessions": weight_registry_recent_sessions,
         "resume_hint": _("Puedes pausar el registro."),
     }
+    if include_weight_registry:
+        weight_registry_payload = weight_registry if weight_registry is not None else default_weight_registry
+    else:
+        weight_registry_payload = weight_registry
 
     egg_workflow = {
         "cartons_per_pack": cartons_per_pack,
@@ -2763,7 +2772,7 @@ def _build_telegram_mini_app_payload(
         },
         "production_reference": production_reference,
         "production": production,
-        "weight_registry": weight_registry,
+        "weight_registry": weight_registry_payload,
         "pending_classification": pending_classification_summary,
         "egg_workflow": egg_workflow,
         "transport_queue": transport_queue,
@@ -3015,6 +3024,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                     if shift_empty:
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             production_payload: Optional[dict[str, object]] = None
+            weight_registry_payload: Optional[dict[str, object]] = None
             if card_permissions.get("production"):
                 registry = build_production_registry(user=user, reference_date=today)
                 if registry:
@@ -3034,6 +3044,27 @@ class TaskManagerMiniAppView(generic.TemplateView):
                         "chicken_house": None,
                         "farm": None,
                     }
+            if card_permissions.get("weight_registry"):
+                weight_submit_url = reverse("task_manager:mini-app-weight-registry")
+                registry = build_weight_registry(user=user, reference_date=today)
+                if registry:
+                    weight_registry_payload = serialize_weight_registry(registry)
+                    weight_registry_payload["submit_url"] = weight_submit_url
+                else:
+                    weight_registry_payload = {
+                        "date": today.isoformat(),
+                        "date_label": date_format(today, "DATE_FORMAT"),
+                        "title": _("Pesaje de aves"),
+                        "subtitle": "",
+                        "unit_label": "g",
+                        "min_sample_size": 30,
+                        "uniformity_tolerance_percent": 10,
+                        "locations": [],
+                        "sessions": [],
+                        "recent_sessions": [],
+                        "resume_hint": _("Puedes pausar el registro."),
+                        "submit_url": weight_submit_url,
+                    }
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
@@ -3045,6 +3076,8 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 include_shift_confirmation_stub=False,
                 user=user,
                 production=production_payload,
+                weight_registry=weight_registry_payload,
+                include_weight_registry=bool(card_permissions.get("weight_registry")),
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
@@ -3205,6 +3238,26 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
                     shift_empty = build_shift_confirmation_empty_card(user=user, reference_date=today)
                     if shift_empty:
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
+            weight_registry_payload: Optional[dict[str, object]] = None
+            if card_permissions.get("weight_registry"):
+                weight_registry_session = build_weight_registry(user=user, reference_date=today)
+                weight_submit_url = reverse("task_manager:mini-app-weight-registry")
+                if weight_registry_session:
+                    weight_registry_payload = serialize_weight_registry(weight_registry_session)
+                    weight_registry_payload["submit_url"] = weight_submit_url
+                else:
+                    weight_registry_payload = {
+                        "submit_url": weight_submit_url,
+                        "locations": [],
+                        "sessions": [],
+                        "recent_sessions": [],
+                        "unit_label": "g",
+                        "min_sample_size": 30,
+                        "uniformity_tolerance_percent": 10,
+                        "resume_hint": _("Puedes pausar el registro."),
+                        "date": today.isoformat(),
+                        "date_label": date_format(today, "DATE_FORMAT"),
+                    }
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
@@ -3215,6 +3268,8 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
                 shift_confirmation_empty=shift_empty_payload,
                 include_shift_confirmation_stub=False,
                 user=user,
+                weight_registry=weight_registry_payload,
+                include_weight_registry=bool(card_permissions.get("weight_registry")),
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-dev-logout")
         else:
@@ -3463,6 +3518,73 @@ def mini_app_production_record_view(request):
         {
             "status": "ok",
             "production": response_payload,
+        }
+    )
+
+
+@require_POST
+def mini_app_weight_registry_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_weight_registry_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para registrar los pesos.")},
+            status=403,
+        )
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    date_str = payload.get("date")
+    target_date = timezone.localdate()
+    if date_str:
+        try:
+            target_date = date.fromisoformat(str(date_str))
+        except ValueError:
+            return JsonResponse({"error": _("La fecha enviada no es válida.")}, status=400)
+
+    registry = build_weight_registry(user=user, reference_date=target_date)
+    if not registry:
+        return JsonResponse(
+            {"error": _("No encontramos salones asignados a tu turno.")},
+            status=404,
+        )
+
+    if registry.date != target_date:
+        return JsonResponse(
+            {"error": _("La fecha enviada no coincide con el turno activo.")},
+            status=400,
+        )
+
+    sessions_payload = payload.get("sessions") or payload.get("session_details")
+    if not isinstance(sessions_payload, list):
+        return JsonResponse({"error": _("Debes enviar los salones con sus pesos capturados.")}, status=400)
+
+    try:
+        persist_weight_registry(
+            registry=registry,
+            sessions=sessions_payload,
+            user=user,
+        )
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    refreshed = build_weight_registry(user=user, reference_date=registry.date)
+    payload_response = None
+    if refreshed:
+        payload_response = serialize_weight_registry(refreshed)
+        payload_response["submit_url"] = reverse("task_manager:mini-app-weight-registry")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "weight_registry": payload_response,
         }
     )
 

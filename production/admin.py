@@ -10,6 +10,8 @@ from .models import (
     Farm,
     ProductionRecord,
     Room,
+    WeightSample,
+    WeightSampleSession,
 )
 
 
@@ -143,3 +145,50 @@ class RoomAdmin(admin.ModelAdmin):
     list_display = ("name", "chicken_house", "area_m2")
     list_filter = ("chicken_house__farm", "chicken_house")
     search_fields = ("name", "chicken_house__name", "chicken_house__farm__name")
+
+
+class WeightSampleInline(admin.TabularInline):
+    model = WeightSample
+    extra = 0
+    fields = ("grams", "recorded_at", "recorded_by")
+    readonly_fields = ("recorded_at", "recorded_by")
+    ordering = ("recorded_at",)
+
+
+@admin.register(WeightSampleSession)
+class WeightSampleSessionAdmin(admin.ModelAdmin):
+    inlines = (WeightSampleInline,)
+    list_display = (
+        "date",
+        "room",
+        "sample_size",
+        "average_grams",
+        "uniformity_percent",
+        "submitted_at",
+        "updated_by",
+    )
+    list_filter = ("date", "room__chicken_house__farm", "room__chicken_house")
+    search_fields = (
+        "room__name",
+        "room__chicken_house__name",
+        "room__chicken_house__farm__name",
+    )
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+    )
+    ordering = ("-date", "room__name")
+
+
+@admin.register(WeightSample)
+class WeightSampleAdmin(admin.ModelAdmin):
+    list_display = ("session", "grams", "recorded_at", "recorded_by")
+    list_filter = ("recorded_at", "recorded_by")
+    search_fields = (
+        "session__room__name",
+        "session__room__chicken_house__name",
+        "session__room__chicken_house__farm__name",
+    )
+    ordering = ("-recorded_at",)

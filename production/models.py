@@ -182,3 +182,136 @@ class ProductionRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} · {self.production} · {self.bird_batch}"
+
+
+class WeightSampleSession(models.Model):
+    """Daily weight capture for a specific room."""
+
+    date = models.DateField("Fecha")
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name="weight_sample_sessions",
+        verbose_name="Salón",
+    )
+    production_record = models.ForeignKey(
+        ProductionRecord,
+        on_delete=models.SET_NULL,
+        related_name="weight_sample_sessions",
+        verbose_name="Registro de producción",
+        null=True,
+        blank=True,
+    )
+    unit = models.CharField("Unidad", max_length=16, default="g")
+    tolerance_percent = models.PositiveSmallIntegerField(
+        "Tolerancia uniformidad (%)",
+        default=10,
+    )
+    minimum_sample = models.PositiveSmallIntegerField(
+        "Muestra mínima sugerida",
+        default=30,
+    )
+    birds = models.PositiveIntegerField("Aves en salón", null=True, blank=True)
+    sample_size = models.PositiveIntegerField("Tamaño de muestra", default=0)
+    average_grams = models.DecimalField(
+        "Peso promedio (g)",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    variance_grams = models.DecimalField(
+        "Varianza (g²)",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    min_grams = models.DecimalField(
+        "Peso mínimo (g)",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    max_grams = models.DecimalField(
+        "Peso máximo (g)",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    uniformity_percent = models.DecimalField(
+        "Uniformidad (%)",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    within_tolerance = models.PositiveIntegerField(
+        "Muestras dentro de la tolerancia",
+        default=0,
+    )
+    submitted_at = models.DateTimeField("Enviado en", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="weight_sample_sessions_created",
+        verbose_name="Registrado por",
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="weight_sample_sessions_updated",
+        verbose_name="Actualizado por",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "Sesión de pesaje"
+        verbose_name_plural = "Sesiones de pesaje"
+        ordering = ("-date", "-updated_at")
+        unique_together = ("date", "room")
+
+    def __str__(self) -> str:
+        return f"{self.date:%Y-%m-%d} · {self.room}"
+
+
+class WeightSample(models.Model):
+    """Individual weight capture belonging to a session."""
+
+    session = models.ForeignKey(
+        WeightSampleSession,
+        on_delete=models.CASCADE,
+        related_name="samples",
+        verbose_name="Sesión",
+    )
+    grams = models.DecimalField(
+        "Peso (g)",
+        max_digits=8,
+        decimal_places=2,
+    )
+    recorded_at = models.DateTimeField("Registrado en", default=timezone.now)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="weight_samples_recorded",
+        verbose_name="Registrado por",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Peso registrado"
+        verbose_name_plural = "Pesos registrados"
+        ordering = ("created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.session} · {self.grams} g"

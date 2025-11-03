@@ -2200,6 +2200,8 @@
             data-weight-unit="{{ weight_registry.unit_label|default:'g' }}"
             data-weight-tolerance="{{ weight_registry.uniformity_tolerance_percent|default:10 }}"
             data-weight-minimum="{{ weight_registry.min_sample_size|default:30 }}"
+            data-weight-submit-url="{{ weight_registry.submit_url|default:'' }}"
+            data-weight-date="{{ weight_registry.date|default:'' }}"
           >
             <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div class="space-y-2">
@@ -2226,47 +2228,87 @@
 
             <div class="mt-4 space-y-5">
               <section class="space-y-2">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-600">
-                    Selecciona los salones
-                  </p>
-                  <span
-                    class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-sky-600"
-                    data-weight-selected-counter
-                  >
-                    0 seleccionados
-                  </span>
-                </div>
-                <div class="flex flex-wrap gap-2" data-weight-location-list>
-                  {% for location in weight_registry.locations %}
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full border border-sky-200/60 bg-white/90 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm shadow-sky-100/40 transition hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/60"
-                      data-weight-location="{{ location.id }}"
-                      data-weight-location-label="{{ location.label }}"
-                      data-weight-location-birds="{{ location.birds|default:'' }}"
-                      data-weight-location-farm="{{ location.farm|default:'' }}"
-                      data-weight-location-barn="{{ location.barn|default:'' }}"
-                      data-weight-location-room="{{ location.room|default:'' }}"
-                    >
-                      <span class="inline-flex flex-col items-start text-left leading-tight">
-                        <span>{{ location.label }}</span>
-                        {% if location.birds %}
-                          <span class="text-[10px] font-semibold uppercase tracking-wide text-sky-500">
-                            {{ location.birds|intcomma }} aves
-                          </span>
-                        {% endif %}
-                      </span>
-                      <span
-                        class="hidden h-6 w-6 items-center justify-center rounded-full bg-sky-600 text-[11px] font-bold text-white shadow-sm shadow-sky-300/70"
-                        data-weight-location-check
-                        aria-hidden="true"
+                {% with weight_registry_locations=weight_registry.locations %}
+                <div class="space-y-3" data-weight-location-list>
+                  {% if weight_registry_locations %}
+                    {% regroup weight_registry_locations by farm as weight_registry_farms %}
+                    {% for farm in weight_registry_farms %}
+                      <section
+                        class="space-y-2 rounded-2xl border border-sky-200/70 bg-white/90 p-3 shadow-inner shadow-sky-100/60"
+                        data-weight-farm
+                        data-weight-farm-label="{{ farm.grouper|default:_('Sin granja') }}"
                       >
-                        ✓
-                      </span>
-                    </button>
-                  {% endfor %}
+                        <header class="flex items-center justify-between gap-2">
+                          <p class="text-sm font-semibold text-sky-800">
+                            {{ farm.grouper|default:_('Sin granja asignada') }}
+                          </p>
+                        </header>
+                        {% regroup farm.list by barn as weight_registry_barns %}
+                        <div class="space-y-2" data-weight-barn-collection>
+                          {% for barn in weight_registry_barns %}
+                            <article
+                              class="space-y-2 rounded-xl border border-sky-200/70 bg-sky-50/60 p-3 shadow-inner shadow-sky-100/50"
+                              data-weight-barn
+                              data-weight-barn-label="{{ barn.grouper|default:_('Sin galpón') }}"
+                            >
+                              <header class="flex items-center justify-between gap-2">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">
+                                  {{ barn.grouper|default:_('Sin galpón asignado') }}
+                                </p>
+                              </header>
+                              <div class="flex flex-wrap gap-2" data-weight-room-list>
+                                {% for location in barn.list %}
+                                  <button
+                                    type="button"
+                                    class="group inline-flex min-w-[8.5rem] flex-1 items-center justify-between gap-3 rounded-xl border border-sky-200/60 bg-white/90 px-3 py-2 text-left text-xs font-semibold text-sky-700 shadow-sm shadow-sky-100/40 transition hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/60 sm:max-w-xs"
+                                    data-weight-location="{{ location.id }}"
+                                    data-weight-location-label="{{ location.label }}"
+                                    data-weight-location-room="{{ location.room|default:location.label }}"
+                                    data-weight-location-barn="{{ location.barn|default:'' }}"
+                                    data-weight-location-farm="{{ location.farm|default:'' }}"
+                                    data-weight-location-birds="{{ location.birds|default:'' }}"
+                                    data-weight-location-room-id="{{ location.room_id|default:'' }}"
+                                  >
+                                    <span class="inline-flex flex-col items-start leading-tight text-sky-800">
+                                      <span class="text-sm font-semibold">
+                                        {{ location.room|default:location.label }}
+                                      </span>
+                                    <span
+                                      class="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-sky-500"
+                                      data-weight-location-meta
+                                    >
+                                      <span data-weight-location-birds-label>
+                                        {% if location.birds %}
+                                          {{ location.birds|intcomma }} aves
+                                        {% else %}
+                                          —
+                                        {% endif %}
+                                      </span>
+                                    </span>
+                                  </span>
+                                  </button>
+                                {% empty %}
+                                  <p class="text-xs text-slate-500">
+                                    {% trans "Sin salones asignados en este galpón." %}
+                                  </p>
+                                {% endfor %}
+                              </div>
+                            </article>
+                          {% empty %}
+                            <p class="text-xs text-slate-500">
+                              {% trans "Sin galpones asignados para esta granja." %}
+                            </p>
+                          {% endfor %}
+                        </div>
+                      </section>
+                    {% endfor %}
+                  {% else %}
+                    <p class="text-xs text-slate-500" data-weight-location-empty>
+                      {% trans "No hay salones asignados para tu turno." %}
+                    </p>
+                  {% endif %}
                 </div>
+                {% endwith %}
               </section>
 
               <section class="space-y-2" data-weight-idle-actions>
@@ -2293,8 +2335,8 @@
 
               <section
                 class="hidden space-y-4 rounded-2xl border border-sky-100 bg-white/90 px-4 py-4 shadow-inner shadow-sky-100/60"
-                data-weight-panel
-              >
+               data-weight-panel
+             >
                 <header class="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-600">
@@ -2329,52 +2371,8 @@
                         Agregar
                       </button>
                     </div>
-                  </label>
-                  <div class="grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
-                    <button
-                      type="button"
-                      class="rounded-xl border border-sky-200 bg-white/90 px-2 py-2 font-semibold text-sky-700 shadow-sm hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
-                      data-weight-quick="1.60"
-                    >
-                      1.600
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-xl border border-sky-200 bg-white/90 px-2 py-2 font-semibold text-sky-700 shadow-sm hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
-                      data-weight-quick="1.65"
-                    >
-                      1.650
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-xl border border-sky-200 bg-white/90 px-2 py-2 font-semibold text-sky-700 shadow-sm hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
-                      data-weight-quick="1.70"
-                    >
-                      1.700
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-xl border border-sky-200 bg-white/90 px-2 py-2 font-semibold text-sky-700 shadow-sm hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
-                      data-weight-quick="1.75"
-                    >
-                      1.750
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-xl border border-sky-200 bg-white/90 px-2 py-2 font-semibold text-sky-700 shadow-sm hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
-                      data-weight-quick="1.80"
-                    >
-                      1.800
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-xl border border-sky-200 bg-white/90 px-2 py-2 font-semibold text-sky-700 shadow-sm hover:border-sky-400 hover:text-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70"
-                      data-weight-quick="1.85"
-                    >
-                      1.850
-                    </button>
-                  </div>
-                </div>
+                 </label>
+               </div>
 
                 <div class="space-y-3">
                   <div class="flex items-center justify-between">
@@ -2464,23 +2462,7 @@
                 </footer>
               </section>
             </div>
-
-            {% if weight_registry.recent_sessions %}
-              <section class="mt-5 rounded-2xl border border-sky-100 bg-white/85 p-4 text-xs text-slate-600 shadow-inner shadow-sky-100/60">
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-600">Referencias recientes</p>
-                <ul class="mt-2 space-y-1" data-weight-recent-list>
-                  {% for session in weight_registry.recent_sessions %}
-                    <li class="flex flex-wrap items-center justify-between gap-2">
-                      <span>{{ session.label }}</span>
-                      <span class="inline-flex items-center gap-2 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-600">
-                        {{ session.sample_size }} aves · {{ session.avg_weight|intcomma }} {{ weight_registry.unit_label|default:'g' }}
-                        <span class="hidden sm:inline">· {{ session.uniformity_percent }}%</span>
-                      </span>
-                    </li>
-                  {% endfor %}
-                </ul>
-              </section>
-            {% endif %}
+            {{ weight_registry.sessions|json_script:"weight-registry-sessions" }}
           </article>
         {% endif %}
         {% endwith %}
@@ -4567,6 +4549,8 @@
 
         const productionCard = document.querySelector('[data-production-card]');
         const weightCard = document.querySelector('[data-weight-card]');
+        const weightSubmitUrl = weightCard ? weightCard.getAttribute('data-weight-submit-url') || '' : '';
+        const weightDate = weightCard ? weightCard.getAttribute('data-weight-date') || '' : '';
         const productionCompleteBanner = productionCard
           ? productionCard.querySelector('[data-production-complete-banner]')
           : null;
@@ -6327,9 +6311,7 @@
       }
 
       if (weightCard) {
-        const weightLocationButtons = Array.prototype.slice.call(
-          weightCard.querySelectorAll('[data-weight-location]')
-        );
+        const weightLocationList = weightCard.querySelector('[data-weight-location-list]');
         const weightSelectedCounter = weightCard.querySelector('[data-weight-selected-counter]');
         const weightSelectionHint = weightCard.querySelector('[data-weight-selection-hint]');
         const weightIdleActions = weightCard.querySelector('[data-weight-idle-actions]');
@@ -6338,7 +6320,6 @@
         const weightPanel = weightCard.querySelector('[data-weight-panel]');
         const weightInput = weightCard.querySelector('[data-weight-input]');
         const weightAddButton = weightCard.querySelector('[data-weight-add]');
-        const weightQuickButtons = Array.prototype.slice.call(weightCard.querySelectorAll('[data-weight-quick]'));
         const weightList = weightCard.querySelector('[data-weight-list]');
         const weightEmptyState = weightCard.querySelector('[data-weight-empty-state]');
         const weightSummary = weightCard.querySelector('[data-weight-summary]');
@@ -6358,9 +6339,12 @@
         const weightUnitLabel = weightCard.getAttribute('data-weight-unit') || 'g';
         const weightTolerancePercent = Number(weightCard.getAttribute('data-weight-tolerance')) || 10;
         const weightMinimumSample = Number(weightCard.getAttribute('data-weight-minimum')) || 30;
-        const weightSelectedCounterDefault = weightSelectedCounter ? weightSelectedCounter.textContent : '';
+        const weightSelectedCounterDefault =
+          weightSelectedCounter && weightSelectedCounter.textContent
+            ? weightSelectedCounter.textContent
+            : 'Sin salón activo';
         const weightStatusColorClasses = ['text-slate-400', 'text-emerald-600', 'text-amber-600', 'text-rose-600'];
-        const weightSelectedButtonActiveClasses = [
+        const weightActiveButtonClasses = [
           'border-emerald-500',
           'bg-emerald-50',
           'text-emerald-900',
@@ -6368,8 +6352,15 @@
           'ring-1',
           'ring-emerald-200/70',
         ];
+        const weightProgressButtonClasses = [
+          'border-emerald-400',
+          'bg-emerald-50/60',
+          'text-emerald-800',
+          'shadow-emerald-100/60',
+        ];
         let isWeightPanelOpen = false;
         let weightLastMetrics = null;
+        let weightStatusLockUntil = 0;
 
         function toSlug(value) {
           if (!value) {
@@ -6406,11 +6397,339 @@
         })();
 
         const weightState = {
-          selectedSalons: [],
-          entries: [],
+          activeSalonId: null,
+          sessionOrder: [],
+          sessions: {},
           dirty: false,
           lastSavedAt: null,
         };
+
+        const weightLocations = collectWeightLocations();
+        const weightCardBaseClass = weightCard ? weightCard.className : '';
+        const weightLocationButtons = weightLocations.locations.map(function (location) {
+          return location.button;
+        });
+
+        weightLocations.locations.forEach(function (location) {
+          ensureSessionForLocation(location);
+        });
+
+        let weightInitialSessions = [];
+        const weightSessionsNode = document.getElementById('weight-registry-sessions');
+        if (weightSessionsNode) {
+          try {
+            weightInitialSessions = JSON.parse(weightSessionsNode.textContent || '[]');
+          } catch (error) {
+            console.warn('No se pudo cargar el registro de pesos guardado en el servidor.', error);
+          }
+        }
+
+        function applyWeightCardTheme(mode) {
+          if (!weightCard) {
+            return;
+          }
+          const successClasses = [
+            'border-emerald-200',
+            'via-emerald-50/85',
+            'to-emerald-100/85',
+            'shadow-emerald-100/70',
+          ];
+          const baseToRemove = ['border-sky-200', 'via-sky-50/80', 'to-blue-100/80', 'shadow-sky-100/70'];
+          weightCard.className = weightCardBaseClass;
+          baseToRemove.forEach(function (cls) {
+            weightCard.classList.remove(cls);
+          });
+          if (mode === 'success') {
+            successClasses.forEach(function (cls) {
+              weightCard.classList.add(cls);
+            });
+          } else {
+            baseToRemove.forEach(function (cls) {
+              if (weightCardBaseClass.split(/\s+/).indexOf(cls) === -1) {
+                return;
+              }
+              weightCard.classList.add(cls);
+            });
+          }
+        }
+        let serverSessionLoaded = applyServerSessions(weightInitialSessions, { persist: false });
+
+        function extractRoomId(identifier) {
+          if (!identifier) {
+            return null;
+          }
+          const match = /^room-(\d+)$/i.exec(String(identifier));
+          if (match) {
+            const value = Number(match[1]);
+            return Number.isFinite(value) ? value : null;
+          }
+          return null;
+        }
+
+        function collectWeightLocations() {
+          if (!weightLocationList) {
+            return { locations: [], byId: new Map() };
+          }
+          const buttons = Array.prototype.slice.call(
+            weightLocationList.querySelectorAll('[data-weight-location]')
+          );
+          const locations = [];
+          const byId = new Map();
+          buttons.forEach(function (button) {
+            const id = button.getAttribute('data-weight-location');
+            if (!id) {
+              return;
+            }
+            const birdsValue = normalizeNumber(button.getAttribute('data-weight-location-birds'));
+            const roomIdValue = normalizeNumber(button.getAttribute('data-weight-location-room-id'));
+            const fallbackRoomId = Number.isFinite(roomIdValue) ? roomIdValue : extractRoomId(id);
+            const location = {
+              id: id,
+              label: button.getAttribute('data-weight-location-label') || button.textContent.trim() || id,
+              room: button.getAttribute('data-weight-location-room') || '',
+              barn: button.getAttribute('data-weight-location-barn') || '',
+              farm: button.getAttribute('data-weight-location-farm') || '',
+              birds: Number.isFinite(birdsValue) ? birdsValue : null,
+              roomId: Number.isFinite(roomIdValue) ? roomIdValue : fallbackRoomId,
+              button: button,
+              baseClass: button.className,
+              nodes: {
+                meta: button.querySelector('[data-weight-location-meta]') || null,
+                birdsLabel: button.querySelector('[data-weight-location-birds-label]') || null,
+                progress: button.querySelector('[data-weight-location-progress]') || null,
+                check: button.querySelector('[data-weight-location-check]') || null,
+              },
+              farmNode: button.closest('[data-weight-farm]') || null,
+              barnNode: button.closest('[data-weight-barn]') || null,
+            };
+            locations.push(location);
+            byId.set(id, location);
+          });
+          return {
+            locations: locations,
+            byId: byId,
+          };
+        }
+
+        function getLocationMeta(id) {
+          if (!id) {
+            return null;
+          }
+          return weightLocations.byId.get(id) || null;
+        }
+
+        function ensureSessionForLocation(location) {
+          if (!location) {
+            return null;
+          }
+          let session = weightState.sessions[location.id];
+          if (!session) {
+            session = {
+              id: location.id,
+              label: location.label,
+              farm: location.farm,
+              barn: location.barn,
+              room: location.room || location.label,
+              birds: location.birds,
+              roomId: location.roomId || null,
+              entries: [],
+              status: 'idle',
+              createdAt: new Date().toISOString(),
+              updatedAt: null,
+            };
+            weightState.sessions[location.id] = session;
+            if (weightState.sessionOrder.indexOf(location.id) === -1) {
+              weightState.sessionOrder.push(location.id);
+            }
+          } else {
+            if (!session.roomId && location.roomId) {
+              session.roomId = location.roomId;
+            }
+            if (!Number.isFinite(session.birds) && Number.isFinite(location.birds)) {
+              session.birds = location.birds;
+            }
+          }
+          return session;
+        }
+
+        function applyServerSessions(sessionList, options) {
+          if (!Array.isArray(sessionList)) {
+            return false;
+          }
+          let hasEntries = false;
+          sessionList.forEach(function (sessionData) {
+            if (!sessionData || !sessionData.id) {
+              return;
+            }
+            const roomIdFromSession = normalizeNumber(sessionData.room_id || sessionData.roomId);
+            const roomIdFromIdentifier = extractRoomId(sessionData.id);
+            const location =
+              getLocationMeta(sessionData.id) ||
+              {
+                id: sessionData.id,
+                label: sessionData.label || sessionData.id,
+                farm: sessionData.farm || '',
+                barn: sessionData.barn || '',
+                room: sessionData.room || sessionData.label || sessionData.id,
+                birds: Number.isFinite(sessionData.birds) ? sessionData.birds : null,
+                roomId: Number.isFinite(roomIdFromSession)
+                  ? roomIdFromSession
+                  : Number.isFinite(roomIdFromIdentifier)
+                  ? roomIdFromIdentifier
+                  : null,
+              };
+            const session = ensureSessionForLocation(location);
+            if (Number.isFinite(roomIdFromSession) && !session.roomId) {
+              session.roomId = roomIdFromSession;
+            } else if (!session.roomId && Number.isFinite(roomIdFromIdentifier)) {
+              session.roomId = roomIdFromIdentifier;
+            }
+            if (Number.isFinite(sessionData.birds)) {
+              session.birds = sessionData.birds;
+            }
+            const entriesRaw = Array.isArray(sessionData.entries)
+              ? sessionData.entries
+              : Array.isArray(sessionData.entries_grams)
+              ? sessionData.entries_grams
+              : [];
+            session.entries = entriesRaw
+              .filter(function (value) {
+                return Number.isFinite(Number(value)) && Number(value) > 0;
+              })
+              .map(function (value) {
+                return {
+                  id: createEntryId(),
+                  grams: Number(value),
+                  createdAt: sessionData.created_at || session.createdAt || null,
+                  updatedAt: sessionData.updated_at || sessionData.submitted_at || null,
+                };
+              });
+            session.status = session.entries.length ? 'paused' : 'idle';
+            session.createdAt = sessionData.created_at || session.createdAt;
+            session.updatedAt = sessionData.updated_at || sessionData.submitted_at || session.updatedAt;
+            hasEntries = hasEntries || session.entries.length > 0;
+          });
+          if (!weightState.activeSalonId) {
+            const firstWithEntries = getSessionsWithEntries()[0];
+            if (firstWithEntries) {
+              weightState.activeSalonId = firstWithEntries.id;
+            }
+          }
+          if (!options || options.persist !== false) {
+            weightState.dirty = false;
+          }
+          return hasEntries;
+        }
+
+        function getActiveSession() {
+          if (!weightState.activeSalonId) {
+            return null;
+          }
+          return weightState.sessions[weightState.activeSalonId] || null;
+        }
+
+        function getSessionEntries(session) {
+          const target = session || getActiveSession();
+          if (!target || !Array.isArray(target.entries)) {
+            return [];
+          }
+          return target.entries;
+        }
+
+        function getSessionsWithEntries() {
+          return getAllSessions().filter(sessionHasEntries);
+        }
+
+        function getAllSessions() {
+          return weightState.sessionOrder
+            .map(function (id) {
+              return weightState.sessions[id];
+            })
+            .filter(function (session) {
+              return !!session;
+            });
+        }
+
+        function sessionHasEntries(session) {
+          return !!(session && Array.isArray(session.entries) && session.entries.length > 0);
+        }
+
+        function getTotalEntriesAcrossSessions() {
+          return getSessionsWithEntries().reduce(function (accumulator, session) {
+            return accumulator + session.entries.length;
+          }, 0);
+        }
+
+        function formatSessionPath(session) {
+          if (!session) {
+            return '';
+          }
+          const parts = [];
+          if (session.farm) {
+            parts.push(session.farm);
+          }
+          if (session.barn) {
+            parts.push(session.barn);
+          }
+          if (session.room) {
+            parts.push(session.room);
+          }
+          if (parts.length) {
+            return parts.join(' · ');
+          }
+          return session.label || session.id;
+        }
+
+        function markActiveSessionPaused() {
+          const current = getActiveSession();
+          if (!current) {
+            return;
+          }
+          if (current.entries.length > 0) {
+            current.status = 'paused';
+            current.updatedAt = new Date().toISOString();
+          } else {
+            current.status = 'idle';
+          }
+        }
+
+        function setActiveSalon(id, options) {
+          if (!id) {
+            return;
+          }
+          if (weightState.activeSalonId && weightState.activeSalonId !== id) {
+            markActiveSessionPaused();
+          }
+          const location = getLocationMeta(id);
+          if (!location) {
+            setStatus('No encontramos el salón seleccionado', 'error', { sticky: true });
+            return;
+          }
+          const session = ensureSessionForLocation(location);
+          weightState.activeSalonId = id;
+          if (session.status === 'idle' && session.entries.length > 0) {
+            session.status = 'paused';
+          }
+          updateActiveSalonsLabel();
+          updateLocationButtons();
+          updateLocationSummaries();
+          updateSelectedCounter();
+          updateStartButtonState();
+          updateSelectionHint();
+          if (isWeightPanelOpen && (!options || options.openPanel !== false)) {
+            renderWeightEntries();
+          } else if (!isWeightPanelOpen) {
+            renderWeightEntries();
+          }
+          autoPersistState({ silent: true });
+          if (options && options.openPanel !== false) {
+            openWeightPanel({ focus: options && options.focus !== false });
+          }
+          if (!options || options.feedback !== false) {
+            const roomLabel = session.room || session.label || 'Salón seleccionado';
+            setStatus(roomLabel + ' listo para captura', 'info');
+          }
+        }
 
         function round(value, decimals) {
           if (!Number.isFinite(value)) {
@@ -6500,8 +6819,16 @@
           return 'w-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         }
 
-        function setStatus(message, tone) {
+        function setStatus(message, tone, options) {
           if (!weightStatusNode) {
+            return;
+          }
+          const opts = options || {};
+          const now = Date.now();
+          const isStickyRequest = !!opts.sticky;
+          const force = !!opts.force;
+          const activeLock = weightStatusLockUntil > now;
+          if (activeLock && !isStickyRequest && !force) {
             return;
           }
           weightStatusColorClasses.forEach(function (cls) {
@@ -6519,34 +6846,50 @@
           }
           weightStatusNode.classList.add(toneClass);
           weightStatusNode.textContent = message;
+          if (isStickyRequest) {
+            const duration = Number(opts.duration) || 6000;
+            weightStatusLockUntil = now + duration;
+          } else if (force) {
+            weightStatusLockUntil = 0;
+          } else if (!activeLock) {
+            weightStatusLockUntil = 0;
+          }
         }
 
         function updateSelectedCounter() {
           if (!weightSelectedCounter) {
             return;
           }
-          const count = weightState.selectedSalons.length;
-          if (!count) {
-            weightSelectedCounter.textContent = weightSelectedCounterDefault || '0 seleccionados';
+          const activeSession = getActiveSession();
+          const pausedCount = getSessionsWithEntries().filter(function (session) {
+            return !activeSession || session.id !== activeSession.id;
+          }).length;
+          if (!activeSession) {
+            if (pausedCount > 0) {
+              weightSelectedCounter.textContent =
+                pausedCount === 1
+                  ? '1 salón en pausa'
+                  : formatCount(pausedCount) + ' salones en pausa';
+            } else {
+              weightSelectedCounter.textContent = weightSelectedCounterDefault || 'Sin salón activo';
+            }
             return;
           }
-          if (count === 1) {
-            weightSelectedCounter.textContent = '1 salón';
-            return;
+          const baseLabel = activeSession.room || activeSession.label || 'Salón activo';
+          if (pausedCount > 0) {
+            weightSelectedCounter.textContent =
+              baseLabel + ' · +' + formatCount(pausedCount) + (pausedCount === 1 ? ' en pausa' : ' en pausa');
+          } else {
+            weightSelectedCounter.textContent = baseLabel;
           }
-          weightSelectedCounter.textContent = formatCount(count) + ' salones';
         }
 
         function getActiveSalonsLabel() {
-          if (!weightState.selectedSalons.length) {
-            return 'Sin salón seleccionado';
+          const activeSession = getActiveSession();
+          if (!activeSession) {
+            return 'Selecciona un salón';
           }
-          const first = weightState.selectedSalons[0].label || weightState.selectedSalons[0].id;
-          if (weightState.selectedSalons.length === 1) {
-            return first;
-          }
-          const rest = weightState.selectedSalons.length - 1;
-          return first + ' +' + rest + (rest === 1 ? ' salón' : ' salones');
+          return formatSessionPath(activeSession);
         }
 
         function updateActiveSalonsLabel() {
@@ -6557,41 +6900,48 @@
         }
 
         function updateLocationButtons() {
-          const selectedIds = weightState.selectedSalons.map(function (salon) {
-            return salon.id;
-          });
-          weightLocationButtons.forEach(function (button) {
-            const id = button.getAttribute('data-weight-location');
-            const isSelected = selectedIds.indexOf(id) !== -1;
-            const check = button.querySelector('[data-weight-location-check]');
-            weightSelectedButtonActiveClasses.forEach(function (cls) {
-              if (isSelected) {
-                button.classList.add(cls);
-              } else {
-                button.classList.remove(cls);
-              }
-            });
-            if (check) {
-              check.classList.toggle('hidden', !isSelected);
+          weightLocations.locations.forEach(function (location) {
+            const button = location.button;
+            if (!button) {
+              return;
+            }
+            const session = weightState.sessions[location.id];
+            const isActive = weightState.activeSalonId === location.id;
+            const hasEntries = session && Array.isArray(session.entries) && session.entries.length > 0;
+            let className = location.baseClass || button.className;
+            if (isActive) {
+              className += ' ' + weightActiveButtonClasses.join(' ');
+            } else if (hasEntries) {
+              className += ' ' + weightProgressButtonClasses.join(' ');
+            }
+            button.className = className;
+            if (location.nodes.birdsLabel && Number.isFinite(location.birds)) {
+              location.nodes.birdsLabel.textContent = formatBirdCount(location.birds);
             }
           });
+        }
+
+        function updateLocationSummaries() {
+          // Summaries no longer needed; function kept for compatibility.
         }
 
         function updateStartButtonState() {
           if (!weightStartButton) {
             return;
           }
-          const hasSelection = weightState.selectedSalons.length > 0;
-          weightStartButton.disabled = !hasSelection;
-          weightStartButton.classList.toggle('opacity-60', !hasSelection);
-          weightStartButton.classList.toggle('pointer-events-none', !hasSelection);
+          const hasActive = Boolean(weightState.activeSalonId);
+          const hasRecordedEntries = getTotalEntriesAcrossSessions() > 0;
+          weightStartButton.disabled = !hasActive || hasRecordedEntries;
+          weightStartButton.classList.toggle('opacity-60', !hasActive || hasRecordedEntries);
+          weightStartButton.classList.toggle('pointer-events-none', !hasActive || hasRecordedEntries);
+          weightStartButton.classList.toggle('hidden', hasRecordedEntries);
         }
 
         function updateResumeVisibility() {
           if (!weightResumeButton) {
             return;
           }
-          const shouldShow = !isWeightPanelOpen && weightState.entries.length > 0;
+          const shouldShow = !isWeightPanelOpen && getTotalEntriesAcrossSessions() > 0;
           weightResumeButton.classList.toggle('hidden', !shouldShow);
         }
 
@@ -6603,15 +6953,28 @@
             weightSelectionHint.classList.add('hidden');
             return;
           }
-          const hasEntries = weightState.entries.length > 0;
-          const hasSelection = weightState.selectedSalons.length > 0;
+          const activeSession = getActiveSession();
+          const totalEntries = getTotalEntriesAcrossSessions();
           weightSelectionHint.classList.remove('hidden');
-          if (hasEntries) {
-            weightSelectionHint.textContent = 'Registro pausado, toca continuar cuando retomes.';
-          } else if (hasSelection) {
-            weightSelectionHint.textContent = 'Listo para iniciar muestreo.';
+          if (!activeSession && totalEntries === 0) {
+            weightSelectionHint.textContent = 'Selecciona un salón para comenzar.';
+            return;
+          }
+          if (!activeSession && totalEntries > 0) {
+            weightSelectionHint.textContent = 'Registro pausado, toca un salón para continuar.';
+            return;
+          }
+          const activeEntries = activeSession ? activeSession.entries.length : 0;
+          const pausedSessions = getSessionsWithEntries().filter(function (session) {
+            return session.id !== (activeSession ? activeSession.id : null);
+          }).length;
+          if (activeEntries === 0) {
+            weightSelectionHint.textContent =
+              'Listo para iniciar muestreo en ' + (activeSession.room || activeSession.label || 'este salón') + '.';
+          } else if (pausedSessions > 0) {
+            weightSelectionHint.textContent = 'Tienes salones en pausa, toca uno para continuar.';
           } else {
-            weightSelectionHint.textContent = 'Selecciona al menos un salón para comenzar.';
+            weightSelectionHint.textContent = 'Registro pausado, toca continuar cuando retomes.';
           }
         }
 
@@ -6619,21 +6982,25 @@
           if (!weightPanel) {
             return;
           }
-          if (!weightState.selectedSalons.length) {
-            setStatus('Selecciona al menos un salón para iniciar.', 'warning');
+          if (!weightState.activeSalonId) {
+            setStatus('Selecciona un salón para iniciar.', 'warning');
             return;
           }
-          isWeightPanelOpen = true;
-          weightPanel.classList.remove('hidden');
-          if (weightIdleActions) {
-            weightIdleActions.classList.add('hidden');
+          if (!isWeightPanelOpen) {
+            isWeightPanelOpen = true;
+            weightPanel.classList.remove('hidden');
+            if (weightIdleActions) {
+              weightIdleActions.classList.add('hidden');
+            }
           }
           updateActiveSalonsLabel();
-          updateSelectionHint();
           renderWeightEntries();
           updateResumeVisibility();
+          updateSelectionHint();
           if (options && options.focus && weightInput) {
-            weightInput.focus();
+            setTimeout(function () {
+              weightInput.focus();
+            }, 30);
           }
         }
 
@@ -6658,22 +7025,53 @@
             return;
           }
           try {
+            const serializedSessions = weightState.sessionOrder
+              .map(function (id) {
+                return weightState.sessions[id];
+              })
+              .filter(function (session) {
+                return !!session;
+              })
+              .map(function (session) {
+                return {
+                  id: session.id,
+                  label: session.label,
+                  farm: session.farm,
+                  barn: session.barn,
+                  room: session.room,
+                  birds: session.birds,
+                  roomId: session.roomId || null,
+                  status: session.status,
+                  createdAt: session.createdAt,
+                  updatedAt: session.updatedAt,
+                  entries: Array.isArray(session.entries)
+                    ? session.entries.map(function (entry) {
+                        return {
+                          id: entry.id,
+                          grams: entry.grams,
+                          createdAt: entry.createdAt || null,
+                          updatedAt: entry.updatedAt || null,
+                        };
+                      })
+                    : [],
+                };
+              });
             const payloadToStore = {
-              version: 1,
-              salons: weightState.selectedSalons,
-              entries: weightState.entries,
+              version: 2,
+              activeSalonId: weightState.activeSalonId,
+              sessions: serializedSessions,
               updatedAt: new Date().toISOString(),
             };
             window.localStorage.setItem(weightStorageKey, JSON.stringify(payloadToStore));
             weightState.lastSavedAt = Date.now();
             if (options && options.feedback === 'explicit') {
               weightState.dirty = false;
-              setStatus('Registro guardado en el dispositivo', 'success');
+            setStatus('Registro guardado en el dispositivo', 'success', { sticky: true, duration: 4000 });
             }
           } catch (error) {
             console.warn('No se pudo guardar el registro de pesos.', error);
             if (options && options.feedback === 'explicit') {
-              setStatus('No pudimos guardar localmente', 'error');
+            setStatus('No pudimos guardar localmente', 'error', { sticky: true, duration: 5000 });
             }
           }
           updateResumeVisibility();
@@ -6688,6 +7086,20 @@
           } catch (error) {
             console.warn('No se pudo limpiar el registro de pesos.', error);
           }
+        }
+
+        function resetSessionState() {
+          weightState.sessions = {};
+          weightState.sessionOrder = [];
+          weightState.activeSalonId = null;
+          weightState.dirty = false;
+          weightState.lastSavedAt = null;
+          weightLastMetrics = null;
+          weightStatusLockUntil = 0;
+          weightLocations.locations.forEach(function (location) {
+            ensureSessionForLocation(location);
+          });
+          applyWeightCardTheme('base');
         }
 
         function computeWeightMetrics(entries) {
@@ -6744,11 +7156,12 @@
           };
         }
 
-        function updateWeightSummary() {
+        function updateWeightSummary(entries) {
           if (!weightSummary) {
             return;
           }
-          weightLastMetrics = computeWeightMetrics(weightState.entries);
+          const sourceEntries = Array.isArray(entries) ? entries : getSessionEntries();
+          weightLastMetrics = computeWeightMetrics(sourceEntries);
           if (!weightLastMetrics || !weightLastMetrics.count) {
             weightSummary.classList.add('hidden');
             if (weightSampleWarning) {
@@ -6812,14 +7225,12 @@
           if (!weightList || !weightEmptyState) {
             return;
           }
+          const entries = getSessionEntries();
           weightList.innerHTML = '';
-          if (!weightState.entries.length) {
+          if (!weightState.activeSalonId) {
             weightEmptyState.classList.remove('hidden');
             weightList.classList.add('hidden');
-            weightSummary && weightSummary.classList.add('hidden');
-            if (weightSampleWarning) {
-              weightSampleWarning.classList.add('hidden');
-            }
+            updateWeightSummary([]);
             if (weightTotalCountNode) {
               weightTotalCountNode.textContent = '0 aves';
             }
@@ -6829,45 +7240,64 @@
             weightLastMetrics = null;
             updateResumeVisibility();
             updateSelectionHint();
+            updateLocationButtons();
+            updateLocationSummaries();
+            updateSelectedCounter();
             return;
           }
-          weightEmptyState.classList.add('hidden');
-          weightState.entries
-            .slice()
-            .reverse()
-            .forEach(function (entry) {
-              const badge = document.createElement('div');
-              badge.className =
-                'inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm shadow-emerald-100/60';
-              const valueButton = document.createElement('button');
-            valueButton.type = 'button';
-            valueButton.className =
-              'text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70';
-            valueButton.setAttribute('data-weight-edit', entry.id);
-            valueButton.textContent = formatKgLabel(entry.grams);
-            const removeButton = document.createElement('button');
-            removeButton.type = 'button';
-            removeButton.className =
-              'inline-flex h-6 w-6 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-[11px] font-bold text-emerald-600 transition hover:border-emerald-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70';
-            removeButton.setAttribute('data-weight-remove', entry.id);
-            removeButton.setAttribute('aria-label', 'Eliminar peso');
-            removeButton.textContent = '×';
-            badge.appendChild(valueButton);
-            badge.appendChild(removeButton);
-            weightList.appendChild(badge);
-          });
-          weightList.classList.remove('hidden');
-          weightList.scrollTop = 0;
-          updateWeightSummary();
+          if (!entries.length) {
+            weightEmptyState.classList.remove('hidden');
+            weightList.classList.add('hidden');
+            updateWeightSummary([]);
+          } else {
+            weightEmptyState.classList.add('hidden');
+            entries
+              .slice()
+              .reverse()
+              .forEach(function (entry) {
+                const badge = document.createElement('div');
+                badge.className =
+                  'inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm shadow-emerald-100/60';
+                const valueButton = document.createElement('button');
+                valueButton.type = 'button';
+                valueButton.className =
+                  'text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70';
+                valueButton.setAttribute('data-weight-edit', entry.id);
+                valueButton.textContent = formatKgLabel(entry.grams);
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className =
+                  'inline-flex h-6 w-6 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-[11px] font-bold text-emerald-600 transition hover:border-emerald-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70';
+                removeButton.setAttribute('data-weight-remove', entry.id);
+                removeButton.setAttribute('aria-label', 'Eliminar peso');
+                removeButton.textContent = '×';
+                badge.appendChild(valueButton);
+                badge.appendChild(removeButton);
+                weightList.appendChild(badge);
+              });
+            weightList.classList.remove('hidden');
+            weightList.scrollTop = 0;
+            updateWeightSummary(entries);
+          }
+          if (weightTotalCountNode) {
+            weightTotalCountNode.textContent = formatBirdCount(entries.length);
+          }
+          if (weightCountNode) {
+            weightCountNode.textContent = formatBirdCount(entries.length);
+          }
           updateResumeVisibility();
           updateSelectionHint();
+          updateLocationButtons();
+          updateLocationSummaries();
+          updateSelectedCounter();
         }
 
         function getWeightsClipboardPayload() {
-          if (!weightState.entries.length) {
+          const entries = getSessionEntries();
+          if (!entries.length) {
             return '';
           }
-          return weightState.entries
+          return entries
             .slice()
             .reverse()
             .map(function (entry) {
@@ -6920,11 +7350,22 @@
           if (!Number.isFinite(grams) || grams <= 0) {
             return false;
           }
-          weightState.entries.push({
+          const session = getActiveSession();
+          if (!session) {
+            setStatus('Selecciona un salón antes de registrar pesos', 'warning');
+            return false;
+          }
+          const nowIso = new Date().toISOString();
+          session.entries.push({
             id: createEntryId(),
             grams: grams,
-            createdAt: new Date().toISOString(),
+            createdAt: nowIso,
           });
+          session.status = 'in-progress';
+          session.updatedAt = nowIso;
+          if (!session.createdAt) {
+            session.createdAt = nowIso;
+          }
           weightState.dirty = true;
           renderWeightEntries();
           autoPersistState({ silent: true });
@@ -6932,13 +7373,21 @@
         }
 
         function removeWeightEntry(entryId) {
-          const index = weightState.entries.findIndex(function (entry) {
+          const session = getActiveSession();
+          if (!session) {
+            return;
+          }
+          const index = session.entries.findIndex(function (entry) {
             return entry.id === entryId;
           });
           if (index === -1) {
             return;
           }
-          weightState.entries.splice(index, 1);
+          session.entries.splice(index, 1);
+          session.updatedAt = new Date().toISOString();
+          if (!session.entries.length) {
+            session.status = 'idle';
+          }
           weightState.dirty = true;
           renderWeightEntries();
           autoPersistState({ silent: true });
@@ -6946,7 +7395,11 @@
         }
 
         function editWeightEntry(entryId) {
-          const entry = weightState.entries.find(function (item) {
+          const session = getActiveSession();
+          if (!session) {
+            return;
+          }
+          const entry = session.entries.find(function (item) {
             return item.id === entryId;
           });
           if (!entry) {
@@ -6959,11 +7412,13 @@
           }
           const parsed = parseWeightInput(updated);
           if (!Number.isFinite(parsed) || parsed <= 0) {
-            setStatus('Ingresa un peso válido', 'error');
+            setStatus('Ingresa un peso válido', 'error', { sticky: true, duration: 4000 });
             return;
           }
           entry.grams = parsed;
           entry.updatedAt = new Date().toISOString();
+          session.updatedAt = entry.updatedAt;
+          session.status = 'in-progress';
           weightState.dirty = true;
           renderWeightEntries();
           autoPersistState({ silent: true });
@@ -6980,40 +7435,126 @@
               return;
             }
             const saved = JSON.parse(raw);
-            if (saved && Array.isArray(saved.salons)) {
-              weightState.selectedSalons = saved.salons
-                .filter(function (salon) {
-                  return salon && salon.id;
-                })
-                .map(function (salon) {
-                  return {
-                    id: salon.id,
-                    label: salon.label || salon.id,
-                    barn: salon.barn || null,
-                    room: salon.room || null,
-                    farm: salon.farm || null,
-                    birds: salon.birds || null,
-                  };
-                });
+            let hasEntries = false;
+            if (saved && saved.version === 2 && Array.isArray(saved.sessions)) {
+              saved.sessions.forEach(function (sessionData) {
+                if (!sessionData || !sessionData.id) {
+                  return;
+                }
+            const roomIdFromSession = normalizeNumber(sessionData.roomId);
+            const roomIdFallback = normalizeNumber(sessionData.room_id);
+            const idRoomExtract = extractRoomId(sessionData.id);
+            const location =
+              getLocationMeta(sessionData.id) ||
+              {
+                id: sessionData.id,
+                label: sessionData.label || sessionData.id,
+                farm: sessionData.farm || '',
+                barn: sessionData.barn || '',
+                room: sessionData.room || sessionData.label || sessionData.id,
+                birds: Number.isFinite(sessionData.birds) ? sessionData.birds : null,
+                roomId: Number.isFinite(roomIdFromSession)
+                  ? roomIdFromSession
+                  : Number.isFinite(roomIdFallback)
+                  ? roomIdFallback
+                  : Number.isFinite(idRoomExtract)
+                  ? idRoomExtract
+                  : null,
+              };
+            const session = ensureSessionForLocation(location);
+            if (!session.roomId) {
+              if (Number.isFinite(roomIdFromSession)) {
+                session.roomId = roomIdFromSession;
+              } else if (Number.isFinite(roomIdFallback)) {
+                session.roomId = roomIdFallback;
+              } else if (Number.isFinite(idRoomExtract)) {
+                session.roomId = idRoomExtract;
+              }
             }
-            if (saved && Array.isArray(saved.entries)) {
-              weightState.entries = saved.entries
-                .filter(function (entry) {
-                  return entry && Number.isFinite(Number(entry.grams)) && Number(entry.grams) > 0;
-                })
-                .map(function (entry) {
+                session.entries = Array.isArray(sessionData.entries)
+                  ? sessionData.entries
+                      .filter(function (entry) {
+                        return entry && Number.isFinite(Number(entry.grams)) && Number(entry.grams) > 0;
+                      })
+                      .map(function (entry) {
+                        return {
+                          id: entry.id || createEntryId(),
+                          grams: Number(entry.grams),
+                          createdAt: entry.createdAt || null,
+                          updatedAt: entry.updatedAt || null,
+                        };
+                      })
+                  : [];
+                session.status = sessionData.status || (session.entries.length ? 'paused' : 'idle');
+                session.createdAt = sessionData.createdAt || session.createdAt;
+                session.updatedAt = sessionData.updatedAt || null;
+                hasEntries = hasEntries || session.entries.length > 0;
+              });
+              if (saved.activeSalonId && weightState.sessions[saved.activeSalonId]) {
+                weightState.activeSalonId = saved.activeSalonId;
+              }
+              weightState.lastSavedAt = saved.updatedAt ? Date.parse(saved.updatedAt) : null;
+            } else if (saved && (Array.isArray(saved.salons) || Array.isArray(saved.entries))) {
+              const legacySalons = Array.isArray(saved.salons)
+                ? saved.salons.filter(function (salon) {
+                    return salon && salon.id;
+                  })
+                : [];
+              const legacyEntries = Array.isArray(saved.entries)
+                ? saved.entries.filter(function (entry) {
+                    return entry && Number.isFinite(Number(entry.grams)) && Number(entry.grams) > 0;
+                  })
+                : [];
+              if (legacySalons.length && legacyEntries.length) {
+                const primary = legacySalons[0];
+                const legacyRoomId = normalizeNumber(primary.roomId || primary.room_id);
+            const location =
+              getLocationMeta(primary.id) ||
+              {
+                id: primary.id,
+                label: primary.label || primary.id,
+                farm: primary.farm || '',
+                barn: primary.barn || '',
+                room: primary.room || primary.label || primary.id,
+                birds: Number.isFinite(primary.birds) ? primary.birds : null,
+                roomId: Number.isFinite(legacyRoomId) ? legacyRoomId : extractRoomId(primary.id),
+              };
+            const session = ensureSessionForLocation(location);
+            if (!session.roomId && Number.isFinite(legacyRoomId)) {
+              session.roomId = legacyRoomId;
+            } else if (!session.roomId) {
+              const parsed = extractRoomId(primary.id);
+              if (Number.isFinite(parsed)) {
+                session.roomId = parsed;
+              }
+            }
+                session.entries = legacyEntries.map(function (entry) {
                   return {
                     id: entry.id || createEntryId(),
                     grams: Number(entry.grams),
                     createdAt: entry.createdAt || null,
+                    updatedAt: entry.updatedAt || null,
                   };
                 });
+                session.status = session.entries.length ? 'paused' : 'idle';
+                session.createdAt = saved.updatedAt || session.createdAt;
+                session.updatedAt = saved.updatedAt || null;
+                weightState.activeSalonId = session.id;
+                hasEntries = session.entries.length > 0;
+              }
+              weightState.lastSavedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) : null;
             }
             weightState.dirty = false;
-            weightState.lastSavedAt = saved && saved.updatedAt ? Date.parse(saved.updatedAt) : null;
-            if (weightState.entries.length) {
-              setStatus('Registro listo para continuar', 'info');
+            if (!weightState.activeSalonId) {
+              const firstWithEntries = getSessionsWithEntries()[0];
+              if (firstWithEntries) {
+                weightState.activeSalonId = firstWithEntries.id;
+              }
             }
+            if (hasEntries) {
+            setStatus('Registro listo para continuar', 'info');
+            }
+            serverSessionLoaded = serverSessionLoaded || hasEntries;
           } catch (error) {
             console.warn('No se pudo cargar el registro de pesos.', error);
           }
@@ -7022,7 +7563,7 @@
         function handleAddWeight(valueOverride) {
           const grams = Number.isFinite(valueOverride) ? valueOverride : parseWeightInput(weightInput ? weightInput.value : '');
           if (!Number.isFinite(grams) || grams <= 0) {
-            setStatus('Ingresa un peso válido', 'error');
+            setStatus('Ingresa un peso válido', 'error', { sticky: true, duration: 4000 });
             if (!Number.isFinite(valueOverride) && weightInput) {
               weightInput.focus();
             }
@@ -7039,72 +7580,234 @@
         }
 
         function handlePause() {
-          if (!weightState.entries.length) {
+          const session = getActiveSession();
+          if (!session || !session.entries.length) {
             setStatus('Sin pesos pendientes por guardar', 'warning');
             return;
           }
           if (!canUseLocalStorage) {
-            setStatus('Mantén la app abierta, no pudimos guardar localmente', 'error');
+            setStatus('Mantén la app abierta, no pudimos guardar localmente', 'error', { sticky: true, duration: 5000 });
             return;
           }
+          session.status = 'paused';
+          session.updatedAt = new Date().toISOString();
           autoPersistState({ feedback: 'explicit' });
           closeWeightPanel();
+          updateLocationButtons();
+          updateLocationSummaries();
+          updateSelectedCounter();
           if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
             telegram.HapticFeedback.notificationOccurred('success');
           }
         }
 
-        function handleFinish() {
-          const count = weightState.entries.length;
-          const hasSelection = weightState.selectedSalons.length > 0;
-          if (!hasSelection) {
-            setStatus('Selecciona al menos un salón antes de enviar', 'error');
-            return;
-          }
-          if (!count) {
-            setStatus('Agrega pesos antes de enviar', 'error');
+        async function handleFinish() {
+          const allSessions = getAllSessions();
+          if (!allSessions.length) {
+            setStatus('Agrega pesos antes de enviar', 'error', { sticky: true });
             if (weightInput) {
               weightInput.focus();
             }
             return;
           }
-          if (count < weightMinimumSample) {
-            const proceed = window.confirm(
-              'Llevas ' +
-                formatCount(count) +
-                ' aves. ¿Quieres enviar el registro con una muestra menor a ' +
-                formatCount(weightMinimumSample) +
-                '?'
-            );
-            if (!proceed) {
-              setStatus('Completa al menos ' + formatCount(weightMinimumSample) + ' aves antes de enviar', 'warning');
-              return;
-            }
+          const resolvedSessions = allSessions
+            .map(function (session) {
+              const meta = getLocationMeta(session.id);
+              let roomId = Number.isFinite(session.roomId) ? session.roomId : extractRoomId(session.id);
+              if (!Number.isFinite(roomId) && meta && Number.isFinite(meta.roomId)) {
+                roomId = meta.roomId;
+              }
+              if (Number.isFinite(roomId)) {
+                session.roomId = roomId;
+              }
+              return {
+                session: session,
+                meta: meta,
+                roomId: Number.isFinite(roomId) ? roomId : null,
+              };
+            })
+            .filter(function (item) {
+              return item.meta && Number.isFinite(item.roomId);
+            });
+
+          if (!resolvedSessions.length) {
+            setStatus('Los salones registrados no coinciden con tu turno actual. Revisa la selección.', 'error', {
+              sticky: true,
+              duration: 6000,
+            });
+            return;
           }
-          const metrics = computeWeightMetrics(weightState.entries);
+
+          const skippedCount = allSessions.length - resolvedSessions.length;
+          if (skippedCount > 0) {
+            setStatus(
+              formatCount(skippedCount) +
+                ' salones no están disponibles en tu turno actual y se omitieron del envío.',
+              'warning'
+            );
+          }
+
+          const sessionsWithEntries = resolvedSessions.filter(function (item) {
+            return sessionHasEntries(item.session);
+          });
+          if (!sessionsWithEntries.length) {
+            setStatus('Agrega pesos antes de enviar', 'error', { sticky: true });
+            if (weightInput) {
+              weightInput.focus();
+            }
+            return;
+          }
+
+          const belowMinimum = sessionsWithEntries.filter(function (item) {
+            return item.session.entries.length < weightMinimumSample;
+          });
+          if (belowMinimum.length) {
+            const first = belowMinimum[0].session;
+            setStatus(
+              'Enviando ' +
+                (first.room || first.label || first.id || 'salón') +
+                ' con ' +
+                formatCount(first.entries.length) +
+                ' aves (mínimo sugerido ' +
+                formatCount(weightMinimumSample) +
+                ').',
+              'warning',
+              { sticky: true, duration: 4000 }
+            );
+          }
+          const sessionDetails = resolvedSessions.map(function (item) {
+            const session = item.session;
+            const metrics = computeWeightMetrics(session.entries);
+            const averageGrams = round(metrics.gramsAverage, 2);
+            const varianceGrams = round(metrics.varianceGrams, 2);
+            const minGrams = round(metrics.minGrams, 2);
+            const maxGrams = round(metrics.maxGrams, 2);
+            const uniformityPercent = round(metrics.uniformityPercent, 2);
+            const sessionMetrics = {
+              count: metrics.count,
+              average_grams: averageGrams,
+              average_kg: Number.isFinite(metrics.gramsAverage) ? round(metrics.gramsAverage / 1000, 3) : null,
+              variance_grams: varianceGrams,
+              variance_kg: Number.isFinite(metrics.varianceGrams) ? round(metrics.varianceGrams / 1000000, 4) : null,
+              min_grams: minGrams,
+              max_grams: maxGrams,
+              uniformity_percent: uniformityPercent,
+              within_tolerance: metrics.withinTolerance,
+              tolerance_percent: metrics.tolerancePercent,
+            };
+            return {
+              id: session.id,
+              label: session.label,
+              farm: session.farm,
+              barn: session.barn,
+              room: session.room,
+              birds: session.birds,
+              room_id: item.roomId,
+              metrics: sessionMetrics,
+              entries_grams: session.entries.map(function (entry) {
+                return round(entry.grams, 2);
+              }),
+            };
+          });
+          const aggregatedEntries = sessionsWithEntries.reduce(function (accumulator, item) {
+            return accumulator.concat(item.session.entries.slice());
+          }, []);
+          const overallMetrics = computeWeightMetrics(aggregatedEntries);
+          const serverSessionsPayload = sessionDetails.map(function (session) {
+            return {
+              id: session.id,
+              room_id: session.room_id,
+              entries: session.entries_grams.slice(),
+            };
+          });
           const payloadToSend = {
             action: 'weight-registry',
             unit: weightUnitLabel,
             tolerance_percent: weightTolerancePercent,
             minimum_sample: weightMinimumSample,
-            salons: weightState.selectedSalons,
+            salons: sessionDetails.map(function (session) {
+              return {
+                id: session.id,
+                label: session.label,
+                farm: session.farm,
+                barn: session.barn,
+                room: session.room,
+                birds: session.birds,
+                room_id: session.room_id,
+                sample_size: session.metrics.count,
+              };
+            }),
+            session_details: sessionDetails,
             metrics: {
-              count: metrics.count,
-              average_grams: round(metrics.gramsAverage, 2),
-              average_kg: round(metrics.gramsAverage / 1000, 3),
-              variance_grams: round(metrics.varianceGrams, 2),
-              variance_kg: round(metrics.varianceGrams / 1000000, 4),
-              min_grams: round(metrics.minGrams, 2),
-              max_grams: round(metrics.maxGrams, 2),
-              uniformity_percent: round(metrics.uniformityPercent, 2),
-              within_tolerance: metrics.withinTolerance,
-              tolerance_percent: metrics.tolerancePercent,
+              count: overallMetrics.count,
+              average_grams: round(overallMetrics.gramsAverage, 2),
+              average_kg: Number.isFinite(overallMetrics.gramsAverage)
+                ? round(overallMetrics.gramsAverage / 1000, 3)
+                : null,
+              variance_grams: round(overallMetrics.varianceGrams, 2),
+              variance_kg: Number.isFinite(overallMetrics.varianceGrams)
+                ? round(overallMetrics.varianceGrams / 1000000, 4)
+                : null,
+              min_grams: round(overallMetrics.minGrams, 2),
+              max_grams: round(overallMetrics.maxGrams, 2),
+              uniformity_percent: round(overallMetrics.uniformityPercent, 2),
+              within_tolerance: overallMetrics.withinTolerance,
+              tolerance_percent: overallMetrics.tolerancePercent,
             },
-            entries_grams: weightState.entries.map(function (entry) {
+            entries_grams: aggregatedEntries.map(function (entry) {
               return round(entry.grams, 2);
             }),
             saved_at: new Date().toISOString(),
           };
+
+          let serverRegistryPayload = null;
+          if (weightSubmitUrl) {
+            setButtonLoading(weightFinishButton, true, 'Enviando...');
+            try {
+              const response = await fetch(weightSubmitUrl, {
+                method: 'POST',
+                credentials: 'include',
+                headers: Object.assign(
+                  { 'Content-Type': 'application/json' },
+                  csrfToken ? { 'X-CSRFToken': csrfToken } : {}
+                ),
+                body: JSON.stringify({
+                  date: weightDate || null,
+                  unit: weightUnitLabel,
+                  tolerance_percent: weightTolerancePercent,
+                  minimum_sample: weightMinimumSample,
+                  sessions: serverSessionsPayload,
+                }),
+              });
+              const result = await parseJsonResponse(response);
+              if (result.status === 401 || result.status === 403) {
+                redirectToLogin();
+                return;
+              }
+              if (!result.ok || (result.data && result.data.error)) {
+                const errorMessage =
+                  (result.data && result.data.error) || 'No fue posible guardar los pesos. Intenta de nuevo.';
+                setStatus(errorMessage, 'error', { sticky: true, duration: 6000 });
+                applyWeightCardTheme('base');
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('error');
+                }
+                return;
+              }
+              serverRegistryPayload = result.data ? result.data.weight_registry : null;
+            } catch (error) {
+              console.warn('No se pudo guardar el registro de pesos:', error);
+              setStatus('No fue posible guardar los pesos. Intenta de nuevo.', 'error', { sticky: true, duration: 6000 });
+              applyWeightCardTheme('base');
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                telegram.HapticFeedback.notificationOccurred('error');
+              }
+              return;
+            } finally {
+              setButtonLoading(weightFinishButton, false);
+            }
+          }
+
           try {
             if (telegram && typeof telegram.sendData === 'function') {
               telegram.sendData(JSON.stringify(payloadToSend));
@@ -7116,28 +7819,56 @@
           if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
             telegram.HapticFeedback.notificationOccurred('success');
           }
-          setStatus('Registro enviado', 'success');
-          weightState.entries = [];
-          weightState.dirty = false;
-          weightState.lastSavedAt = null;
-          renderWeightEntries();
+          applyWeightCardTheme('success');
+          setStatus('Pesos sincronizados exitosamente. ¡Turno al día!', 'success', { sticky: true, duration: 6000 });
           clearStoredState();
+          resetSessionState();
+          if (serverRegistryPayload && Array.isArray(serverRegistryPayload.sessions)) {
+            applyServerSessions(serverRegistryPayload.sessions, { persist: true });
+            serverSessionLoaded = true;
+          } else if (serverSessionsPayload.length) {
+            applyServerSessions(serverSessionsPayload, { persist: true });
+          }
+          autoPersistState({ silent: true });
+          weightState.lastSavedAt = Date.now();
+          weightState.dirty = false;
+          weightLastMetrics = null;
+          closeWeightPanel();
+          renderWeightEntries();
+          updateActiveSalonsLabel();
+          updateLocationButtons();
+          updateLocationSummaries();
+          updateSelectedCounter();
+          updateStartButtonState();
+          updateResumeVisibility();
           updateSelectionHint();
+          const totalAfterSave = getTotalEntriesAcrossSessions();
+          if (!totalAfterSave && Date.now() > weightStatusLockUntil) {
+            setStatus('Sin cambios', 'muted', { force: true });
+          }
         }
 
+        applyWeightCardTheme('base');
         loadWeightState();
         updateLocationButtons();
+        updateLocationSummaries();
         updateSelectedCounter();
         updateStartButtonState();
         updateActiveSalonsLabel();
         renderWeightEntries();
         updateResumeVisibility();
         updateSelectionHint();
-        if (!weightState.entries.length) {
-          setStatus('Sin cambios', 'muted');
+        const totalEntries = getTotalEntriesAcrossSessions();
+        if (serverSessionLoaded && totalEntries) {
+          setStatus('Registro listo para continuar', 'info');
+        } else if (!totalEntries) {
+          setStatus('Sin cambios', 'muted', { force: true });
         }
         if (!canUseLocalStorage) {
-          setStatus('Mantén la app abierta, no guardaremos automáticamente', 'warning');
+          setStatus('Mantén la app abierta, no guardaremos automáticamente', 'warning', {
+            sticky: true,
+            duration: 5000,
+          });
         }
 
         if (weightLocationButtons.length) {
@@ -7147,37 +7878,20 @@
               if (!id) {
                 return;
               }
-              const label = button.getAttribute('data-weight-location-label') || id;
-              const existingIndex = weightState.selectedSalons.findIndex(function (salon) {
-                return salon.id === id;
-              });
-              if (existingIndex === -1) {
-                weightState.selectedSalons.push({
-                  id: id,
-                  label: label,
-                  farm: button.getAttribute('data-weight-location-farm') || null,
-                  barn: button.getAttribute('data-weight-location-barn') || null,
-                  room: button.getAttribute('data-weight-location-room') || null,
-                  birds: button.getAttribute('data-weight-location-birds') || null,
-                });
-                setStatus(label + ' agregado', 'info');
-              } else {
-                weightState.selectedSalons.splice(existingIndex, 1);
-                setStatus(label + ' retirado', 'warning');
+              setActiveSalon(id, { openPanel: true, focus: true });
+              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
+                telegram.HapticFeedback.selectionChanged();
               }
-              weightState.dirty = true;
-              updateLocationButtons();
-              updateSelectedCounter();
-              updateActiveSalonsLabel();
-              updateStartButtonState();
-              updateSelectionHint();
-              autoPersistState({ silent: true });
             });
           });
         }
 
         if (weightStartButton) {
           weightStartButton.addEventListener('click', function () {
+            if (!weightState.activeSalonId) {
+              setStatus('Selecciona un salón para iniciar.', 'warning');
+              return;
+            }
             openWeightPanel({ focus: true });
             if (isWeightPanelOpen) {
               setStatus('Registro en progreso', 'info');
@@ -7190,6 +7904,10 @@
 
         if (weightResumeButton) {
           weightResumeButton.addEventListener('click', function () {
+            if (!weightState.activeSalonId) {
+              setStatus('Selecciona un salón para continuar.', 'warning');
+              return;
+            }
             openWeightPanel({ focus: true });
             if (isWeightPanelOpen) {
               setStatus('Registro retomado', 'info');
@@ -7215,19 +7933,6 @@
           });
         }
 
-        if (weightQuickButtons.length) {
-          weightQuickButtons.forEach(function (button) {
-            button.addEventListener('click', function () {
-              const raw = button.getAttribute('data-weight-quick');
-              const grams = parseWeightInput(raw);
-              if (!Number.isFinite(grams) || grams <= 0) {
-                setStatus('Valor rápido inválido', 'error');
-                return;
-              }
-              handleAddWeight(grams);
-            });
-          });
-        }
 
         if (weightList) {
           weightList.addEventListener('click', function (event) {
@@ -7248,24 +7953,31 @@
 
         if (weightResetButton) {
           weightResetButton.addEventListener('click', function () {
-            if (!weightState.entries.length) {
+            const session = getActiveSession();
+            if (!session || !session.entries.length) {
               return;
             }
-            const proceed = window.confirm('¿Vaciar la lista de pesos?');
+            const roomLabel = session.room || session.label || 'este salón';
+            const proceed = window.confirm('¿Vaciar la lista de pesos de ' + roomLabel + '?');
             if (!proceed) {
               return;
             }
-            weightState.entries = [];
+            session.entries = [];
+            session.status = 'idle';
+            session.updatedAt = new Date().toISOString();
             weightState.dirty = true;
             renderWeightEntries();
             autoPersistState({ silent: true });
+            updateLocationButtons();
+            updateLocationSummaries();
             setStatus('Lista reiniciada', 'warning');
           });
         }
 
         if (weightCopyButton) {
           weightCopyButton.addEventListener('click', function () {
-            if (!weightState.entries.length) {
+            const entries = getSessionEntries();
+            if (!entries.length) {
               setStatus('No hay pesos para copiar', 'warning');
               return;
             }

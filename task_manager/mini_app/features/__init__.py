@@ -14,6 +14,12 @@ from .production_registry import (
     persist_production_records,
     serialize_production_registry,
 )
+from .weight_registry import (
+    WeightRegistry,
+    build_weight_registry,
+    persist_weight_registry,
+    serialize_weight_registry,
+)
 
 __all__ = [
     "ShiftConfirmationCard",
@@ -26,4 +32,8 @@ __all__ = [
     "build_production_registry",
     "persist_production_records",
     "serialize_production_registry",
+    "WeightRegistry",
+    "build_weight_registry",
+    "persist_weight_registry",
+    "serialize_weight_registry",
 ]

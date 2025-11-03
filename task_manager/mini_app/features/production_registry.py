@@ -85,7 +85,7 @@ class ProductionRegistry:
         return date_format(self.date, "l").capitalize()
 
 
-def _resolve_assignment_for_date(*, user: UserProfile, target_date: date) -> Optional[ShiftAssignment]:
+def resolve_assignment_for_date(*, user: UserProfile, target_date: date) -> Optional[ShiftAssignment]:
     if not user.is_active or not user.has_perm("task_manager.view_mini_app_production_card"):
         return None
 
@@ -124,7 +124,7 @@ def build_production_registry(
         return None
 
     target_date = reference_date or UserProfile.colombia_today()
-    assignment = _resolve_assignment_for_date(user=user, target_date=target_date)
+    assignment = resolve_assignment_for_date(user=user, target_date=target_date)
     if not assignment or not assignment.position:
         return None
 
