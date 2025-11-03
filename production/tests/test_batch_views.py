@@ -238,3 +238,50 @@ class BatchManagementViewTests(TestCase):
         self.assertIsNotNone(selected_batch)
         self.assertEqual(selected_batch.pk, oldest_with_more_birds.pk)
         self.assertEqual(response.context["selected_batch_label"], "Lote #1")
+
+    def test_selected_batch_keeps_natural_order(self) -> None:
+        today = date.today()
+        oldest_birth = today - timedelta(days=84)
+        middle_birth = today - timedelta(days=56)
+        youngest_birth = today - timedelta(days=21)
+
+        oldest_batch = BirdBatch.objects.create(
+            farm=self.farm,
+            status=BirdBatch.Status.ACTIVE,
+            birth_date=oldest_birth,
+            initial_quantity=2200,
+            breed="Hy-Line Brown",
+        )
+        middle_batch = BirdBatch.objects.create(
+            farm=self.farm,
+            status=BirdBatch.Status.ACTIVE,
+            birth_date=middle_birth,
+            initial_quantity=2100,
+            breed="Hy-Line Brown",
+        )
+        youngest_batch = BirdBatch.objects.create(
+            farm=self.farm,
+            status=BirdBatch.Status.ACTIVE,
+            birth_date=youngest_birth,
+            initial_quantity=2300,
+            breed="Hy-Line Brown",
+        )
+
+        baseline_response = self.client.get(reverse("production:batches"))
+        self.assertEqual(baseline_response.status_code, 200)
+
+        baseline_order = [card["id"] for card in baseline_response.context["batch_cards"]]
+        self.assertGreaterEqual(len(baseline_order), 3)
+        self.assertEqual(
+            baseline_order[:3],
+            [oldest_batch.pk, middle_batch.pk, youngest_batch.pk],
+        )
+
+        focused_response = self.client.get(
+            reverse("production:batches"),
+            {"batch": youngest_batch.pk},
+        )
+        self.assertEqual(focused_response.status_code, 200)
+        focused_order = [card["id"] for card in focused_response.context["batch_cards"]]
+        self.assertEqual(focused_order[:3], baseline_order[:3])
+        self.assertEqual(focused_response.context["selected_batch_id"], youngest_batch.pk)

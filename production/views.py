@@ -1016,11 +1016,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         distribution_groups, distribution_assigned = self._build_distribution_view_data(
             distribution_form
         )
-        batch_cards = self._build_batch_cards(
-            batches,
-            label_map,
-            focused_batch_id=selected_batch.pk if selected_batch else None,
-        )
+        batch_cards = self._build_batch_cards(batches, label_map)
         selected_batch_label = (
             resolve_batch_label(selected_batch, label_map) if selected_batch else None
         )
@@ -1119,7 +1115,6 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         self,
         batches: List[BirdBatch],
         label_map: Mapping[int, str],
-        focused_batch_id: Optional[int],
     ) -> List[BatchCard]:
         today = timezone.localdate()
         cards: List[BatchCard] = []
@@ -1157,9 +1152,8 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
                 )
             )
 
-        def card_sort_key(card: BatchCard) -> Tuple[bool, bool, int, int, int, int]:
+        def card_sort_key(card: BatchCard) -> Tuple[bool, int, int, int, int]:
             return (
-                card["id"] != focused_batch_id,
                 card["status"] != BirdBatch.Status.ACTIVE,
                 -card["age_days"],
                 -card["initial_quantity"],
