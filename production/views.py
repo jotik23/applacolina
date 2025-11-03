@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -159,6 +159,31 @@ class BatchMetrics(TypedDict):
     total_rooms_used: int
 
 
+def build_active_batch_label_map(batches: Iterable[BirdBatch]) -> Dict[int, str]:
+    """Return positional labels for active batches ordered from oldest to newest."""
+    today = timezone.localdate()
+    active_batches: List[Tuple[BirdBatch, int]] = []
+    for batch in batches:
+        if batch.status != BirdBatch.Status.ACTIVE:
+            continue
+        age_days = max((today - batch.birth_date).days, 0)
+        active_batches.append((batch, age_days))
+
+    active_batches.sort(
+        key=lambda item: (
+            -item[1],
+            -item[0].initial_quantity,
+            item[0].pk,
+        )
+    )
+    return {batch.pk: f"Lote #{index + 1}" for index, (batch, _) in enumerate(active_batches)}
+
+
+def resolve_batch_label(batch: BirdBatch, label_map: Mapping[int, str]) -> str:
+    """Resolve the display label for a batch with a fallback to its primary key."""
+    return label_map.get(batch.pk, f"Lote #{batch.pk}")
+
+
 class FilterConfig(TypedDict):
     farms: List[str]
     barns: List[str]
@@ -254,6 +279,16 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 }
             )
             return context
+
+        batches.sort(
+            key=lambda batch: (
+                -max((today - batch.birth_date).days, 0),
+                -batch.initial_quantity,
+                batch.pk,
+            )
+        )
+
+        label_map = build_active_batch_label_map(batches)
 
         batch_ids = [batch.id for batch in batches]
         batch_id_set = set(batch_ids)
@@ -720,7 +755,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             barn_names_display = ", ".join(barn_names) if barn_names else "Sin asignación"
 
             lot_data: LotOverview = {
-                "label": f"Lote #{batch.id}",
+                "label": resolve_batch_label(batch, label_map),
                 "breed": batch.breed,
                 "birth_date": batch.birth_date,
                 "age_weeks": (today - batch.birth_date).days // 7 if batch.birth_date else 0,
@@ -908,9 +943,15 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
 
         if form.is_valid():
             instance = form.save()
+            label_map = build_active_batch_label_map(
+                BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE).only(
+                    "id", "birth_date", "initial_quantity", "status"
+                )
+            )
+            batch_label = resolve_batch_label(instance, label_map)
             messages.success(
                 request,
-                f'Se registró el lote #{instance.pk} para {instance.farm.name}. Desde este panel puedes distribuirlo en salones.',
+                f"Se registró {batch_label} para {instance.farm.name}. Desde este panel puedes distribuirlo en salones.",
             )
             return redirect(f"{reverse_lazy('production:batches')}?batch={instance.pk}")
 
@@ -954,6 +995,16 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         batches = self._fetch_batches()
+        today = timezone.localdate()
+        batches.sort(
+            key=lambda batch: (
+                batch.status != BirdBatch.Status.ACTIVE,
+                -max((today - batch.birth_date).days, 0),
+                -batch.initial_quantity,
+                batch.pk,
+            )
+        )
+        label_map = build_active_batch_label_map(batches)
         focused_batch_id = getattr(self, "_focused_batch_id", None)
         if focused_batch_id is None:
             focused_batch_id = self._safe_pk_lookup(BirdBatch, self.request.GET.get("batch"))
@@ -965,7 +1016,14 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         distribution_groups, distribution_assigned = self._build_distribution_view_data(
             distribution_form
         )
-        batch_cards = self._build_batch_cards(batches, focused_batch_id=selected_batch.pk if selected_batch else None)
+        batch_cards = self._build_batch_cards(
+            batches,
+            label_map,
+            focused_batch_id=selected_batch.pk if selected_batch else None,
+        )
+        selected_batch_label = (
+            resolve_batch_label(selected_batch, label_map) if selected_batch else None
+        )
 
         context.update(
             {
@@ -983,6 +1041,8 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
                 "batch_cards": batch_cards,
                 "selected_batch": selected_batch,
                 "selected_batch_id": selected_batch.pk if selected_batch else None,
+                "selected_batch_label": selected_batch_label,
+                "batch_label_map": label_map,
                 "batch_metrics": self._compute_batch_metrics(batches=batches),
                 "dashboard_generated_at": timezone.now(),
             }
@@ -1056,7 +1116,10 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         }
 
     def _build_batch_cards(
-        self, batches: List[BirdBatch], focused_batch_id: Optional[int]
+        self,
+        batches: List[BirdBatch],
+        label_map: Mapping[int, str],
+        focused_batch_id: Optional[int],
     ) -> List[BatchCard]:
         today = timezone.localdate()
         cards: List[BatchCard] = []
@@ -1080,7 +1143,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
             cards.append(
                 BatchCard(
                     id=batch.pk,
-                    label=f"Lote #{batch.pk}",
+                    label=resolve_batch_label(batch, label_map),
                     farm_name=batch.farm.name,
                     status=batch.status,
                     status_label=batch.get_status_display(),
@@ -1094,21 +1157,17 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
                 )
             )
 
-        if focused_batch_id:
-            cards.sort(
-                key=lambda card: (
-                    card["id"] != focused_batch_id,
-                    card["status"] != BirdBatch.Status.ACTIVE,
-                    -card["birth_date"].toordinal(),
-                )
+        def card_sort_key(card: BatchCard) -> Tuple[bool, bool, int, int, int, int]:
+            return (
+                card["id"] != focused_batch_id,
+                card["status"] != BirdBatch.Status.ACTIVE,
+                -card["age_days"],
+                -card["initial_quantity"],
+                card["birth_date"].toordinal(),
+                card["id"],
             )
-        else:
-            cards.sort(
-                key=lambda card: (
-                    card["status"] != BirdBatch.Status.ACTIVE,
-                    -card["birth_date"].toordinal(),
-                )
-            )
+
+        cards.sort(key=card_sort_key)
         return cards
 
     def _compute_batch_metrics(self, batches: Optional[List[BirdBatch]] = None) -> BatchMetrics:
