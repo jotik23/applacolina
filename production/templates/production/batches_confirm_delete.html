@@ -1,0 +1,53 @@
+{% extends "calendario/base.html" %}
+
+{% block title %}Eliminar {{ entity_label }} · Lotes{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+
+  <section class="space-y-8">
+    <header class="rounded-2xl bg-white/85 p-8 shadow-sm ring-1 ring-rose-200/70">
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 ring-1 ring-rose-200">
+            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path
+                fill-rule="evenodd"
+                d="M11.47 3.03a.75.75 0 011.06 0l8.44 8.44a.75.75 0 010 1.06l-8.44 8.44a.75.75 0 01-1.06 0L3.03 12.53a.75.75 0 010-1.06l8.44-8.44zM12 9a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0012 9zm0 7a.9.9 0 100-1.8.9.9 0 000 1.8z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </span>
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-rose-500">Acción irreversible</p>
+            <h1 class="text-3xl font-semibold text-slate-900">Eliminar {{ entity_label }}</h1>
+          </div>
+        </div>
+        <p class="text-sm leading-6 text-slate-600">
+          Esta acción no se puede deshacer. Se eliminará <strong class="font-semibold text-slate-900">{{ object_display }}</strong>{% if entity_label == 'lote de aves' %}, incluyendo las asignaciones registradas{% else %}.{% endif %}
+        </p>
+      </div>
+    </header>
+
+    <form method="post" class="rounded-2xl border border-rose-200/70 bg-white/95 p-8 shadow-sm space-y-6">
+      {% csrf_token %}
+      <p class="text-sm text-slate-600">
+        Confirma si deseas continuar. Puedes volver al panel de lotes para revisar la información antes de eliminar.
+      </p>
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <a
+          href="{% url 'production:batches' %}"
+          class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+        >
+          Cancelar
+        </a>
+        <button
+          type="submit"
+          class="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500"
+        >
+          Sí, eliminar definitivamente
+        </button>
+      </div>
+    </form>
+  </section>
+{% endblock %}

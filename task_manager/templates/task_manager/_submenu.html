@@ -1,0 +1,14 @@
+{% load i18n %}
+<nav class="mb-8 border-b border-slate-200/70">
+  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
+    <a
+      href="{% url 'task_manager:index' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'tasks' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'tasks' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'tasks' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      {% trans "Tareas" %}
+    </a>
+    {# Futuras secciones se insertarán aquí #}
+  </div>
+</nav>

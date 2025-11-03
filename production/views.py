@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.views.generic import DeleteView, TemplateView, UpdateView
 
 from applacolina.mixins import StaffRequiredMixin
-from production.forms import ChickenHouseForm, FarmForm, RoomForm
+from production.forms import BatchDistributionForm, BirdBatchForm, ChickenHouseForm, FarmForm, RoomForm
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
@@ -126,6 +126,37 @@ class FarmOverview(TypedDict):
     code: str
     summary: FarmSummary
     lots: List[LotOverview]
+
+
+class BatchAllocationSummary(TypedDict):
+    id: int
+    room_name: str
+    chicken_house_name: str
+    quantity: int
+
+
+class BatchCard(TypedDict):
+    id: int
+    label: str
+    farm_name: str
+    status: str
+    status_label: str
+    birth_date: date
+    age_weeks: int
+    age_days: int
+    initial_quantity: int
+    allocated_quantity: int
+    remaining_quantity: int
+    allocations: List[BatchAllocationSummary]
+
+
+class BatchMetrics(TypedDict):
+    total_batches: int
+    active_batches: int
+    inactive_batches: int
+    total_initial_birds: int
+    total_assigned_birds: int
+    total_rooms_used: int
 
 
 class FilterConfig(TypedDict):
@@ -852,6 +883,289 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
         return context
 
 
+class BatchManagementView(StaffRequiredMixin, TemplateView):
+    """Manage bird batches and their room allocations."""
+
+    template_name = "production/batches.html"
+    form_registry = {
+        "batch": ("_batch_form", BirdBatchForm),
+    }
+
+    def post(self, request, *args, **kwargs):
+        form_type = request.POST.get("form_type", "")
+
+        if form_type == "distribution":
+            return self._handle_distribution_post(request)
+
+        registry_entry = self.form_registry.get(form_type)
+        if not registry_entry:
+            messages.error(request, "No se pudo determinar el formulario enviado.")
+            return redirect("production:batches")
+
+        form_attr, form_class = registry_entry
+        form = form_class(request.POST)
+        setattr(self, form_attr, form)
+
+        if form.is_valid():
+            instance = form.save()
+            messages.success(
+                request,
+                f'Se registró el lote #{instance.pk} para {instance.farm.name}. Desde este panel puedes distribuirlo en salones.',
+            )
+            return redirect(f"{reverse_lazy('production:batches')}?batch={instance.pk}")
+
+        return self.get(request, *args, **kwargs)
+
+    def _handle_distribution_post(self, request):
+        batch_id = self._safe_pk_lookup(BirdBatch, request.POST.get("batch_id"))
+        if not batch_id:
+            messages.error(request, "No fue posible identificar el lote seleccionado.")
+            return redirect("production:batches")
+
+        allocations_prefetch = Prefetch(
+            "allocations",
+            queryset=BirdBatchRoomAllocation.objects.select_related("room__chicken_house"),
+        )
+        try:
+            batch = (
+                BirdBatch.objects.select_related("farm")
+                .prefetch_related(allocations_prefetch)
+                .get(pk=batch_id)
+            )
+        except BirdBatch.DoesNotExist:
+            messages.error(request, "El lote seleccionado ya no existe.")
+            return redirect("production:batches")
+
+        form = BatchDistributionForm(request.POST, batch=batch)
+        self._distribution_form = form
+        self._focused_batch_id = batch_id
+
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                "Distribución guardada correctamente. Las asignaciones fueron actualizadas.",
+            )
+            return redirect(f"{reverse_lazy('production:batches')}?batch={batch_id}")
+
+        return self.get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        batches = self._fetch_batches()
+        focused_batch_id = getattr(self, "_focused_batch_id", None)
+        if focused_batch_id is None:
+            focused_batch_id = self._safe_pk_lookup(BirdBatch, self.request.GET.get("batch"))
+
+        selected_batch = self._select_batch(batches, focused_batch_id)
+
+        batch_form = self._get_form_instance("batch")
+        distribution_form = self._get_distribution_form(selected_batch)
+        distribution_groups, distribution_assigned = self._build_distribution_view_data(
+            distribution_form
+        )
+        batch_cards = self._build_batch_cards(batches, focused_batch_id=selected_batch.pk if selected_batch else None)
+
+        context.update(
+            {
+                "active_submenu": "batches",
+                "batch_form": batch_form,
+                "distribution_form": distribution_form,
+                "distribution_groups": distribution_groups,
+                "distribution_totals": (
+                    self._build_distribution_totals(
+                        selected_batch, distribution_assigned
+                    )
+                    if selected_batch
+                    else None
+                ),
+                "batch_cards": batch_cards,
+                "selected_batch": selected_batch,
+                "selected_batch_id": selected_batch.pk if selected_batch else None,
+                "batch_metrics": self._compute_batch_metrics(batches=batches),
+                "dashboard_generated_at": timezone.now(),
+            }
+        )
+        return context
+
+    def _fetch_batches(self) -> List[BirdBatch]:
+        allocations_prefetch = Prefetch(
+            "allocations",
+            queryset=BirdBatchRoomAllocation.objects.select_related("room__chicken_house").order_by(
+                "room__chicken_house__name", "room__name"
+            ),
+        )
+        return list(
+            BirdBatch.objects.select_related("farm")
+            .prefetch_related(allocations_prefetch)
+            .order_by("-status", "-birth_date")
+        )
+
+    def _select_batch(
+        self, batches: List[BirdBatch], focused_batch_id: Optional[int]
+    ) -> Optional[BirdBatch]:
+        if not batches:
+            return None
+
+        if focused_batch_id:
+            for batch in batches:
+                if batch.pk == focused_batch_id:
+                    return batch
+
+        return batches[0]
+
+    def _get_form_instance(self, form_key: str):
+        form_attr, form_class = self.form_registry[form_key]
+        existing_form = getattr(self, form_attr, None)
+        if existing_form is not None:
+            return existing_form
+
+        form = form_class()
+        setattr(self, form_attr, form)
+        return form
+
+    def _get_distribution_form(self, batch: Optional[BirdBatch]):
+        if not batch:
+            return None
+
+        existing_form = getattr(self, "_distribution_form", None)
+        if existing_form is not None and existing_form.batch.pk == batch.pk:
+            return existing_form
+
+        return BatchDistributionForm(batch=batch)
+
+    def _build_distribution_view_data(
+        self, form: Optional[BatchDistributionForm]
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        if not form:
+            return [], 0
+
+        groups, overall_total = form.build_groups()
+        return groups, overall_total
+
+    def _build_distribution_totals(
+        self, batch: BirdBatch, assigned_quantity: int
+    ) -> Dict[str, int]:
+        initial = batch.initial_quantity
+        remaining = max(initial - assigned_quantity, 0)
+        return {
+            "initial": initial,
+            "assigned": assigned_quantity,
+            "remaining": remaining,
+        }
+
+    def _build_batch_cards(
+        self, batches: List[BirdBatch], focused_batch_id: Optional[int]
+    ) -> List[BatchCard]:
+        today = timezone.localdate()
+        cards: List[BatchCard] = []
+        for batch in batches:
+            allocations: List[BatchAllocationSummary] = []
+            allocated_total = 0
+            for allocation in batch.allocations.all():
+                allocated_total += allocation.quantity
+                allocations.append(
+                    BatchAllocationSummary(
+                        id=allocation.pk,
+                        room_name=allocation.room.name,
+                        chicken_house_name=allocation.room.chicken_house.name,
+                        quantity=allocation.quantity,
+                    )
+                )
+
+            age_days = max((today - batch.birth_date).days, 0)
+            age_weeks = age_days // 7
+
+            cards.append(
+                BatchCard(
+                    id=batch.pk,
+                    label=f"Lote #{batch.pk}",
+                    farm_name=batch.farm.name,
+                    status=batch.status,
+                    status_label=batch.get_status_display(),
+                    birth_date=batch.birth_date,
+                    age_weeks=age_weeks,
+                    age_days=age_days,
+                    initial_quantity=batch.initial_quantity,
+                    allocated_quantity=allocated_total,
+                    remaining_quantity=max(batch.initial_quantity - allocated_total, 0),
+                    allocations=allocations,
+                )
+            )
+
+        if focused_batch_id:
+            cards.sort(
+                key=lambda card: (
+                    card["id"] != focused_batch_id,
+                    card["status"] != BirdBatch.Status.ACTIVE,
+                    -card["birth_date"].toordinal(),
+                )
+            )
+        else:
+            cards.sort(
+                key=lambda card: (
+                    card["status"] != BirdBatch.Status.ACTIVE,
+                    -card["birth_date"].toordinal(),
+                )
+            )
+        return cards
+
+    def _compute_batch_metrics(self, batches: Optional[List[BirdBatch]] = None) -> BatchMetrics:
+        if batches is None:
+            total_batches = BirdBatch.objects.count()
+            active_batches = BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE).count()
+            inactive_batches = BirdBatch.objects.filter(status=BirdBatch.Status.INACTIVE).count()
+            total_initial_birds = (
+                BirdBatch.objects.aggregate(total=Coalesce(Sum("initial_quantity"), 0))["total"] or 0
+            )
+            total_assigned_birds = (
+                BirdBatchRoomAllocation.objects.aggregate(total=Coalesce(Sum("quantity"), 0))["total"] or 0
+            )
+            total_rooms_used = (
+                BirdBatchRoomAllocation.objects.values("room").distinct().count()
+            )
+            return BatchMetrics(
+                total_batches=total_batches,
+                active_batches=active_batches,
+                inactive_batches=inactive_batches,
+                total_initial_birds=total_initial_birds,
+                total_assigned_birds=total_assigned_birds,
+                total_rooms_used=total_rooms_used,
+            )
+
+        total_batches = len(batches)
+        active_batches = sum(1 for batch in batches if batch.status == BirdBatch.Status.ACTIVE)
+        inactive_batches = total_batches - active_batches
+        total_initial_birds = sum(batch.initial_quantity for batch in batches)
+        total_assigned_birds = sum(
+            allocation.quantity for batch in batches for allocation in batch.allocations.all()
+        )
+        rooms_used = {
+            allocation.room_id for batch in batches for allocation in batch.allocations.all()
+        }
+
+        return BatchMetrics(
+            total_batches=total_batches,
+            active_batches=active_batches,
+            inactive_batches=inactive_batches,
+            total_initial_birds=total_initial_birds,
+            total_assigned_birds=total_assigned_birds,
+            total_rooms_used=len(rooms_used),
+        )
+
+    def _safe_pk_lookup(self, model, raw_value: Optional[str]) -> Optional[int]:
+        try:
+            pk_value = int(raw_value) if raw_value is not None else None
+        except (TypeError, ValueError):
+            return None
+        if pk_value is None:
+            return None
+        if model.objects.filter(pk=pk_value).exists():
+            return pk_value
+        return None
+
+
 class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
     """Catalogue and management hub for farms, chicken houses and rooms."""
 
@@ -1094,6 +1408,87 @@ class RoomDeleteView(InfrastructureDeleteView):
     success_message = 'Se eliminó el salón "%(object)s" correctamente.'
 
 
+class BatchFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
+    template_name = "production/batch_form.html"
+    success_url = reverse_lazy("production:batches")
+    page_title: str = ""
+    submit_label: str = ""
+    entity_label: str = ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("active_submenu", "batches")
+        context["page_title"] = self.page_title
+        context["submit_label"] = self.submit_label
+        context["entity_label"] = self.entity_label
+        context["breadcrumbs"] = [
+            {"label": "Lotes y asignaciones", "url": reverse_lazy("production:batches")},
+            {"label": self.page_title, "url": ""},
+        ]
+        return context
+
+
+class BirdBatchUpdateView(BatchFormViewMixin, UpdateView):
+    model = BirdBatch
+    form_class = BirdBatchForm
+    page_title = "Editar lote de aves"
+    submit_label = "Guardar cambios"
+    entity_label = "lote de aves"
+    success_message = 'Se actualizó el lote #%(pk)s correctamente.'
+
+
+class BirdBatchDeleteView(StaffRequiredMixin, DeleteView):
+    model = BirdBatch
+    template_name = "production/batches_confirm_delete.html"
+    success_url = reverse_lazy("production:batches")
+    entity_label = "lote de aves"
+    success_message = 'Se eliminó el lote "%(object)s" correctamente.'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("active_submenu", "batches")
+        context["entity_label"] = self.entity_label
+        context["object_display"] = str(self.object)
+        context["breadcrumbs"] = [
+            {"label": "Lotes y asignaciones", "url": reverse_lazy("production:batches")},
+            {"label": f"Eliminar {self.entity_label}", "url": ""},
+        ]
+        return context
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        object_display = str(self.object)
+        response = super().delete(request, *args, **kwargs)
+        messages.success(request, self.success_message % {"object": object_display})
+        return response
+
+
+class BatchAllocationDeleteView(StaffRequiredMixin, DeleteView):
+    model = BirdBatchRoomAllocation
+    template_name = "production/batches_confirm_delete.html"
+    success_url = reverse_lazy("production:batches")
+    entity_label = "asignación de lote"
+    success_message = 'Se eliminó la asignación "%(object)s" correctamente.'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("active_submenu", "batches")
+        context["entity_label"] = self.entity_label
+        context["object_display"] = str(self.object)
+        context["breadcrumbs"] = [
+            {"label": "Lotes y asignaciones", "url": reverse_lazy("production:batches")},
+            {"label": f"Eliminar {self.entity_label}", "url": ""},
+        ]
+        return context
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        object_display = str(self.object)
+        response = super().delete(request, *args, **kwargs)
+        messages.success(request, self.success_message % {"object": object_display})
+        return response
+
+
 production_home_view = ProductionHomeView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
 farm_update_view = FarmUpdateView.as_view()
@@ -1102,3 +1497,7 @@ room_update_view = RoomUpdateView.as_view()
 farm_delete_view = FarmDeleteView.as_view()
 chicken_house_delete_view = ChickenHouseDeleteView.as_view()
 room_delete_view = RoomDeleteView.as_view()
+batch_management_view = BatchManagementView.as_view()
+bird_batch_update_view = BirdBatchUpdateView.as_view()
+bird_batch_delete_view = BirdBatchDeleteView.as_view()
+batch_allocation_delete_view = BatchAllocationDeleteView.as_view()
