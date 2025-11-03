@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -80,6 +81,16 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "suggestions": "task_manager.view_mini_app_suggestions_card",
     "task": "task_manager.view_mini_app_task_cards",
 }
+
+_SESSION_TOKEN_KEY = "mini_app_session_token"
+
+
+def _resolve_mini_app_session_token(request) -> str:
+    token = request.session.get(_SESSION_TOKEN_KEY)
+    if not token:
+        token = uuid.uuid4().hex
+        request.session[_SESSION_TOKEN_KEY] = token
+    return str(token)
 
 
 _TASK_CRITICALITY_TONE_MAP: dict[str, str] = {
@@ -1665,20 +1676,27 @@ def _build_telegram_mini_app_payload(
         },
     ]
 
+    default_today = timezone.localdate()
     default_weight_registry = {
+        "date": default_today.isoformat(),
+        "date_label": date_format(default_today, "DATE_FORMAT"),
+        "task_assignment_id": 0,
+        "task_definition_id": 0,
+        "production_record_id": None,
+        "context_token": uuid.uuid4().hex,
         "title": _("Pesaje de aves"),
         "subtitle": _(""),
         "unit_label": "g",
         "min_sample_size": 30,
         "uniformity_tolerance_percent": 10,
         "locations": weight_registry_locations,
+        "sessions": [],
         "recent_sessions": weight_registry_recent_sessions,
         "resume_hint": _("Puedes pausar el registro."),
     }
-    if include_weight_registry:
-        weight_registry_payload = weight_registry if weight_registry is not None else default_weight_registry
-    else:
-        weight_registry_payload = weight_registry
+    weight_registry_payload = weight_registry
+    if include_weight_registry and weight_registry_payload is None and use_task_samples:
+        weight_registry_payload = default_weight_registry
 
     egg_workflow = {
         "cartons_per_pack": cartons_per_pack,
@@ -2879,6 +2897,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             production_payload: Optional[dict[str, object]] = None
             weight_registry_payload: Optional[dict[str, object]] = None
+            session_token = _resolve_mini_app_session_token(self.request)
             if card_permissions.get("production"):
                 registry = build_production_registry(user=user, reference_date=today)
                 if registry:
@@ -2900,25 +2919,14 @@ class TaskManagerMiniAppView(generic.TemplateView):
                     }
             if card_permissions.get("weight_registry"):
                 weight_submit_url = reverse("task_manager:mini-app-weight-registry")
-                registry = build_weight_registry(user=user, reference_date=today)
+                registry = build_weight_registry(
+                    user=user,
+                    reference_date=today,
+                    session_token=session_token,
+                )
                 if registry:
                     weight_registry_payload = serialize_weight_registry(registry)
                     weight_registry_payload["submit_url"] = weight_submit_url
-                else:
-                    weight_registry_payload = {
-                        "date": today.isoformat(),
-                        "date_label": date_format(today, "DATE_FORMAT"),
-                        "title": _("Pesaje de aves"),
-                        "subtitle": "",
-                        "unit_label": "g",
-                        "min_sample_size": 30,
-                        "uniformity_tolerance_percent": 10,
-                        "locations": [],
-                        "sessions": [],
-                        "recent_sessions": [],
-                        "resume_hint": _("Puedes pausar el registro."),
-                        "submit_url": weight_submit_url,
-                    }
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
@@ -3092,26 +3100,18 @@ class TaskManagerMiniAppDevView(generic.TemplateView):
                     shift_empty = build_shift_confirmation_empty_card(user=user, reference_date=today)
                     if shift_empty:
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
+            session_token = _resolve_mini_app_session_token(self.request)
             weight_registry_payload: Optional[dict[str, object]] = None
             if card_permissions.get("weight_registry"):
-                weight_registry_session = build_weight_registry(user=user, reference_date=today)
+                weight_registry_session = build_weight_registry(
+                    user=user,
+                    reference_date=today,
+                    session_token=session_token,
+                )
                 weight_submit_url = reverse("task_manager:mini-app-weight-registry")
                 if weight_registry_session:
                     weight_registry_payload = serialize_weight_registry(weight_registry_session)
                     weight_registry_payload["submit_url"] = weight_submit_url
-                else:
-                    weight_registry_payload = {
-                        "submit_url": weight_submit_url,
-                        "locations": [],
-                        "sessions": [],
-                        "recent_sessions": [],
-                        "unit_label": "g",
-                        "min_sample_size": 30,
-                        "uniformity_tolerance_percent": 10,
-                        "resume_hint": _("Puedes pausar el registro."),
-                        "date": today.isoformat(),
-                        "date_label": date_format(today, "DATE_FORMAT"),
-                    }
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
@@ -3389,6 +3389,8 @@ def mini_app_weight_registry_view(request):
             status=403,
         )
 
+    session_token = _resolve_mini_app_session_token(request)
+
     try:
         payload = json.loads(request.body.decode() or "{}")
     except json.JSONDecodeError:
@@ -3402,7 +3404,11 @@ def mini_app_weight_registry_view(request):
         except ValueError:
             return JsonResponse({"error": _("La fecha enviada no es válida.")}, status=400)
 
-    registry = build_weight_registry(user=user, reference_date=target_date)
+    registry = build_weight_registry(
+        user=user,
+        reference_date=target_date,
+        session_token=session_token,
+    )
     if not registry:
         return JsonResponse(
             {"error": _("No encontramos salones asignados a tu turno.")},
@@ -3429,7 +3435,11 @@ def mini_app_weight_registry_view(request):
         message = _extract_validation_message(exc)
         return JsonResponse({"error": message}, status=400)
 
-    refreshed = build_weight_registry(user=user, reference_date=registry.date)
+    refreshed = build_weight_registry(
+        user=user,
+        reference_date=registry.date,
+        session_token=session_token,
+    )
     payload_response = None
     if refreshed:
         payload_response = serialize_weight_registry(refreshed)

@@ -4,6 +4,7 @@
 - Asume que hay varias sesiones de Codex trabajando en paralelo; antes de editar revisa `git status` y los diffs relevantes para entender el contexto vigente.
 - Evita sobrescribir o revertir cambios ajenos: si detectas modificaciones recientes en las mismas rutas, integra tu trabajo de forma incremental (usa `git add -p` o actualiza bloques concretos en lugar de reescribir archivos completos).
 - Deja trazabilidad breve en `plan.md` o en el mensaje final cuando tomes decisiones que afecten a otras áreas, así los siguientes agentes comprenden el estado del trabajo.
+- Ante tareas concretas que no pidan refactor explícito, evalúa si puedes introducir refactors incrementales alineados con este manual (renombrar métodos, extraer lógica, separar archivos, añadir tests, etc.) sin desviar el objetivo principal.
 - Tras cada guardado valida otra vez con `git status` que solo se incluyen tus cambios y sincroniza con el repositorio remoto cuando aplique antes de iniciar nuevas tareas.
 - Si surge un conflicto inevitable, pausa y comunica la situación en el canal indicado por la coordinación (o en el resumen final) para que otro agente pueda resolverlo sin perder avances.
 

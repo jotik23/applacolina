@@ -28,7 +28,7 @@
     data-calendar-create-url="{% url 'personal:calendar-create' %}"
     data-task-highlight-id="{{ task_definition_highlight_id|default:'' }}"
   >
-    {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" %}
+    {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" current_namespace=request.resolver_match.namespace current_app=request.resolver_match.app_name namespaces=request.resolver_match.namespaces %}
       <header class="sticky top-0 z-40 border-b border-white/10 bg-gradient-to-r from-slate-950 via-indigo-900 to-sky-800 text-white shadow-lg shadow-slate-900/40 backdrop-blur">
         <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <div class="flex h-16 items-center justify-between gap-4">
@@ -54,7 +54,8 @@
               <div class="hidden items-center gap-2 lg:flex" aria-label="Accesos rápidos">
                 <a
                   href="{% url 'task_manager:index' %}"
-                  class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'task_manager' or current_app == 'task_manager' or 'task_manager' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
+                  {% if current_namespace == 'task_manager' or current_app == 'task_manager' or 'task_manager' in namespaces %}aria-current="page"{% endif %}
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path
@@ -65,23 +66,23 @@
                   </svg>
                   <span>Gestión de tareas</span>
                 </a>
-                <span
-                  role="button"
-                  aria-disabled="true"
-                  class="inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/50 opacity-60"
+                <a
+                  href="{% url 'production:index' %}"
+                  class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
+                  {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}aria-current="page"{% endif %}
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
                   </svg>
                   <span>Producción</span>
-                </span>
+                </a>
                 <div
                   class="relative inline-flex"
                   data-calendar-menu
                 >
                   <button
                     type="button"
-                    class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                    class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'personal' or current_app == 'personal' or 'personal' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
                     data-calendar-menu-trigger
                     aria-haspopup="true"
                     aria-expanded="false"
@@ -155,7 +156,7 @@
                   href="{% url 'admin:index' %}"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'personal' or current_app == 'personal' or 'personal' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
                 >
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path
@@ -438,8 +439,9 @@
               <div class="mt-2 grid gap-2 text-sm font-semibold text-slate-700">
                 <a
                   href="{% url 'task_manager:index' %}"
-                  class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                  class="inline-flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 {% if current_namespace == 'task_manager' or current_app == 'task_manager' or 'task_manager' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
                   data-mobile-nav-close
+                  {% if current_namespace == 'task_manager' or current_app == 'task_manager' or 'task_manager' in namespaces %}aria-current="page"{% endif %}
                 >
                   Tareas
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -450,16 +452,17 @@
                     />
                   </svg>
                 </a>
-                <span
-                  role="button"
-                  aria-disabled="true"
-                  class="inline-flex cursor-not-allowed items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-slate-400 opacity-60"
+                <a
+                  href="{% url 'production:index' %}"
+                  class="inline-flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                  data-mobile-nav-close
+                  {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}aria-current="page"{% endif %}
                 >
                   Producción
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
                   </svg>
-                </span>
+                </a>
                 <a
                   href="{% url 'admin:index' %}"
                   target="_blank"
@@ -508,7 +511,12 @@
           <div class="border-t border-slate-100 px-4 py-4">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Accesos rápidos</p>
             <div class="mt-3 grid gap-2 text-sm">
-              <a href="{% url 'task_manager:index' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+              <a
+                href="{% url 'task_manager:index' %}"
+                class="flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand {% if current_namespace == 'task_manager' or current_app == 'task_manager' or 'task_manager' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                data-mobile-nav-close
+                {% if current_namespace == 'task_manager' or current_app == 'task_manager' or 'task_manager' in namespaces %}aria-current="page"{% endif %}
+              >
                 <span>Gestor de tareas</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path
@@ -518,13 +526,23 @@
                   />
                 </svg>
               </a>
-              <span role="button" aria-disabled="true" class="flex cursor-not-allowed items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-slate-400 opacity-60">
+              <a
+                href="{% url 'production:index' %}"
+                class="flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                data-mobile-nav-close
+                {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}aria-current="page"{% endif %}
+              >
                 <span>Producción avícola</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path d="M4.22 3.22a.75.75 0 011.06 0l.97.97 1.28-1.28a.75.75 0 011.06 0l1.28 1.28 1.28-1.28a.75.75 0 011.06 0l1.28 1.28.97-.97a.75.75 0 011.06 1.06l-.97.97 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28 1.28 1.28a.75.75 0 010 1.06l-1.28 1.28.97.97a.75.75 0 11-1.06 1.06l-.97-.97-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-1.28 1.28a.75.75 0 01-1.06 0l-1.28-1.28-.97.97a.75.75 0 11-1.06-1.06l.97-.97-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-1.28-1.28a.75.75 0 010-1.06l1.28-1.28-.97-.97a.75.75 0 010-1.06z" />
                 </svg>
-              </span>
-              <a href="{% url 'personal:dashboard' %}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+              </a>
+              <a
+                href="{% url 'personal:dashboard' %}"
+                class="flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand {% if current_namespace == 'personal' or current_app == 'personal' or 'personal' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                data-mobile-nav-close
+                {% if current_namespace == 'personal' or current_app == 'personal' or 'personal' in namespaces %}aria-current="page"{% endif %}
+              >
                 <span>Calendarios</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path
@@ -534,7 +552,13 @@
                   />
                 </svg>
               </a>
-              <a href="{% url 'admin:index' %}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand" data-mobile-nav-close>
+              <a
+                href="{% url 'admin:index' %}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand text-slate-700"
+                data-mobile-nav-close
+              >
                 <span>Administración</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path

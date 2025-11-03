@@ -111,6 +111,7 @@ class TaskDefinition(models.Model):
     class RecordFormat(models.TextChoices):
         NONE = "none", _("No requiere formato")
         PRODUCTION_RECORD = "production_record", _("Registro de producción")
+        BIRD_WEIGHT = "bird_weight", _("Pesaje aves")
 
     RECURRENCE_ARRAY_FIELDS: tuple[str, ...] = (
         "weekly_days",

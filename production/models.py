@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -202,6 +203,14 @@ class WeightSampleSession(models.Model):
         null=True,
         blank=True,
     )
+    task_assignment = models.ForeignKey(
+        "task_manager.TaskAssignment",
+        on_delete=models.SET_NULL,
+        related_name="weight_sessions",
+        verbose_name="Asignación de tarea",
+        null=True,
+        blank=True,
+    )
     unit = models.CharField("Unidad", max_length=16, default="g")
     tolerance_percent = models.PositiveSmallIntegerField(
         "Tolerancia uniformidad (%)",
@@ -276,7 +285,18 @@ class WeightSampleSession(models.Model):
         verbose_name = "Sesión de pesaje"
         verbose_name_plural = "Sesiones de pesaje"
         ordering = ("-date", "-updated_at")
-        unique_together = ("date", "room")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("room", "task_assignment"),
+                name="uniq_weight_session_assignment_room",
+                condition=Q(task_assignment__isnull=False),
+            ),
+            models.UniqueConstraint(
+                fields=("date", "room"),
+                name="uniq_weight_session_date_room_unassigned",
+                condition=Q(task_assignment__isnull=True),
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} · {self.room}"

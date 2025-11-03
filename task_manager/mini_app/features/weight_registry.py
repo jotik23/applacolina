@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Iterable, Mapping, Optional, Sequence
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db.models import Sum
+from django.db import connection, transaction
+from django.db.models import Q, Sum
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
@@ -21,6 +23,7 @@ from production.models import (
     WeightSample,
     WeightSampleSession,
 )
+from task_manager.models import TaskAssignment, TaskDefinition
 
 from .production_registry import resolve_assignment_for_date
 
@@ -86,6 +89,10 @@ class WeightSessionSummary:
 @dataclass(frozen=True)
 class WeightRegistry:
     date: date
+    task_assignment_id: int
+    task_definition_id: int
+    production_record_id: Optional[int]
+    context_token: str
     unit_label: str
     min_sample_size: int
     uniformity_tolerance_percent: int
@@ -195,6 +202,7 @@ def build_weight_registry(
     *,
     user: Optional[UserProfile],
     reference_date: Optional[date] = None,
+    session_token: Optional[str] = None,
 ) -> Optional[WeightRegistry]:
     if not user or not getattr(user, "is_authenticated", False):
         return None
@@ -205,6 +213,16 @@ def build_weight_registry(
     target_date = reference_date or UserProfile.colombia_today()
     assignment = resolve_assignment_for_date(user=user, target_date=target_date)
     if not assignment or not assignment.position:
+        return None
+
+    supports_assignment_fk = _weight_session_assignment_column_exists()
+
+    weight_assignment = _resolve_bird_weight_assignment(
+        user=user,
+        target_date=target_date,
+        position_id=assignment.position_id,
+    )
+    if not weight_assignment:
         return None
 
     rooms = _resolve_rooms_for_assignment(assignment)
@@ -234,24 +252,39 @@ def build_weight_registry(
             )
         )
 
-    sessions_queryset = (
-        WeightSampleSession.objects.select_related(
-            "room",
-            "room__chicken_house",
-            "room__chicken_house__farm",
-            "production_record",
-            "created_by",
-            "updated_by",
-        )
+    select_related_fields = [
+        "room",
+        "room__chicken_house",
+        "room__chicken_house__farm",
+        "production_record",
+        "created_by",
+        "updated_by",
+    ]
+    if supports_assignment_fk:
+        select_related_fields.append("task_assignment")
+
+    sessions_base_queryset = (
+        WeightSampleSession.objects.select_related(*select_related_fields)
         .prefetch_related("samples")
         .filter(date=target_date, room__in=rooms)
         .order_by("room__name")
     )
 
+    if supports_assignment_fk:
+        sessions = list(
+            sessions_base_queryset.filter(task_assignment_id=weight_assignment.pk)
+        )
+        if not sessions:
+            sessions = list(
+                sessions_base_queryset.filter(task_assignment__isnull=True)
+            )
+    else:
+        sessions = list(sessions_base_queryset)
+
     location_by_room = {location.room_id: location for location in locations}
     session_snapshots: list[WeightSessionSnapshot] = []
 
-    for session in sessions_queryset:
+    for session in sessions:
         location = location_by_room.get(session.room_id)
         if not location:
             continue
@@ -273,13 +306,23 @@ def build_weight_registry(
             )
         )
 
+    recent_select_related = ["room", "room__chicken_house"]
+    if supports_assignment_fk:
+        recent_select_related.append("task_assignment")
+
     recent_sessions_queryset = (
-        WeightSampleSession.objects.select_related("room", "room__chicken_house")
+        WeightSampleSession.objects.select_related(*recent_select_related)
         .prefetch_related("samples")
         .filter(room__in=rooms)
         .exclude(date__lt=target_date - timedelta(days=30))
-        .order_by("-submitted_at", "-updated_at")[:5]
     )
+    if supports_assignment_fk:
+        recent_sessions_queryset = recent_sessions_queryset.filter(
+            Q(task_assignment_id=weight_assignment.pk)
+            | Q(task_assignment__task_definition_id=weight_assignment.task_definition_id)
+            | Q(task_assignment__isnull=True)
+        )
+    recent_sessions_queryset = recent_sessions_queryset.order_by("-submitted_at", "-updated_at")[:5]
     recent_summaries: list[WeightSessionSummary] = []
     for session in recent_sessions_queryset:
         metrics = _compute_metrics(tuple(sample.grams for sample in session.samples.all()), session.tolerance_percent)
@@ -295,8 +338,19 @@ def build_weight_registry(
             )
         )
 
+    context_token = _generate_weight_registry_context_token(
+        user=user,
+        assignment=weight_assignment,
+        session_token=session_token,
+        target_date=target_date,
+    )
+
     return WeightRegistry(
         date=target_date,
+        task_assignment_id=weight_assignment.pk,
+        task_definition_id=weight_assignment.task_definition_id,
+        production_record_id=weight_assignment.production_record_id,
+        context_token=context_token,
         unit_label="g",
         min_sample_size=30,
         uniformity_tolerance_percent=10,
@@ -305,6 +359,59 @@ def build_weight_registry(
         recent_sessions=tuple(recent_summaries),
         resume_hint=_("Puedes pausar el registro."),
     )
+
+
+def _generate_weight_registry_context_token(
+    *,
+    user: Optional[UserProfile],
+    assignment: TaskAssignment,
+    session_token: Optional[str],
+    target_date: date,
+) -> str:
+    user_part = str(user.pk) if user and user.pk else "anonymous"
+    assignment_part = str(assignment.pk)
+    definition_part = str(assignment.task_definition_id)
+    date_part = target_date.isoformat()
+    session_part = session_token or "legacy-session"
+    raw = "|".join((user_part, assignment_part, definition_part, date_part, session_part))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _resolve_bird_weight_assignment(
+    *,
+    user: Optional[UserProfile],
+    target_date: date,
+    position_id: Optional[int],
+) -> Optional[TaskAssignment]:
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    assignments = (
+        TaskAssignment.objects.select_related(
+            "task_definition",
+            "task_definition__position",
+            "production_record",
+        )
+        .filter(
+            due_date=target_date,
+            task_definition__record_format=TaskDefinition.RecordFormat.BIRD_WEIGHT,
+        )
+        .order_by("task_definition__pk")
+    )
+
+    collaborator_assignments = assignments.filter(collaborator=user)
+    if position_id:
+        collaborator_assignments = collaborator_assignments.filter(
+            Q(task_definition__position_id=position_id) | Q(task_definition__position__isnull=True)
+        )
+    prioritized = collaborator_assignments.first()
+    if prioritized:
+        return prioritized
+
+    fallback = assignments.filter(collaborator__isnull=True)
+    if position_id:
+        fallback = fallback.filter(task_definition__position_id=position_id)
+    return fallback.first()
 
 
 def _resolve_production_record(*, room_id: int, target_date: date) -> Optional[ProductionRecord]:
@@ -330,6 +437,9 @@ def persist_weight_registry(
     location_map = registry.location_map()
     locations_by_identifier = registry.location_by_identifier()
     now = timezone.now()
+    assignment_id = registry.task_assignment_id
+    production_record_id = registry.production_record_id
+    supports_assignment_fk = _weight_session_assignment_column_exists()
 
     with transaction.atomic():
         for session_payload in sessions:
@@ -380,12 +490,19 @@ def persist_weight_registry(
                     continue
                 entries.append(_decimal_from_value(value))
 
-            session_obj = (
-                WeightSampleSession.objects.select_for_update()
-                .filter(date=registry.date, room_id=location.room_id)
-                .first()
+            base_queryset = WeightSampleSession.objects.select_for_update().filter(
+                date=registry.date,
+                room_id=location.room_id,
             )
-            if not entries and not session_obj:
+            session_obj: Optional[WeightSampleSession]
+            if supports_assignment_fk:
+                session_obj = base_queryset.filter(task_assignment_id=assignment_id).first()
+                if session_obj is None:
+                    session_obj = base_queryset.filter(task_assignment__isnull=True).first()
+            else:
+                session_obj = base_queryset.first()
+
+            if not entries and session_obj is None:
                 # Nothing to persist for this location.
                 continue
 
@@ -395,16 +512,28 @@ def persist_weight_registry(
                     room_id=location.room_id,
                     created_by=user,
                 )
+                if supports_assignment_fk:
+                    session_obj.task_assignment_id = assignment_id
+            else:
+                if supports_assignment_fk:
+                    if session_obj.task_assignment_id not in (None, assignment_id):
+                        raise ValidationError(_("Ya existe un pesaje registrado para otra tarea."))
+                    if session_obj.created_by_id is None:
+                        session_obj.created_by = user
+                    session_obj.task_assignment_id = assignment_id
             session_obj.unit = registry.unit_label
             session_obj.tolerance_percent = registry.uniformity_tolerance_percent
             session_obj.minimum_sample = registry.min_sample_size
             session_obj.birds = location.birds
             session_obj.updated_by = user
             session_obj.submitted_at = now
-            session_obj.production_record = _resolve_production_record(
-                room_id=location.room_id,
-                target_date=registry.date,
-            )
+            if production_record_id is not None:
+                session_obj.production_record_id = production_record_id
+            else:
+                session_obj.production_record = _resolve_production_record(
+                    room_id=location.room_id,
+                    target_date=registry.date,
+                )
 
             metrics = _compute_metrics(entries, session_obj.tolerance_percent or registry.uniformity_tolerance_percent)
             session_obj.sample_size = metrics.count
@@ -494,6 +623,10 @@ def serialize_weight_registry(registry: WeightRegistry) -> dict[str, object]:
     return {
         "date": registry.date.isoformat(),
         "date_label": date_format(registry.date, "DATE_FORMAT"),
+        "task_assignment_id": registry.task_assignment_id,
+        "task_definition_id": registry.task_definition_id,
+        "production_record_id": registry.production_record_id,
+        "context_token": registry.context_token,
         "title": _("Pesaje de aves"),
         "subtitle": "",
         "unit_label": registry.unit_label,
@@ -504,3 +637,22 @@ def serialize_weight_registry(registry: WeightRegistry) -> dict[str, object]:
         "recent_sessions": recent_payload,
         "resume_hint": registry.resume_hint,
     }
+
+
+def _weight_session_assignment_column_exists() -> bool:
+    """Check if the weight session table already includes the task assignment FK."""
+
+    table_name = WeightSampleSession._meta.db_table
+    try:
+        with connection.cursor() as cursor:
+            description = connection.introspection.get_table_description(cursor, table_name)
+    except (ProgrammingError, OperationalError):
+        return False
+
+    for column in description:
+        column_name = getattr(column, "name", None)
+        if column_name is None and isinstance(column, (list, tuple)):
+            column_name = column[0]
+        if column_name == "task_assignment_id":
+            return True
+    return False

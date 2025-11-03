@@ -5,38 +5,111 @@
 
 {% block content %}
   <section class="space-y-10">
-    <header class="flex flex-col gap-3 rounded-xl bg-white/60 p-6 shadow-sm ring-1 ring-slate-200/70">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 class="text-3xl font-semibold text-slate-900">Producción avícola</h1>
-          <p class="mt-1 max-w-2xl text-sm text-slate-600">
-            Panorama general de granjas, galpones y salones con los principales indicadores de producción.
-            Los valores mostrados son demostrativos mientras integramos los cálculos reales.
-          </p>
-        </div>
-        <div class="flex items-center gap-2 text-xs text-slate-500">
-          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+    <header class="rounded-2xl bg-white/70 p-8 shadow-sm ring-1 ring-slate-200/80">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div class="max-w-2xl space-y-2">
+          <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">
             <span class="size-2 rounded-full bg-emerald-400"></span>
-            Datos sincronizados
+            Panel maestro · producción avícola
           </span>
-          <span class="hidden sm:inline">Ultima actualización: {{ dashboard_generated_at|date:"d M Y" }}</span>
+          <h1 class="text-3xl font-semibold text-slate-900">Seguimiento integral de lotes</h1>
         </div>
+        <div class="text-xs text-slate-500">
+          <p>Generado: {{ dashboard_generated_at|date:"d M Y · H:i" }}</p>
+        </div>
+      </div>
+
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {% for metric in global_metrics %}
+          <article class="flex flex-col gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-5 shadow-sm transition hover:border-emerald-200 hover:shadow-md">
+            <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <span>{{ metric.label }}</span>
+              <span class="{% if metric.is_positive %}text-emerald-500{% else %}text-rose-500{% endif %}">
+                {% if metric.delta > 0 %}+{% endif %}{{ metric.delta }}%
+              </span>
+            </div>
+            <div class="text-3xl font-semibold text-slate-900">
+              {{ metric.value }}
+            </div>
+            <p class="text-xs leading-5 text-slate-500">{{ metric.description }}</p>
+          </article>
+        {% endfor %}
       </div>
     </header>
 
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <form class="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-slate-200/70">
+      <div class="flex flex-wrap items-end gap-4">
+        <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Filtro de granja
+          <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+            <option value="">Todas las granjas</option>
+            {% for farm in filters.farms %}
+              <option>{{ farm }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Galpón
+          <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+            <option value="">Todos</option>
+            {% for barn in filters.barns %}
+              <option>{{ barn }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Horizonte de análisis
+          <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+            {% for range in filters.ranges %}
+              <option>{{ range }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Raza
+          <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+            <option value="">Todas</option>
+            {% for breed in filters.breeds %}
+              <option>{{ breed }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Tamaño de huevo
+          <select class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+            <option value="">Todos</option>
+            {% for egg_size in filters.egg_sizes %}
+              <option>{{ egg_size }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div class="ml-auto flex gap-3">
+          <button type="button" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-700">Limpiar</button>
+          <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">
+            Aplicar filtros
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div class="space-y-8">
         {% for farm in farms %}
           <section class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
-            <div class="border-b border-slate-100 px-6 py-5">
-              <div class="flex flex-wrap items-start justify-between gap-4">
+            <header class="border-b border-slate-100 px-6 py-5">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <h2 class="text-xl font-semibold text-slate-900">{{ farm.name }}</h2>
+                  <h2 class="text-2xl font-semibold text-slate-900">{{ farm.name }}</h2>
                   <p class="mt-1 text-sm text-slate-500">
                     Código {{ farm.code }} · {{ farm.summary.location }}
                   </p>
                 </div>
-                <dl class="grid grid-cols-2 gap-4 text-sm text-slate-600 sm:grid-cols-4">
+                <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-3 lg:grid-cols-4">
                   <div>
                     <dt class="font-semibold text-slate-500">Aves iniciales</dt>
                     <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.total_birds|intcomma }}</dd>
@@ -47,65 +120,225 @@
                   </div>
                   <div>
                     <dt class="font-semibold text-slate-500">Postura promedio</dt>
-                    <dd class="mt-1 text-lg font-semibold text-emerald-600">{{ farm.summary.average_posture }}%</dd>
+                    <dd class="mt-1 text-lg font-semibold text-emerald-600">{{ farm.summary.posture_percent }}%</dd>
                   </div>
                   <div>
-                    <dt class="font-semibold text-slate-500">Mortalidad prom.</dt>
-                    <dd class="mt-1 text-lg font-semibold text-amber-600">{{ farm.summary.average_mortality_rate }}%</dd>
+                    <dt class="font-semibold text-slate-500">Mortalidad acumulada</dt>
+                    <dd class="mt-1 text-lg font-semibold text-amber-600">{{ farm.summary.mortality_percent }}%</dd>
+                  </div>
+                  <div>
+                    <dt class="font-semibold text-slate-500">Uniformidad media</dt>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.average_uniformity }}%</dd>
+                  </div>
+                  <div>
+                    <dt class="font-semibold text-slate-500">Huevos/día</dt>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.eggs_per_day|intcomma }}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-semibold text-slate-500">Consumo semanal</dt>
+                    <dd class="mt-1 text-lg font-semibold text-slate-900">{{ farm.summary.feed_weekly_kg|intcomma }} kg</dd>
                   </div>
                 </dl>
               </div>
-              <p class="mt-4 text-sm text-slate-500">{{ farm.summary.notes }}</p>
-            </div>
+            </header>
 
             <div class="space-y-6 p-6">
-              {% for barn in farm.barns %}
-                <article class="rounded-xl border border-slate-100 bg-slate-50/70 shadow-inner">
-                  <header class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
-                    <div>
-                      <h3 class="text-base font-semibold text-slate-800">{{ barn.name }}</h3>
-                      <p class="text-xs text-slate-500">
-                        Monitoreo de salones y desempeño en tiempo real.
-                      </p>
-                    </div>
-                  </header>
+              {% for lot in farm.lots %}
+                <article class="rounded-xl border border-slate-200/70 bg-slate-50/80 shadow-inner">
+                  <details class="group">
+                    <summary class="flex cursor-pointer flex-col gap-4 bg-white/90 px-5 py-4 transition hover:bg-emerald-50 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                          <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                            {{ lot.label }}
+                          </span>
+                          <span class="text-xs text-slate-500">{{ lot.breed }} · {{ lot.age_weeks }} semanas · Nacido {{ lot.birth_date|date:"d M Y" }}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">
+                          Distribuido en {{ lot.barn_count }} galpón{{ lot.barn_count|pluralize }}:
+                          <span class="font-semibold text-slate-500">{{ lot.barn_names_display }}</span>
+                        </p>
+                        <p class="text-xs text-slate-500">{{ lot.notes }}</p>
+                      </div>
+                      <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-6">
+                        <div>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Aves actuales</dt>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.current_birds|intcomma }}</dd>
+                        </div>
+                        <div>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Saldo de aves</dt>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.bird_balance|intcomma }}</dd>
+                        </div>
+                        <div>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Uniformidad</dt>
+                          <dd class="mt-1 text-base font-semibold text-emerald-600">{{ lot.uniformity }}%</dd>
+                        </div>
+                        <div>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Peso promedio</dt>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.avg_weight }} kg</dd>
+                        </div>
+                        <div>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo diario</dt>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.feed_today_grams }} g/ave</dd>
+                        </div>
+                        <div>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo semanal</dt>
+                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.weekly_feed_kg|intcomma }} kg</dd>
+                        </div>
+                      </dl>
+                    </summary>
 
-                  <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 text-left">
-                      <thead class="bg-slate-100/80 text-xs uppercase tracking-wide text-slate-500/90">
-                        <tr>
-                          <th scope="col" class="px-5 py-3 font-semibold">Salón</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Aves iniciales</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Aves actuales</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Raza</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Semanas</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Postura actual</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Mortalidad acum.</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Prom. mortalidad día</th>
-                          <th scope="col" class="px-5 py-3 font-semibold">Actualizado</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-slate-100 bg-white/80 text-sm text-slate-600">
-                        {% for salon in barn.salons %}
-                          <tr class="hover:bg-amber-50/60">
-                            <td class="px-5 py-3 font-semibold text-slate-800">{{ salon.label }}</td>
-                            <td class="px-5 py-3">{{ salon.initial_birds|intcomma }}</td>
-                            <td class="px-5 py-3">{{ salon.current_birds|intcomma }}</td>
-                            <td class="px-5 py-3">{{ salon.breed }}</td>
-                            <td class="px-5 py-3">{{ salon.age_weeks }}</td>
-                            <td class="px-5 py-3">
-                              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                                {{ salon.posture_percent }}%
-                              </span>
-                            </td>
-                            <td class="px-5 py-3">{{ salon.accumulated_mortality|intcomma }}</td>
-                            <td class="px-5 py-3">{{ salon.daily_mortality_avg }}</td>
-                            <td class="px-5 py-3 text-xs text-slate-500">{{ salon.last_update|date:"d M Y" }}</td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
+                    <div class="space-y-6 bg-white px-5 py-6 text-sm text-slate-600">
+                      <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                        <header class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <span>Distribución por galpón</span>
+                          <span class="text-[11px] text-slate-400">Detalle de ocupación y consumo</span>
+                        </header>
+                        <div class="overflow-x-auto">
+                          <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                            <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-slate-500/90">
+                              <tr>
+                                <th scope="col" class="px-4 py-3">Galpón</th>
+                                <th scope="col" class="px-4 py-3">Sector</th>
+                                <th scope="col" class="px-4 py-3">Aves iniciales</th>
+                                <th scope="col" class="px-4 py-3">Aves actuales</th>
+                                <th scope="col" class="px-4 py-3">Ocupación</th>
+                                <th scope="col" class="px-4 py-3">Consumo diario</th>
+                                <th scope="col" class="px-4 py-3">Consumo semanal</th>
+                                <th scope="col" class="px-4 py-3">Mort. semana</th>
+                                <th scope="col" class="px-4 py-3">Actualizado</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 bg-white/80 text-slate-600">
+                              {% for barn in lot.barns %}
+                                <tr class="hover:bg-emerald-50/60">
+                                  <td class="px-4 py-3 font-semibold text-slate-800">{{ barn.name }}</td>
+                                  <td class="px-4 py-3">{{ barn.segment }}</td>
+                                  <td class="px-4 py-3">{{ barn.initial_birds|intcomma }}</td>
+                                  <td class="px-4 py-3">{{ barn.current_birds|intcomma }}</td>
+                                  <td class="px-4 py-3">{{ barn.occupancy_rate }}%</td>
+                                  <td class="px-4 py-3">{{ barn.feed_today_grams }} g/ave</td>
+                                  <td class="px-4 py-3">{{ barn.weekly_feed_kg|intcomma }} kg</td>
+                                  <td class="px-4 py-3">{{ barn.mortality_week|intcomma }} aves ({{ barn.mortality_percentage }}%)</td>
+                                  <td class="px-4 py-3 text-xs text-slate-500">{{ barn.last_update|date:"d M Y" }}</td>
+                                </tr>
+                              {% empty %}
+                                <tr>
+                                  <td colspan="9" class="px-4 py-3 text-center text-xs text-slate-500">
+                                    Sin galpones asociados a este lote.
+                                  </td>
+                                </tr>
+                              {% endfor %}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+
+                      <div class="grid gap-6 lg:grid-cols-3">
+                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                          <header class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <span>Evolución de peso</span>
+                            <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600">Objetivo {{ lot.target_weight }} kg</span>
+                          </header>
+                          <ul class="space-y-3">
+                            {% for point in lot.weight_trend %}
+                              <li class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+                                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semana {{ point.week }}</span>
+                                <span class="text-sm font-semibold text-slate-800">
+                                  {{ point.actual_weight }} kg
+                                  <span class="text-xs text-slate-400">/ {{ point.projected_weight }} kg</span>
+                                </span>
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        </section>
+
+                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                          <header class="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Consumo y eficiencia
+                          </header>
+                          <ul class="space-y-3">
+                            {% for record in lot.consumption_history %}
+                              <li class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+                                <div class="flex flex-col">
+                                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semana {{ record.week }}</span>
+                                  <span class="text-[11px] text-slate-400">Gramos ave/día: {{ record.grams_per_bird }}</span>
+                                </div>
+                                <span class="text-sm font-semibold text-slate-800">{{ record.feed_kg|intcomma }} kg</span>
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        </section>
+
+                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                          <header class="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Mortalidad por periodo
+                          </header>
+                          <ul class="space-y-3">
+                            {% for record in lot.mortality %}
+                              <li class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+                                <div class="flex flex-col">
+                                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ record.label }}</span>
+                                  <span class="text-[11px] text-slate-400">{{ record.percentage }}%</span>
+                                </div>
+                                <span class="text-sm font-semibold text-slate-800">{{ record.quantity|intcomma }} aves</span>
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        </section>
+                      </div>
+
+                      <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
+                        <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                          <header class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <span>Comportamiento del tamaño de huevo</span>
+                            <span class="text-[11px] text-slate-400">Distribución semanal</span>
+                          </header>
+                          <div class="space-y-4">
+                            {% for egg in lot.egg_mix %}
+                              <div>
+                                <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  <span>{{ egg.size }}</span>
+                                  <span>{{ egg.percentage }}% · {{ egg.avg_weight }} g</span>
+                                </div>
+                                <div class="mt-2 h-2 w-full rounded-full bg-slate-200">
+                                  <div class="h-full rounded-full bg-amber-500" style="width: {{ egg.percentage }}%;"></div>
+                                </div>
+                              </div>
+                            {% endfor %}
+                          </div>
+                        </section>
+
+                        <section class="flex flex-col justify-between gap-4 rounded-xl border border-slate-200/80 p-5 shadow-sm">
+                          <div>
+                            <header class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Notas operativas
+                            </header>
+                            <p class="mt-2 text-sm text-slate-600">{{ lot.notes }}</p>
+                          </div>
+                          {% if lot.alerts %}
+                            <div>
+                              <header class="text-xs font-semibold uppercase tracking-wide text-amber-600">
+                                Alertas activas
+                              </header>
+                              <ul class="mt-3 space-y-2">
+                                {% for alert in lot.alerts %}
+                                  <li class="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                                    <span class="size-2 rounded-full bg-amber-400"></span>
+                                    {{ alert }}
+                                  </li>
+                                {% endfor %}
+                              </ul>
+                            </div>
+                          {% else %}
+                            <div class="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                              Sin alertas · cumplimiento dentro de parámetros.
+                            </div>
+                          {% endif %}
+                        </section>
+                      </div>
+                    </div>
+                  </details>
                 </article>
               {% endfor %}
             </div>
@@ -120,42 +353,37 @@
 
       <aside class="space-y-6">
         <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
-          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Próximos hitos</h3>
+          <header class="text-xs font-semibold uppercase tracking-wide text-slate-500">Próximos hitos operativos</header>
           <ul class="mt-4 space-y-4 text-sm text-slate-600">
-            <li class="flex flex-col">
-              <span class="font-semibold text-slate-800">Revisión biosanitaria</span>
-              <span class="text-xs text-slate-500">Granja San Lucas · 12 Nov 2025</span>
-            </li>
-            <li class="flex flex-col">
-              <span class="font-semibold text-slate-800">Renovación de lotes</span>
-              <span class="text-xs text-slate-500">Granja El Porvenir · 21 Dic 2025</span>
-            </li>
-            <li class="flex flex-col">
-              <span class="font-semibold text-slate-800">Instalación sensores ambientales</span>
-              <span class="text-xs text-slate-500">Galpón 2 · 03 Ene 2026</span>
-            </li>
+            {% for milestone in upcoming_milestones %}
+              <li class="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p class="font-semibold text-slate-800">{{ milestone.title }}</p>
+                <p class="text-xs text-slate-500">{{ milestone.detail }}</p>
+                <p class="text-xs font-semibold text-slate-400">Programado para {{ milestone.due_on|date:"d M Y" }}</p>
+              </li>
+            {% endfor %}
           </ul>
         </div>
 
         <div class="rounded-2xl bg-slate-900 text-slate-100 shadow-lg ring-1 ring-slate-900/40">
           <div class="border-b border-white/10 px-6 py-4">
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-200">Indicadores clave</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-200">Resumen acumulado</h3>
           </div>
           <dl class="grid gap-6 p-6 text-sm">
             <div class="space-y-1">
-              <dt class="text-xs uppercase tracking-wide text-slate-400">Postura objetivo</dt>
-              <dd class="text-2xl font-semibold text-white">92%</dd>
-              <dd class="text-xs text-slate-400">Meta global de noviembre</dd>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Aves iniciales registradas</dt>
+              <dd class="text-2xl font-semibold text-white">{{ total_initial_birds|intcomma }}</dd>
+              <dd class="text-xs text-slate-400">Incluye todos los lotes activos</dd>
             </div>
             <div class="space-y-1">
-              <dt class="text-xs uppercase tracking-wide text-slate-400">Mortalidad objetivo</dt>
-              <dd class="text-2xl font-semibold text-white">0.9%</dd>
-              <dd class="text-xs text-slate-400">Tendencia semanal</dd>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Consumo acumulado</dt>
+              <dd class="text-2xl font-semibold text-white">{{ total_feed_to_date|intcomma }} kg</dd>
+              <dd class="text-xs text-slate-400">Desde el inicio de cada lote</dd>
             </div>
             <div class="space-y-1">
-              <dt class="text-xs uppercase tracking-wide text-slate-400">Lotes en alerta</dt>
-              <dd class="text-2xl font-semibold text-white">3</dd>
-              <dd class="text-xs text-slate-400">Seguimiento priorizado</dd>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Lotes en monitoreo</dt>
+              <dd class="text-2xl font-semibold text-white">{{ farms|length }} granjas · {{ total_lots }} lotes</dd>
+              <dd class="text-xs text-slate-400">Aves activas: {{ total_current_birds|intcomma }} · Galpones vinculados: {{ total_barn_allocations }}</dd>
             </div>
           </dl>
         </div>

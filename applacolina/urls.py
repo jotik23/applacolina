@@ -17,7 +17,7 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 admin.site.site_header = "Administracion de La Colina"
@@ -30,7 +30,7 @@ urlpatterns = [
     path('portal/', include('personal.portal_urls', namespace='portal')),
     path('calendario/', include('personal.urls', namespace='personal')),
     path('task-manager/', include('task_manager.urls', namespace='task_manager')),
-    path('produccion-avicola/', include('production.urls', namespace='production')),
+    re_path(r'^producci[oó]n-avicola/', include('production.urls', namespace='production')),
     path('notificaciones/', include('notifications.urls', namespace='notifications')),
     path('api/', include('personal.api_urls', namespace='personal-api')),
 ]

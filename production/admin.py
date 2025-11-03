@@ -161,17 +161,24 @@ class WeightSampleSessionAdmin(admin.ModelAdmin):
     list_display = (
         "date",
         "room",
+        "task_assignment",
         "sample_size",
         "average_grams",
         "uniformity_percent",
         "submitted_at",
         "updated_by",
     )
-    list_filter = ("date", "room__chicken_house__farm", "room__chicken_house")
+    list_filter = (
+        "date",
+        "room__chicken_house__farm",
+        "room__chicken_house",
+        "task_assignment__task_definition",
+    )
     search_fields = (
         "room__name",
         "room__chicken_house__name",
         "room__chicken_house__farm__name",
+        "task_assignment__task_definition__name",
     )
     readonly_fields = (
         "created_at",
