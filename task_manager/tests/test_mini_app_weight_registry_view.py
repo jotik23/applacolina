@@ -121,6 +121,7 @@ class MiniAppWeightRegistryViewTests(TestCase):
         self.assertEqual(weight_payload["task_assignment_id"], assignment.pk)
         self.assertEqual(weight_payload["task_definition_id"], assignment.task_definition_id)
         self.assertIsNone(weight_payload["production_record_id"])
+        self.assertEqual(weight_payload["production_room_record_ids"], {})
         self.assertIn("context_token", weight_payload)
         self.assertTrue(weight_payload["context_token"])
         initial_context_token = weight_payload["context_token"]
@@ -140,6 +141,14 @@ class MiniAppWeightRegistryViewTests(TestCase):
         self._create_assignment(operator=user)
         assignment = self._create_weight_task(operator=user, due_date=today)
         self.client.force_login(user)
+
+        initial_response = self.client.get(reverse("task_manager:telegram-mini-app"))
+        self.assertEqual(initial_response.status_code, 200)
+        initial_payload = initial_response.context["telegram_mini_app"]
+        assert initial_payload is not None
+        initial_registry = initial_payload["weight_registry"]
+        assert initial_registry is not None
+        initial_context_token = initial_registry["context_token"]
 
         url = reverse("task_manager:mini-app-weight-registry")
         payload = {
@@ -174,6 +183,7 @@ class MiniAppWeightRegistryViewTests(TestCase):
         self.assertIn("context_token", registry_payload)
         self.assertTrue(registry_payload["context_token"])
         self.assertEqual(registry_payload["context_token"], initial_context_token)
+        self.assertIn("production_room_record_ids", registry_payload)
         self.assertEqual(
             registry_payload["submit_url"],
             reverse("task_manager:mini-app-weight-registry"),

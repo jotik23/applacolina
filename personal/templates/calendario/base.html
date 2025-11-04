@@ -27,6 +27,8 @@
     data-calendar-detail-template="{% url 'personal:calendar-detail' 0 %}"
     data-calendar-create-url="{% url 'personal:calendar-create' %}"
     data-task-highlight-id="{{ task_definition_highlight_id|default:'' }}"
+    data-app-timezone="{{ APP_TIME_ZONE }}"
+    data-app-timezone-offset="{{ APP_TIME_ZONE_OFFSET_MINUTES }}"
   >
     {% with resolver_match=request.resolver_match user_label=request.user.get_full_name|default:request.user.get_username|default:"Invitado" current_namespace=request.resolver_match.namespace current_app=request.resolver_match.app_name namespaces=request.resolver_match.namespaces %}
       <header class="sticky top-0 z-40 border-b border-white/10 bg-gradient-to-r from-slate-950 via-indigo-900 to-sky-800 text-white shadow-lg shadow-slate-900/40 backdrop-blur">
@@ -881,6 +883,7 @@
           var cache = null;
           var listeners = [];
           var body = typeof document !== 'undefined' ? document.body : null;
+          var appTimeZone = body ? body.dataset.appTimezone || 'America/Bogota' : 'America/Bogota';
           var listUrl = body ? body.dataset.calendarListUrl || null : null;
           var detailTemplate = body ? body.dataset.calendarDetailTemplate || null : null;
           if (!calendarDetailTemplate) {
@@ -889,8 +892,17 @@
           if (!calendarCreateUrl) {
             calendarCreateUrl = body ? body.dataset.calendarCreateUrl || null : null;
           }
-          var longFormatter = safeDateFormatter('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
-          var shortFormatter = safeDateFormatter('es-CO', { day: '2-digit', month: 'short' });
+          var longFormatter = safeDateFormatter('es-CO', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            timeZone: appTimeZone,
+          });
+          var shortFormatter = safeDateFormatter('es-CO', {
+            day: '2-digit',
+            month: 'short',
+            timeZone: appTimeZone,
+          });
           var statusMeta = {
             draft: { label: 'Borrador', classes: 'border border-slate-200 bg-slate-100 text-slate-600' },
             approved: { label: 'Aprobado', classes: 'border border-emerald-200 bg-emerald-100 text-emerald-700' },

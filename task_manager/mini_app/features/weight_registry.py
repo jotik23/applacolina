@@ -19,6 +19,7 @@ from personal.models import UserProfile
 from production.models import (
     BirdBatchRoomAllocation,
     ProductionRecord,
+    ProductionRoomRecord,
     Room,
     WeightSample,
     WeightSampleSession,
@@ -92,6 +93,7 @@ class WeightRegistry:
     task_assignment_id: int
     task_definition_id: int
     production_record_id: Optional[int]
+    room_record_ids: Mapping[int, int]
     context_token: str
     unit_label: str
     min_sample_size: int
@@ -228,6 +230,8 @@ def build_weight_registry(
     rooms = _resolve_rooms_for_assignment(assignment)
     locations: list[WeightLocation] = []
     birds_map = _birds_per_room(rooms)
+    room_ids = [room.pk for room in rooms]
+    room_record_map: dict[int, int] = {}
 
     for room in rooms:
         chicken_house = room.chicken_house
@@ -283,6 +287,13 @@ def build_weight_registry(
 
     location_by_room = {location.room_id: location for location in locations}
     session_snapshots: list[WeightSessionSnapshot] = []
+
+    if weight_assignment.production_record_id and room_ids:
+        room_records = ProductionRoomRecord.objects.filter(
+            production_record_id=weight_assignment.production_record_id,
+            room_id__in=room_ids,
+        ).values("room_id", "id")
+        room_record_map = {row["room_id"]: row["id"] for row in room_records}
 
     for session in sessions:
         location = location_by_room.get(session.room_id)
@@ -350,6 +361,7 @@ def build_weight_registry(
         task_assignment_id=weight_assignment.pk,
         task_definition_id=weight_assignment.task_definition_id,
         production_record_id=weight_assignment.production_record_id,
+        room_record_ids=room_record_map,
         context_token=context_token,
         unit_label="g",
         min_sample_size=30,
@@ -425,6 +437,15 @@ def _resolve_production_record(*, room_id: int, target_date: date) -> Optional[P
     )
 
 
+def _resolve_production_room_record(*, room_id: int, target_date: date) -> Optional[ProductionRoomRecord]:
+    return (
+        ProductionRoomRecord.objects.select_related("production_record")
+        .filter(production_record__date=target_date, room_id=room_id)
+        .order_by("pk")
+        .first()
+    )
+
+
 def persist_weight_registry(
     *,
     registry: WeightRegistry,
@@ -439,6 +460,7 @@ def persist_weight_registry(
     now = timezone.now()
     assignment_id = registry.task_assignment_id
     production_record_id = registry.production_record_id
+    room_record_map = dict(registry.room_record_ids or {})
     supports_assignment_fk = _weight_session_assignment_column_exists()
 
     with transaction.atomic():
@@ -527,13 +549,42 @@ def persist_weight_registry(
             session_obj.birds = location.birds
             session_obj.updated_by = user
             session_obj.submitted_at = now
-            if production_record_id is not None:
-                session_obj.production_record_id = production_record_id
-            else:
-                session_obj.production_record = _resolve_production_record(
+            target_production_record_id = production_record_id
+            target_room_record_id = room_record_map.get(location.room_id)
+            resolved_room_record = None
+
+            if target_room_record_id is None:
+                resolved_room_record = _resolve_production_room_record(
                     room_id=location.room_id,
                     target_date=registry.date,
                 )
+                if resolved_room_record:
+                    target_room_record_id = resolved_room_record.pk
+                    room_record_map[location.room_id] = target_room_record_id
+                    if target_production_record_id is None:
+                        target_production_record_id = resolved_room_record.production_record_id
+
+            if target_production_record_id is not None:
+                session_obj.production_record_id = target_production_record_id
+            else:
+                production_record = _resolve_production_record(
+                    room_id=location.room_id,
+                    target_date=registry.date,
+                )
+                if production_record:
+                    session_obj.production_record = production_record
+                    target_production_record_id = production_record.pk
+
+            if target_room_record_id is not None:
+                session_obj.production_room_record_id = target_room_record_id
+            elif target_production_record_id is not None and resolved_room_record is None:
+                fallback_room_record = ProductionRoomRecord.objects.filter(
+                    production_record_id=target_production_record_id,
+                    room_id=location.room_id,
+                ).order_by('pk').first()
+                if fallback_room_record:
+                    session_obj.production_room_record_id = fallback_room_record.pk
+                    room_record_map[location.room_id] = fallback_room_record.pk
 
             metrics = _compute_metrics(entries, session_obj.tolerance_percent or registry.uniformity_tolerance_percent)
             session_obj.sample_size = metrics.count
@@ -626,6 +677,7 @@ def serialize_weight_registry(registry: WeightRegistry) -> dict[str, object]:
         "task_assignment_id": registry.task_assignment_id,
         "task_definition_id": registry.task_definition_id,
         "production_record_id": registry.production_record_id,
+        "production_room_record_ids": dict(registry.room_record_ids),
         "context_token": registry.context_token,
         "title": _("Pesaje de aves"),
         "subtitle": "",

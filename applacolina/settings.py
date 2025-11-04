@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -125,6 +126,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'personal.context_processors.quick_create',
+                'applacolina.context_processors.timezone_settings',
             ],
         },
     },
@@ -202,7 +204,13 @@ AUTHENTICATION_BACKENDS = [
 
 LANGUAGE_CODE = 'es'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "America/Bogota")
+
+os.environ.setdefault("TZ", TIME_ZONE)
+try:  # Ensure POSIX environments apply the timezone to system-level utilities.
+    time.tzset()
+except AttributeError:
+    pass
 
 USE_I18N = True
 

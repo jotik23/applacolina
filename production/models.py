@@ -209,6 +209,87 @@ class ProductionRecord(models.Model):
     def __str__(self) -> str:
         return f"{self.date:%Y-%m-%d} · {self.production} · {self.bird_batch}"
 
+    def recompute_totals_from_rooms(self, *, save: bool = True) -> "ProductionRecord":
+        """Refresh aggregate fields using the related room records."""
+        aggregates = self.room_records.aggregate(
+            total_production=Sum("production"),
+            total_consumption=Sum("consumption"),
+            total_mortality=Sum("mortality"),
+            total_discard=Sum("discard"),
+        )
+
+        self.production = aggregates.get("total_production") or Decimal("0")
+        self.consumption = aggregates.get("total_consumption") or Decimal("0")
+        self.mortality = int(aggregates.get("total_mortality") or 0)
+        self.discard = int(aggregates.get("total_discard") or 0)
+
+        if save:
+            update_fields = ("production", "consumption", "mortality", "discard", "updated_at")
+            self.save(update_fields=update_fields)
+        return self
+
+    @property
+    def room_count(self) -> int:
+        return self.room_records.count()
+
+    @property
+    def room_totals(self) -> dict[str, Decimal]:
+        aggregates = self.room_records.aggregate(
+            total_production=Sum("production"),
+            total_consumption=Sum("consumption"),
+            total_mortality=Sum("mortality"),
+            total_discard=Sum("discard"),
+        )
+        return {
+            "production": aggregates.get("total_production") or Decimal("0"),
+            "consumption": aggregates.get("total_consumption") or Decimal("0"),
+            "mortality": int(aggregates.get("total_mortality") or 0),
+            "discard": int(aggregates.get("total_discard") or 0),
+        }
+
+
+class ProductionRoomRecord(models.Model):
+    production_record = models.ForeignKey(
+        ProductionRecord,
+        on_delete=models.CASCADE,
+        related_name="room_records",
+        verbose_name="Registro de producción",
+    )
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name="production_records",
+        verbose_name="Salón",
+    )
+    production = models.DecimalField(
+        verbose_name="Producción",
+        max_digits=10,
+        decimal_places=2,
+    )
+    consumption = models.DecimalField(
+        verbose_name="Consumo",
+        max_digits=10,
+        decimal_places=2,
+    )
+    mortality = models.PositiveIntegerField(verbose_name="Mortalidad")
+    discard = models.PositiveIntegerField(verbose_name="Descarte")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Registro de producción por salón"
+        verbose_name_plural = "Registros de producción por salón"
+        ordering = ("room__chicken_house__name", "room__name")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("production_record", "room"),
+                name="uniq_room_production_record",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.production_record.date:%Y-%m-%d} · {self.room}"
+
 
 class WeightSampleSession(models.Model):
     """Daily weight capture for a specific room."""
@@ -225,6 +306,14 @@ class WeightSampleSession(models.Model):
         on_delete=models.SET_NULL,
         related_name="weight_sample_sessions",
         verbose_name="Registro de producción",
+        null=True,
+        blank=True,
+    )
+    production_room_record = models.ForeignKey(
+        'production.ProductionRoomRecord',
+        on_delete=models.SET_NULL,
+        related_name='weight_sample_sessions',
+        verbose_name='Registro de producción por salón',
         null=True,
         blank=True,
     )

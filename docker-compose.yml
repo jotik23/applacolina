@@ -13,6 +13,9 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      TZ: America/Bogota
+      DJANGO_TIME_ZONE: America/Bogota
     depends_on:
       db:
         condition: service_healthy
@@ -26,6 +29,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-applacolina}
       POSTGRES_USER: ${POSTGRES_USER:-applacolina}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-applacolina}
+      TZ: America/Bogota
     ports:
       - "5432:5432"
     volumes:

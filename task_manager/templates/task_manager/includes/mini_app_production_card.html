@@ -55,81 +55,122 @@
                                     <h4 class="text-sm font-semibold text-slate-900">{{ lot.label }}</h4>
                                     <p class="text-xs text-slate-500">
                                       {% if lot.chicken_house %}{{ lot.chicken_house }}{% endif %}
-                                      {% if lot.rooms %} · Salones: {{ lot.rooms|join:", " }}{% endif %}
+                                      {% if lot.room_labels %} · Salones: {{ lot.room_labels|join:", " }}{% endif %}
                                       · {{ lot.birds|intcomma }} aves
                                     </p>
                                   </div>
+                                  <div class="text-xs text-slate-500 sm:text-right" data-production-lot-summary>
+                                    <p>
+                                      Producción: <span class="font-semibold text-slate-900" data-production-total-label="production">{{ lot.record.production|default:"0" }}</span> cartones
+                                    </p>
+                                    <p>
+                                      Consumo: <span class="font-semibold text-slate-900" data-production-total-label="consumption">{{ lot.record.consumption|default:"0" }}</span> kg
+                                    </p>
+                                    <p>
+                                      Mortalidad: <span class="font-semibold text-slate-900" data-production-total-label="mortality">{{ lot.record.mortality|default:"0" }}</span> aves · Descarte: <span class="font-semibold text-slate-900" data-production-total-label="discard">{{ lot.record.discard|default:"0" }}</span>
+                                    </p>
+                                  </div>
                                 </header>
-                                <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                                  <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-                                    <span class="text-xs text-slate-500">Producción total (cartones)</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      inputmode="decimal"
+                                <div class="mt-4 space-y-3" data-production-room-list>
+                                  {% for room in lot.rooms %}
+                                    <article
+                                      class="rounded-xl border border-slate-200 bg-white/90 p-3 shadow-inner shadow-slate-100/60"
+                                      data-production-room
+                                      data-room-id="{{ room.id }}"
+                                      data-room-label="{{ room.label }}"
+                                      data-room-birds="{{ room.birds }}"
+                                    >
+                                      <header class="flex items-start justify-between gap-2">
+                                        <div>
+                                          <p class="text-sm font-semibold text-slate-900">{{ room.label }}</p>
+                                          <p class="text-xs text-slate-500">{{ room.birds|intcomma }} aves asignadas</p>
+                                        </div>
+                                      </header>
+                                      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                                        <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                                          <span class="text-[11px] uppercase tracking-wide text-slate-400">
+                                            Producción (cartones)
+                                            <span class="text-rose-500" aria-hidden="true">*</span>
+                                            <span class="sr-only"> (requerido)</span>
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            inputmode="numeric"
+                                      pattern="[0-9]*"
                                       class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
-                                      data-production-field="production"
-                                      value="{{ lot.record.production|default:'' }}"
+                                      data-production-room-field="production"
+                                      value="{{ room.production|default:'' }}"
                                     />
                                   </label>
-                                  <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-                                    <span class="text-xs text-slate-500">Consumo balanceado (kg)</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      inputmode="decimal"
-                                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
-                                      data-production-field="consumption"
-                                      value="{{ lot.record.consumption|default:'' }}"
-                                    />
-                                  </label>
-                                  <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-                                    <span class="text-xs text-slate-500">Mortalidad (aves)</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
+                                        <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                                          <span class="text-[11px] uppercase tracking-wide text-slate-400">
+                                            Consumo (kg)
+                                            <span class="text-rose-500" aria-hidden="true">*</span>
+                                            <span class="sr-only"> (requerido)</span>
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
                                       inputmode="numeric"
+                                      pattern="[0-9]*"
                                       class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
-                                      data-production-field="mortality"
-                                      value="{{ lot.record.mortality|default:'' }}"
+                                      data-production-room-field="consumption"
+                                      value="{{ room.consumption|default:'' }}"
                                     />
                                   </label>
+                                        <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                                          <span class="text-[11px] uppercase tracking-wide text-slate-400">Mortalidad (aves)</span>
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            inputmode="numeric"
+                                            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
+                                            data-production-room-field="mortality"
+                                            value="{{ room.mortality|default:'' }}"
+                                          />
+                                        </label>
+                                        <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                                          <span class="text-[11px] uppercase tracking-wide text-slate-400">Descarte (aves)</span>
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            inputmode="numeric"
+                                            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
+                                            data-production-room-field="discard"
+                                            value="{{ room.discard|default:'' }}"
+                                          />
+                                        </label>
+                                      </div>
+                                    </article>
+                                  {% endfor %}
+                                </div>
+                                <div class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-center">
                                   <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-                                    <span class="text-xs text-slate-500">Descarte (aves)</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      inputmode="numeric"
-                                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
-                                      data-production-field="discard"
-                                      value="{{ lot.record.discard|default:'' }}"
-                                    />
-                                  </label>
-                                  <label class="flex flex-col gap-1 text-xs font-semibold text-slate-600 sm:col-span-2">
-                                    <span class="text-xs text-slate-500">Peso promedio del huevo (g)</span>
+                                    <span class="text-[11px] uppercase tracking-wide text-slate-400">Peso promedio del huevo (g)</span>
                                     <input
                                       type="number"
                                       step="0.1"
                                       min="0"
                                       inputmode="decimal"
                                       class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 {{ field_focus }}"
-                                      data-production-field="average_egg_weight"
+                                      data-production-average
                                       value="{{ lot.record.average_egg_weight|default:'' }}"
                                     />
                                   </label>
+                                  <p class="text-xs text-slate-500" data-production-last>
+                                    {% if lot.record %}
+                                      Última actualización: <span data-production-last-label>{{ lot.record.last_updated_label }}</span>
+                                      {% if lot.record.last_actor %} · <span data-production-last-user>{{ lot.record.last_actor }}</span>{% endif %}
+                                    {% else %}
+                                      Sin registros previos para este lote.
+                                    {% endif %}
+                                  </p>
                                 </div>
-                                <p class="mt-3 text-xs text-slate-500" data-production-last>
-                                  {% if lot.record %}
-                                    Última actualización: <span data-production-last-label>{{ lot.record.last_updated_label }}</span>
-                                    {% if lot.record.last_actor %} · <span data-production-last-user>{{ lot.record.last_actor }}</span>{% endif %}
-                                  {% else %}
-                                    Sin registros previos para este lote.
-                                  {% endif %}
-                                </p>
                               </section>
                             {% endfor %}
                           </div>
@@ -146,9 +187,10 @@
                             type="button"
                             class="{{ button_classes }}"
                             data-task-action="complete-production"
+                            data-production-submit-button
                           >
-                            <span aria-hidden="true">✅</span>
-                            Marcar como completada
+                            <span aria-hidden="true" data-production-button-icon>💾</span>
+                            <span data-production-button-label>Guardar</span>
                           </button>
                         </div>
                         <div

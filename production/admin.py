@@ -12,6 +12,7 @@ from .models import (
     ChickenHouse,
     Farm,
     ProductionRecord,
+    ProductionRoomRecord,
     Room,
     WeightSample,
     WeightSampleSession,
@@ -65,8 +66,9 @@ class BirdBatchRoomAllocationInline(admin.TabularInline):
 
 class ProductionRecordInline(admin.TabularInline):
     model = ProductionRecord
-    extra = 1
+    extra = 0
     fields = ("date", "production", "consumption", "mortality", "discard", "average_egg_weight")
+    readonly_fields = ("production", "consumption", "mortality", "discard")
     ordering = ("-date",)
 
     def save_model(self, request, obj, form, change):
@@ -74,6 +76,13 @@ class ProductionRecordInline(admin.TabularInline):
             obj.created_by = request.user
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+
+
+class ProductionRoomRecordInline(admin.TabularInline):
+    model = ProductionRoomRecord
+    extra = 0
+    fields = ("room", "production", "consumption", "mortality", "discard")
+    autocomplete_fields = ("room",)
 
 
 @admin.register(Farm)
@@ -147,13 +156,29 @@ class ProductionRecordAdmin(admin.ModelAdmin):
     list_filter = ("bird_batch", "date")
     search_fields = ("bird_batch__id", "bird_batch__farm__name", "date")
     ordering = ("-date",)
-    readonly_fields = ("created_by", "updated_by", "recorded_at", "updated_at")
+    readonly_fields = (
+        "production",
+        "consumption",
+        "mortality",
+        "discard",
+        "created_by",
+        "updated_by",
+        "recorded_at",
+        "updated_at",
+    )
+    inlines = (ProductionRoomRecordInline,)
 
     def save_model(self, request, obj, form, change):
         if not obj.created_by:
             obj.created_by = request.user
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        record: ProductionRecord = form.instance
+        record.refresh_from_db()
+        record.recompute_totals_from_rooms()
 
 
 @admin.register(Room)

@@ -173,7 +173,11 @@
       }
     </style>
   </head>
-  <body class="min-h-full bg-gradient-to-br from-sky-50 via-white to-amber-50 text-slate-900">
+  <body
+    class="min-h-full bg-gradient-to-br from-sky-50 via-white to-amber-50 text-slate-900"
+    data-app-timezone="{{ APP_TIME_ZONE }}"
+    data-app-timezone-offset="{{ APP_TIME_ZONE_OFFSET_MINUTES }}"
+  >
     <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 py-6">
       {% if mini_app_access_granted and telegram_mini_app %}
       <header class="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur">
@@ -4481,6 +4485,7 @@
         const telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
         const eggWorkflow = payload && payload.egg_workflow ? payload.egg_workflow : null;
         const productionReference = payload && payload.production_reference ? payload.production_reference : null;
+        const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
         const eggStageDefinitions = {};
         if (eggWorkflow && Array.isArray(eggWorkflow.stages)) {
           eggWorkflow.stages.forEach(function (stage) {
@@ -4505,6 +4510,8 @@
         const logoutForm = document.querySelector('[data-mini-app-logout-form]');
         const csrfTokenInput = logoutForm ? logoutForm.querySelector('input[name="csrfmiddlewaretoken"]') : null;
         const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
+        tmMiniApp.csrfToken = csrfToken;
+        tmMiniApp.telegram = telegram;
 
         const dialogRoot = document.querySelector('[data-mini-app-flow-dialog-root]');
         const confirmDialog = dialogRoot ? dialogRoot.querySelector('[data-mini-app-dialog="confirm"]') : null;
@@ -4523,48 +4530,10 @@
         let isProcessingMainAction = false;
         let activeDialog = null;
         let lastFocusedElement = null;
-        let productionLastFocusedElement = null;
 
-        const productionCard = document.querySelector('[data-production-card]');
         const weightCard = document.querySelector('[data-weight-card]');
         const weightSubmitUrl = weightCard ? weightCard.getAttribute('data-weight-submit-url') || '' : '';
         const weightDate = weightCard ? weightCard.getAttribute('data-weight-date') || '' : '';
-        const productionCompleteBanner = productionCard
-          ? productionCard.querySelector('[data-production-complete-banner]')
-          : null;
-        const productionTriggerButtons = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-trigger]'))
-          : [];
-        const productionSummaryCardList = productionCard
-          ? productionCard.querySelector('[data-production-summary-card-list]')
-          : null;
-        const productionPanels = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-panel]'))
-          : [];
-        const productionSaveButtons = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-save]'))
-          : [];
-        const consumptionToggleButtons = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-consumption-option]'))
-          : [];
-        const consumptionPanels = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-consumption-panel]'))
-          : [];
-        const consumptionInputs = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-consumption-input]'))
-          : [];
-        const productionModeButtons = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-mode-option]'))
-          : [];
-        const productionOutputPanels = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-output-panel]'))
-          : [];
-        const productionInputs = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-input]'))
-          : [];
-        const productionOutputInputs = productionCard
-          ? Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-output]'))
-          : [];
 
         const pendingClassificationCard = document.querySelector('[data-pending-classification-card]');
         const pendingClassificationStageButtons = pendingClassificationCard
@@ -4718,15 +4687,7 @@
         let highlightedStageId = null;
         let stageHighlightResetTimer = null;
 
-        const productionSavedState = {
-          consumption: false,
-          mortality: false,
-          discard: false,
-          'egg-weight': false,
-          production: false,
-        };
-        let activeProductionSection = null;
-
+        const appTimeZone = document.body.getAttribute('data-app-timezone') || 'America/Bogota';
         const hasIntl = typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function';
         const numberFormatter = hasIntl ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }) : null;
         const integerFormatter = hasIntl ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }) : null;
@@ -4738,28 +4699,13 @@
           : null;
         const dateFormatter =
           typeof Intl !== 'undefined' && typeof Intl.DateTimeFormat === 'function'
-            ? new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: '2-digit', month: 'short' })
+            ? new Intl.DateTimeFormat('es-CO', {
+                weekday: 'short',
+                day: '2-digit',
+                month: 'short',
+                timeZone: appTimeZone,
+              })
             : null;
-        const BULTO_IN_KG = 40;
-        const PRODUCTION_FIELD_LABELS = {
-          production: 'Producción total',
-          consumption: 'Consumo balanceado',
-          mortality: 'Mortalidad',
-          discard: 'Descarte',
-          average_egg_weight: 'Peso promedio del huevo',
-        };
-        let productionSaveInFlight = false;
-        const productionState = {
-          unit: 'kg',
-          consumptionKg: '',
-          consumptionBultos: '',
-          mortality: '',
-          discard: '',
-          eggWeight: '',
-          barnOutputs: {},
-          roomOutputs: {},
-          mode: 'barn',
-        };
 
         function normalizeNumber(value) {
           if (value === null || value === undefined || value === '') {
@@ -4790,250 +4736,7 @@
           return fixed.replace(/\.?0+$/, '') + ' %';
         }
 
-        function resolveActiveHens() {
-          if (productionReference && Object.prototype.hasOwnProperty.call(productionReference, 'active_hens')) {
-            const parsedReference = normalizeNumber(productionReference.active_hens);
-            if (parsedReference !== null && parsedReference > 0) {
-              return parsedReference;
-            }
-          }
-          const attributeValue = productionCard ? productionCard.getAttribute('data-production-active-hens') : null;
-          const parsedAttribute = normalizeNumber(attributeValue);
-          if (parsedAttribute !== null && parsedAttribute > 0) {
-            return parsedAttribute;
-          }
-          return null;
-        }
 
-        function getProductionLots() {
-          if (!productionCard) {
-            return [];
-          }
-          return Array.prototype.slice.call(productionCard.querySelectorAll('[data-production-lot]'));
-        }
-
-        function collectProductionEntry(lotNode) {
-          if (!lotNode) {
-            return null;
-          }
-          const batchId = lotNode.getAttribute('data-batch-id');
-          if (!batchId) {
-            showTaskFeedback(productionCard, 'No se pudo identificar el lote para registrar.', 'error');
-            return null;
-          }
-          const entry = {};
-          const numericBatch = parseInt(batchId, 10);
-          entry.bird_batch = Number.isFinite(numericBatch) ? numericBatch : batchId;
-          const required = ['production', 'consumption', 'mortality', 'discard'];
-          const optional = ['average_egg_weight'];
-          const fields = required.concat(optional);
-          let hasError = false;
-          fields.forEach(function (field) {
-            const input = lotNode.querySelector('[data-production-field=\"' + field + '\"]');
-            if (!input) {
-              return;
-            }
-            input.classList.remove('border-rose-300');
-            const value = typeof input.value === 'string' ? input.value.trim() : '';
-            if (!value && required.indexOf(field) !== -1) {
-              const label = PRODUCTION_FIELD_LABELS[field] || 'este campo';
-              const lotLabelNode = lotNode.querySelector('h4');
-              const lotLabel = lotLabelNode ? lotLabelNode.textContent.trim() : '';
-              const message = lotLabel
-                ? 'Completa ' + label + ' para ' + lotLabel + '.'
-                : 'Completa ' + label + ' antes de guardar.';
-              showTaskFeedback(productionCard, message, 'error');
-              input.classList.add('border-rose-300');
-              if (typeof input.focus === 'function') {
-                input.focus();
-              }
-              hasError = true;
-              return;
-            }
-            if (value !== '') {
-              entry[field] = value;
-            }
-          });
-          if (hasError) {
-            return null;
-          }
-          return entry;
-        }
-
-        function updateProductionFromResponse(productionPayload) {
-          if (!productionCard || !productionPayload) {
-            return;
-          }
-          if (productionPayload.submit_url) {
-            productionCard.setAttribute('data-production-submit-url', productionPayload.submit_url);
-          }
-          if (productionPayload.date) {
-            productionCard.setAttribute('data-production-date', productionPayload.date);
-          }
-          const lotNodes = getProductionLots();
-          const lotMap = {};
-          lotNodes.forEach(function (node) {
-            const id = node.getAttribute('data-batch-id');
-            if (id) {
-              lotMap[id] = node;
-            }
-          });
-          const lots = Array.isArray(productionPayload.lots) ? productionPayload.lots : [];
-          lots.forEach(function (lot) {
-            if (!lot || typeof lot.id === 'undefined') {
-              return;
-            }
-            const node = lotMap[String(lot.id)];
-            if (!node) {
-              return;
-            }
-            const record = lot.record || null;
-            const fieldValues = record
-              ? {
-                  production: record.production || '',
-                  consumption: record.consumption || '',
-                  mortality:
-                    record.mortality === 0 || record.mortality ? String(record.mortality) : '',
-                  discard: record.discard === 0 || record.discard ? String(record.discard) : '',
-                  average_egg_weight: record.average_egg_weight || '',
-                }
-              : {
-                  production: '',
-                  consumption: '',
-                  mortality: '',
-                  discard: '',
-                  average_egg_weight: '',
-                };
-            Object.keys(fieldValues).forEach(function (field) {
-              const input = node.querySelector('[data-production-field=\"' + field + '\"]');
-              if (input) {
-                input.value = fieldValues[field];
-                input.classList.remove('border-rose-300');
-              }
-            });
-            const lastContainer = node.querySelector('[data-production-last]');
-            if (lastContainer) {
-              if (record && record.last_updated_label) {
-                let html =
-                  'Última actualización: <span data-production-last-label>' +
-                  record.last_updated_label +
-                  '</span>';
-                if (record.last_actor) {
-                  html += ' · <span data-production-last-user>' + record.last_actor + '</span>';
-                }
-                lastContainer.innerHTML = html;
-                lastContainer.classList.remove('text-rose-500');
-              } else {
-                lastContainer.textContent = 'Sin registros previos para este lote.';
-                lastContainer.classList.add('text-rose-500');
-              }
-            }
-          });
-        }
-
-        function applyProductionSuccessStyles(button) {
-          if (!button) {
-            return;
-          }
-          if (!button.dataset.originalLabel) {
-            button.dataset.originalLabel = button.textContent.trim();
-          }
-          button.classList.remove(
-            'border-rose-200',
-            'bg-rose-600',
-            'shadow-rose-200/70',
-            'hover:bg-rose-700',
-            'focus:ring-rose-300/60'
-          );
-          button.classList.add(
-            'border-transparent',
-            'bg-emerald-500',
-            'shadow-emerald-200/70',
-            'hover:bg-emerald-600',
-            'focus:ring-emerald-300/60'
-          );
-          button.innerHTML = '<span aria-hidden=\"true\">💾</span><span>Guardar cambios</span>';
-          button.dataset.originalLabel = 'Guardar cambios';
-          button.disabled = false;
-        }
-
-        async function handleProductionComplete(button, title) {
-          if (productionSaveInFlight) {
-            return;
-          }
-          if (!productionCard) {
-            return;
-          }
-          const submitUrl = productionCard.getAttribute('data-production-submit-url');
-          if (!submitUrl) {
-            showTaskFeedback(productionCard, 'No encontramos la ruta para guardar los registros.', 'error');
-            return;
-          }
-          const lotNodes = getProductionLots();
-          if (!lotNodes.length) {
-            showTaskFeedback(productionCard, 'No hay lotes activos para registrar.', 'error');
-            return;
-          }
-          const entries = [];
-          for (let index = 0; index < lotNodes.length; index += 1) {
-            const lotEntry = collectProductionEntry(lotNodes[index]);
-            if (!lotEntry) {
-              return;
-            }
-            entries.push(lotEntry);
-          }
-          const payload = {
-            date: productionCard.getAttribute('data-production-date') || null,
-            lots: entries,
-          };
-          productionSaveInFlight = true;
-          setButtonLoading(button, true, 'Guardando...');
-          try {
-            const response = await fetch(submitUrl, {
-              method: 'POST',
-              credentials: 'include',
-              headers: Object.assign(
-                { 'Content-Type': 'application/json' },
-                csrfToken ? { 'X-CSRFToken': csrfToken } : {}
-              ),
-              body: JSON.stringify(payload),
-            });
-            const result = await parseJsonResponse(response);
-            if (result.status === 401 || result.status === 403) {
-              redirectToLogin();
-              return;
-            }
-            if (!result.ok || (result.data && result.data.error)) {
-              const errorMessage =
-                (result.data && result.data.error) || 'No fue posible guardar los registros. Intenta de nuevo.';
-              showTaskFeedback(productionCard, errorMessage, 'error');
-              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
-                telegram.HapticFeedback.notificationOccurred('error');
-              }
-              return;
-            }
-            const data = result.data || {};
-            if (data.production) {
-              updateProductionFromResponse(data.production);
-            }
-            markProductionComplete();
-            applyProductionSuccessStyles(button);
-            showTaskFeedback(productionCard, 'Registros guardados correctamente.', 'success');
-            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
-              telegram.HapticFeedback.notificationOccurred('success');
-            }
-            sendTaskAction('complete-production', title || '', { section: 'production' });
-          } catch (error) {
-            console.warn('No se pudo guardar el registro de producción:', error);
-            showTaskFeedback(productionCard, 'No fue posible guardar los registros. Intenta de nuevo.', 'error');
-            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
-              telegram.HapticFeedback.notificationOccurred('error');
-            }
-          } finally {
-            productionSaveInFlight = false;
-            setButtonLoading(button, false);
-          }
-        }
 
         function formatDateLabel(value) {
           if (!value) {
@@ -5935,358 +5638,6 @@
             }
           }
         }
-
-        function getConsumptionInfo() {
-          const kg = normalizeNumber(productionState.consumptionKg);
-          const bultos = normalizeNumber(productionState.consumptionBultos);
-          if (kg !== null) {
-            const derivedBultos = kg / BULTO_IN_KG;
-            return {
-              primary: formatNumber(kg) + ' kg',
-              secondary: '≈ ' + formatNumber(derivedBultos) + ' bultos',
-            };
-          }
-          if (bultos !== null) {
-            const derivedKg = bultos * BULTO_IN_KG;
-            return {
-              primary: formatNumber(bultos) + ' bultos',
-              secondary: '≈ ' + formatNumber(derivedKg) + ' kg',
-            };
-          }
-          return { primary: '—', secondary: null };
-        }
-
-        function getProductionLines() {
-          let total = 0;
-          const details = [];
-          const detailEntries = [];
-
-          Object.keys(productionState.barnOutputs).forEach(function (label) {
-            const value = productionState.barnOutputs[label];
-            if (Number.isFinite(value)) {
-              total += value;
-              detailEntries.push({ label: label, value: value, scope: 'barn', unit: 'cartones' });
-              details.push(label + ': ' + formatNumber(value));
-            }
-          });
-
-          Object.keys(productionState.roomOutputs).forEach(function (label) {
-            const value = productionState.roomOutputs[label];
-            if (Number.isFinite(value)) {
-              total += value;
-              detailEntries.push({ label: label, value: value, scope: 'room', unit: 'cartones' });
-              details.push(label + ': ' + formatNumber(value));
-            }
-          });
-
-          return {
-            total: total,
-            totalLabel: total > 0 ? formatNumber(total) + ' huevos' : '—',
-            detail: details,
-            detailEntries: detailEntries,
-          };
-        }
-
-        function getProductionSummaryContext() {
-          const consumptionInfo = getConsumptionInfo();
-          const mortalityValue = normalizeNumber(productionState.mortality);
-          const discardValue = normalizeNumber(productionState.discard);
-          const productionInfo = getProductionLines();
-          const eggWeightValue = normalizeNumber(productionState.eggWeight);
-          const baseHens = resolveActiveHens();
-          let posturePercent = null;
-          if (baseHens !== null) {
-            let availableHens = baseHens;
-            if (mortalityValue !== null) {
-              availableHens -= mortalityValue;
-            }
-            if (discardValue !== null) {
-              availableHens -= discardValue;
-            }
-            if (availableHens > 0 && Number.isFinite(productionInfo.total) && productionInfo.total > 0) {
-              posturePercent = (productionInfo.total / availableHens) * 100;
-            }
-          }
-          return {
-            consumptionInfo: consumptionInfo,
-            mortalityValue: mortalityValue,
-            discardValue: discardValue,
-            productionInfo: productionInfo,
-            eggWeightValue: eggWeightValue,
-            baseHens: baseHens,
-            posturePercent: posturePercent,
-          };
-        }
-
-        function getProductionSummaryLines(context) {
-          const summaryContext = context || getProductionSummaryContext();
-          const lines = [];
-          const consumptionInfo = summaryContext.consumptionInfo;
-          lines.push('Consumo: ' + consumptionInfo.primary);
-          if (consumptionInfo.secondary) {
-            lines.push('Equivalencia: ' + consumptionInfo.secondary);
-          }
-          const mortalityValue = summaryContext.mortalityValue;
-          const discardValue = summaryContext.discardValue;
-          lines.push('Mortalidad: ' + (mortalityValue !== null ? formatNumber(mortalityValue) + ' aves' : '—'));
-          lines.push('Descarte: ' + (discardValue !== null ? formatNumber(discardValue) + ' aves' : '—'));
-
-          const productionInfo = summaryContext.productionInfo;
-          lines.push('Producción total: ' + productionInfo.totalLabel);
-          const eggWeightValue = summaryContext.eggWeightValue;
-          lines.push('Peso promedio huevo: ' + (eggWeightValue !== null ? formatNumber(eggWeightValue) + ' g' : '—'));
-          if (summaryContext.posturePercent !== null) {
-            lines.push('Postura: ' + formatPercentage(summaryContext.posturePercent));
-          } else {
-            lines.push('Postura: —');
-          }
-          if (productionInfo.detail.length) {
-            lines.push('Detalle: ' + productionInfo.detail.join(' · '));
-          }
-          return lines;
-        }
-
-        function updateProductionSummary() {
-          const summaryContext = getProductionSummaryContext();
-          const lines = getProductionSummaryLines(summaryContext);
-          renderList(productionSummaryCardList, lines);
-        }
-
-        function markProductionComplete() {
-          if (!productionCard) {
-            return;
-          }
-          if (productionCompleteBanner) {
-            productionCompleteBanner.classList.remove('hidden');
-          }
-          productionCard.classList.add('ring-2', 'ring-emerald-300', 'ring-offset-2', 'ring-offset-white');
-          productionCard.setAttribute('data-task-completed', 'true');
-        }
-
-        function updateTriggerStyles(activeSection) {
-          productionTriggerButtons.forEach(function (button) {
-            if (!button.dataset.baseClass) {
-              button.dataset.baseClass = button.className;
-            }
-            const base = button.dataset.baseClass;
-            const section = button.getAttribute('data-production-section') || 'consumption';
-            const isActive = activeSection && section === activeSection;
-            const isSaved = productionSavedState[section];
-
-            let classes = base;
-            if (isActive) {
-              classes += ' bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-200/80';
-            } else if (isSaved) {
-              classes += ' border-emerald-300 text-emerald-700 bg-emerald-50 shadow-sm shadow-emerald-100/60';
-            }
-            button.className = classes;
-          });
-        }
-
-        function showProductionPanel(section, options) {
-          activeProductionSection = section;
-          if (section === 'consumption') {
-            setActiveConsumptionUnit(productionState.unit || 'kg');
-          }
-          if (section === 'production') {
-            setProductionMode(productionState.mode || 'barn');
-          }
-          productionPanels.forEach(function (panel) {
-            const panelSection = panel.getAttribute('data-section');
-            panel.classList.toggle('hidden', panelSection !== section);
-          });
-          updateTriggerStyles(section);
-
-          if (!(options && options.focus)) {
-            return;
-          }
-
-          let target = null;
-          if (section === 'consumption') {
-            const unit = productionState.unit || 'kg';
-            target =
-              consumptionInputs.find(function (input) {
-                return input.getAttribute('data-unit') === unit;
-              }) || consumptionInputs[0];
-          } else if (section === 'mortality' || section === 'discard') {
-            target = productionInputs.find(function (input) {
-              return input.getAttribute('data-production-input') === section;
-            });
-          } else if (section === 'egg-weight') {
-            target = productionInputs.find(function (input) {
-              return input.getAttribute('data-production-input') === 'egg-weight';
-            });
-          } else if (section === 'production') {
-            const mode = productionState.mode || 'barn';
-            if (mode === 'barn') {
-              target = productionOutputInputs.find(function (input) {
-                return input.hasAttribute('data-barn');
-              });
-            } else {
-              target = productionOutputInputs.find(function (input) {
-                return input.hasAttribute('data-room');
-              });
-            }
-          }
-
-          if (target && typeof target.focus === 'function') {
-            setTimeout(function () {
-              target.focus();
-            }, 30);
-          }
-        }
-
-        function hideProductionPanels() {
-          activeProductionSection = null;
-          productionPanels.forEach(function (panel) {
-            panel.classList.add('hidden');
-          });
-          updateTriggerStyles(null);
-        }
-
-        function toggleProductionPanel(section) {
-          if (activeProductionSection === section) {
-            hideProductionPanels();
-          } else {
-            showProductionPanel(section, { focus: true });
-          }
-        }
-
-        function setActiveConsumptionUnit(unit) {
-          productionState.unit = unit;
-          consumptionToggleButtons.forEach(function (button) {
-            const buttonUnit = button.getAttribute('data-unit');
-            const isActive = buttonUnit === unit;
-            button.setAttribute('data-state', isActive ? 'active' : 'inactive');
-          });
-          consumptionPanels.forEach(function (panel) {
-            const panelUnit = panel.getAttribute('data-unit');
-            panel.classList.toggle('hidden', panelUnit !== unit);
-          });
-        }
-
-        function setProductionMode(mode) {
-          productionState.mode = mode;
-          productionModeButtons.forEach(function (button) {
-            const buttonMode = button.getAttribute('data-mode');
-            const isActive = buttonMode === mode;
-            button.setAttribute('data-state', isActive ? 'active' : 'inactive');
-          });
-          productionOutputPanels.forEach(function (panel) {
-            const panelMode = panel.getAttribute('data-mode');
-            panel.classList.toggle('hidden', panelMode !== mode);
-          });
-        }
-
-        if (productionCard) {
-          updateTriggerStyles(null);
-          setActiveConsumptionUnit(productionState.unit);
-          setProductionMode(productionState.mode);
-          updateProductionSummary();
-
-          productionTriggerButtons.forEach(function (button) {
-            button.addEventListener('click', function (event) {
-              const section = event.currentTarget.getAttribute('data-production-section') || 'consumption';
-              toggleProductionPanel(section);
-              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.selectionChanged) {
-                telegram.HapticFeedback.selectionChanged();
-              }
-            });
-          });
-
-          consumptionToggleButtons.forEach(function (button) {
-            button.addEventListener('click', function (event) {
-              const unit = event.currentTarget.getAttribute('data-unit') || 'kg';
-              setActiveConsumptionUnit(unit);
-              if (activeProductionSection === 'consumption') {
-                showProductionPanel('consumption', { focus: true });
-              }
-            });
-          });
-
-          productionModeButtons.forEach(function (button) {
-            button.addEventListener('click', function (event) {
-              const mode = event.currentTarget.getAttribute('data-mode') || 'barn';
-              setProductionMode(mode);
-              if (activeProductionSection === 'production') {
-                showProductionPanel('production', { focus: true });
-              }
-            });
-          });
-
-          productionSaveButtons.forEach(function (button) {
-            button.addEventListener('click', function () {
-              const section = button.getAttribute('data-section') || 'consumption';
-              if (section === 'consumption') {
-                const kgInput = consumptionInputs.find(function (input) {
-                  return input.getAttribute('data-unit') === 'kg';
-                });
-                const bultosInput = consumptionInputs.find(function (input) {
-                  return input.getAttribute('data-unit') === 'bultos';
-                });
-                productionState.consumptionKg = kgInput ? kgInput.value : '';
-                productionState.consumptionBultos = bultosInput ? bultosInput.value : '';
-              } else if (section === 'mortality' || section === 'discard') {
-                const field = productionInputs.find(function (input) {
-                  return input.getAttribute('data-production-input') === section;
-                });
-                productionState[section] = field ? field.value : '';
-              } else if (section === 'egg-weight') {
-                const field = productionInputs.find(function (input) {
-                  return input.getAttribute('data-production-input') === 'egg-weight';
-                });
-                productionState.eggWeight = field ? field.value : '';
-              } else if (section === 'production') {
-                productionState.barnOutputs = {};
-                productionState.roomOutputs = {};
-                productionOutputInputs.forEach(function (input) {
-                  const value = normalizeNumber(input.value);
-                  const barn = input.getAttribute('data-barn');
-                  const room = input.getAttribute('data-room');
-                  if (barn) {
-                    if (value === null) {
-                      delete productionState.barnOutputs[barn];
-                    } else {
-                      productionState.barnOutputs[barn] = value;
-                    }
-                  } else if (room) {
-                    if (value === null) {
-                      delete productionState.roomOutputs[room];
-                    } else {
-                      productionState.roomOutputs[room] = value;
-                    }
-                  }
-                });
-              }
-
-              productionSavedState[section] = true;
-              updateProductionSummary();
-              hideProductionPanels();
-
-              const summaryContextForLog = getProductionSummaryContext();
-              const summaryLinesForLog = getProductionSummaryLines(summaryContextForLog);
-
-              if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
-                telegram.HapticFeedback.notificationOccurred('success');
-              }
-              if (telegram && typeof telegram.sendData === 'function') {
-                try {
-                  telegram.sendData(
-                    JSON.stringify({
-                      action: 'simulate-production-save',
-                      section: section,
-                      summary: summaryLinesForLog,
-                    })
-                  );
-                } catch (error) {
-                  console.info('No se pudo enviar el resumen simulado a Telegram:', error);
-                }
-              } else {
-                console.info('Registro guardado:', section, summaryLinesForLog);
-              }
-          });
-        });
-      }
 
       if (weightCard) {
         const weightLocationList = weightCard.querySelector('[data-weight-location-list]');
@@ -8486,6 +7837,7 @@
             console.info('Accion seleccionada:', payload.action, payload.title, extra || '');
           }
         }
+        tmMiniApp.sendTaskAction = sendTaskAction;
 
         function showTaskFeedback(card, message, tone) {
           if (!card) {
@@ -8510,27 +7862,43 @@
             feedback.classList.add('hidden');
           }, 4500);
         }
+        tmMiniApp.showTaskFeedback = showTaskFeedback;
 
         function setButtonLoading(button, isLoading, loadingLabel) {
           if (!button) {
             return;
           }
           if (isLoading) {
+            if (!button.dataset.originalHtml) {
+              button.dataset.originalHtml = button.innerHTML;
+            }
             if (!button.dataset.originalLabel) {
               button.dataset.originalLabel = button.textContent.trim();
             }
             button.disabled = true;
             if (loadingLabel) {
-              button.textContent = loadingLabel;
+              button.innerHTML = '<span class="animate-pulse">' + loadingLabel + '</span>';
             }
             button.classList.add('opacity-70', 'pointer-events-none');
           } else {
-            const originalLabel = button.dataset.originalLabel || button.textContent.trim();
             button.disabled = false;
-            button.textContent = originalLabel;
+            if (button.dataset.originalHtml) {
+              button.innerHTML = button.dataset.originalHtml;
+            } else {
+              const originalLabel = button.dataset.originalLabel || button.textContent.trim();
+              button.textContent = originalLabel;
+            }
             button.classList.remove('opacity-70', 'pointer-events-none');
+            const productionRefresh =
+              window.tmMiniApp && typeof window.tmMiniApp.refreshProductionButtonState === 'function'
+                ? window.tmMiniApp.refreshProductionButtonState
+                : null;
+            if (productionRefresh && button.hasAttribute('data-production-submit-button')) {
+              productionRefresh();
+            }
           }
         }
+        tmMiniApp.setButtonLoading = setButtonLoading;
 
         function updateEvidenceSummary(card, evidenceCount, requiresEvidence) {
           if (!card) {
@@ -8592,6 +7960,7 @@
               return { ok: response.ok, status: response.status, data: data };
             });
         }
+        tmMiniApp.parseJsonResponse = parseJsonResponse;
 
         function handleTaskComplete(card, button, title) {
           if (!card) {
@@ -8833,7 +8202,13 @@
             let section = null;
             if (action === 'complete-production') {
               event.preventDefault();
-              handleProductionComplete(event.currentTarget, title);
+              const submitProduction =
+                window.tmMiniApp && typeof window.tmMiniApp.submitProduction === 'function'
+                  ? window.tmMiniApp.submitProduction
+                  : null;
+              if (submitProduction) {
+                submitProduction(event.currentTarget);
+              }
               return;
             }
             if (action === 'log-production') {
@@ -8864,6 +8239,7 @@
             window.location.reload();
           }
         }
+        tmMiniApp.redirectToLogin = redirectToLogin;
 
         function performLogout() {
           if (!logoutUrl) {
@@ -9122,6 +8498,7 @@
         }
       })();
     </script>
+    <script src="{% static 'task_manager/js/production_card.js' %}" defer></script>
     {% endif %}
   </body>
 </html>

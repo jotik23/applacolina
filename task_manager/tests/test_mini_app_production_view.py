@@ -23,6 +23,7 @@ from production.models import (
     ChickenHouse,
     Farm,
     ProductionRecord,
+    ProductionRoomRecord,
     Room,
 )
 
@@ -125,6 +126,12 @@ class MiniAppProductionViewTests(TestCase):
         self.assertEqual(lot_payload["id"], self.bird_batch.pk)
         self.assertEqual(lot_payload["birds"], 960)
         self.assertIsNone(lot_payload["record"])
+        self.assertEqual(lot_payload["room_labels"], [self.room.name])
+        self.assertEqual(len(lot_payload["rooms"]), 1)
+        room_payload = lot_payload["rooms"][0]
+        self.assertEqual(room_payload["id"], self.room.pk)
+        self.assertEqual(room_payload["birds"], 960)
+        self.assertIsNone(room_payload["production"])
 
     def test_production_card_hidden_without_permission(self):
         user = self._create_user(grant_permission=False)
@@ -154,11 +161,16 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "production": "152.5",
-                    "consumption": "480.2",
-                    "mortality": 3,
-                    "discard": 5,
                     "average_egg_weight": "10200",
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "152",
+                            "consumption": "480",
+                            "mortality": 3,
+                            "discard": 5,
+                        }
+                    ],
                 }
             ],
         }
@@ -170,11 +182,52 @@ class MiniAppProductionViewTests(TestCase):
         record = ProductionRecord.objects.get(bird_batch=self.bird_batch, date=today)
         self.assertEqual(record.created_by, user)
         self.assertEqual(record.updated_by, user)
-        self.assertAlmostEqual(float(record.production), 152.5)
-        self.assertAlmostEqual(float(record.consumption), 480.2)
+        self.assertEqual(record.production, 152)
+        self.assertEqual(record.consumption, 480)
         self.assertEqual(record.mortality, 3)
         self.assertEqual(record.discard, 5)
         self.assertAlmostEqual(float(record.average_egg_weight), 10200.00)
+        room_records = ProductionRoomRecord.objects.filter(production_record=record)
+        self.assertEqual(room_records.count(), 1)
+        room_record = room_records.first()
+        assert room_record is not None
+        self.assertEqual(room_record.room, self.room)
+        self.assertEqual(room_record.production, 152)
+        self.assertEqual(room_record.consumption, 480)
+        self.assertEqual(room_record.mortality, 3)
+        self.assertEqual(room_record.discard, 5)
+
+    def test_production_optional_fields_default_to_zero(self):
+        user = self._create_user(grant_permission=True)
+        self._create_assignment(operator=user)
+        self.client.force_login(user)
+
+        url = reverse("task_manager:mini-app-production-records")
+        today = timezone.localdate()
+        payload = {
+            "date": today.isoformat(),
+            "lots": [
+                {
+                    "bird_batch": self.bird_batch.pk,
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "200",
+                            "consumption": "500",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        response = self.client.post(url, payload, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        record = ProductionRecord.objects.get(bird_batch=self.bird_batch, date=today)
+        self.assertEqual(record.mortality, 0)
+        self.assertEqual(record.discard, 0)
+        room_record = ProductionRoomRecord.objects.get(production_record=record, room=self.room)
+        self.assertEqual(room_record.mortality, 0)
+        self.assertEqual(room_record.discard, 0)
 
     def test_production_record_update_preserves_created_by(self):
         user = self._create_user(grant_permission=True)
@@ -199,11 +252,16 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "production": "160",
-                    "consumption": "500",
-                    "mortality": 1,
-                    "discard": 6,
                     "average_egg_weight": "63.5",
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "160",
+                            "consumption": "500",
+                            "mortality": 1,
+                            "discard": 6,
+                        }
+                    ],
                 }
             ],
         }
@@ -212,9 +270,14 @@ class MiniAppProductionViewTests(TestCase):
         record.refresh_from_db()
         self.assertEqual(record.created_by, other_user)
         self.assertEqual(record.updated_by, user)
-        self.assertAlmostEqual(float(record.production), 160)
+        self.assertEqual(record.production, 160)
         self.assertEqual(record.mortality, 1)
         self.assertAlmostEqual(float(record.average_egg_weight), 63.5)
+        room_record = ProductionRoomRecord.objects.get(production_record=record, room=self.room)
+        self.assertEqual(room_record.production, 160)
+        self.assertEqual(room_record.consumption, 500)
+        self.assertEqual(room_record.mortality, 1)
+        self.assertEqual(room_record.discard, 6)
 
     def test_production_record_validation_error(self):
         user = self._create_user(grant_permission=True)
@@ -227,10 +290,15 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "production": "",
-                    "consumption": "500",
-                    "mortality": 0,
-                    "discard": 0,
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "",
+                            "consumption": "500",
+                            "mortality": 0,
+                            "discard": 0,
+                        }
+                    ],
                 }
             ],
         }
@@ -251,11 +319,16 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "production": "120",
-                    "consumption": "450",
-                    "mortality": 0,
-                    "discard": 0,
                     "average_egg_weight": "100000000000",  # 11 digits before decimal
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "120",
+                            "consumption": "450",
+                            "mortality": 0,
+                            "discard": 0,
+                        }
+                    ],
                 }
             ],
         }
@@ -275,10 +348,15 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "production": "120",
-                    "consumption": "450",
-                    "mortality": 1,
-                    "discard": 2,
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "120",
+                            "consumption": "450",
+                            "mortality": 1,
+                            "discard": 2,
+                        }
+                    ],
                 }
             ],
         }
