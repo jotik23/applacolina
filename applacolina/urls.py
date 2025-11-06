@@ -29,6 +29,7 @@ urlpatterns = [
     path('', RedirectView.as_view(pattern_name='task_manager:index', permanent=False)),
     path('portal/', include('personal.portal_urls', namespace='portal')),
     path('calendario/', include('personal.urls', namespace='personal')),
+    path('administracion/', include('administration.urls', namespace='administration')),
     path('task-manager/', include('task_manager.urls', namespace='task_manager')),
     re_path(r'^producci[oó]n-avicola/', include('production.urls', namespace='production')),
     path('notificaciones/', include('notifications.urls', namespace='notifications')),

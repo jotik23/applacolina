@@ -97,6 +97,7 @@ LOCAL_APPS = [
     'notifications.apps.NotificationsConfig',
     'personal.apps.PersonalConfig',
     'task_manager.apps.TaskManagerConfig',
+    'administration.apps.AdministrationConfig',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -78,6 +78,20 @@
                   </svg>
                   <span>Producción</span>
                 </a>
+                <a
+                  href="{% url 'administration:index' %}"
+                  class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'administration' or current_app == 'administration' or 'administration' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
+                  {% if current_namespace == 'administration' or current_app == 'administration' or 'administration' in namespaces %}aria-current="page"{% endif %}
+                >
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M10.82 2.577a.75.75 0 00-1.64 0l-.247 1.357a.38.38 0 01-.278.3l-1.31.31a.75.75 0 00-.332 1.262l1.003.93a.38.38 0 01.11.36l-.225 1.36a.75.75 0 001.13.787l1.16-.66a.38.38 0 01.37 0l1.16.66a.75.75 0 001.13-.788l-.224-1.36a.38.38 0 01.11-.36l1.003-.93a.75.75 0 00-.332-1.262l-1.31-.31a.38.38 0 01-.278-.3l-.247-1.357zM4.5 9.5a.75.75 0 00-.75.75v4c0 1.243 1.007 2.25 2.25 2.25h8a2.25 2.25 0 002.25-2.25v-4a.75.75 0 00-1.5 0v4c0 .414-.336.75-.75.75h-8a.75.75 0 01-.75-.75v-4A.75.75 0 004.5 9.5z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Administración</span>
+                </a>
                 <div
                   class="relative inline-flex"
                   data-calendar-menu
@@ -466,13 +480,28 @@
                   </svg>
                 </a>
                 <a
+                  href="{% url 'administration:index' %}"
+                  class="inline-flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 {% if current_namespace == 'administration' or current_app == 'administration' or 'administration' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                  data-mobile-nav-close
+                  {% if current_namespace == 'administration' or current_app == 'administration' or 'administration' in namespaces %}aria-current="page"{% endif %}
+                >
+                  Administración
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fill-rule="evenodd"
+                      d="M10.82 2.577a.75.75 0 00-1.64 0l-.247 1.357a.38.38 0 01-.278.3l-1.31.31a.75.75 0 00-.332 1.262l1.003.93a.38.38 0 01.11.36l-.225 1.36a.75.75 0 001.13.787l1.16-.66a.38.38 0 01.37 0l1.16.66a.75.75 0 001.13-.788l-.224-1.36a.38.38 0 01.11-.36l1.003-.93a.75.75 0 00-.332-1.262l-1.31-.31a.38.38 0 01-.278-.3l-.247-1.357zM4.5 9.5a.75.75 0 00-.75.75v4c0 1.243 1.007 2.25 2.25 2.25h8a2.25 2.25 0 002.25-2.25v-4a.75.75 0 00-1.5 0v4c0 .414-.336.75-.75.75h-8a.75.75 0 01-.75-.75v-4A.75.75 0 004.5 9.5z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </a>
+                <a
                   href="{% url 'admin:index' %}"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
                   data-mobile-nav-close
                 >
-                  Administración
+                  Configuración
                   <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path
                       fill-rule="evenodd"
@@ -540,6 +569,21 @@
                 </svg>
               </a>
               <a
+                href="{% url 'administration:index' %}"
+                class="flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand {% if current_namespace == 'administration' or current_app == 'administration' or 'administration' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                data-mobile-nav-close
+                {% if current_namespace == 'administration' or current_app == 'administration' or 'administration' in namespaces %}aria-current="page"{% endif %}
+              >
+                <span>Administración</span>
+                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path
+                    fill-rule="evenodd"
+                    d="M10.82 2.577a.75.75 0 00-1.64 0l-.247 1.357a.38.38 0 01-.278.3l-1.31.31a.75.75 0 00-.332 1.262l1.003.93a.38.38 0 01.11.36l-.225 1.36a.75.75 0 001.13.787l1.16-.66a.38.38 0 01.37 0l1.16.66a.75.75 0 001.13-.788l-.224-1.36a.38.38 0 01.11-.36l1.003-.93a.75.75 0 00-.332-1.262l-1.31-.31a.38.38 0 01-.278-.3l-.247-1.357zM4.5 9.5a.75.75 0 00-.75.75v4c0 1.243 1.007 2.25 2.25 2.25h8a2.25 2.25 0 002.25-2.25v-4a.75.75 0 00-1.5 0v4c0 .414-.336.75-.75.75h-8a.75.75 0 01-.75-.75v-4A.75.75 0 004.5 9.5z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </a>
+              <a
                 href="{% url 'personal:dashboard' %}"
                 class="flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand {% if current_namespace == 'personal' or current_app == 'personal' or 'personal' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
                 data-mobile-nav-close
@@ -561,7 +605,7 @@
                 class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition hover:border-brand hover:text-brand text-slate-700"
                 data-mobile-nav-close
               >
-                <span>Administración</span>
+                <span>Configuración</span>
                 <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path
                     fill-rule="evenodd"
