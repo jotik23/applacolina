@@ -26,6 +26,15 @@ class Supplier(TimeStampedModel):
     contact_phone = models.CharField("Teléfono", max_length=50, blank=True)
     address = models.CharField("Dirección", max_length=255, blank=True)
     city = models.CharField("Ciudad", max_length=120, blank=True)
+    account_holder_id = models.CharField("Identificación titular", max_length=50, blank=True)
+    account_holder_name = models.CharField("Nombre titular", max_length=255, blank=True)
+    ACCOUNT_TYPE_CHOICES = (
+        ("ahorros", "Ahorros"),
+        ("corriente", "Corriente"),
+    )
+    account_type = models.CharField("Tipo de cuenta", max_length=20, choices=ACCOUNT_TYPE_CHOICES, blank=True)
+    account_number = models.CharField("Número de cuenta", max_length=60, blank=True)
+    bank_name = models.CharField("Banco", max_length=120, blank=True)
 
     class Meta:
         verbose_name = "Tercero"
@@ -291,11 +300,21 @@ class PurchaseRequest(TimeStampedModel):
             location_bits.append(self.scope_farm.name)
         if self.scope_chicken_house:
             location_bits.append(self.scope_chicken_house.name)
-        if self.scope_batch_code:
-            location_bits.append(f"Lote {self.scope_batch_code}")
+        batch_label = self._scope_batch_label()
+        if batch_label:
+            location_bits.append(batch_label)
         if not location_bits:
             return base
         return f"{base} · {' / '.join(location_bits)}"
+
+    def _scope_batch_label(self) -> str:
+        code = (self.scope_batch_code or '').strip()
+        if not code:
+            return ''
+        normalized = code.lower()
+        if normalized.startswith('lote'):
+            return code
+        return f"Lote {code}"
 
 
 class PurchaseItem(TimeStampedModel):

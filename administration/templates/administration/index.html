@@ -62,7 +62,11 @@
                 <tr>
                   <th scope="col" class="px-6 py-3">Solicitud</th>
                   <th scope="col" class="px-6 py-3">Tercero</th>
-                  <th scope="col" class="px-6 py-3">Etapa</th>
+                  <th scope="col" class="px-6 py-3">Categoría / Soporte</th>
+                  {% if purchases_scope.code == 'aprobacion' %}
+                    <th scope="col" class="px-6 py-3 text-center">Aprobaciones recibidas</th>
+                    <th scope="col" class="px-6 py-3 text-center">Aprobaciones pendientes</th>
+                  {% endif %}
                   <th scope="col" class="px-6 py-3 text-right">Monto</th>
                   <th scope="col" class="px-6 py-3 text-right">Acciones</th>
                 </tr>
@@ -74,12 +78,12 @@
                       <td class="px-6 py-4">
                         <div class="flex flex-col gap-1">
                           <div class="flex items-center gap-2">
-                            <p class="font-semibold text-slate-900">{{ purchase.timeline_code }}</p>
+                            <p class="text-sm font-semibold text-slate-900">{{ purchase.description }}</p>
                             <span class="inline-flex items-center rounded-full bg-{{ purchase.status_palette }}-100 px-2 py-0.5 text-[11px] font-semibold text-{{ purchase.status_palette }}-700">
                               {{ purchase.status_badge }}
                             </span>
                           </div>
-                          <p class="text-xs text-slate-500">{{ purchase.description }}</p>
+                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ purchase.timeline_code }}</p>
                           <div class="text-xs text-slate-500">
                             <span class="font-semibold text-slate-700">{{ purchase.requester }}</span>
                             ·
@@ -87,25 +91,52 @@
                           </div>
                         </div>
                       </td>
-                      <td class="px-6 py-4">
+                      <td class="px-6 py-4 align-middle">
                         <div class="text-sm font-semibold text-slate-900">{{ purchase.supplier }}</div>
                         <p class="text-xs text-slate-500">Creada {{ purchase.created_on|date:"M d" }}{% if purchase.eta %} · ETA {{ purchase.eta|date:"M d" }}{% endif %}</p>
                       </td>
-                      <td class="px-6 py-4">
-                        {% if purchase.current_stage %}
-                          <div class="flex flex-col gap-1 rounded-xl border border-slate-200/70 bg-slate-50/70 px-4 py-2 text-xs">
-                            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Etapa actual</span>
-                            <p class="text-sm font-semibold text-slate-900">{{ purchase.current_stage.label }}</p>
-                            <p class="text-xs text-slate-500">{{ purchase.current_stage.tooltip }}</p>
-                          </div>
+                      <td class="px-6 py-4 align-middle">
+                        <p class="text-sm font-semibold text-slate-900">{{ purchase.category_name }}</p>
+                        {% if purchase.support_type_label %}
+                          <p class="text-xs text-slate-500">{{ purchase.support_type_label }}</p>
                         {% else %}
-                          <span class="text-xs text-slate-400">Sin etapa</span>
+                          <p class="text-xs text-slate-400">Sin tipo de soporte</p>
                         {% endif %}
                       </td>
-                      <td class="px-6 py-4 text-right font-semibold text-slate-900">
+                      {% if purchases_scope.code == 'aprobacion' %}
+                        <td class="px-6 py-4 align-middle">
+                          {% if purchase.approvals_received %}
+                            <ul class="space-y-1 text-sm text-slate-700">
+                              {% for approver in purchase.approvals_received %}
+                                <li class="flex items-center gap-2">
+                                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                                  <span class="font-medium">{{ approver }}</span>
+                                </li>
+                              {% endfor %}
+                            </ul>
+                          {% else %}
+                            <p class="text-xs text-slate-400">Sin aprobaciones</p>
+                          {% endif %}
+                        </td>
+                        <td class="px-6 py-4 align-middle">
+                          {% if purchase.approvals_pending %}
+                            <ul class="space-y-1 text-sm text-slate-700">
+                              {% for approver in purchase.approvals_pending %}
+                                <li class="flex items-center gap-2">
+                                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">•</span>
+                                  <span class="font-medium">{{ approver }}</span>
+                                </li>
+                              {% endfor %}
+                            </ul>
+                          {% else %}
+                            <p class="text-xs text-slate-400">Sin pendientes</p>
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                      <td class="px-6 py-4 text-right font-semibold text-slate-900 align-middle">
                         {{ purchase.total_display }}
                       </td>
-                      <td class="px-6 py-4 text-right">
+                      <td class="px-6 py-4 text-right align-middle">
                         <div class="inline-flex flex-col gap-2 text-right">
                           {% if purchase.action %}
                             <a
@@ -116,19 +147,21 @@
                               <span aria-hidden="true">→</span>
                             </a>
                           {% endif %}
-                          <a
-                            href="?scope={{ purchases_scope.code }}&panel=request&purchase={{ purchase.pk }}"
-                            class="text-xs font-medium text-slate-500 underline decoration-dotted underline-offset-4 hover:text-slate-700"
-                          >
-                            Ver solicitud
-                          </a>
+                          {% if not purchases_scope.code == 'aprobacion' or not purchase.action or purchase.action.label != 'Ver solicitud' %}
+                            <a
+                              href="?scope={{ purchases_scope.code }}&panel=request&purchase={{ purchase.pk }}"
+                              class="text-xs font-medium text-slate-500 underline decoration-dotted underline-offset-4 hover:text-slate-700"
+                            >
+                              Ver solicitud
+                            </a>
+                          {% endif %}
                         </div>
                       </td>
                     </tr>
                   {% endfor %}
                 {% else %}
                   <tr>
-                    <td colspan="5" class="px-6 py-16 text-center">
+                    <td colspan="{% if purchases_scope.code == 'aprobacion' %}7{% else %}5{% endif %}" class="px-6 py-16 text-center">
                       <div class="mx-auto max-w-lg space-y-2">
                         <p class="text-base font-semibold text-slate-900">Sin compras / gastos en este estado</p>
                         <p class="text-sm text-slate-500">Crea una nueva solicitud o ajusta el filtro para ver Compras / Gastos en otras etapas.</p>
@@ -147,7 +180,7 @@
   {% if purchases_panel %}
     <div class="fixed inset-0 z-30 bg-slate-900/40"></div>
     <section
-      class="fixed inset-y-0 right-0 z-40 w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl"
+      class="fixed inset-y-0 right-0 z-40 w-full max-w-4xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl"
       role="dialog"
       aria-modal="true"
       aria-labelledby="side-panel-title"
@@ -162,7 +195,7 @@
         <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cerrar</a>
       </div>
       <div class="p-6">
-        <form method="post" action=".">
+        <form method="post" action="{% url 'administration:purchases' %}">
           {% csrf_token %}
           <input type="hidden" name="scope" value="{{ purchases_scope.code }}">
           <input type="hidden" name="panel" value="{{ purchases_panel.panel.code }}">

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from django import template
 
 register = template.Library()
@@ -29,3 +31,14 @@ def dict_get(value, key):
     if isinstance(value, dict):
         return value.get(key)
     return None
+
+
+@register.filter
+def multiply(value, arg):
+    """Multiply two numeric values safely for template usage."""
+    try:
+        left = Decimal(str(value or 0))
+        right = Decimal(str(arg or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal('0')
+    return left * right

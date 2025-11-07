@@ -23,6 +23,11 @@ class SupplierForm(forms.ModelForm):
             "contact_phone",
             "address",
             "city",
+            "account_holder_id",
+            "account_holder_name",
+            "account_type",
+            "account_number",
+            "bank_name",
         ]
 
 
@@ -40,6 +45,14 @@ class PurchasingExpenseTypeForm(forms.ModelForm):
             "self_withholding_rate",
             "is_active",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        scope_field = self.fields.get("scope")
+        if scope_field:
+            scope_field.choices = [
+                choice for choice in scope_field.choices if choice[0] != PurchasingExpenseType.Scope.HOUSE
+            ]
 
     def clean_parent_category(self):
         parent = self.cleaned_data.get("parent_category")

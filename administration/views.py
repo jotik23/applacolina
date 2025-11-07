@@ -9,14 +9,14 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.functional import cached_property
 from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
-from production.models import ChickenHouse, Farm
+from production.models import BirdBatch, ChickenHouse, Farm
 
 from .forms import (
     ExpenseTypeWorkflowFormSet,
@@ -265,6 +265,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'suppliers': self.purchase_form_options['suppliers'],
                 'farms': self.purchase_form_options['farms'],
                 'chicken_houses': self.purchase_form_options['chicken_houses'],
+                'bird_batches': self.purchase_form_options['bird_batches'],
                 'items': items,
                 'scope_values': form_initial['scope'],
                 'initial': form_initial['values'],
@@ -272,6 +273,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'read_only': form_initial['read_only'],
                 'scope_code': form_initial['scope_code'],
                 'scope_label': form_initial['scope_label'],
+                'scope_requires_location': form_initial['scope_requires_location'],
             },
             'purchase_request_field_errors': field_errors,
             'purchase_request_item_errors': item_errors,
@@ -324,6 +326,10 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
         if not unit_label:
             unit_label = 'Unidad'
+        location_scopes = {
+            PurchasingExpenseType.Scope.FARM,
+            PurchasingExpenseType.Scope.LOT,
+        }
         return {
             'values': values,
             'scope': scope,
@@ -332,13 +338,14 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'unit_label': unit_label,
             'scope_code': scope_code,
             'scope_label': scope_label,
+            'scope_requires_location': scope_code in location_scopes,
         }
 
     def _serialize_items(self, purchase) -> list[dict[str, str]]:
         if not purchase:
             return []
         serialized: list[dict[str, str]] = []
-        for item in purchase.items.select_related('farm', 'chicken_house').all():
+        for item in purchase.items.all():
             serialized.append(
                 {
                     'id': str(item.id),
@@ -386,8 +393,21 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         ]
         farms = [{'id': farm.id, 'name': farm.name} for farm in Farm.objects.order_by('name')]
         houses = [
-            {'id': house.id, 'name': house.name, 'farm_id': house.farm_id}
+            {
+                'id': house.id,
+                'name': house.name,
+                'label': f'{house.farm.name} - {house.name}',
+                'farm_id': house.farm_id,
+            }
             for house in ChickenHouse.objects.select_related('farm').order_by('farm__name', 'name')
+        ]
+        bird_batches = [
+            {
+                'id': batch.id,
+                'value': self._format_bird_batch_value(batch),
+                'label': self._format_bird_batch_label(batch),
+            }
+            for batch in BirdBatch.objects.select_related('farm').order_by('-birth_date', 'farm__name')
         ]
         support_types = [
             {
@@ -402,6 +422,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'suppliers': suppliers,
             'farms': farms,
             'chicken_houses': houses,
+            'bird_batches': bird_batches,
             'support_types': support_types,
         }
 
@@ -433,6 +454,14 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         if value is None:
             return ''
         return format(value.normalize(), 'f')
+
+    def _format_bird_batch_label(self, batch: BirdBatch) -> str:
+        farm_name = batch.farm.name if batch.farm else 'Sin granja'
+        return f'Lote #{batch.pk} · {farm_name}'
+
+    def _format_bird_batch_value(self, batch: BirdBatch) -> str:
+        # Persist the human-readable label to keep compatibility with existing scope batch codes.
+        return self._format_bird_batch_label(batch)
 
     def _build_base_url(self, *, scope: str | None) -> str:
         base = reverse('administration:purchases')
@@ -550,6 +579,41 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
             params['panel'] = self.request.GET.get('panel')
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
+
+
+class SupplierQuickCreateView(StaffRequiredMixin, generic.View):
+    http_method_names = ['post']
+
+    def post(self, request: HttpRequest, *args, **kwargs) -> JsonResponse:
+        data = request.POST.copy()
+        tax_id = (data.get('tax_id') or '').strip()
+        name = (data.get('name') or '').strip()
+        if not data.get('account_holder_id') and tax_id:
+            data['account_holder_id'] = tax_id
+        if not data.get('account_holder_name') and name:
+            data['account_holder_name'] = name
+        form = SupplierForm(data)
+        if form.is_valid():
+            supplier = form.save()
+            display = supplier.name
+            if supplier.tax_id:
+                display = f"{supplier.name} · {supplier.tax_id}"
+            return JsonResponse(
+                {
+                    'supplier': {
+                        'id': str(supplier.pk),
+                        'name': supplier.name,
+                        'display': display,
+                        'tax_id': supplier.tax_id,
+                    }
+                },
+                status=201,
+            )
+        errors = {
+            field: [str(error) for error in error_list]
+            for field, error_list in form.errors.items()
+        }
+        return JsonResponse({'errors': errors}, status=400)
 
 
 class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):

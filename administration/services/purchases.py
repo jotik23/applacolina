@@ -7,7 +7,7 @@ from typing import Iterable, Literal, Sequence
 from django.db import models
 from django.utils import timezone
 
-from administration.models import PurchaseRequest
+from administration.models import PurchaseApproval, PurchaseRequest
 
 StageStatus = Literal['pending', 'active', 'completed', 'locked']
 
@@ -34,6 +34,10 @@ class PurchaseRecord:
     requester: str
     supplier: str
     scope_label: str
+    category_name: str
+    support_type_label: str | None
+    approvals_received: Sequence[str]
+    approvals_pending: Sequence[str]
     lifecycle: str
     created_on: timezone.datetime
     eta: timezone.datetime | None
@@ -104,7 +108,7 @@ PURCHASE_STAGE_META = {
         'palette': 'amber',
     },
     'purchasing': {
-        'label': 'En compra',
+        'label': 'En Gestión de compra',
         'description': 'Equipo de compras gestionando la orden.',
         'tooltip': 'Aprobada y en proceso de compra.',
         'palette': 'indigo',
@@ -206,7 +210,8 @@ def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
 
 def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
     return (
-        PurchaseRequest.objects.select_related('supplier', 'requester', 'expense_type')
+        PurchaseRequest.objects.select_related('supplier', 'requester', 'expense_type', 'support_document_type')
+        .prefetch_related('approvals__approver')
         .filter(status=scope_code)
         .order_by('-created_at')[:50]
     )
@@ -230,12 +235,23 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
     )
     current_stage = next((stage for stage in stage_indicators if stage.status == 'active'), None)
     action = ACTION_BY_STATUS.get(purchase.status)
+    approvals = tuple(purchase.approvals.all())
+    approvals_received = tuple(
+        _format_approval_actor(approval) for approval in approvals if approval.status == PurchaseApproval.Status.APPROVED
+    )
+    approvals_pending = tuple(
+        _format_approval_actor(approval) for approval in approvals if approval.status == PurchaseApproval.Status.PENDING
+    )
     return PurchaseRecord(
         pk=purchase.pk,
         timeline_code=purchase.timeline_code,
         requester=requester_name,
         supplier=purchase.supplier.name,
         scope_label=purchase.scope_label,
+        category_name=purchase.expense_type.name,
+        support_type_label=purchase.support_document_type.name if purchase.support_document_type else None,
+        approvals_received=approvals_received,
+        approvals_pending=approvals_pending,
         lifecycle=purchase.status,
         created_on=purchase.created_at,
         eta=purchase.eta,
@@ -248,6 +264,12 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
         status_palette=palette,
         description=purchase.description or purchase.name,
     )
+
+
+def _format_approval_actor(approval: PurchaseApproval) -> str:
+    if approval.approver:
+        return approval.approver.get_full_name() or approval.approver.get_username()
+    return approval.role or "Pendiente asignación"
 
 
 def _resolve_panel(panel_code: str | None, purchase_pk: int | None) -> PurchasePanelState | None:
