@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 from typing import Iterable, Literal, Sequence
 
-# Allowed status values for UI pills and stage indicators.
+from django.db import models
+from django.utils import timezone
+
+from administration.models import PurchaseRequest
+
 StageStatus = Literal['pending', 'active', 'completed', 'locked']
 
 
 @dataclass(frozen=True)
 class StageIndicator:
-    """Represents the consolidated status of a purchase stage."""
-
     code: str
     label: str
     status: StageStatus
@@ -21,8 +22,6 @@ class StageIndicator:
 
 @dataclass(frozen=True)
 class PurchaseAction:
-    """Action rendered in the table for progressing a purchase."""
-
     label: str
     panel: str
     verb: str
@@ -30,20 +29,18 @@ class PurchaseAction:
 
 @dataclass(frozen=True)
 class PurchaseRecord:
-    """Data required by the dashboard table."""
-
     pk: int
     timeline_code: str
     requester: str
     supplier: str
     scope_label: str
     lifecycle: str
-    created_on: date
-    eta: date | None
+    created_on: timezone.datetime
+    eta: timezone.datetime | None
     currency: str
     total_amount: Decimal
     stage_indicators: Sequence[StageIndicator]
-    action: PurchaseAction
+    action: PurchaseAction | None
     status_badge: str
     status_palette: str
     description: str
@@ -71,7 +68,7 @@ class PurchasePanel:
 @dataclass(frozen=True)
 class PurchasePanelState:
     panel: PurchasePanel
-    purchase: PurchaseRecord | None
+    purchase: PurchaseRequest | None
 
 
 @dataclass(frozen=True)
@@ -80,7 +77,7 @@ class PurchaseDashboardState:
     scopes: Sequence[PurchaseScope]
     purchases: Sequence[PurchaseRecord]
     panel: PurchasePanelState | None
-    recent_activity: Sequence[dict]
+    recent_activity: Sequence[dict[str, str]]
 
 
 PANEL_REGISTRY = {
@@ -92,192 +89,69 @@ PANEL_REGISTRY = {
 }
 
 
-# Scope descriptors are sorted the same way the filters must be displayed.
 SCOPE_DEFINITIONS = (
-    ('borrador', 'Borradores', 'Solicitudes aún en preparación'),
-    ('aprobacion', 'En aprobación', 'Esperando visto bueno del flujo'),
-    ('ordenado', 'Orden emitida', 'Ordenes listas para recepción'),
-    ('recepcion', 'Recepciones', 'Parcial o totalmente recibidas'),
-    ('factura', 'Facturas', 'Documentación fiscal registrada'),
-    ('pago', 'Pagos', 'Pagos programados o en curso'),
-    ('archivada', 'Archivadas', 'Compras cerradas'),
+    (PurchaseRequest.Status.DRAFT, 'Borradores', 'Solicitudes aún en preparación'),
+    (PurchaseRequest.Status.APPROVAL, 'En aprobación', 'Esperando visto bueno del flujo'),
+    (PurchaseRequest.Status.ORDERED, 'Orden emitida', 'Órdenes listas para recepción'),
+    (PurchaseRequest.Status.RECEPTION, 'Recepciones', 'Parcial o totalmente recibidas'),
+    (PurchaseRequest.Status.INVOICE, 'Facturas', 'Documentación fiscal registrada'),
+    (PurchaseRequest.Status.PAYMENT, 'Pagos', 'Pagos programados o en curso'),
+    (PurchaseRequest.Status.ARCHIVED, 'Archivadas', 'Compras cerradas'),
 )
 
+STATUS_BADGES = {
+    PurchaseRequest.Status.DRAFT: ('Borrador', 'slate'),
+    PurchaseRequest.Status.APPROVAL: ('En aprobación', 'amber'),
+    PurchaseRequest.Status.ORDERED: ('Orden emitida', 'blue'),
+    PurchaseRequest.Status.RECEPTION: ('Recepción', 'violet'),
+    PurchaseRequest.Status.INVOICE: ('Factura', 'emerald'),
+    PurchaseRequest.Status.PAYMENT: ('Pago', 'cyan'),
+    PurchaseRequest.Status.ARCHIVED: ('Archivada', 'slate'),
+}
 
-def _stage(code: str, label: str, status: StageStatus, tooltip: str) -> StageIndicator:
-    return StageIndicator(code=code, label=label, status=status, tooltip=tooltip)
+ACTION_BY_STATUS = {
+    PurchaseRequest.Status.DRAFT: PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
+    PurchaseRequest.Status.APPROVAL: PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
+    PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
+    PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
+    PurchaseRequest.Status.INVOICE: PurchaseAction('Registrar factura', 'invoice', 'registrar_factura'),
+    PurchaseRequest.Status.PAYMENT: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
+    PurchaseRequest.Status.ARCHIVED: None,
+}
 
-
-PURCHASE_FIXTURE: Sequence[PurchaseRecord] = (
-    PurchaseRecord(
-        pk=101,
-        timeline_code='SOL-2025-104',
-        requester='Flavia Gómez',
-        supplier='Agroinsumos del Norte',
-        scope_label='Granjas · Ventilación',
-        lifecycle='borrador',
-        created_on=date(2025, 11, 3),
-        eta=date(2025, 11, 15),
-        currency='USD',
-        total_amount=Decimal('18250'),
-        description='Refacciones para ventiladores y repuestos eléctricos.',
-        status_badge='Borrador',
-        status_palette='slate',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'active', 'En edición por Flavia Gómez'),
-            _stage('order', 'Orden', 'pending', 'Pendiente de aprobación'),
-            _stage('reception', 'Recepción', 'locked', 'Necesita orden aprobada'),
-            _stage('invoice', 'Factura', 'locked', 'En espera de recepción'),
-            _stage('payment', 'Pago', 'locked', 'Pagos disponibles tras la factura'),
-        ),
-        action=PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
-    ),
-    PurchaseRecord(
-        pk=102,
-        timeline_code='SOL-2025-088',
-        requester='Carlos Ríos',
-        supplier='Servicios Frío Central',
-        scope_label='Planta · Climatización',
-        lifecycle='aprobacion',
-        created_on=date(2025, 10, 20),
-        eta=date(2025, 11, 5),
-        currency='COP',
-        total_amount=Decimal('14500000'),
-        description='Mantenimiento correctivo urgente línea 2.',
-        status_badge='En aprobación',
-        status_palette='amber',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'completed', 'Aprobada por Operaciones'),
-            _stage('order', 'Orden', 'active', 'Esperando aprobación Financiera'),
-            _stage('reception', 'Recepción', 'locked', 'Orden requerida'),
-            _stage('invoice', 'Factura', 'locked', 'Recepción pendiente'),
-            _stage('payment', 'Pago', 'locked', 'Factura sin registrar'),
-        ),
-        action=PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
-    ),
-    PurchaseRecord(
-        pk=103,
-        timeline_code='SOL-2025-071',
-        requester='Andrea Morales',
-        supplier='Transporte y Logística Andina',
-        scope_label='Logística · Fletes',
-        lifecycle='ordenado',
-        created_on=date(2025, 9, 28),
-        eta=date(2025, 11, 7),
-        currency='USD',
-        total_amount=Decimal('8200'),
-        description='Servicio de transporte nocturno granja 5.',
-        status_badge='Orden emitida',
-        status_palette='blue',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'completed', 'Flujo de aprobación completado'),
-            _stage('order', 'Orden', 'completed', 'PO-4578 asignada'),
-            _stage('reception', 'Recepción', 'active', 'Esperando confirmación de llegada'),
-            _stage('invoice', 'Factura', 'pending', 'Factura llegará tras la recepción'),
-            _stage('payment', 'Pago', 'locked', 'Factura aún no registrada'),
-        ),
-        action=PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
-    ),
-    PurchaseRecord(
-        pk=104,
-        timeline_code='SOL-2025-055',
-        requester='Jesús Pineda',
-        supplier='Fertilizantes Sierra Alta',
-        scope_label='Granjas · Fertilizantes',
-        lifecycle='recepcion',
-        created_on=date(2025, 9, 10),
-        eta=None,
-        currency='USD',
-        total_amount=Decimal('25300'),
-        description='Fertilizante foliar lote 2025-Q3.',
-        status_badge='Recepción parcial',
-        status_palette='violet',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'completed', 'Aprobada por cadena completa'),
-            _stage('order', 'Orden', 'completed', 'Orden emitida y enviada'),
-            _stage('reception', 'Recepción', 'active', '1 de 3 entregas registradas'),
-            _stage('invoice', 'Factura', 'pending', 'Factura se espera tras recepción total'),
-            _stage('payment', 'Pago', 'locked', 'Factura aún no registrada'),
-        ),
-        action=PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
-    ),
-    PurchaseRecord(
-        pk=105,
-        timeline_code='SOL-2025-032',
-        requester='Flavia Gómez',
-        supplier='Soluciones Integrales IT',
-        scope_label='Oficinas · Tecnología',
-        lifecycle='factura',
-        created_on=date(2025, 8, 3),
-        eta=None,
-        currency='USD',
-        total_amount=Decimal('6400'),
-        description='Renovación licencias ERP.',
-        status_badge='Facturada',
-        status_palette='emerald',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'completed', 'Aprobada'),
-            _stage('order', 'Orden', 'completed', 'Orden interna OC-3981'),
-            _stage('reception', 'Recepción', 'completed', 'Servicios recibidos'),
-            _stage('invoice', 'Factura', 'active', 'Factura F-9921 en revisión'),
-            _stage('payment', 'Pago', 'pending', 'Pago se habilita tras validación'),
-        ),
-        action=PurchaseAction('Registrar factura', 'invoice', 'registrar_factura'),
-    ),
-    PurchaseRecord(
-        pk=106,
-        timeline_code='SOL-2025-017',
-        requester='Carlos Ríos',
-        supplier='Transportes Pacífico',
-        scope_label='Distribución · Fletes',
-        lifecycle='pago',
-        created_on=date(2025, 7, 12),
-        eta=None,
-        currency='COP',
-        total_amount=Decimal('23450000'),
-        description='Servicios de transporte Q2 consolidados.',
-        status_badge='Pago programado',
-        status_palette='cyan',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'completed', 'Aprobada 2025-07-15'),
-            _stage('order', 'Orden', 'completed', 'Orden OC-2121'),
-            _stage('reception', 'Recepción', 'completed', 'Confirmada 2025-08-02'),
-            _stage('invoice', 'Factura', 'completed', 'Factura F-3215 validada'),
-            _stage('payment', 'Pago', 'active', 'Pago agendado para 2025-11-10'),
-        ),
-        action=PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
-    ),
-    PurchaseRecord(
-        pk=107,
-        timeline_code='SOL-2025-003',
-        requester='Jesús Pineda',
-        supplier='Agroservicios Express',
-        scope_label='Granjas · Insumos varios',
-        lifecycle='archivada',
-        created_on=date(2025, 1, 18),
-        eta=None,
-        currency='USD',
-        total_amount=Decimal('4200'),
-        description='Pedidos consolidados Q1',
-        status_badge='Archivada',
-        status_palette='slate',
-        stage_indicators=(
-            _stage('request', 'Solicitud', 'completed', 'Completada 2025-01-19'),
-            _stage('order', 'Orden', 'completed', 'Orden OC-1001'),
-            _stage('reception', 'Recepción', 'completed', 'Recibida 2025-02-02'),
-            _stage('invoice', 'Factura', 'completed', 'Factura F-1201'),
-            _stage('payment', 'Pago', 'completed', 'Pagada 2025-03-10'),
-        ),
-        action=PurchaseAction('Ver solicitud', 'request', 'ver_detalle'),
-    ),
-)
+STAGE_TOOLTIPS = {
+    'request': 'Solicitud y metadatos',
+    'order': 'Orden de compra',
+    'reception': 'Recepciones',
+    'invoice': 'Registro de factura',
+    'payment': 'Programación de pago',
+}
 
 
-def _build_scopes(purchases: Iterable[PurchaseRecord]) -> Sequence[PurchaseScope]:
+def get_dashboard_state(*, scope_code: str | None, panel_code: str | None, purchase_pk: int | None) -> PurchaseDashboardState:
+    scopes = _build_scopes()
+    selected_scope = _find_scope(scopes, scope_code or scopes[0].code)
+    purchases = tuple(_build_purchase_record(p) for p in _query_purchases(selected_scope.code))
+    panel_state = _resolve_panel(panel_code, purchase_pk)
+    activity = _recent_activity()
+    return PurchaseDashboardState(
+        scope=selected_scope,
+        scopes=scopes,
+        purchases=purchases,
+        panel=panel_state,
+        recent_activity=activity,
+    )
+
+
+def _build_scopes() -> Sequence[PurchaseScope]:
     counts = {code: 0 for code, *_ in SCOPE_DEFINITIONS}
-    for purchase in purchases:
-        counts[purchase.lifecycle] = counts.get(purchase.lifecycle, 0) + 1
-
+    qs = (
+        PurchaseRequest.objects.values('status')
+        .order_by('status')
+        .annotate(count=models.Count('id'))  # type: ignore[name-defined]
+    )
+    for row in qs:
+        counts[row['status']] = row['count']
     return tuple(
         PurchaseScope(code=code, label=label, description=description, count=counts.get(code, 0))
         for code, label, description in SCOPE_DEFINITIONS
@@ -291,22 +165,53 @@ def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
     return scopes[0]
 
 
-def get_dashboard_state(*, scope_code: str | None, panel_code: str | None, purchase_pk: int | None) -> PurchaseDashboardState:
-    scopes = _build_scopes(PURCHASE_FIXTURE)
-    selected_scope = _find_scope(scopes, scope_code or scopes[0].code)
-    purchases = tuple(p for p in PURCHASE_FIXTURE if p.lifecycle == selected_scope.code)
-    panel_state = _resolve_panel(panel_code, purchase_pk)
-    recent_activity = (
-        {'actor': 'Sistema', 'event': 'Workflow registró cambio de estado', 'timestamp': 'Hace 2 min'},
-        {'actor': 'Flavia Gómez', 'event': 'Adjuntó factura preliminar SOL-2025-032', 'timestamp': 'Hace 35 min'},
-        {'actor': 'Carlos Ríos', 'event': 'Actualizó recepción parcial SOL-2025-088', 'timestamp': 'Ayer'},
+def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
+    return (
+        PurchaseRequest.objects.select_related('supplier', 'requester', 'expense_type', 'cost_center')
+        .filter(status=scope_code)
+        .order_by('-created_at')[:50]
     )
-    return PurchaseDashboardState(
-        scope=selected_scope,
-        scopes=scopes,
-        purchases=purchases,
-        panel=panel_state,
-        recent_activity=recent_activity,
+
+
+def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
+    requester_name = ""
+    if purchase.requester:
+        requester_name = purchase.requester.get_full_name() or purchase.requester.get_username()
+    else:
+        requester_name = "Sistema"
+    badge, palette = STATUS_BADGES.get(purchase.status, ('Sin estado', 'slate'))
+    stage_indicators = tuple(
+        StageIndicator(
+            code=code,
+            label=label,
+            status=purchase.stage_status(code),
+            tooltip=STAGE_TOOLTIPS[code],
+        )
+        for code, label in (
+            ('request', 'Solicitud'),
+            ('order', 'Orden'),
+            ('reception', 'Recepción'),
+            ('invoice', 'Factura'),
+            ('payment', 'Pago'),
+        )
+    )
+    action = ACTION_BY_STATUS.get(purchase.status)
+    return PurchaseRecord(
+        pk=purchase.pk,
+        timeline_code=purchase.timeline_code,
+        requester=requester_name,
+        supplier=purchase.supplier.name,
+        scope_label=purchase.scope_label,
+        lifecycle=purchase.status,
+        created_on=purchase.created_at,
+        eta=purchase.eta,
+        currency=purchase.currency,
+        total_amount=purchase.estimated_total,
+        stage_indicators=stage_indicators,
+        action=action,
+        status_badge=badge,
+        status_palette=palette,
+        description=purchase.description or purchase.name,
     )
 
 
@@ -316,9 +221,22 @@ def _resolve_panel(panel_code: str | None, purchase_pk: int | None) -> PurchaseP
     panel = PANEL_REGISTRY.get(panel_code)
     if not panel:
         return None
-
     purchase = None
-    if purchase_pk is not None:
-        purchase = next((p for p in PURCHASE_FIXTURE if p.pk == purchase_pk), None)
-
+    if purchase_pk:
+        purchase = PurchaseRequest.objects.filter(pk=purchase_pk).first()
     return PurchasePanelState(panel=panel, purchase=purchase)
+
+
+def _recent_activity() -> Sequence[dict[str, str]]:
+    events = []
+    qs = PurchaseRequest.objects.select_related('requester').order_by('-updated_at')[:5]
+    for purchase in qs:
+        actor = purchase.requester.get_full_name() if purchase.requester else "Sistema"
+        events.append(
+            {
+                'actor': actor or "Sistema",
+                'event': f"{purchase.timeline_code} · {purchase.get_status_display()}",
+                'timestamp': timezone.localtime(purchase.updated_at).strftime("%d %b %H:%M"),
+            }
+        )
+    return events

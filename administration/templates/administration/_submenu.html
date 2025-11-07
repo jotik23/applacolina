@@ -6,8 +6,23 @@
       {% if active == 'purchases' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'purchases' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
-      Compras
+      Dashboard
+    </a>
+    <a
+      href="{% url 'administration:purchases_suppliers' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'suppliers' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'suppliers' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'suppliers' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Proveedores
+    </a>
+    <a
+      href="{% url 'administration:purchases_configuration' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'configuration' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'configuration' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'configuration' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Configuración
     </a>
   </div>
 </nav>
-

@@ -129,6 +129,9 @@ TEMPLATES = [
                 'personal.context_processors.quick_create',
                 'applacolina.context_processors.timezone_settings',
             ],
+            'libraries': {
+                'form_extras': 'administration.templatetags.form_extras',
+            },
         },
     },
 ]

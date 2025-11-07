@@ -114,13 +114,15 @@
                       </td>
                       <td class="px-6 py-4 text-right">
                         <div class="inline-flex flex-col gap-2 text-right">
-                          <a
-                            href="?scope={{ purchases_scope.code }}&panel={{ purchase.action.panel }}&purchase={{ purchase.pk }}"
-                            class="inline-flex items-center justify-end gap-2 text-sm font-semibold text-brand hover:text-brand/80"
-                          >
-                            {{ purchase.action.label }}
-                            <span aria-hidden="true">→</span>
-                          </a>
+                          {% if purchase.action %}
+                            <a
+                              href="?scope={{ purchases_scope.code }}&panel={{ purchase.action.panel }}&purchase={{ purchase.pk }}"
+                              class="inline-flex items-center justify-end gap-2 text-sm font-semibold text-brand hover:text-brand/80"
+                            >
+                              {{ purchase.action.label }}
+                              <span aria-hidden="true">→</span>
+                            </a>
+                          {% endif %}
                           <a
                             href="?scope={{ purchases_scope.code }}&panel=request&purchase={{ purchase.pk }}"
                             class="text-xs font-medium text-slate-500 underline decoration-dotted underline-offset-4 hover:text-slate-700"
