@@ -1,0 +1,79 @@
+{% with purchase=purchases_panel.purchase %}
+<section class="space-y-6 text-sm text-slate-700">
+  <article class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+    <header>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Orden de compra</p>
+      <h2 class="text-lg font-semibold text-slate-900">Datos generales</h2>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <label class="text-xs font-semibold text-slate-500">
+        Número de orden
+        <input type="text" name="order_number" value="PO-{{ purchase.timeline_code|default:'NUEVA' }}" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Fecha de emisión
+        <input type="date" name="order_date" value="{{ purchase.created_on|date:'Y-m-d' }}" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Vigencia de precios
+        <input type="date" name="order_expiration" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Condiciones de pago
+        <input type="text" name="payment_terms" value="30 días" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+    </div>
+  </article>
+
+  <article class="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <header>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Contacto de proveedor</p>
+      <p class="text-xs text-slate-500">Usado para enviar confirmaciones y órdenes automáticas.</p>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <label class="text-xs font-semibold text-slate-500">
+        Contacto
+        <input type="text" name="vendor_contact" value="Coordinación comercial" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Correo
+        <input type="email" name="vendor_email" value="compras@{{ purchase.supplier|default:'proveedor'|slugify }}.com" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Teléfono
+        <input type="tel" name="vendor_phone" placeholder="+57 000 0000" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Método de envío
+        <select name="shipping_method" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+          <option>Recojo en planta</option>
+          <option selected>Entrega en granja</option>
+          <option>Courier</option>
+        </select>
+      </label>
+    </div>
+  </article>
+
+  <article class="space-y-3 rounded-2xl border border-dashed border-slate-300 p-5">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Adjuntos</p>
+    <label class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 hover:border-slate-300">
+      Subir cotización o términos
+      <input type="file" name="order_attachment" class="hidden">
+      <span class="text-xs font-medium text-brand">Seleccionar</span>
+    </label>
+    <p class="text-xs text-slate-400">Los archivos se enviarán al proveedor cuando registres la orden.</p>
+  </article>
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+    <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cancelar</a>
+    <div class="flex gap-3">
+      <button type="submit" name="intent" value="save_order" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">
+        Guardar borrador
+      </button>
+      <button type="submit" name="intent" value="confirm_order" class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90">
+        Registrar orden
+      </button>
+    </div>
+  </div>
+</section>
+{% endwith %}

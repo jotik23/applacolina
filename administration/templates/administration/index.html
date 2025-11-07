@@ -4,19 +4,200 @@
 
 {% block content %}
   {% include "administration/_submenu.html" with active=administration_active_submenu %}
-  <section class="space-y-6">
-    <article class="rounded-2xl bg-white/80 p-10 text-center shadow-sm ring-1 ring-slate-200/70">
-      <div class="mx-auto flex max-w-2xl flex-col items-center gap-4">
-        <span class="inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand">
-          <span class="size-2 rounded-full bg-brand"></span>
-          Compras
-        </span>
-        <h1 class="text-3xl font-semibold text-slate-900">Módulo de compras en preparación</h1>
-        <p class="text-sm leading-6 text-slate-600">
-          Estamos configurando esta sección para centralizar la gestión de compras. Vuelve pronto para encontrar los tableros y flujos de trabajo correspondientes.
-        </p>
-      </div>
-    </article>
-  </section>
-{% endblock %}
 
+  <section class="space-y-8">
+    <header class="flex flex-col gap-4 rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/70 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Administración</p>
+        <h1 class="text-2xl font-semibold text-slate-900">Compras</h1>
+        <p class="text-sm text-slate-600">Gestiona el ciclo completo de compras sin salir del tablero.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        {% if purchases_panel %}
+          <a
+            href="?scope={{ purchases_scope.code }}"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+          >
+            <span aria-hidden="true" class="size-1.5 rounded-full bg-slate-400"></span>
+            Cerrar formulario
+          </a>
+        {% endif %}
+        <a
+          href="?scope={{ purchases_scope.code }}&panel=request"
+          class="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
+        >
+          <span aria-hidden="true" class="text-base">＋</span>
+          Nueva compra
+        </a>
+      </div>
+    </header>
+
+    <div class="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/70">
+      <div class="flex flex-wrap gap-2 border-b border-slate-200/70 pb-4">
+        {% for scope in purchases_scopes %}
+          <a
+            href="?scope={{ scope.code }}"
+            class="group inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition {% if scope.code == purchases_scope.code %}border-slate-900 bg-slate-900 text-white shadow{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900{% endif %}"
+            aria-current="{% if scope.code == purchases_scope.code %}page{% else %}false{% endif %}"
+          >
+            <span class="inline-flex size-5 items-center justify-center rounded-full text-xs font-bold {% if scope.code == purchases_scope.code %}bg-white/20 text-white{% else %}bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700{% endif %}">
+              {{ scope.count }}
+            </span>
+            {{ scope.label }}
+          </a>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div class="overflow-hidden rounded-2xl border border-slate-200/70">
+          <div class="flex items-center justify-between border-b border-slate-200/70 bg-slate-50/70 px-6 py-3">
+            <div>
+              <p class="text-sm font-semibold text-slate-900">{{ purchases_scope.label }}</p>
+              <p class="text-xs text-slate-500">{{ purchases_scope.description }}</p>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">Listado</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+              <thead class="bg-white text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th scope="col" class="px-6 py-3">Solicitud</th>
+                  <th scope="col" class="px-6 py-3">Proveedor</th>
+                  <th scope="col" class="px-6 py-3">Etapas</th>
+                  <th scope="col" class="px-6 py-3 text-right">Monto</th>
+                  <th scope="col" class="px-6 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 bg-white">
+                {% if purchases_list %}
+                  {% for purchase in purchases_list %}
+                    <tr class="align-top hover:bg-slate-50/70">
+                      <td class="px-6 py-4">
+                        <div class="flex flex-col gap-1">
+                          <div class="flex items-center gap-2">
+                            <p class="font-semibold text-slate-900">{{ purchase.timeline_code }}</p>
+                            <span class="inline-flex items-center rounded-full bg-{{ purchase.status_palette }}-100 px-2 py-0.5 text-[11px] font-semibold text-{{ purchase.status_palette }}-700">
+                              {{ purchase.status_badge }}
+                            </span>
+                          </div>
+                          <p class="text-xs text-slate-500">{{ purchase.description }}</p>
+                          <div class="text-xs text-slate-500">
+                            <span class="font-semibold text-slate-700">{{ purchase.requester }}</span>
+                            ·
+                            {{ purchase.scope_label }}
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="text-sm font-semibold text-slate-900">{{ purchase.supplier }}</div>
+                        <p class="text-xs text-slate-500">Creada {{ purchase.created_on|date:"M d" }}{% if purchase.eta %} · ETA {{ purchase.eta|date:"M d" }}{% endif %}</p>
+                      </td>
+                      <td class="px-6 py-4">
+                        <ol class="flex gap-3 text-xs">
+                          {% for stage in purchase.stage_indicators %}
+                            <li class="flex flex-col items-center text-center">
+                              <span
+                                class="mb-1 inline-flex size-8 items-center justify-center rounded-full border text-[11px] font-semibold {% if stage.status == 'completed' %}border-emerald-200 bg-emerald-50 text-emerald-700{% elif stage.status == 'active' %}border-brand/30 bg-brand/10 text-brand{% elif stage.status == 'pending' %}border-slate-200 bg-slate-50 text-slate-500{% else %}border-slate-100 bg-slate-50 text-slate-300{% endif %}"
+                                title="{{ stage.tooltip }}"
+                              >
+                                {{ forloop.counter }}
+                              </span>
+                              <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                {{ stage.label }}
+                              </span>
+                            </li>
+                          {% endfor %}
+                        </ol>
+                      </td>
+                      <td class="px-6 py-4 text-right font-semibold text-slate-900">
+                        {{ purchase.total_display }}
+                      </td>
+                      <td class="px-6 py-4 text-right">
+                        <div class="inline-flex flex-col gap-2 text-right">
+                          <a
+                            href="?scope={{ purchases_scope.code }}&panel={{ purchase.action.panel }}&purchase={{ purchase.pk }}"
+                            class="inline-flex items-center justify-end gap-2 text-sm font-semibold text-brand hover:text-brand/80"
+                          >
+                            {{ purchase.action.label }}
+                            <span aria-hidden="true">→</span>
+                          </a>
+                          <a
+                            href="?scope={{ purchases_scope.code }}&panel=request&purchase={{ purchase.pk }}"
+                            class="text-xs font-medium text-slate-500 underline decoration-dotted underline-offset-4 hover:text-slate-700"
+                          >
+                            Ver solicitud
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="5" class="px-6 py-16 text-center">
+                      <div class="mx-auto max-w-lg space-y-2">
+                        <p class="text-base font-semibold text-slate-900">Sin compras en este estado</p>
+                        <p class="text-sm text-slate-500">Crea una nueva solicitud o ajusta el filtro para ver compras en otras etapas.</p>
+                      </div>
+                    </td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="flex flex-col gap-4 rounded-2xl border border-slate-200/70 bg-white p-5">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Actividad reciente</p>
+            <ul class="mt-4 space-y-4 text-sm">
+              {% for entry in purchases_recent_activity %}
+                <li class="flex gap-3">
+                  <span class="mt-1 size-2 rounded-full bg-brand"></span>
+                  <div>
+                    <p class="font-semibold text-slate-900">{{ entry.actor }}</p>
+                    <p class="text-slate-600">{{ entry.event }}</p>
+                    <p class="text-xs text-slate-400">{{ entry.timestamp }}</p>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+            Documentos y adjuntos se listan en el detalle. Cargar un archivo mostrará un toast y se anexará automáticamente.
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  {% if purchases_panel %}
+    <div class="fixed inset-0 z-30 bg-slate-900/40"></div>
+    <section
+      class="fixed inset-y-0 right-0 z-40 w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="side-panel-title"
+    >
+      <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+        <div>
+          <p id="side-panel-title" class="text-lg font-semibold text-slate-900">{{ purchases_panel.panel.title }}</p>
+          {% if purchases_panel.purchase %}
+            <p class="text-xs uppercase tracking-wide text-slate-500">{{ purchases_panel.purchase.timeline_code }} · {{ purchases_panel.purchase.supplier }}</p>
+          {% endif %}
+        </div>
+        <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cerrar</a>
+      </div>
+      <div class="p-6">
+        <form method="post" action=".">
+          {% csrf_token %}
+          <input type="hidden" name="scope" value="{{ purchases_scope.code }}">
+          <input type="hidden" name="panel" value="{{ purchases_panel.panel.code }}">
+          {% if purchases_panel.purchase %}
+            <input type="hidden" name="purchase" value="{{ purchases_panel.purchase.pk }}">
+          {% endif %}
+          {% include purchases_panel.panel.template_name %}
+        </form>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

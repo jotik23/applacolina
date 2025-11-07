@@ -1,0 +1,85 @@
+{% with purchase=purchases_panel.purchase %}
+<section class="space-y-6 text-sm text-slate-700">
+  <article class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+    <header>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Factura</p>
+      <h2 class="text-lg font-semibold text-slate-900">Datos fiscales</h2>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <label class="text-xs font-semibold text-slate-500">
+        Número de factura
+        <input type="text" name="invoice_number" value="F-{{ purchase.timeline_code|default:'0000' }}" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Fecha de factura
+        <input type="date" name="invoice_date" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Fecha de vencimiento
+        <input type="date" name="invoice_due" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Moneda
+        <select name="invoice_currency" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+          <option {% if purchase.currency == 'USD' %}selected{% endif %}>USD</option>
+          <option {% if purchase.currency == 'COP' %}selected{% endif %}>COP</option>
+        </select>
+      </label>
+    </div>
+  </article>
+
+  <article class="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <header class="flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Montos</p>
+        <p class="text-xs text-slate-500">Puedes ajustar impuestos por retenciones.</p>
+      </div>
+      <button type="button" class="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">Recalcular</button>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <label class="text-xs font-semibold text-slate-500">
+        Subtotal
+        <input type="number" name="invoice_subtotal" value="{{ purchase.total_amount }}" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Impuestos
+        <input type="number" name="invoice_taxes" value="0" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Retenciones
+        <input type="number" name="invoice_withholding" value="0" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Total factura
+        <input type="number" name="invoice_total" value="{{ purchase.total_amount }}" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      </label>
+    </div>
+    <label class="text-xs font-semibold text-slate-500">
+      Notas
+      <textarea name="invoice_notes" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm" placeholder="Comentarios, números de recepción, etc."></textarea>
+    </label>
+  </article>
+
+  <article class="space-y-3 rounded-2xl border border-dashed border-slate-300 p-5">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Adjuntar documentos</p>
+    <label class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 hover:border-slate-300">
+      Subir factura firmada
+      <input type="file" name="invoice_attachment" class="hidden">
+      <span class="text-xs font-medium text-brand">Seleccionar</span>
+    </label>
+    <p class="text-xs text-slate-400">Cada documento aparece inmediatamente en la tarjeta de adjuntos.</p>
+  </article>
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+    <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cancelar</a>
+    <div class="flex gap-3">
+      <button type="submit" name="intent" value="save_invoice" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">
+        Guardar borrador
+      </button>
+      <button type="submit" name="intent" value="confirm_invoice" class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90">
+        Registrar factura
+      </button>
+    </div>
+  </div>
+</section>
+{% endwith %}
