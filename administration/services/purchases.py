@@ -91,7 +91,8 @@ PANEL_REGISTRY = {
 
 SCOPE_DEFINITIONS = (
     (PurchaseRequest.Status.DRAFT, 'Borradores', 'Solicitudes aún en preparación'),
-    (PurchaseRequest.Status.APPROVAL, 'En aprobación', 'Esperando visto bueno del flujo'),
+    (PurchaseRequest.Status.SUBMITTED, 'En aprobación', 'Esperando visto bueno del flujo'),
+    (PurchaseRequest.Status.APPROVED, 'Aprobadas', 'Listas para generar orden'),
     (PurchaseRequest.Status.ORDERED, 'Orden emitida', 'Órdenes listas para recepción'),
     (PurchaseRequest.Status.RECEPTION, 'Recepciones', 'Parcial o totalmente recibidas'),
     (PurchaseRequest.Status.INVOICE, 'Facturas', 'Documentación fiscal registrada'),
@@ -101,7 +102,8 @@ SCOPE_DEFINITIONS = (
 
 STATUS_BADGES = {
     PurchaseRequest.Status.DRAFT: ('Borrador', 'slate'),
-    PurchaseRequest.Status.APPROVAL: ('En aprobación', 'amber'),
+    PurchaseRequest.Status.SUBMITTED: ('En aprobación', 'amber'),
+    PurchaseRequest.Status.APPROVED: ('Aprobada', 'emerald'),
     PurchaseRequest.Status.ORDERED: ('Orden emitida', 'blue'),
     PurchaseRequest.Status.RECEPTION: ('Recepción', 'violet'),
     PurchaseRequest.Status.INVOICE: ('Factura', 'emerald'),
@@ -111,7 +113,8 @@ STATUS_BADGES = {
 
 ACTION_BY_STATUS = {
     PurchaseRequest.Status.DRAFT: PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
-    PurchaseRequest.Status.APPROVAL: PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
+    PurchaseRequest.Status.SUBMITTED: PurchaseAction('Ver solicitud', 'request', 'ver_detalle'),
+    PurchaseRequest.Status.APPROVED: PurchaseAction('Registrar orden', 'order', 'registrar_orden'),
     PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.INVOICE: PurchaseAction('Registrar factura', 'invoice', 'registrar_factura'),
@@ -167,7 +170,7 @@ def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
 
 def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
     return (
-        PurchaseRequest.objects.select_related('supplier', 'requester', 'expense_type', 'cost_center')
+        PurchaseRequest.objects.select_related('supplier', 'requester', 'expense_type')
         .filter(status=scope_code)
         .order_by('-created_at')[:50]
     )

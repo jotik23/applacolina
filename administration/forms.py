@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from django import forms
+from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.core.exceptions import ValidationError
 
-from production.models import ChickenHouse
-
 from .models import (
-    CostCenterConfig,
     ExpenseTypeApprovalRule,
     PurchasingExpenseType,
     Supplier,
@@ -47,55 +45,53 @@ class PurchasingExpenseTypeForm(forms.ModelForm):
     class Meta:
         model = PurchasingExpenseType
         fields = [
-            "code",
             "name",
             "scope",
-            "description",
             "iva_rate",
             "withholding_rate",
-            "requires_invoice",
-            "requires_supporting_docs",
-            "mandatory_documents",
+            "self_withholding_rate",
+            "parent_category",
             "is_active",
         ]
 
+    def clean_parent_category(self):
+        parent = self.cleaned_data.get("parent_category")
+        instance = self.instance
+        if parent and instance.pk and parent.pk == instance.pk:
+            raise ValidationError("La categoría padre no puede ser la misma categoría.")
+        return parent
+
 
 class ExpenseTypeApprovalRuleForm(forms.ModelForm):
+    sequence = forms.IntegerField(min_value=1, label="Secuencia")
+
     class Meta:
         model = ExpenseTypeApprovalRule
         fields = ["sequence", "name", "approver"]
 
 
-class CostCenterConfigForm(forms.ModelForm):
-    class Meta:
-        model = CostCenterConfig
-        fields = [
-            "expense_type",
-            "name",
-            "scope",
-            "allocation_method",
-            "percentage",
-            "valid_from",
-            "valid_until",
-            "is_required",
-            "farm",
-            "chicken_house",
-            "notes",
-            "is_active",
-        ]
-
-    def clean_percentage(self):
-        value = self.cleaned_data["percentage"]
-        if value <= 0:
-            raise ValidationError("El porcentaje debe ser mayor que 0%.")
-        return value
-
+class BaseExpenseTypeWorkflowFormSet(BaseInlineFormSet):
     def clean(self):
-        cleaned = super().clean()
-        farm = cleaned.get("farm")
-        chicken_house: ChickenHouse | None = cleaned.get("chicken_house")
-        if chicken_house and farm and chicken_house.farm_id != farm.id:
-            self.add_error("chicken_house", "El galpón debe pertenecer a la granja seleccionada.")
-        if chicken_house and not farm:
-            self.add_error("farm", "Selecciona la granja antes de elegir un galpón.")
-        return cleaned
+        super().clean()
+        sequences: set[int] = set()
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            sequence = form.cleaned_data.get("sequence")
+            if sequence is None:
+                continue
+            if sequence in sequences:
+                form.add_error("sequence", "La secuencia debe ser única dentro del flujo.")
+            sequences.add(sequence)
+
+
+ExpenseTypeWorkflowFormSet = inlineformset_factory(
+    PurchasingExpenseType,
+    ExpenseTypeApprovalRule,
+    form=ExpenseTypeApprovalRuleForm,
+    formset=BaseExpenseTypeWorkflowFormSet,
+    extra=0,
+    can_delete=True,
+)

@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
 from production.models import ChickenHouse, Farm
 
 
@@ -70,15 +71,21 @@ class Supplier(TimeStampedModel):
 
 class PurchasingExpenseType(TimeStampedModel):
     class Scope(models.TextChoices):
-        FARM = "farm", "Granjas"
-        PLANT = "plant", "Planta"
-        OFFICE = "office", "Oficinas"
+        FARM = "farm", "Granja"
+        LOT = "lot", "Lote"
+        HOUSE = "house", "Galpón"
         LOGISTICS = "logistics", "Logística"
 
-    code = models.CharField("Código", max_length=30, unique=True)
     name = models.CharField("Nombre", max_length=200)
+    parent_category = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="child_categories",
+        verbose_name="Categoría padre",
+    )
     scope = models.CharField("Ámbito", max_length=20, choices=Scope.choices, default=Scope.FARM)
-    description = models.TextField("Descripción", blank=True)
     iva_rate = models.DecimalField(
         "IVA (%)",
         max_digits=5,
@@ -93,18 +100,30 @@ class PurchasingExpenseType(TimeStampedModel):
         default=Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
-    requires_invoice = models.BooleanField("Exige factura", default=True)
-    requires_supporting_docs = models.BooleanField("Documentos obligatorios", default=False)
-    mandatory_documents = models.CharField("Documentos solicitados", max_length=255, blank=True)
+    self_withholding_rate = models.DecimalField(
+        "Autoretención (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
     is_active = models.BooleanField("Activo", default=True)
 
     class Meta:
-        verbose_name = "Tipo de gasto"
-        verbose_name_plural = "Tipos de gasto"
+        verbose_name = "Categoría de gasto"
+        verbose_name_plural = "Categorías de gasto"
         ordering = ("name",)
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.code})"
+        return self.name
+
+    @property
+    def approval_phase_summary(self) -> str:
+        phases = [
+            rule.name
+            for rule in self.approval_rules.all().order_by('sequence')
+        ]
+        return ", ".join(phases)
 
 
 class ExpenseTypeApprovalRule(TimeStampedModel):
@@ -112,7 +131,7 @@ class ExpenseTypeApprovalRule(TimeStampedModel):
         PurchasingExpenseType,
         on_delete=models.CASCADE,
         related_name="approval_rules",
-        verbose_name="Tipo de gasto",
+        verbose_name="Categoría de gasto",
     )
     sequence = models.PositiveSmallIntegerField("Secuencia")
     name = models.CharField("Nombre del paso", max_length=150)
@@ -127,78 +146,22 @@ class ExpenseTypeApprovalRule(TimeStampedModel):
         verbose_name = "Regla de aprobación"
         verbose_name_plural = "Reglas de aprobación"
         ordering = ("expense_type", "sequence")
-        unique_together = ("expense_type", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("expense_type", "sequence"),
+                name="unique_expense_type_sequence",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.expense_type.code} · {self.sequence} - {self.name}"
-
-
-class CostCenterConfig(TimeStampedModel):
-    class AllocationMethod(models.TextChoices):
-        MANUAL = "manual", "Manual"
-        AREA = "area", "Por área"
-        PRODUCTION = "production", "Producción"
-        HEADCOUNT = "headcount", "Headcount"
-
-    expense_type = models.ForeignKey(
-        PurchasingExpenseType,
-        on_delete=models.PROTECT,
-        related_name="cost_centers",
-        verbose_name="Tipo de gasto",
-    )
-    name = models.CharField("Nombre", max_length=150)
-    scope = models.CharField("Ámbito", max_length=20, choices=PurchasingExpenseType.Scope.choices)
-    allocation_method = models.CharField(
-        "Método de asignación",
-        max_length=20,
-        choices=AllocationMethod.choices,
-        default=AllocationMethod.MANUAL,
-    )
-    percentage = models.DecimalField(
-        "Porcentaje",
-        max_digits=5,
-        decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-    )
-    valid_from = models.DateField("Válido desde")
-    valid_until = models.DateField("Válido hasta", blank=True, null=True)
-    is_required = models.BooleanField("Obligatorio", default=False)
-    farm = models.ForeignKey(
-        Farm,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="cost_centers",
-        verbose_name="Granja",
-    )
-    chicken_house = models.ForeignKey(
-        ChickenHouse,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="cost_centers",
-        verbose_name="Galpón",
-    )
-    notes = models.TextField("Notas", blank=True)
-    is_active = models.BooleanField("Activo", default=True)
-
-    class Meta:
-        verbose_name = "Configuración de centro de costo"
-        verbose_name_plural = "Configuraciones de centros de costo"
-        ordering = ("-valid_from", "name")
-
-    def __str__(self) -> str:
-        return self.name
-
-    @property
-    def delete_protected_message(self) -> str:
-        return "No es posible eliminar este centro de costo porque tiene movimientos asociados."
+        return f"{self.expense_type.name} · {self.sequence} - {self.name}"
 
 
 class PurchaseRequest(TimeStampedModel):
     class Status(models.TextChoices):
         DRAFT = "borrador", "Borrador"
-        APPROVAL = "aprobacion", "En aprobación"
+        SUBMITTED = "aprobacion", "En aprobación"
+        APPROVED = "aprobada", "Aprobada"
         ORDERED = "ordenado", "Orden emitida"
         RECEPTION = "recepcion", "Recepción"
         INVOICE = "factura", "Factura"
@@ -226,15 +189,7 @@ class PurchaseRequest(TimeStampedModel):
         PurchasingExpenseType,
         on_delete=models.PROTECT,
         related_name="purchase_requests",
-        verbose_name="Tipo de gasto",
-    )
-    cost_center = models.ForeignKey(
-        CostCenterConfig,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="purchase_requests",
-        verbose_name="Centro de costo",
+        verbose_name="Categoría de gasto",
     )
     status = models.CharField(
         "Estado",
@@ -265,6 +220,7 @@ class PurchaseRequest(TimeStampedModel):
     payment_account = models.CharField("Cuenta de pago", max_length=120, blank=True)
     payment_date = models.DateField("Fecha de pago", blank=True, null=True)
     payment_notes = models.TextField("Notas de pago", blank=True)
+    approved_at = models.DateTimeField("Aprobado en", blank=True, null=True)
 
     class Meta:
         verbose_name = "Solicitud de compra"
@@ -277,7 +233,8 @@ class PurchaseRequest(TimeStampedModel):
     def stage_status(self, stage_code: str) -> str:
         flow = [
             self.Status.DRAFT,
-            self.Status.APPROVAL,
+            self.Status.SUBMITTED,
+            self.Status.APPROVED,
             self.Status.ORDERED,
             self.Status.RECEPTION,
             self.Status.INVOICE,
@@ -286,10 +243,10 @@ class PurchaseRequest(TimeStampedModel):
         ]
         stage_index = {
             "request": 0,
-            "order": 2,
-            "reception": 3,
-            "invoice": 4,
-            "payment": 5,
+            "order": 3,
+            "reception": 4,
+            "invoice": 5,
+            "payment": 6,
         }
         current_index = flow.index(self.status)
         target_index = stage_index.get(stage_code, 0)
@@ -305,8 +262,6 @@ class PurchaseRequest(TimeStampedModel):
 
     @property
     def scope_label(self) -> str:
-        if self.cost_center:
-            return self.cost_center.name
         return self.expense_type.name
 
 
@@ -355,3 +310,85 @@ class PurchaseItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.description
+
+
+class PurchaseApproval(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        APPROVED = "approved", "Aprobado"
+        REJECTED = "rejected", "Rechazado"
+
+    purchase_request = models.ForeignKey(
+        PurchaseRequest,
+        on_delete=models.CASCADE,
+        related_name="approvals",
+        verbose_name="Solicitud",
+    )
+    rule = models.ForeignKey(
+        ExpenseTypeApprovalRule,
+        on_delete=models.SET_NULL,
+        related_name="purchase_approvals",
+        blank=True,
+        null=True,
+        verbose_name="Regla",
+    )
+    sequence = models.PositiveSmallIntegerField("Secuencia")
+    role = models.CharField("Rol", max_length=150)
+    approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="purchase_approvals",
+        blank=True,
+        null=True,
+        verbose_name="Aprobador",
+    )
+    status = models.CharField(
+        "Estado",
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    comments = models.TextField("Comentarios", blank=True)
+    decided_at = models.DateTimeField("Decidido en", blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Aprobación de compra"
+        verbose_name_plural = "Aprobaciones de compra"
+        ordering = ("purchase_request", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("purchase_request", "sequence"),
+                name="unique_purchase_request_sequence",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.purchase_request.timeline_code} · Paso {self.sequence}"
+
+
+class PurchaseAuditLog(TimeStampedModel):
+    purchase_request = models.ForeignKey(
+        PurchaseRequest,
+        on_delete=models.CASCADE,
+        related_name="audit_logs",
+        verbose_name="Solicitud",
+    )
+    event = models.CharField("Evento", max_length=120)
+    message = models.TextField("Mensaje", blank=True)
+    payload = models.JSONField("Detalle", default=dict, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="purchase_audit_logs",
+        blank=True,
+        null=True,
+        verbose_name="Actor",
+    )
+
+    class Meta:
+        verbose_name = "Log de auditoría"
+        verbose_name_plural = "Logs de auditoría"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.purchase_request.timeline_code} · {self.event}"
