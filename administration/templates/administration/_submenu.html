@@ -1,4 +1,4 @@
-<nav class="mb-8 border-b border-slate-200/70">
+<nav class="border-b border-slate-200/70" data-app-submenu>
   <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
     <a
       href="{% url 'administration:purchases' %}"
@@ -6,7 +6,7 @@
       {% if active == 'purchases' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'purchases' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
-      Dashboard
+      Compras y Gastos
     </a>
     <a
       href="{% url 'administration:purchases_suppliers' %}"

@@ -8,6 +8,7 @@ from .models import (
     ExpenseTypeApprovalRule,
     PurchasingExpenseType,
     Supplier,
+    SupportDocumentType,
 )
 
 
@@ -30,11 +31,13 @@ class PurchasingExpenseTypeForm(forms.ModelForm):
         model = PurchasingExpenseType
         fields = [
             "name",
+            "default_unit",
             "scope",
+            "parent_category",
+            "default_support_document_type",
             "iva_rate",
             "withholding_rate",
             "self_withholding_rate",
-            "parent_category",
             "is_active",
         ]
 
@@ -44,6 +47,21 @@ class PurchasingExpenseTypeForm(forms.ModelForm):
         if parent and instance.pk and parent.pk == instance.pk:
             raise ValidationError("La categoría padre no puede ser la misma categoría.")
         return parent
+
+
+class SupportDocumentTypeForm(forms.ModelForm):
+    class Meta:
+        model = SupportDocumentType
+        fields = ["name", "kind", "template"]
+
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get("kind")
+        template = (cleaned.get("template") or "").strip()
+        cleaned["template"] = template
+        if kind == SupportDocumentType.Kind.INTERNAL and not template:
+            self.add_error("template", "Ingresa el HTML que se usará para el soporte interno.")
+        return cleaned
 
 
 class ExpenseTypeApprovalRuleForm(forms.ModelForm):

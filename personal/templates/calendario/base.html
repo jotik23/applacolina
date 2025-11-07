@@ -20,6 +20,32 @@
         }
       }
     </script>
+    <style>
+      .app-shell-main {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        width: 100%;
+      }
+
+      @media (min-width: 1024px) {
+        .app-shell-main {
+          gap: 2rem;
+        }
+      }
+
+      .app-shell-main > * {
+        width: 100%;
+      }
+
+      .app-shell-main > nav[data-app-submenu] {
+        margin-top: -0.5rem;
+      }
+
+      .app-shell-main > nav[data-app-submenu] + * {
+        margin-top: -1.5rem;
+      }
+    </style>
   </head>
   <body
     class="min-h-screen bg-slate-100 text-slate-800 flex flex-col"
@@ -649,7 +675,7 @@
     {% endwith %}
 
     {% if messages %}
-      <div class="mx-auto mt-4 w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto mt-4 w-full max-w-[3000px] px-4 sm:px-6 lg:px-8">
         <div class="space-y-3">
           {% for message in messages %}
             {% if message.level_tag == 'success' %}
@@ -680,9 +706,15 @@
       </div>
     {% endif %}
 
-    <main class="mx-auto mt-6 max-w-[3000px] flex-1 px-3 pb-16 sm:px-4 lg:px-6">
-      {% block content %}{% endblock %}
-    </main>
+    {% with view_match=request.resolver_match %}
+      {% if view_match and view_match.namespace == 'personal' and view_match.url_name != 'configurator' %}
+        <main class="mx-auto mt-6 max-w-[3000px] flex-1 px-3 pb-16 sm:px-4 lg:px-6">
+      {% else %}
+        <main class="mx-auto mt-6 max-w-[3000px] flex-1 px-3 pb-16 sm:px-4 lg:px-6 app-shell-main">
+      {% endif %}
+          {% block content %}{% endblock %}
+        </main>
+    {% endwith %}
 
     {% if calendar_generation_form %}
       <div class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" data-calendar-create>

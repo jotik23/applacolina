@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import ClassVar
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -35,14 +36,41 @@ class Supplier(TimeStampedModel):
         return self.name
 
 
+class SupportDocumentType(TimeStampedModel):
+    class Kind(models.TextChoices):
+        EXTERNAL = "external", "Soporte externo"
+        INTERNAL = "internal", "Soporte interno"
+
+    name = models.CharField("Nombre", max_length=120, unique=True)
+    kind = models.CharField("Tipo", max_length=20, choices=Kind.choices, default=Kind.EXTERNAL)
+    template = models.TextField(
+        "Plantilla soporte",
+        blank=True,
+        help_text="HTML usado para generar el soporte interno. Usa {{campo}} para valores dinámicos.",
+    )
+
+    class Meta:
+        verbose_name = "Tipo de soporte"
+        verbose_name_plural = "Tipos de soporte"
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def requires_template(self) -> bool:
+        return self.kind == self.Kind.INTERNAL
+
+
 class PurchasingExpenseType(TimeStampedModel):
     class Scope(models.TextChoices):
+        COMPANY = "company", "Empresa"
         FARM = "farm", "Granja"
         LOT = "lot", "Lote"
         HOUSE = "house", "Galpón"
-        LOGISTICS = "logistics", "Logística"
 
     name = models.CharField("Nombre", max_length=200)
+    default_unit = models.CharField("Unidad base", max_length=30, blank=True)
     parent_category = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -51,7 +79,15 @@ class PurchasingExpenseType(TimeStampedModel):
         related_name="child_categories",
         verbose_name="Categoría padre",
     )
-    scope = models.CharField("Ámbito", max_length=20, choices=Scope.choices, default=Scope.FARM)
+    scope = models.CharField("Ámbito", max_length=20, choices=Scope.choices, default=Scope.COMPANY)
+    default_support_document_type = models.ForeignKey(
+        SupportDocumentType,
+        on_delete=models.PROTECT,
+        related_name="default_for_categories",
+        verbose_name="Tipo de soporte por defecto",
+        null=True,
+        blank=True,
+    )
     iva_rate = models.DecimalField(
         "IVA (%)",
         max_digits=5,
@@ -134,6 +170,17 @@ class PurchaseRequest(TimeStampedModel):
         PAYMENT = "pago", "Pago"
         ARCHIVED = "archivada", "Archivada"
 
+    STAGE_FLOW: ClassVar[tuple[tuple[str, str], ...]] = (
+        ("draft", Status.DRAFT),
+        ("approval", Status.SUBMITTED),
+        ("purchasing", Status.APPROVED),
+        ("receiving", Status.ORDERED),
+        ("payable", Status.RECEPTION),
+        ("support", Status.INVOICE),
+        ("accounting", Status.PAYMENT),
+        ("archived", Status.ARCHIVED),
+    )
+
     timeline_code = models.CharField("Código", max_length=40, unique=True)
     name = models.CharField("Nombre", max_length=200)
     description = models.TextField("Descripción", blank=True)
@@ -187,6 +234,31 @@ class PurchaseRequest(TimeStampedModel):
     payment_date = models.DateField("Fecha de pago", blank=True, null=True)
     payment_notes = models.TextField("Notas de pago", blank=True)
     approved_at = models.DateTimeField("Aprobado en", blank=True, null=True)
+    scope_farm = models.ForeignKey(
+        Farm,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="purchase_requests",
+        verbose_name="Granja asociada",
+    )
+    scope_chicken_house = models.ForeignKey(
+        ChickenHouse,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="purchase_requests",
+        verbose_name="Galpón asociado",
+    )
+    scope_batch_code = models.CharField("Lote asociado", max_length=60, blank=True)
+    support_document_type = models.ForeignKey(
+        SupportDocumentType,
+        on_delete=models.PROTECT,
+        related_name="purchase_requests",
+        verbose_name="Tipo de soporte",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "Solicitud de compra"
@@ -197,38 +269,33 @@ class PurchaseRequest(TimeStampedModel):
         return f"{self.timeline_code} - {self.name}"
 
     def stage_status(self, stage_code: str) -> str:
-        flow = [
-            self.Status.DRAFT,
-            self.Status.SUBMITTED,
-            self.Status.APPROVED,
-            self.Status.ORDERED,
-            self.Status.RECEPTION,
-            self.Status.INVOICE,
-            self.Status.PAYMENT,
-            self.Status.ARCHIVED,
-        ]
-        stage_index = {
-            "request": 0,
-            "order": 3,
-            "reception": 4,
-            "invoice": 5,
-            "payment": 6,
-        }
+        flow = [status for _, status in self.STAGE_FLOW]
+        stage_index = {code: index for index, (code, _) in enumerate(self.STAGE_FLOW)}
+        target_index = stage_index.get(stage_code)
+        if target_index is None:
+            return "locked"
         current_index = flow.index(self.status)
-        target_index = stage_index.get(stage_code, 0)
         if current_index > target_index:
             return "completed"
         if current_index == target_index:
             return "active"
-        if flow[target_index] == self.Status.ARCHIVED:
-            return "completed"
         if current_index + 1 == target_index:
             return "pending"
         return "locked"
 
     @property
     def scope_label(self) -> str:
-        return self.expense_type.name
+        base = self.expense_type.name
+        location_bits: list[str] = []
+        if self.scope_farm:
+            location_bits.append(self.scope_farm.name)
+        if self.scope_chicken_house:
+            location_bits.append(self.scope_chicken_house.name)
+        if self.scope_batch_code:
+            location_bits.append(f"Lote {self.scope_batch_code}")
+        if not location_bits:
+            return base
+        return f"{base} · {' / '.join(location_bits)}"
 
 
 class PurchaseItem(TimeStampedModel):
@@ -245,24 +312,6 @@ class PurchaseItem(TimeStampedModel):
         decimal_places=2,
         validators=[MinValueValidator(0)],
     )
-    unit = models.CharField("Unidad", max_length=30)
-    farm = models.ForeignKey(
-        Farm,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="purchase_items",
-        verbose_name="Granja",
-    )
-    chicken_house = models.ForeignKey(
-        ChickenHouse,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="purchase_items",
-        verbose_name="Galpón",
-    )
-    batch_code = models.CharField("Lote", max_length=60, blank=True)
     estimated_amount = models.DecimalField(
         "Monto estimado",
         max_digits=12,

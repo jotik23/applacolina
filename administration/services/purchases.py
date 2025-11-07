@@ -40,6 +40,7 @@ class PurchaseRecord:
     currency: str
     total_amount: Decimal
     stage_indicators: Sequence[StageIndicator]
+    current_stage: StageIndicator | None
     action: PurchaseAction | None
     status_badge: str
     status_palette: str
@@ -89,26 +90,70 @@ PANEL_REGISTRY = {
 }
 
 
-SCOPE_DEFINITIONS = (
-    (PurchaseRequest.Status.DRAFT, 'Borradores', 'Solicitudes aún en preparación'),
-    (PurchaseRequest.Status.SUBMITTED, 'En aprobación', 'Esperando visto bueno del flujo'),
-    (PurchaseRequest.Status.APPROVED, 'Aprobadas', 'Listas para generar orden'),
-    (PurchaseRequest.Status.ORDERED, 'Orden emitida', 'Órdenes listas para recepción'),
-    (PurchaseRequest.Status.RECEPTION, 'Recepciones', 'Parcial o totalmente recibidas'),
-    (PurchaseRequest.Status.INVOICE, 'Facturas', 'Documentación fiscal registrada'),
-    (PurchaseRequest.Status.PAYMENT, 'Pagos', 'Pagos programados o en curso'),
-    (PurchaseRequest.Status.ARCHIVED, 'Archivadas', 'Compras cerradas'),
+PURCHASE_STAGE_META = {
+    'draft': {
+        'label': 'Solicitud (en borrador)',
+        'description': 'Solicitudes en preparación antes de enviarse.',
+        'tooltip': 'Solicitud creada y aún editable.',
+        'palette': 'slate',
+    },
+    'approval': {
+        'label': 'En aprobación',
+        'description': 'Esperando visto bueno del flujo configurado.',
+        'tooltip': 'En evaluación por los aprobadores.',
+        'palette': 'amber',
+    },
+    'purchasing': {
+        'label': 'En compra',
+        'description': 'Equipo de compras gestionando la orden.',
+        'tooltip': 'Aprobada y en proceso de compra.',
+        'palette': 'indigo',
+    },
+    'receiving': {
+        'label': 'Por recibir',
+        'description': 'Órdenes emitidas pendientes de recepción.',
+        'tooltip': 'Esperando recepción parcial o total.',
+        'palette': 'blue',
+    },
+    'payable': {
+        'label': 'Por pagar',
+        'description': 'Recepciones registradas con pago pendiente.',
+        'tooltip': 'Listo para programar el pago.',
+        'palette': 'orange',
+    },
+    'support': {
+        'label': 'Por soportar',
+        'description': 'Pendiente cargar o validar los soportes.',
+        'tooltip': 'Falta adjuntar documentos soporte.',
+        'palette': 'emerald',
+    },
+    'accounting': {
+        'label': 'En contabilidad',
+        'description': 'Pagos enviados al equipo contable.',
+        'tooltip': 'Contabilidad revisando y cerrando la compra.',
+        'palette': 'cyan',
+    },
+    'archived': {
+        'label': 'Archivadas',
+        'description': 'Compras cerradas y con soporte completo.',
+        'tooltip': 'Proceso completado y archivado.',
+        'palette': 'slate',
+    },
+}
+
+
+SCOPE_DEFINITIONS = tuple(
+    (
+        status,
+        PURCHASE_STAGE_META[stage_code]['label'],
+        PURCHASE_STAGE_META[stage_code]['description'],
+    )
+    for stage_code, status in PurchaseRequest.STAGE_FLOW
 )
 
 STATUS_BADGES = {
-    PurchaseRequest.Status.DRAFT: ('Borrador', 'slate'),
-    PurchaseRequest.Status.SUBMITTED: ('En aprobación', 'amber'),
-    PurchaseRequest.Status.APPROVED: ('Aprobada', 'emerald'),
-    PurchaseRequest.Status.ORDERED: ('Orden emitida', 'blue'),
-    PurchaseRequest.Status.RECEPTION: ('Recepción', 'violet'),
-    PurchaseRequest.Status.INVOICE: ('Factura', 'emerald'),
-    PurchaseRequest.Status.PAYMENT: ('Pago', 'cyan'),
-    PurchaseRequest.Status.ARCHIVED: ('Archivada', 'slate'),
+    status: (PURCHASE_STAGE_META[stage_code]['label'], PURCHASE_STAGE_META[stage_code]['palette'])
+    for stage_code, status in PurchaseRequest.STAGE_FLOW
 }
 
 ACTION_BY_STATUS = {
@@ -121,15 +166,6 @@ ACTION_BY_STATUS = {
     PurchaseRequest.Status.PAYMENT: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
     PurchaseRequest.Status.ARCHIVED: None,
 }
-
-STAGE_TOOLTIPS = {
-    'request': 'Solicitud y metadatos',
-    'order': 'Orden de compra',
-    'reception': 'Recepciones',
-    'invoice': 'Registro de factura',
-    'payment': 'Programación de pago',
-}
-
 
 def get_dashboard_state(*, scope_code: str | None, panel_code: str | None, purchase_pk: int | None) -> PurchaseDashboardState:
     scopes = _build_scopes()
@@ -185,19 +221,14 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
     badge, palette = STATUS_BADGES.get(purchase.status, ('Sin estado', 'slate'))
     stage_indicators = tuple(
         StageIndicator(
-            code=code,
-            label=label,
-            status=purchase.stage_status(code),
-            tooltip=STAGE_TOOLTIPS[code],
+            code=stage_code,
+            label=PURCHASE_STAGE_META[stage_code]['label'],
+            status=purchase.stage_status(stage_code),
+            tooltip=PURCHASE_STAGE_META[stage_code]['tooltip'],
         )
-        for code, label in (
-            ('request', 'Solicitud'),
-            ('order', 'Orden'),
-            ('reception', 'Recepción'),
-            ('invoice', 'Factura'),
-            ('payment', 'Pago'),
-        )
+        for stage_code, _ in PurchaseRequest.STAGE_FLOW
     )
+    current_stage = next((stage for stage in stage_indicators if stage.status == 'active'), None)
     action = ACTION_BY_STATUS.get(purchase.status)
     return PurchaseRecord(
         pk=purchase.pk,
@@ -211,6 +242,7 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
         currency=purchase.currency,
         total_amount=purchase.estimated_total,
         stage_indicators=stage_indicators,
+        current_stage=current_stage,
         action=action,
         status_badge=badge,
         status_palette=palette,

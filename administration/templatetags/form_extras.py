@@ -22,3 +22,10 @@ def add_attr(field, arg: str):
     key, value = arg.split('=', 1)
     field.field.widget.attrs[key.strip()] = value.strip()
     return field
+
+
+@register.filter
+def dict_get(value, key):
+    if isinstance(value, dict):
+        return value.get(key)
+    return None
