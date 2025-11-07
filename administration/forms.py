@@ -17,28 +17,12 @@ class SupplierForm(forms.ModelForm):
         fields = [
             "name",
             "tax_id",
-            "tax_regime",
-            "payment_terms_days",
-            "is_active",
             "contact_name",
             "contact_email",
             "contact_phone",
             "address",
             "city",
-            "bank_name",
-            "bank_account_type",
-            "bank_account_number",
-            "requires_vat_retention",
-            "requires_ica_retention",
-            "requires_rtefte",
-            "notes",
         ]
-
-    def clean_payment_terms_days(self):
-        value = self.cleaned_data["payment_terms_days"]
-        if value <= 0:
-            raise ValidationError("El plazo debe ser mayor que cero.")
-        return value
 
 
 class PurchasingExpenseTypeForm(forms.ModelForm):

@@ -24,7 +24,7 @@ def _create_expense_type() -> PurchasingExpenseType:
 
 def _create_supplier() -> Supplier:
     return Supplier.objects.create(
-        name='Proveedor Demo',
+        name='Tercero Demo',
         tax_id='900123456',
     )
 

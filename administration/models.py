@@ -18,51 +18,17 @@ class TimeStampedModel(models.Model):
 
 
 class Supplier(TimeStampedModel):
-    class TaxRegime(models.TextChoices):
-        GENERAL = "general", "Régimen general"
-        SIMPLIFIED = "simplificado", "Régimen simplificado"
-        SPECIAL = "especial", "Régimen especial"
-
-    class AccountType(models.TextChoices):
-        CHECKING = "checking", "Cuenta corriente"
-        SAVINGS = "savings", "Cuenta de ahorros"
-        OTHER = "other", "Otro"
-
-    name = models.CharField("Nombre comercial", max_length=255)
-    tax_id = models.CharField("NIT", max_length=50, unique=True)
-    tax_regime = models.CharField(
-        "Régimen",
-        max_length=20,
-        choices=TaxRegime.choices,
-        default=TaxRegime.GENERAL,
-    )
-    payment_terms_days = models.PositiveSmallIntegerField(
-        "Plazo de pago (días)",
-        default=30,
-        validators=[MaxValueValidator(365)],
-    )
-    is_active = models.BooleanField("Activo", default=True)
+    name = models.CharField("Nombre / Razón social", max_length=255)
+    tax_id = models.CharField("CC/NIT", max_length=50, unique=True)
     contact_name = models.CharField("Contacto", max_length=150, blank=True)
     contact_email = models.EmailField("Correo de contacto", blank=True)
     contact_phone = models.CharField("Teléfono", max_length=50, blank=True)
     address = models.CharField("Dirección", max_length=255, blank=True)
     city = models.CharField("Ciudad", max_length=120, blank=True)
-    bank_name = models.CharField("Banco", max_length=150, blank=True)
-    bank_account_type = models.CharField(
-        "Tipo de cuenta",
-        max_length=20,
-        choices=AccountType.choices,
-        default=AccountType.CHECKING,
-    )
-    bank_account_number = models.CharField("Número de cuenta", max_length=64, blank=True)
-    requires_vat_retention = models.BooleanField("Retención IVA", default=False)
-    requires_ica_retention = models.BooleanField("Retención ICA", default=False)
-    requires_rtefte = models.BooleanField("Retefuente", default=False)
-    notes = models.TextField("Notas internas", blank=True)
 
     class Meta:
-        verbose_name = "Proveedor"
-        verbose_name_plural = "Proveedores"
+        verbose_name = "Tercero"
+        verbose_name_plural = "Terceros"
         ordering = ("name",)
 
     def __str__(self) -> str:
@@ -183,7 +149,7 @@ class PurchaseRequest(TimeStampedModel):
         Supplier,
         on_delete=models.PROTECT,
         related_name="purchase_requests",
-        verbose_name="Proveedor",
+        verbose_name="Tercero",
     )
     expense_type = models.ForeignKey(
         PurchasingExpenseType,

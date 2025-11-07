@@ -1,7 +1,7 @@
 {% extends "calendario/base.html" %}
 {% load form_extras %}
 
-{% block title %}Administración · Proveedores{% endblock %}
+{% block title %}Administración · Terceros{% endblock %}
 
 {% block content %}
   {% include "administration/_submenu.html" with active=administration_active_submenu %}
@@ -10,8 +10,7 @@
     <header class="flex flex-col gap-4 rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/70 lg:flex-row lg:items-center lg:justify-between">
       <div>
         <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Administración</p>
-        <h1 class="text-2xl font-semibold text-slate-900">Proveedores</h1>
-        <p class="text-sm text-slate-600">Gestiona solicitudes de alta, estados y datos bancarios.</p>
+        <h1 class="text-2xl font-semibold text-slate-900">Terceros</h1>
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <form method="get" class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2">
@@ -19,7 +18,7 @@
             type="search"
             name="search"
             value="{{ supplier_search }}"
-            placeholder="Buscar por nombre o NIT"
+            placeholder="Buscar por nombre o CC/NIT"
             class="w-48 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none"
           >
           <button type="submit" class="text-xs font-semibold text-slate-500">Buscar</button>
@@ -29,7 +28,7 @@
           class="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
         >
           <span aria-hidden="true" class="text-base">＋</span>
-          Nuevo proveedor
+          Nuevo tercero
         </a>
       </div>
     </header>
@@ -41,7 +40,7 @@
           <span class="font-semibold text-slate-900">{{ suppliers_page.object_list|length }}</span>
           de
           <span class="font-semibold text-slate-900">{{ suppliers_page.paginator.count }}</span>
-          proveedores
+          terceros
           {% if supplier_search %}
             para <span class="font-semibold">“{{ supplier_search }}”</span>
           {% endif %}
@@ -54,11 +53,9 @@
         <table class="min-w-full divide-y divide-slate-200 text-sm">
           <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
-              <th class="px-6 py-3">Nombre</th>
-              <th class="px-6 py-3">NIT</th>
-              <th class="px-6 py-3">Régimen</th>
-              <th class="px-6 py-3 text-center">Plazo</th>
-              <th class="px-6 py-3 text-center">Estado</th>
+              <th class="px-6 py-3">Nombre / Razón social</th>
+              <th class="px-6 py-3">CC/NIT</th>
+              <th class="px-6 py-3">Contacto</th>
               <th class="px-6 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -67,18 +64,20 @@
               <tr class="hover:bg-slate-50/70">
                 <td class="px-6 py-4">
                   <p class="font-semibold text-slate-900">{{ supplier.name }}</p>
-                  <p class="text-xs text-slate-500">{{ supplier.contact_name }} · {{ supplier.contact_email }}</p>
+                  <p class="text-xs text-slate-500">
+                    {{ supplier.address|default:"Sin dirección" }}{% if supplier.city %} · {{ supplier.city }}{% endif %}
+                  </p>
                 </td>
                 <td class="px-6 py-4">
                   <p class="font-semibold text-slate-700">{{ supplier.tax_id }}</p>
-                  <p class="text-xs text-slate-500">{{ supplier.city }}</p>
+                  <p class="text-xs text-slate-500">Identificación</p>
                 </td>
-                <td class="px-6 py-4 text-slate-600">{{ supplier.get_tax_regime_display }}</td>
-                <td class="px-6 py-4 text-center text-slate-600">{{ supplier.payment_terms_days }} días</td>
-                <td class="px-6 py-4 text-center">
-                  <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {% if supplier.is_active %}bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200{% else %}bg-slate-100 text-slate-500 ring-1 ring-slate-200{% endif %}">
-                    {{ supplier.is_active|yesno:"Activo,Inactivo" }}
-                  </span>
+                <td class="px-6 py-4">
+                  <p class="text-sm font-semibold text-slate-900">{{ supplier.contact_name|default:"Sin contacto" }}</p>
+                  <p class="text-xs text-slate-500">{{ supplier.contact_email }}</p>
+                  {% if supplier.contact_phone %}
+                    <p class="text-xs text-slate-500">{{ supplier.contact_phone }}</p>
+                  {% endif %}
                 </td>
                 <td class="px-6 py-4">
                   <div class="flex flex-wrap items-center justify-end gap-2">
@@ -88,17 +87,6 @@
                     >
                       Editar
                     </a>
-                    <form method="post" class="inline">
-                      {% csrf_token %}
-                      <input type="hidden" name="supplier_id" value="{{ supplier.pk }}">
-                      <input type="hidden" name="form_action" value="{% if supplier.is_active %}deactivate{% else %}activate{% endif %}">
-                      <button
-                        type="submit"
-                        class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                      >
-                        {% if supplier.is_active %}Desactivar{% else %}Activar{% endif %}
-                      </button>
-                    </form>
                     <a
                       href="?{% if supplier_search %}search={{ supplier_search|urlencode }}&{% endif %}modal=delete&supplier={{ supplier.pk }}"
                       class="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
@@ -110,8 +98,8 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6" class="px-6 py-16 text-center text-sm text-slate-500">
-                  No se encontraron proveedores.
+                <td colspan="4" class="px-6 py-16 text-center text-sm text-slate-500">
+                  No se encontraron terceros.
                 </td>
               </tr>
             {% endfor %}
@@ -150,7 +138,7 @@
       <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
         <div>
           <p class="text-lg font-semibold text-slate-900">
-            {% if supplier_instance %}Editar proveedor{% else %}Registrar proveedor{% endif %}
+            {% if supplier_instance %}Editar tercero{% else %}Registrar tercero{% endif %}
           </p>
           {% if supplier_instance %}
             <span class="mt-1 inline-flex items-center rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-600">
@@ -171,26 +159,16 @@
           {% endif %}
           {{ supplier_form.non_field_errors }}
           <article class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Datos fiscales</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Identificación</p>
             <label class="text-xs font-semibold text-slate-500">
-              Nombre comercial
+              Nombre / Razón social
               {{ supplier_form.name|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm" }}
               {{ supplier_form.name.errors }}
             </label>
             <label class="text-xs font-semibold text-slate-500">
-              NIT
+              CC/NIT
               {{ supplier_form.tax_id|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm" }}
               {{ supplier_form.tax_id.errors }}
-            </label>
-            <label class="text-xs font-semibold text-slate-500">
-              Régimen
-              {{ supplier_form.tax_regime|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-              {{ supplier_form.tax_regime.errors }}
-            </label>
-            <label class="text-xs font-semibold text-slate-500">
-              Plazo de pago (días)
-              {{ supplier_form.payment_terms_days|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-              {{ supplier_form.payment_terms_days.errors }}
             </label>
           </article>
 
@@ -227,56 +205,12 @@
             </label>
           </article>
 
-          <article class="space-y-3 rounded-2xl border border-slate-200 p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pagos y retenciones</p>
-            <div class="grid gap-3 lg:grid-cols-2">
-              <label class="text-xs font-semibold text-slate-500">
-                Banco
-                {{ supplier_form.bank_name|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-                {{ supplier_form.bank_name.errors }}
-              </label>
-              <label class="text-xs font-semibold text-slate-500">
-                Tipo de cuenta
-                {{ supplier_form.bank_account_type|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-                {{ supplier_form.bank_account_type.errors }}
-              </label>
-            </div>
-            <label class="text-xs font-semibold text-slate-500">
-              Número de cuenta
-              {{ supplier_form.bank_account_number|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-              {{ supplier_form.bank_account_number.errors }}
-            </label>
-            <div class="flex flex-wrap gap-3 text-xs font-semibold text-slate-600">
-              <label class="inline-flex items-center gap-2">
-                {{ supplier_form.requires_vat_retention|add_class:"size-4 rounded border-slate-300" }}
-                Retención IVA
-              </label>
-              <label class="inline-flex items-center gap-2">
-                {{ supplier_form.requires_ica_retention|add_class:"size-4 rounded border-slate-300" }}
-                Retención ICA
-              </label>
-              <label class="inline-flex items-center gap-2">
-                {{ supplier_form.requires_rtefte|add_class:"size-4 rounded border-slate-300" }}
-                Retefuente
-              </label>
-              <label class="inline-flex items-center gap-2">
-                {{ supplier_form.is_active|add_class:"size-4 rounded border-slate-300" }}
-                Activo
-              </label>
-            </div>
-            <label class="text-xs font-semibold text-slate-500">
-              Notas internas
-              {{ supplier_form.notes|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-              {{ supplier_form.notes.errors }}
-            </label>
-          </article>
-
           <div class="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <a href="?{% if supplier_search %}search={{ supplier_search|urlencode }}&{% endif %}" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">
               Cancelar
             </a>
             <button type="submit" class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90">
-              Guardar proveedor
+              Guardar tercero
             </button>
           </div>
         </form>
@@ -288,7 +222,7 @@
     <div class="fixed inset-0 z-50 bg-slate-900/60"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="w-full max-w-md rounded-2xl bg-white p-6 text-sm text-slate-600 shadow-2xl">
-        <h2 class="text-lg font-semibold text-slate-900">Eliminar proveedor</h2>
+        <h2 class="text-lg font-semibold text-slate-900">Eliminar tercero</h2>
         <p class="mt-2 text-slate-500">
           Esta acción no se puede deshacer. ¿Seguro que deseas eliminar
           <span class="font-semibold">{{ supplier_instance.name }}</span>?

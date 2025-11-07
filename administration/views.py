@@ -58,8 +58,6 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
         action = request.POST.get('form_action')
         if action == 'supplier':
             return self._submit_supplier_form()
-        if action in {'activate', 'deactivate'}:
-            return self._toggle_supplier(is_active=(action == 'activate'))
         if action == 'delete':
             return self._delete_supplier()
         messages.error(request, 'Acción no soportada.')
@@ -100,7 +98,7 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
         if form.is_valid():
             supplier = form.save()
             verb = "actualizado" if instance else "registrado"
-            messages.success(self.request, f"Proveedor {verb} correctamente.")
+            messages.success(self.request, f"Tercero {verb} correctamente.")
             return redirect(self._base_url(with_panel=False))
         messages.error(self.request, "Revisa los errores del formulario.")
         return self.render_to_response(
@@ -112,35 +110,17 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
             )
         )
 
-    def _toggle_supplier(self, *, is_active: bool) -> HttpResponse:
-        supplier_id = _parse_int(self.request.POST.get('supplier_id'))
-        supplier = Supplier.objects.filter(pk=supplier_id).first()
-        if not supplier:
-            messages.error(self.request, "Proveedor no encontrado.")
-            return redirect(self._base_url())
-        if supplier.is_active == is_active:
-            messages.info(
-                self.request,
-                f"El proveedor ya estaba {'activo' if is_active else 'inactivo'}.",
-            )
-        else:
-            supplier.is_active = is_active
-            supplier.save(update_fields=['is_active'])
-            state = "activado" if is_active else "desactivado"
-            messages.success(self.request, f"Proveedor {state}.")
-        return redirect(self._base_url(with_panel=False))
-
     def _delete_supplier(self) -> HttpResponse:
         supplier_id = _parse_int(self.request.POST.get('supplier_id'))
         supplier = Supplier.objects.filter(pk=supplier_id).first()
         if not supplier:
-            messages.error(self.request, "Proveedor no encontrado.")
+            messages.error(self.request, "Tercero no encontrado.")
             return redirect(self._base_url())
         try:
             supplier.delete()
-            messages.success(self.request, "Proveedor eliminado.")
+            messages.success(self.request, "Tercero eliminado.")
         except ProtectedError:
-            messages.error(self.request, "No es posible eliminar este proveedor porque tiene movimientos.")
+            messages.error(self.request, "No es posible eliminar este tercero porque tiene movimientos.")
         return redirect(self._base_url())
 
     def _base_url(self, *, with_panel: bool = True) -> str:
