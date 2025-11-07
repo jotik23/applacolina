@@ -147,14 +147,6 @@
                               <span aria-hidden="true">→</span>
                             </a>
                           {% endif %}
-                          {% if not purchases_scope.code == 'aprobacion' or not purchase.action or purchase.action.label != 'Ver solicitud' %}
-                            <a
-                              href="?scope={{ purchases_scope.code }}&panel=request&purchase={{ purchase.pk }}"
-                              class="text-xs font-medium text-slate-500 underline decoration-dotted underline-offset-4 hover:text-slate-700"
-                            >
-                              Ver solicitud
-                            </a>
-                          {% endif %}
                         </div>
                       </td>
                     </tr>
@@ -195,7 +187,7 @@
         <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cerrar</a>
       </div>
       <div class="p-6">
-        <form method="post" action="{% url 'administration:purchases' %}">
+        <form method="post" action="{% url 'administration:purchases' %}" enctype="multipart/form-data">
           {% csrf_token %}
           <input type="hidden" name="scope" value="{{ purchases_scope.code }}">
           <input type="hidden" name="panel" value="{{ purchases_panel.panel.code }}">

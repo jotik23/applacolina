@@ -113,6 +113,30 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(self.house, purchase.scope_chicken_house)
         self.assertEqual(self.support_type, purchase.support_document_type)
 
+    def test_reopen_from_submitted_returns_to_draft(self) -> None:
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-0005',
+            name='Compra en aprobación',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            support_document_type=self.support_type,
+            status=PurchaseRequest.Status.SUBMITTED,
+        )
+        response = self.client.post(
+            self._url(),
+            data={
+                'panel': 'request',
+                'scope': PurchaseRequest.Status.SUBMITTED,
+                'purchase': str(purchase.pk),
+                'intent': 'reopen_request',
+            },
+        )
+        expected = f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}&panel=request&purchase={purchase.pk}"
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+        purchase.refresh_from_db()
+        self.assertEqual(PurchaseRequest.Status.DRAFT, purchase.status)
+
     def _url(self) -> str:
         return reverse('administration:purchases')
 

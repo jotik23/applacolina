@@ -1,5 +1,13 @@
-{% with purchase=purchases_panel.purchase %}
-<section class="space-y-6 text-sm text-slate-700">
+{% load form_extras static %}
+{% with purchase=purchases_panel.purchase form=purchase_reception_form field_errors=purchase_reception_field_errors item_errors=purchase_reception_item_errors %}
+<section class="space-y-6 text-sm text-slate-700" data-purchase-reception-form>
+  {% if field_errors.non_field %}
+    <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700">
+      {% for message in field_errors.non_field %}
+        <p>{{ message }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
   <article class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
     <header>
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Recepción</p>
@@ -17,34 +25,55 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 bg-white">
-          <tr>
-            <td class="px-4 py-3">
-              <p class="font-semibold text-slate-900">Motor ventilador 1/2hp</p>
-              <p class="text-[11px] text-slate-500">OC ligada · {{ purchase.scope_label }}</p>
-            </td>
-            <td class="px-4 py-3 text-center font-semibold text-slate-500">4</td>
-            <td class="px-4 py-3 text-center">
-              <input type="number" name="receipts[0][qty]" value="2" class="w-20 rounded-xl border border-slate-200 px-2 py-1 text-center">
-            </td>
-            <td class="px-4 py-3 text-center font-semibold text-slate-500">2</td>
-          </tr>
-          <tr>
-            <td class="px-4 py-3">
-              <p class="font-semibold text-slate-900">Kit cables blindados</p>
-              <p class="text-[11px] text-slate-500">Entrega parcial registrada</p>
-            </td>
-            <td class="px-4 py-3 text-center font-semibold text-slate-500">12</td>
-            <td class="px-4 py-3 text-center">
-              <input type="number" name="receipts[1][qty]" value="10" class="w-20 rounded-xl border border-slate-200 px-2 py-1 text-center">
-            </td>
-            <td class="px-4 py-3 text-center font-semibold text-slate-500">2</td>
-          </tr>
+          {% if form.items %}
+            {% for item in form.items %}
+              {% with row_errors=item_errors|dict_get:forloop.counter0 %}
+                <tr data-reception-row data-requested="{{ item.requested_quantity }}">
+                  <td class="px-4 py-3 align-top">
+                    <p class="font-semibold text-slate-900">{{ item.description }}</p>
+                    <p class="text-[11px] text-slate-500">{{ purchase.scope_label }}</p>
+                  </td>
+                  <td class="px-4 py-3 text-center font-semibold text-slate-500">{{ item.requested_quantity }}</td>
+                  <td class="px-4 py-3 text-center">
+                    <input
+                      type="hidden"
+                      name="receipts[{{ forloop.counter0 }}][item_id]"
+                      value="{{ item.id }}"
+                    >
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      name="receipts[{{ forloop.counter0 }}][received_quantity]"
+                      value="{{ item.received_quantity }}"
+                      class="w-24 rounded-xl border border-slate-200 px-2 py-1 text-center shadow-sm focus:border-slate-400 focus:outline-none"
+                    >
+                    {% if row_errors %}
+                      <p class="mt-1 text-[11px] font-semibold text-red-600">{{ row_errors.0 }}</p>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-center font-semibold text-slate-500" data-pending-cell>
+                    {{ item.pending_quantity }}
+                  </td>
+                </tr>
+              {% endwith %}
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="4" class="px-4 py-6 text-center text-slate-500">Sin items asociados.</td>
+            </tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
     <label class="text-xs font-semibold text-slate-500">
       Observaciones
-      <textarea name="reception_notes" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm" placeholder="Daños, faltantes, comentarios del proveedor"></textarea>
+      <textarea
+        name="reception_notes"
+        rows="3"
+        class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        placeholder="Daños, faltantes, comentarios del proveedor"
+      >{{ form.notes }}</textarea>
     </label>
   </article>
 
@@ -52,11 +81,25 @@
     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Documentos</p>
     <label class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 hover:border-slate-300">
       Adjuntar remisión
-      <input type="file" name="delivery_attachment" class="hidden">
+      <input type="file" name="reception_attachments" class="hidden" multiple>
       <span class="text-xs font-medium text-brand">Seleccionar</span>
     </label>
-    <p class="text-xs text-slate-400">Subir un archivo generará un registro en la actividad reciente.</p>
+    <p class="text-xs text-slate-400">Sube remisiones, fotos o evidencias relevantes para la recepción.</p>
+    {% if form.attachments %}
+      <ul class="space-y-1 text-xs text-slate-600">
+        {% for attachment in form.attachments %}
+          <li>
+            <a class="text-brand hover:underline" href="{{ attachment.file.url }}" target="_blank" rel="noopener">
+              {{ attachment.filename }}
+            </a>
+            <span class="text-slate-400">· {{ attachment.created_at|date:"M d, H:i" }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
   </article>
+
+  {% include "administration/purchases/forms/_request_summary.html" with purchase=purchase %}
 
   <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
     <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cancelar</a>
@@ -70,4 +113,5 @@
     </div>
   </div>
 </section>
+<script type="module" src="{% static 'administration/js/purchase-reception-form.js' %}"></script>
 {% endwith %}

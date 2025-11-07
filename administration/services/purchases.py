@@ -87,7 +87,7 @@ class PurchaseDashboardState:
 
 PANEL_REGISTRY = {
     'request': PurchasePanel('request', 'Nueva solicitud de compra', 'administration/purchases/forms/_form_request.html'),
-    'order': PurchasePanel('order', 'Orden de compra', 'administration/purchases/forms/_form_order.html'),
+    'order': PurchasePanel('order', 'Gestionar compra', 'administration/purchases/forms/_form_order.html'),
     'reception': PurchasePanel('reception', 'Registrar recepción', 'administration/purchases/forms/_form_reception.html'),
     'invoice': PurchasePanel('invoice', 'Registrar factura', 'administration/purchases/forms/_form_invoice.html'),
     'payment': PurchasePanel('payment', 'Registrar pago', 'administration/purchases/forms/_form_payment.html'),
@@ -114,7 +114,7 @@ PURCHASE_STAGE_META = {
         'palette': 'indigo',
     },
     'receiving': {
-        'label': 'Por recibir',
+        'label': 'Esperando llegada',
         'description': 'Órdenes emitidas pendientes de recepción.',
         'tooltip': 'Esperando recepción parcial o total.',
         'palette': 'blue',
@@ -163,7 +163,7 @@ STATUS_BADGES = {
 ACTION_BY_STATUS = {
     PurchaseRequest.Status.DRAFT: PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
     PurchaseRequest.Status.SUBMITTED: PurchaseAction('Ver solicitud', 'request', 'ver_detalle'),
-    PurchaseRequest.Status.APPROVED: PurchaseAction('Registrar orden', 'order', 'registrar_orden'),
+    PurchaseRequest.Status.APPROVED: PurchaseAction('Gestionar compra', 'order', 'gestionar_compra'),
     PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.INVOICE: PurchaseAction('Registrar factura', 'invoice', 'registrar_factura'),

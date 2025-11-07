@@ -1,0 +1,70 @@
+{% load form_extras %}
+{% if purchase %}
+<details class="rounded-2xl border border-slate-200 bg-white/70 p-5 text-sm text-slate-700" data-request-summary>
+  <summary class="cursor-pointer select-none text-sm font-semibold text-slate-900">
+    Ver detalles de la solicitud
+  </summary>
+  <div class="mt-3 space-y-4 text-xs text-slate-600">
+    <dl class="grid gap-3 sm:grid-cols-2">
+      <div class="sm:col-span-2">
+        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Solicitud</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.timeline_code }} · {{ purchase.name }}</dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Proveedor</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier.name }}</dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Categoría</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.expense_type.name }}</dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Ámbito / soporte</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.scope_label }}{% if purchase.support_document_type %} · {{ purchase.support_document_type.name }}{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Estado</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_status_display }}</dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Total estimado</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.currency }} {{ purchase.estimated_total|floatformat:0 }}</dd>
+      </div>
+    </dl>
+    {% if purchase.description %}
+      <div>
+        <p class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Notas</p>
+        <p class="mt-1 text-sm text-slate-700">{{ purchase.description }}</p>
+      </div>
+    {% endif %}
+    {% with items=purchase.items.all %}
+      {% if items %}
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2 text-left">Item</th>
+                <th class="px-3 py-2 text-right">Cantidad</th>
+                <th class="px-3 py-2 text-right">Valor unitario</th>
+                <th class="px-3 py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              {% for item in items %}
+                <tr>
+                  <td class="px-3 py-2 text-slate-900">{{ item.description }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.estimated_amount }}</td>
+                  <td class="px-3 py-2 text-right">
+                    {{ item.quantity|multiply:item.estimated_amount|floatformat:2 }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    {% endwith %}
+  </div>
+</details>
+{% endif %}

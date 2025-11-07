@@ -19,6 +19,19 @@
     <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
       Esta solicitud se encuentra en {{ purchase.get_status_display|default:"un estado no editable" }}. Los campos se muestran solo para consulta.
     </div>
+    {% if form.can_reopen %}
+      <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-[11px] text-amber-800">
+        <p class="font-semibold">Si necesitas editarla, devuélvela a borrador y reinicia el flujo de aprobación.</p>
+        <button
+          type="submit"
+          name="intent"
+          value="reopen_request"
+          class="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-white px-4 py-1.5 text-xs font-semibold text-amber-800 hover:border-amber-400 hover:text-amber-900"
+        >
+          Modificar solicitud
+        </button>
+      </div>
+    {% endif %}
   {% endif %}
 
   <fieldset class="space-y-6" {% if form.read_only %}disabled{% endif %}>

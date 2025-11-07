@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import os
 from typing import ClassVar
 
 from django.conf import settings
@@ -169,6 +170,23 @@ class ExpenseTypeApprovalRule(TimeStampedModel):
 
 
 class PurchaseRequest(TimeStampedModel):
+    class DeliveryCondition(models.TextChoices):
+        IMMEDIATE = "immediate", "Entrega inmediata"
+        SHIPPING = "shipping", "Envío posterior"
+
+    class PaymentCondition(models.TextChoices):
+        CASH = "contado", "Contado"
+        CREDIT = "credito", "Crédito"
+
+    class PaymentMethod(models.TextChoices):
+        CASH = "efectivo", "Efectivo"
+        TRANSFER = "transferencia", "Transferencia"
+
+    class PaymentSource(models.TextChoices):
+        TBD = "tbd", "Por definir (TBD)"
+        OPERATIONS = "operations", "Operaciones"
+        FINANCE = "finance", "Finanzas"
+
     class Status(models.TextChoices):
         DRAFT = "borrador", "Borrador"
         SUBMITTED = "aprobacion", "En aprobación"
@@ -229,6 +247,28 @@ class PurchaseRequest(TimeStampedModel):
     eta = models.DateField("ETA", blank=True, null=True)
     order_number = models.CharField("Número de orden", max_length=60, blank=True)
     order_date = models.DateField("Fecha de orden", blank=True, null=True)
+    purchase_date = models.DateField("Fecha de compra", blank=True, null=True)
+    delivery_condition = models.CharField(
+        "Condiciones de entrega",
+        max_length=20,
+        choices=DeliveryCondition.choices,
+        default=DeliveryCondition.IMMEDIATE,
+    )
+    delivery_terms = models.TextField("Condiciones de entrega (legacy)", blank=True, default="")
+    shipping_eta = models.DateField("Fecha estimada de llegada", blank=True, null=True)
+    shipping_notes = models.TextField("Notas de envío", blank=True)
+    payment_condition = models.CharField(
+        "Condiciones de pago",
+        max_length=20,
+        choices=PaymentCondition.choices,
+        blank=True,
+    )
+    payment_method = models.CharField(
+        "Medio de pago",
+        max_length=20,
+        choices=PaymentMethod.choices,
+        blank=True,
+    )
     reception_notes = models.TextField("Notas de recepción", blank=True)
     invoice_number = models.CharField("Número de factura", max_length=60, blank=True)
     invoice_date = models.DateField("Fecha factura", blank=True, null=True)
@@ -242,6 +282,22 @@ class PurchaseRequest(TimeStampedModel):
     payment_account = models.CharField("Cuenta de pago", max_length=120, blank=True)
     payment_date = models.DateField("Fecha de pago", blank=True, null=True)
     payment_notes = models.TextField("Notas de pago", blank=True)
+    payment_source = models.CharField(
+        "Origen del pago",
+        max_length=20,
+        choices=PaymentSource.choices,
+        default=PaymentSource.TBD,
+    )
+    supplier_account_holder_id = models.CharField("Identificación titular (compra)", max_length=50, blank=True)
+    supplier_account_holder_name = models.CharField("Nombre titular (compra)", max_length=255, blank=True)
+    supplier_account_type = models.CharField(
+        "Tipo de cuenta (compra)",
+        max_length=20,
+        choices=Supplier.ACCOUNT_TYPE_CHOICES,
+        blank=True,
+    )
+    supplier_account_number = models.CharField("Número de cuenta (compra)", max_length=60, blank=True)
+    supplier_bank_name = models.CharField("Banco (compra)", max_length=120, blank=True)
     approved_at = models.DateTimeField("Aprobado en", blank=True, null=True)
     scope_farm = models.ForeignKey(
         Farm,
@@ -337,6 +393,13 @@ class PurchaseItem(TimeStampedModel):
         decimal_places=2,
         default=Decimal("0.00"),
     )
+    received_quantity = models.DecimalField(
+        "Cantidad recibida",
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
+    )
 
     class Meta:
         verbose_name = "Item de compra"
@@ -344,6 +407,37 @@ class PurchaseItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.description
+
+
+class PurchaseReceptionAttachment(TimeStampedModel):
+    purchase = models.ForeignKey(
+        PurchaseRequest,
+        on_delete=models.CASCADE,
+        related_name="reception_attachments",
+        verbose_name="Solicitud",
+    )
+    file = models.FileField("Archivo", upload_to="purchases/receptions/%Y/%m/")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchase_reception_attachments",
+        verbose_name="Subido por",
+    )
+    notes = models.CharField("Notas", max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "Adjunto de recepción"
+        verbose_name_plural = "Adjuntos de recepción"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.filename
+
+    @property
+    def filename(self) -> str:
+        return os.path.basename(self.file.name)
 
 
 class PurchaseApproval(TimeStampedModel):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import re
 from urllib.parse import urlencode
@@ -12,6 +13,7 @@ from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import cached_property
 from django.views import generic
 
@@ -30,6 +32,17 @@ from .models import (
     PurchasingExpenseType,
     Supplier,
     SupportDocumentType,
+)
+from .services.purchase_orders import (
+    PurchaseOrderPayload,
+    PurchaseOrderService,
+    PurchaseOrderValidationError,
+)
+from .services.purchase_receptions import (
+    PurchaseReceptionPayload,
+    PurchaseReceptionService,
+    PurchaseReceptionValidationError,
+    ReceptionItemPayload,
 )
 from .services.purchase_requests import (
     PurchaseItemPayload,
@@ -77,12 +90,52 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         else:
             context.setdefault('purchase_request_field_errors', {})
             context.setdefault('purchase_request_item_errors', {})
+        order_field_errors = kwargs.get('purchase_order_field_errors') or {}
+        order_overrides = kwargs.get('purchase_order_overrides')
+        should_build_order_form = order_overrides or order_field_errors or (
+            state.panel and state.panel.panel.code == 'order'
+        )
+        if should_build_order_form:
+            context.update(
+                self._build_purchase_order_form_context(
+                    panel_state=state.panel,
+                    overrides=order_overrides,
+                    field_errors=order_field_errors,
+                )
+            )
+        else:
+            context.setdefault('purchase_order_field_errors', {})
+        reception_field_errors = kwargs.get('purchase_reception_field_errors') or {}
+        reception_item_errors = kwargs.get('purchase_reception_item_errors') or {}
+        reception_overrides = kwargs.get('purchase_reception_overrides')
+        should_build_reception_form = (
+            reception_overrides
+            or reception_field_errors
+            or reception_item_errors
+            or (state.panel and state.panel.panel.code == 'reception')
+        )
+        if should_build_reception_form:
+            context.update(
+                self._build_purchase_reception_form_context(
+                    panel_state=state.panel,
+                    overrides=reception_overrides,
+                    field_errors=reception_field_errors,
+                    item_errors=reception_item_errors,
+                )
+            )
+        else:
+            context.setdefault('purchase_reception_field_errors', {})
+            context.setdefault('purchase_reception_item_errors', {})
         return context
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         panel = request.POST.get('panel')
         if panel == 'request':
             return self._handle_request_panel_post()
+        if panel == 'order':
+            return self._handle_order_panel_post()
+        if panel == 'reception':
+            return self._handle_reception_panel_post()
         messages.error(request, "El formulario enviado no está disponible todavía.")
         return redirect(self._build_base_url(scope=request.POST.get('scope')))
 
@@ -90,6 +143,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         intent = self.request.POST.get('intent') or 'save_draft'
         scope_code = self.request.POST.get('scope') or PurchaseRequest.Status.DRAFT
         purchase_id = _parse_int(self.request.POST.get('purchase'))
+        if intent == 'reopen_request':
+            return self._reopen_purchase_request(purchase_id=purchase_id)
         payload, overrides, field_errors, item_errors = self._build_submission_payload(purchase_id=purchase_id)
         if field_errors or item_errors or payload is None:
             return self._render_request_form_errors(
@@ -120,6 +175,70 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             messages.success(self.request, "Solicitud guardada en borrador.")
         return redirect(self._build_base_url(scope=purchase.status))
 
+    def _handle_order_panel_post(self) -> HttpResponse:
+        intent = self.request.POST.get('intent') or 'save_order'
+        purchase_id = _parse_int(self.request.POST.get('purchase'))
+        if intent == 'reopen_request':
+            return self._reopen_purchase_request(purchase_id=purchase_id)
+        payload, overrides, field_errors = self._build_order_payload(purchase_id=purchase_id)
+        if field_errors or payload is None:
+            return self._render_order_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+            )
+        service = PurchaseOrderService(actor=self.request.user)
+        try:
+            purchase = service.save(payload=payload, intent=intent)
+        except PurchaseOrderValidationError as exc:
+            self._merge_field_errors(field_errors, exc.field_errors)
+            return self._render_order_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+            )
+        if intent == 'confirm_order':
+            messages.success(self.request, "Compra gestionada. Continúa con la recepción cuando corresponda.")
+        else:
+            messages.success(self.request, "Información de compra guardada.")
+        return redirect(self._build_base_url(scope=purchase.status))
+
+    def _handle_reception_panel_post(self) -> HttpResponse:
+        intent = self.request.POST.get('intent') or 'save_reception'
+        purchase_id = _parse_int(self.request.POST.get('purchase'))
+        payload, overrides, field_errors, item_errors = self._build_reception_payload(purchase_id=purchase_id)
+        if field_errors or item_errors or payload is None:
+            return self._render_reception_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+                item_errors=item_errors,
+            )
+
+        files = self.request.FILES.getlist('reception_attachments')
+        service = PurchaseReceptionService(actor=self.request.user)
+        try:
+            purchase = service.register(payload=payload, intent=intent, attachments=files)
+        except PurchaseReceptionValidationError as exc:
+            self._merge_field_errors(field_errors, exc.field_errors)
+            item_errors = exc.item_errors or item_errors
+            return self._render_reception_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+                item_errors=item_errors,
+            )
+
+        if intent == 'confirm_reception':
+            messages.success(self.request, "Recepción registrada. Continúa con la facturación.")
+        else:
+            messages.success(self.request, "Recepción guardada.")
+        return redirect(self._build_base_url(scope=purchase.status))
+
     def _render_request_form_errors(
         self,
         *,
@@ -137,6 +256,62 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 purchase_form_overrides=overrides,
                 purchase_request_field_errors=field_errors,
                 purchase_request_item_errors=item_errors,
+            )
+        )
+
+    def _render_order_form_errors(
+        self,
+        *,
+        scope: str | None,
+        purchase_id: int | None,
+        overrides: dict,
+        field_errors: dict[str, list[str]],
+    ) -> HttpResponse:
+        return self.render_to_response(
+            self.get_context_data(
+                scope_override=scope,
+                panel_override='order',
+                purchase_pk_override=purchase_id,
+                purchase_order_overrides=overrides,
+                purchase_order_field_errors=field_errors,
+            )
+        )
+
+    def _render_reception_form_errors(
+        self,
+        *,
+        scope: str | None,
+        purchase_id: int | None,
+        overrides: dict,
+        field_errors: dict[str, list[str]],
+        item_errors: dict[int, list[str]],
+    ) -> HttpResponse:
+        return self.render_to_response(
+            self.get_context_data(
+                scope_override=scope,
+                panel_override='reception',
+                purchase_pk_override=purchase_id,
+                purchase_reception_overrides=overrides,
+                purchase_reception_field_errors=field_errors,
+                purchase_reception_item_errors=item_errors,
+            )
+        )
+
+    def _reopen_purchase_request(self, *, purchase_id: int | None) -> HttpResponse:
+        if not purchase_id:
+            messages.error(self.request, "No encontramos la solicitud que deseas modificar.")
+            return redirect(self._build_base_url(scope=self.request.POST.get('scope')))
+        purchase = PurchaseRequest.objects.filter(pk=purchase_id).first()
+        if not purchase:
+            messages.error(self.request, "La solicitud seleccionada ya no existe.")
+            return redirect(self._build_base_url(scope=self.request.POST.get('scope')))
+        purchase.status = PurchaseRequest.Status.DRAFT
+        purchase.save(update_fields=['status', 'updated_at'])
+        messages.info(self.request, "La solicitud volvió a borrador y debe aprobarse nuevamente.")
+        return redirect(
+            self._build_base_url(
+                scope=purchase.status,
+                extra={'panel': 'request', 'purchase': purchase.pk},
             )
         )
 
@@ -217,12 +392,165 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
         return payload, overrides, field_errors, item_errors
 
+    def _build_order_payload(
+        self,
+        *,
+        purchase_id: int | None,
+    ) -> tuple[PurchaseOrderPayload | None, dict, dict[str, list[str]]]:
+        purchase_date_raw = (self.request.POST.get('purchase_date') or '').strip()
+        delivery_condition = (self.request.POST.get('delivery_condition') or '').strip()
+        shipping_eta_raw = (self.request.POST.get('shipping_eta') or '').strip()
+        shipping_notes = (self.request.POST.get('shipping_notes') or '').strip()
+        payment_condition = (self.request.POST.get('payment_condition') or '').strip()
+        payment_method = (self.request.POST.get('payment_method') or '').strip()
+        payment_source = (self.request.POST.get('payment_source') or '').strip()
+        supplier_account_holder_id = (self.request.POST.get('supplier_account_holder_id') or '').strip()
+        supplier_account_holder_name = (self.request.POST.get('supplier_account_holder_name') or '').strip()
+        supplier_account_type = (self.request.POST.get('supplier_account_type') or '').strip()
+        supplier_account_number = (self.request.POST.get('supplier_account_number') or '').strip()
+        supplier_bank_name = (self.request.POST.get('supplier_bank_name') or '').strip()
+        purchase_date = self._parse_date(purchase_date_raw)
+        shipping_eta = self._parse_date(shipping_eta_raw)
+        overrides = {
+            'purchase_date': purchase_date_raw,
+            'delivery_condition': delivery_condition,
+            'shipping_eta': shipping_eta_raw,
+            'shipping_notes': shipping_notes,
+            'payment_condition': payment_condition,
+            'payment_method': payment_method,
+            'payment_source': payment_source,
+            'supplier_account_holder_id': supplier_account_holder_id,
+            'supplier_account_holder_name': supplier_account_holder_name,
+            'supplier_account_type': supplier_account_type,
+            'supplier_account_number': supplier_account_number,
+            'supplier_bank_name': supplier_bank_name,
+        }
+        field_errors: dict[str, list[str]] = {}
+        if not purchase_id:
+            field_errors.setdefault('non_field', []).append("Selecciona una solicitud para gestionar.")
+        if not purchase_date_raw:
+            field_errors.setdefault('purchase_date', []).append("Selecciona la fecha de compra.")
+        elif purchase_date is None:
+            field_errors.setdefault('purchase_date', []).append("Ingresa una fecha válida (AAAA-MM-DD).")
+        delivery_options = set(PurchaseRequest.DeliveryCondition.values)
+        if delivery_condition and delivery_condition not in delivery_options:
+            field_errors.setdefault('delivery_condition', []).append("Selecciona una entrega válida.")
+        if not delivery_condition:
+            delivery_condition = PurchaseRequest.DeliveryCondition.IMMEDIATE
+        if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING:
+            if not shipping_eta_raw:
+                field_errors.setdefault('shipping_eta', []).append("Ingresa la fecha estimada de llegada.")
+            elif shipping_eta is None:
+                field_errors.setdefault('shipping_eta', []).append("Fecha estimada inválida.")
+        allowed_conditions = set(PurchaseRequest.PaymentCondition.values)
+        if payment_condition and payment_condition not in allowed_conditions:
+            field_errors.setdefault('payment_condition', []).append("Selecciona una opción válida.")
+        if not payment_condition:
+            field_errors.setdefault('payment_condition', []).append("Selecciona una condición de pago.")
+        allowed_methods = set(PurchaseRequest.PaymentMethod.values)
+        if payment_method and payment_method not in allowed_methods:
+            field_errors.setdefault('payment_method', []).append("Selecciona un medio de pago válido.")
+        if not payment_method:
+            field_errors.setdefault('payment_method', []).append("Selecciona un medio de pago.")
+        payment_sources = set(PurchaseRequest.PaymentSource.values)
+        if payment_source and payment_source not in payment_sources:
+            field_errors.setdefault('payment_source', []).append("Selecciona el origen del pago.")
+        if not payment_source:
+            payment_source = PurchaseRequest.PaymentSource.TBD
+        require_bank_data = payment_method == PurchaseRequest.PaymentMethod.TRANSFER
+        account_types = {choice for choice, _ in Supplier.ACCOUNT_TYPE_CHOICES}
+        if require_bank_data:
+            if supplier_account_type and supplier_account_type not in account_types:
+                field_errors.setdefault('supplier_account_type', []).append("Selecciona un tipo de cuenta válido.")
+            if not supplier_account_type:
+                field_errors.setdefault('supplier_account_type', []).append("Selecciona el tipo de cuenta.")
+            if not supplier_account_holder_name:
+                field_errors.setdefault('supplier_account_holder_name', []).append("Ingresa el titular de la cuenta.")
+            if not supplier_account_holder_id:
+                field_errors.setdefault('supplier_account_holder_id', []).append("Ingresa la identificación del titular.")
+            if not supplier_account_number:
+                field_errors.setdefault('supplier_account_number', []).append("Ingresa el número de cuenta.")
+            if not supplier_bank_name:
+                field_errors.setdefault('supplier_bank_name', []).append("Ingresa el banco.")
+        else:
+            # Allow keeping existing values but do not enforce them.
+            if supplier_account_type and supplier_account_type not in account_types:
+                field_errors.setdefault('supplier_account_type', []).append("Selecciona un tipo de cuenta válido.")
+        payload = None
+        if not field_errors and purchase_id:
+            payload = PurchaseOrderPayload(
+                purchase_id=purchase_id,
+                purchase_date=purchase_date or timezone.localdate(),
+                delivery_condition=delivery_condition,
+                shipping_eta=shipping_eta if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else None,
+                shipping_notes=shipping_notes if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else '',
+                payment_condition=payment_condition,
+                payment_method=payment_method,
+                payment_source=payment_source,
+                supplier_account_holder_id=supplier_account_holder_id,
+                supplier_account_holder_name=supplier_account_holder_name,
+                supplier_account_type=supplier_account_type,
+                supplier_account_number=supplier_account_number,
+                supplier_bank_name=supplier_bank_name,
+            )
+        return payload, overrides, field_errors
+
+    def _build_reception_payload(
+        self,
+        *,
+        purchase_id: int | None,
+    ) -> tuple[PurchaseReceptionPayload | None, dict, dict[str, list[str]], dict[int, list[str]]]:
+        notes = (self.request.POST.get('reception_notes') or '').strip()
+        rows = self._extract_reception_rows()
+        overrides = {
+            'notes': notes,
+            'items': rows,
+        }
+        field_errors: dict[str, list[str]] = {}
+        item_errors: dict[int, list[str]] = {}
+        payload_items: list[ReceptionItemPayload] = []
+        for index, row in enumerate(rows):
+            item_id = _parse_int(row.get('item_id'))
+            received = self._parse_decimal(row.get('received_quantity'), allow_empty=False)
+            errors: list[str] = []
+            if not item_id:
+                errors.append("Item inválido.")
+            if received is None:
+                errors.append("Ingresa una cantidad válida.")
+            elif received < 0:
+                errors.append("La cantidad no puede ser negativa.")
+            if errors:
+                item_errors[index] = errors
+                continue
+            payload_items.append(
+                ReceptionItemPayload(
+                    item_id=item_id,
+                    received_quantity=received,
+                )
+            )
+        payload = None
+        if purchase_id and not field_errors and not item_errors:
+            payload = PurchaseReceptionPayload(
+                purchase_id=purchase_id,
+                notes=notes,
+                items=payload_items,
+            )
+        return payload, overrides, field_errors, item_errors
+
     def _parse_decimal(self, value: str | None, *, allow_empty: bool) -> Decimal | None:
         if value is None or value == '':
             return Decimal('0') if allow_empty else None
         try:
             return Decimal(value)
         except (InvalidOperation, TypeError):
+            return None
+
+    def _parse_date(self, value: str | None):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
             return None
 
     def _extract_item_rows(self) -> list[dict[str, str]]:
@@ -246,6 +574,20 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 continue
             ordered_rows.append(row)
         return ordered_rows
+
+    def _extract_reception_rows(self) -> list[dict[str, str]]:
+        rows: dict[int, dict[str, str]] = {}
+        for key in self.request.POST.keys():
+            match = RECEPTION_ITEM_PATTERN.match(key)
+            if not match:
+                continue
+            index = int(match.group(1))
+            field = match.group(2)
+            rows.setdefault(index, {})[field] = self.request.POST.get(key, '').strip()
+        ordered: list[dict[str, str]] = []
+        for index in sorted(rows.keys()):
+            ordered.append(rows[index])
+        return ordered
 
     def _build_purchase_request_form_context(
         self,
@@ -274,11 +616,103 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'scope_code': form_initial['scope_code'],
                 'scope_label': form_initial['scope_label'],
                 'scope_requires_location': form_initial['scope_requires_location'],
+                'can_reopen': bool(purchase and purchase.status == PurchaseRequest.Status.SUBMITTED),
             },
             'purchase_request_field_errors': field_errors,
             'purchase_request_item_errors': item_errors,
         }
         return context
+
+    def _build_purchase_order_form_context(
+        self,
+        *,
+        panel_state,
+        overrides: dict | None,
+        field_errors: dict[str, list[str]],
+    ) -> dict:
+        purchase = panel_state.purchase if panel_state else None
+        supplier = purchase.supplier if purchase else None
+        default_purchase_date = (purchase.purchase_date or timezone.localdate()).isoformat() if purchase else ''
+        initial = {
+            'purchase_date': default_purchase_date,
+            'delivery_condition': purchase.delivery_condition if purchase else PurchaseRequest.DeliveryCondition.IMMEDIATE,
+            'shipping_eta': purchase.shipping_eta.isoformat() if purchase and purchase.shipping_eta else '',
+            'shipping_notes': purchase.shipping_notes if purchase else '',
+            'payment_condition': purchase.payment_condition or PurchaseRequest.PaymentCondition.CASH,
+            'payment_method': purchase.payment_method or PurchaseRequest.PaymentMethod.TRANSFER,
+            'payment_source': purchase.payment_source or PurchaseRequest.PaymentSource.TBD,
+            'supplier_account_holder_id': purchase.supplier_account_holder_id
+            or (supplier.account_holder_id if supplier else ''),
+            'supplier_account_holder_name': purchase.supplier_account_holder_name
+            or (supplier.account_holder_name if supplier else ''),
+            'supplier_account_type': purchase.supplier_account_type
+            or (supplier.account_type if supplier else ''),
+            'supplier_account_number': purchase.supplier_account_number
+            or (supplier.account_number if supplier else ''),
+            'supplier_bank_name': purchase.supplier_bank_name or (supplier.bank_name if supplier else ''),
+        }
+        if overrides:
+            initial.update({k: v for k, v in overrides.items() if v is not None})
+        context = {
+            'purchase_order_form': {
+                'initial': initial,
+                'payment_conditions': PurchaseRequest.PaymentCondition.choices,
+                'payment_methods': PurchaseRequest.PaymentMethod.choices,
+                'payment_sources': PurchaseRequest.PaymentSource.choices,
+                'delivery_conditions': PurchaseRequest.DeliveryCondition.choices,
+                'account_types': Supplier.ACCOUNT_TYPE_CHOICES,
+                'purchase': purchase,
+                'can_reopen': bool(purchase and purchase.status != PurchaseRequest.Status.DRAFT),
+            },
+            'purchase_order_field_errors': field_errors,
+        }
+        return context
+
+    def _build_purchase_reception_form_context(
+        self,
+        *,
+        panel_state,
+        overrides: dict | None,
+        field_errors: dict[str, list[str]],
+        item_errors: dict[int, list[str]],
+    ) -> dict:
+        purchase = panel_state.purchase if panel_state else None
+        items: list[dict[str, Decimal | int | str]] = []
+        if purchase:
+            for item in purchase.items.all():
+                pending = item.quantity - item.received_quantity
+                items.append(
+                    {
+                        'id': item.id,
+                        'description': item.description,
+                        'requested_quantity': item.quantity,
+                        'received_quantity': item.received_quantity,
+                        'pending_quantity': pending if pending > 0 else Decimal('0'),
+                    }
+                )
+        if overrides and overrides.get('items'):
+            for index, row in enumerate(overrides['items']):
+                item_id = _parse_int(row.get('item_id'))
+                received_raw = row.get('received_quantity')
+                for item in items:
+                    if item['id'] == item_id and received_raw not in (None, ''):
+                        try:
+                            received_value = Decimal(received_raw)
+                        except (InvalidOperation, TypeError):
+                            continue
+                        item['received_quantity'] = received_value
+                        pending = item['requested_quantity'] - received_value
+                        item['pending_quantity'] = pending if pending > 0 else Decimal('0')
+        form = {
+            'items': items,
+            'notes': overrides.get('notes') if overrides else (purchase.reception_notes if purchase else ''),
+            'attachments': purchase.reception_attachments.all() if purchase else [],
+        }
+        return {
+            'purchase_reception_form': form,
+            'purchase_reception_field_errors': field_errors,
+            'purchase_reception_item_errors': item_errors,
+        }
 
     def _resolve_form_initial(self, *, purchase, overrides: dict | None) -> dict:
         read_only = bool(purchase and purchase.status != PurchaseRequest.Status.DRAFT)
@@ -463,11 +897,13 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         # Persist the human-readable label to keep compatibility with existing scope batch codes.
         return self._format_bird_batch_label(batch)
 
-    def _build_base_url(self, *, scope: str | None) -> str:
+    def _build_base_url(self, *, scope: str | None, extra: dict | None = None) -> str:
         base = reverse('administration:purchases')
         params = {}
         if scope:
             params['scope'] = scope
+        if extra:
+            params.update({k: str(v) for k, v in extra.items()})
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
 
@@ -868,3 +1304,4 @@ def _parse_int(value):
 
 
 ITEM_KEY_PATTERN = re.compile(r"^items\[(\d+)]\[(\w+)]$")
+RECEPTION_ITEM_PATTERN = re.compile(r"^receipts\[(\d+)]\[(\w+)]$")
