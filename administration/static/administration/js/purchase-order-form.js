@@ -1,4 +1,5 @@
-const orderForms = document.querySelectorAll('[data-purchase-order-form]');
+const formSelectors = ['[data-purchase-order-form]', '[data-purchase-payment-form]'];
+const orderForms = document.querySelectorAll(formSelectors.join(','));
 
 orderForms.forEach((root) => {
   const deliverySelect = root.querySelector('[data-delivery-select]');

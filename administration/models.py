@@ -73,14 +73,7 @@ class SupportDocumentType(TimeStampedModel):
 
 
 class PurchasingExpenseType(TimeStampedModel):
-    class Scope(models.TextChoices):
-        COMPANY = "company", "Empresa"
-        FARM = "farm", "Granja"
-        LOT = "lot", "Lote"
-        HOUSE = "house", "Galpón"
-
     name = models.CharField("Nombre", max_length=200)
-    default_unit = models.CharField("Unidad base", max_length=30, blank=True)
     parent_category = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -89,7 +82,6 @@ class PurchasingExpenseType(TimeStampedModel):
         related_name="child_categories",
         verbose_name="Categoría padre",
     )
-    scope = models.CharField("Ámbito", max_length=20, choices=Scope.choices, default=Scope.COMPANY)
     default_support_document_type = models.ForeignKey(
         SupportDocumentType,
         on_delete=models.PROTECT,
@@ -102,7 +94,7 @@ class PurchasingExpenseType(TimeStampedModel):
         "IVA (%)",
         max_digits=5,
         decimal_places=2,
-        default=Decimal("19.00"),
+        default=Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     withholding_rate = models.DecimalField(
@@ -112,15 +104,13 @@ class PurchasingExpenseType(TimeStampedModel):
         default=Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
-    self_withholding_rate = models.DecimalField(
-        "Autoretención (%)",
+    assumed_withholding_rate = models.DecimalField(
+        "Retención asumida (%)",
         max_digits=5,
         decimal_places=2,
         default=Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
-    is_active = models.BooleanField("Activo", default=True)
-
     class Meta:
         verbose_name = "Categoría de gasto"
         verbose_name_plural = "Categorías de gasto"
@@ -131,10 +121,16 @@ class PurchasingExpenseType(TimeStampedModel):
 
     @property
     def approval_phase_summary(self) -> str:
-        phases = [
-            rule.name
-            for rule in self.approval_rules.all().order_by('sequence')
-        ]
+        phases: list[str] = []
+        for rule in self.approval_rules.select_related('approver').order_by('id'):
+            label = ''
+            if rule.approver:
+                get_full_name = getattr(rule.approver, 'get_full_name', None)
+                if callable(get_full_name):
+                    label = (get_full_name() or '').strip()
+                if not label:
+                    label = getattr(rule.approver, 'email', '') or str(rule.approver)
+            phases.append(label or 'Aprobador')
         return ", ".join(phases)
 
 
@@ -145,8 +141,6 @@ class ExpenseTypeApprovalRule(TimeStampedModel):
         related_name="approval_rules",
         verbose_name="Categoría de gasto",
     )
-    sequence = models.PositiveSmallIntegerField("Secuencia")
-    name = models.CharField("Nombre del paso", max_length=150)
     approver = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -157,16 +151,17 @@ class ExpenseTypeApprovalRule(TimeStampedModel):
     class Meta:
         verbose_name = "Regla de aprobación"
         verbose_name_plural = "Reglas de aprobación"
-        ordering = ("expense_type", "sequence")
-        constraints = [
-            models.UniqueConstraint(
-                fields=("expense_type", "sequence"),
-                name="unique_expense_type_sequence",
-            ),
-        ]
+        ordering = ("expense_type", "id")
 
     def __str__(self) -> str:
-        return f"{self.expense_type.name} · {self.sequence} - {self.name}"
+        approver_label = ''
+        if self.approver:
+            get_full_name = getattr(self.approver, "get_full_name", None)
+            if callable(get_full_name):
+                approver_label = (get_full_name() or '').strip()
+            if not approver_label:
+                approver_label = getattr(self.approver, "email", "") or str(self.approver)
+        return f"{self.expense_type.name} · {approver_label or 'Aprobador'}"
 
 
 class PurchaseRequest(TimeStampedModel):
@@ -177,6 +172,7 @@ class PurchaseRequest(TimeStampedModel):
     class PaymentCondition(models.TextChoices):
         CASH = "contado", "Contado"
         CREDIT = "credito", "Crédito"
+        CREDIT_PAID = "credito_pagado", "Crédito pagado"
 
     class PaymentMethod(models.TextChoices):
         CASH = "efectivo", "Efectivo"
@@ -184,8 +180,7 @@ class PurchaseRequest(TimeStampedModel):
 
     class PaymentSource(models.TextChoices):
         TBD = "tbd", "Por definir (TBD)"
-        OPERATIONS = "operations", "Operaciones"
-        FINANCE = "finance", "Finanzas"
+        TREASURY = "treasury", "Tesorería"
 
     class Status(models.TextChoices):
         DRAFT = "borrador", "Borrador"

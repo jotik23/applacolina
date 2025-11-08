@@ -35,7 +35,7 @@
   {% endif %}
 
   <fieldset class="space-y-6" {% if form.read_only %}disabled{% endif %}>
-    {% with initial=form.initial scope=form.scope_values scope_code=form.scope_code requires_location=form.scope_requires_location %}
+    {% with initial=form.initial scope=form.scope_values %}
     <article class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 w-full">
       <header>
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumen</p>
@@ -58,27 +58,53 @@
             {% endif %}
           </label>
           <label class="text-xs font-semibold text-slate-500 block">
-            Proveedor
+            Categoría
             <select
-              name="supplier"
+              name="expense_type"
               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-              data-supplier-select
+              data-category-select
             >
-              <option value="">Selecciona un tercero</option>
-              {% for supplier in form.suppliers %}
-                <option value="{{ supplier.id }}" {% if supplier.id == initial.supplier_id %}selected{% endif %}>
-                  {{ supplier.name }}
+              <option value="">Selecciona una categoría</option>
+              {% for category in form.categories %}
+                <option
+                  value="{{ category.id }}"
+                  data-support-type-id="{{ category.support_type_id|default:'' }}"
+                  {% if category.id == initial.expense_type_id %}selected{% endif %}
+                >
+                  {{ category.name }}
                 </option>
               {% endfor %}
             </select>
-            {% if field_errors.supplier %}
-              <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier.0 }}</p>
+            {% if field_errors.expense_type %}
+              <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.expense_type.0 }}</p>
             {% endif %}
-            {% if not form.suppliers %}
-              <p class="mt-1 text-[11px] text-slate-500">Registra proveedores en la pestaña de administración antes de crear solicitudes.</p>
+            {% if not form.categories %}
+              <p class="mt-1 text-[11px] text-slate-500">Activa categorías en la configuración para habilitar este listado.</p>
             {% endif %}
           </label>
-          {% if not form.read_only %}
+        </div>
+        <label class="text-xs font-semibold text-slate-500 block">
+          Proveedor
+          <select
+            name="supplier"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+            data-supplier-select
+          >
+            <option value="">Selecciona un tercero</option>
+            {% for supplier in form.suppliers %}
+              <option value="{{ supplier.id }}" {% if supplier.id == initial.supplier_id %}selected{% endif %}>
+                {{ supplier.name }}
+              </option>
+            {% endfor %}
+          </select>
+          {% if field_errors.supplier %}
+            <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier.0 }}</p>
+          {% endif %}
+          {% if not form.suppliers %}
+            <p class="mt-1 text-[11px] text-slate-500">Registra proveedores en la pestaña de administración antes de crear solicitudes.</p>
+          {% endif %}
+        </label>
+        {% if not form.read_only %}
             <details
               class="lg:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-slate-600 shadow-sm"
               data-new-supplier-panel
@@ -270,102 +296,8 @@
             </details>
           {% endif %}
         </div>
-        <div class="grid gap-4 lg:grid-cols-2">
-          <label class="text-xs font-semibold text-slate-500 block">
-            Categoría
-            <select
-              name="expense_type"
-              class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-              data-category-select
-            >
-              <option value="">Selecciona una categoría</option>
-              {% for category in form.categories %}
-                <option
-                  value="{{ category.id }}"
-                  data-scope="{{ category.scope }}"
-                  data-scope-label="{{ category.scope_label }}"
-                  data-unit="{{ category.unit }}"
-                  data-support-type-id="{{ category.support_type_id|default:'' }}"
-                  {% if category.id == initial.expense_type_id %}selected{% endif %}
-                  {% if category.scope == 'house' and category.id != initial.expense_type_id %}hidden{% endif %}
-                  {% if category.scope == 'house' %}disabled{% endif %}
-                >
-                  {{ category.name }}{% if category.scope == 'house' %} · (Ámbito galpón no disponible){% endif %}
-                </option>
-              {% endfor %}
-            </select>
-            {% if field_errors.expense_type %}
-              <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.expense_type.0 }}</p>
-            {% endif %}
-            {% if not form.categories %}
-              <p class="mt-1 text-[11px] text-slate-500">Activa categorías en la configuración para habilitar este listado.</p>
-            {% endif %}
-          </label>
-          <label class="text-xs font-semibold text-slate-500 block">
-            Tipo de soporte
-            <select
-              name="support_document_type"
-              class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-              data-support-type-select
-            >
-              <option value="">Selecciona el tipo de soporte</option>
-              {% for option in form.support_types %}
-                <option value="{{ option.id }}" {% if option.id == initial.support_document_type_id %}selected{% endif %}>
-                  {{ option.name }} · {{ option.kind }}
-                </option>
-              {% endfor %}
-            </select>
-            {% if field_errors.support_document_type %}
-              <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.support_document_type.0 }}</p>
-            {% endif %}
-            {% if not form.support_types %}
-              <p class="mt-1 text-[11px] text-amber-600">Configura tipos de soporte en la pestaña de administración.</p>
-            {% endif %}
-          </label>
-        </div>
-        <div
-          class="mt-4 rounded-2xl border border-dashed border-slate-300 p-4"
-          data-scope-container
-          data-active-scope="{{ scope_code }}"
-          {% if not requires_location %}hidden{% endif %}
-        >
-          <div class="grid gap-4 lg:grid-cols-2">
-            <label class="text-xs font-semibold text-slate-500 block" data-scope-field="farm" {% if scope_code != 'farm' %}hidden{% endif %}>
-              Granja
-              <select
-                name="scope_farm_id"
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-                data-scope-farm
-              >
-                <option value="">General</option>
-                {% for farm in form.farms %}
-                  <option value="{{ farm.id }}" {% if farm.id == scope.farm_id %}selected{% endif %}>{{ farm.name }}</option>
-                {% endfor %}
-              </select>
-              {% if field_errors.scope_farm_id %}
-                <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.scope_farm_id.0 }}</p>
-              {% endif %}
-            </label>
-            <label class="text-xs font-semibold text-slate-500 block" data-scope-field="batch" {% if scope_code != 'lot' %}hidden{% endif %}>
-              Lote
-              <select
-                name="scope_batch_code"
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-                data-scope-batch
-              >
-                <option value="">Selecciona un lote</option>
-                {% for batch in form.bird_batches %}
-                  <option value="{{ batch.value }}" {% if batch.value == scope.batch_code %}selected{% endif %}>
-                    {{ batch.label }}
-                  </option>
-                {% endfor %}
-              </select>
-              {% if field_errors.scope_batch_code %}
-                <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.scope_batch_code.0 }}</p>
-              {% endif %}
-            </label>
-          </div>
-        </div>
+        <input type="hidden" name="scope_farm_id" value="{{ scope.farm_id|default:'' }}">
+        <input type="hidden" name="scope_batch_code" value="{{ scope.batch_code|default:'' }}">
         <input type="hidden" name="scope_chicken_house_id" value="{{ scope.chicken_house_id|default:'' }}">
     </article>
     {% endwith %}
@@ -485,24 +417,10 @@
         </table>
       </div>
       <p class="text-xs text-slate-500">Los valores y subtotales se recalculan automáticamente al editar los items.</p>
-    </article>
-
-    <article class="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5 lg:grid-cols-2 w-full">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas internas</p>
-        <textarea
-          name="notes"
-          rows="4"
-          class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-          placeholder="Contexto adicional para el aprobador"
-        >{{ form.initial.notes|default:'' }}</textarea>
+      <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+        <span>Total estimado</span>
+        <span data-purchase-total>{{ form.initial.estimated_total|default:"0" }}</span>
       </div>
-      <dl class="space-y-3 text-sm">
-        <div class="flex items-center justify-between border-t border-dashed border-slate-200 pt-3">
-          <dt class="text-base font-semibold text-slate-900">Total estimado</dt>
-          <dd class="text-base font-semibold text-slate-900" data-purchase-total>{{ form.initial.estimated_total|default:"0" }}</dd>
-        </div>
-      </dl>
     </article>
   </fieldset>
 

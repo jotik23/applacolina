@@ -45,9 +45,9 @@
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-6 py-4 text-sm">
           <p class="text-slate-600">
             Mostrando
-            <span class="font-semibold text-slate-900">{{ expense_types_page.object_list|length }}</span>
+            <span class="font-semibold text-slate-900">{{ expense_type_display_count }}</span>
             de
-            <span class="font-semibold text-slate-900">{{ expense_types_page.paginator.count }}</span>
+            <span class="font-semibold text-slate-900">{{ expense_type_total }}</span>
             categorías de gasto
           </p>
           <a
@@ -62,63 +62,62 @@
             <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th class="px-6 py-3">Categoría</th>
-                <th class="px-6 py-3">Ámbito</th>
-                <th class="px-6 py-3">Categoría padre</th>
                 <th class="px-6 py-3">Aprobadores</th>
-                <th class="px-6 py-3 text-center">Estado</th>
                 <th class="px-6 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 bg-white">
-              {% for expense_type in expense_types_page %}
-                <tr class="hover:bg-slate-50/70">
-                  <td class="px-6 py-4">
-                    <p class="font-semibold text-slate-900">{{ expense_type.name }}</p>
-                  </td>
-                  <td class="px-6 py-4 text-slate-600">{{ expense_type.get_scope_display }}</td>
-                  <td class="px-6 py-4 text-slate-600">
-                    {{ expense_type.parent_category.name|default:"—" }}
-                  </td>
-                  <td class="px-6 py-4 text-slate-600">
-                    {{ expense_type.approval_phase_summary|default:"Sin flujo configurado" }}
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {% if expense_type.is_active %}bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200{% else %}bg-slate-100 text-slate-500 ring-1 ring-slate-200{% endif %}">
-                      {{ expense_type.is_active|yesno:"Activo,Inactivo" }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4">
-                    <div class="flex flex-wrap items-center justify-end gap-2">
-                      <a
-                        href="?section=expense_types{% if config_search %}&search={{ config_search|urlencode }}{% endif %}&panel=expense_type&expense_type={{ expense_type.pk }}"
-                        class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                      >
-                        Editar
-                      </a>
-                      <form method="post">
-                        {% csrf_token %}
-                        <input type="hidden" name="section" value="expense_types">
-                        {% if config_search %}
-                          <input type="hidden" name="search" value="{{ config_search }}">
+              {% for row in expense_type_rows %}
+                {% with expense_type=row.category %}
+                  <tr
+                    class="hover:bg-slate-50/70"
+                    data-category-row
+                    data-category-id="{{ expense_type.pk }}"
+                    data-parent-id="{{ row.parent_id|default:'' }}"
+                    {% if row.parent_id %}hidden{% endif %}
+                  >
+                    <td class="px-6 py-4">
+                      <div class="flex items-center gap-2" style="padding-left: calc({{ row.depth }} * 1.5rem);">
+                        {% if row.has_children %}
+                          <button
+                            type="button"
+                            class="inline-flex size-6 items-center justify-center rounded-full border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                            data-toggle-children
+                            data-category-id="{{ expense_type.pk }}"
+                            aria-expanded="false"
+                          >
+                            ▸
+                          </button>
+                        {% else %}
+                          <span class="inline-flex size-6"></span>
                         {% endif %}
-                        <input type="hidden" name="form_action" value="{% if expense_type.is_active %}deactivate{% else %}activate{% endif %}">
-                        <input type="hidden" name="expense_type_id" value="{{ expense_type.pk }}">
-                        <button type="submit" class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300">
-                          {% if expense_type.is_active %}Desactivar{% else %}Activar{% endif %}
-                        </button>
-                      </form>
-                      <a
-                        href="?section=expense_types{% if config_search %}&search={{ config_search|urlencode }}{% endif %}&modal=delete&expense_type={{ expense_type.pk }}"
-                        class="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
-                      >
-                        Eliminar
-                      </a>
-                    </div>
-                  </td>
-                </tr>
+                        <span class="font-semibold text-slate-900">{{ expense_type.name }}</span>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-slate-600">
+                      {{ expense_type.approval_phase_summary|default:"Sin flujo configurado" }}
+                    </td>
+                    <td class="px-6 py-4">
+                      <div class="flex flex-wrap items-center justify-end gap-2">
+                        <a
+                          href="?section=expense_types{% if config_search %}&search={{ config_search|urlencode }}{% endif %}&panel=expense_type&expense_type={{ expense_type.pk }}"
+                          class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          Editar
+                        </a>
+                        <a
+                          href="?section=expense_types{% if config_search %}&search={{ config_search|urlencode }}{% endif %}&modal=delete&expense_type={{ expense_type.pk }}"
+                          class="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                        >
+                          Eliminar
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endwith %}
               {% empty %}
                 <tr>
-                  <td colspan="6" class="px-6 py-16 text-center text-sm text-slate-500">
+                  <td colspan="3" class="px-6 py-16 text-center text-sm text-slate-500">
                     No hay categorías de gasto registradas.
                   </td>
                 </tr>
@@ -126,27 +125,54 @@
             </tbody>
           </table>
         </div>
-        <div class="flex items-center justify-between border-t border-slate-200/70 px-6 py-3 text-sm text-slate-500">
-          <div>Página {{ expense_types_page.number }} de {{ expense_types_page.paginator.num_pages }}</div>
-          <div class="flex gap-2">
-            {% if expense_types_page.has_previous %}
-              <a
-                href="?section=expense_types{% if config_search %}&search={{ config_search|urlencode }}{% endif %}&page={{ expense_types_page.previous_page_number }}"
-                class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-              >
-                Anterior
-              </a>
-            {% endif %}
-            {% if expense_types_page.has_next %}
-              <a
-                href="?section=expense_types{% if config_search %}&search={{ config_search|urlencode }}{% endif %}&page={{ expense_types_page.next_page_number }}"
-                class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-              >
-                Siguiente
-              </a>
-            {% endif %}
-          </div>
-        </div>
+        {% if expense_type_rows %}
+          <script>
+            (() => {
+              const rows = Array.from(document.querySelectorAll('[data-category-row]'));
+              const childrenMap = new Map();
+              rows.forEach((row) => {
+                const parentId = row.dataset.parentId || 'root';
+                if (!childrenMap.has(parentId)) {
+                  childrenMap.set(parentId, []);
+                }
+                childrenMap.get(parentId).push(row);
+              });
+
+              function toggleBranch(parentId, expand) {
+                const children = childrenMap.get(parentId);
+                if (!children) {
+                  return;
+                }
+                children.forEach((child) => {
+                  child.hidden = !expand;
+                  if (!expand) {
+                    const toggle = child.querySelector('[data-toggle-children]');
+                    if (toggle) {
+                      toggle.setAttribute('aria-expanded', 'false');
+                      toggle.textContent = '▸';
+                    }
+                    toggleBranch(child.dataset.categoryId, false);
+                  } else {
+                    const toggle = child.querySelector('[data-toggle-children]');
+                    if (toggle && toggle.getAttribute('aria-expanded') === 'true') {
+                      toggleBranch(child.dataset.categoryId, true);
+                    }
+                  }
+                });
+              }
+
+              document.querySelectorAll('[data-toggle-children]').forEach((button) => {
+                button.addEventListener('click', () => {
+                  const expanded = button.getAttribute('aria-expanded') === 'true';
+                  const nextState = !expanded;
+                  button.setAttribute('aria-expanded', String(nextState));
+                  button.textContent = nextState ? '▾' : '▸';
+                  toggleBranch(button.dataset.categoryId, nextState);
+                });
+              });
+            })();
+          </script>
+        {% endif %}
       </div>
     {% elif config_section == 'support_documents' %}
       <div class="rounded-2xl border border-slate-200/70 bg-white/95 shadow-sm">
@@ -283,19 +309,6 @@
                 {{ expense_type_form.name.errors }}
               </label>
               <label class="text-xs font-semibold text-slate-500">
-                Unidad base
-                {{ expense_type_form.default_unit|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-                <span class="mt-1 block text-[11px] text-slate-500">Opcional. Se usa como etiqueta en los items.</span>
-                {{ expense_type_form.default_unit.errors }}
-              </label>
-            </div>
-            <div class="grid gap-3 lg:grid-cols-2">
-              <label class="text-xs font-semibold text-slate-500">
-                Ámbito
-                {{ expense_type_form.scope|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-                {{ expense_type_form.scope.errors }}
-              </label>
-              <label class="text-xs font-semibold text-slate-500">
                 Categoría padre
                 {{ expense_type_form.parent_category|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
                 {{ expense_type_form.parent_category.errors }}
@@ -304,7 +317,6 @@
             <label class="text-xs font-semibold text-slate-500">
               Tipo de soporte por defecto
               {{ expense_type_form.default_support_document_type|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-              <span class="mt-1 block text-[11px] text-slate-500">Se aplicará al crear solicitudes que utilicen esta categoría.</span>
               {{ expense_type_form.default_support_document_type.errors }}
             </label>
           </article>
@@ -322,15 +334,9 @@
                 {{ expense_type_form.withholding_rate.errors }}
               </label>
               <label class="text-xs font-semibold text-slate-500">
-                Autoretención (%)
-                {{ expense_type_form.self_withholding_rate|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
-                {{ expense_type_form.self_withholding_rate.errors }}
-              </label>
-            </div>
-            <div class="flex flex-wrap gap-4 text-xs font-semibold text-slate-600">
-              <label class="inline-flex items-center gap-2">
-                {{ expense_type_form.is_active|add_class:"size-4 rounded border-slate-300" }}
-                Activo
+                Retención asumida (%)
+                {{ expense_type_form.assumed_withholding_rate|add_class:"mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" }}
+                {{ expense_type_form.assumed_withholding_rate.errors }}
               </label>
             </div>
           </article>
@@ -338,9 +344,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Flujo de aprobación</p>
-                <p class="text-sm text-slate-600">Define el orden de aprobación y los responsables por paso.</p>
               </div>
-              <span class="text-xs font-semibold text-slate-500">Secuencia · Paso · Aprobador</span>
             </div>
             {{ workflow_formset.management_form }}
             {% if workflow_formset.non_form_errors %}

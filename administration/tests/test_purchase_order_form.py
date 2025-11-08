@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from administration.models import PurchaseRequest, PurchasingExpenseType, Supplier, SupportDocumentType
+from administration.models import PurchaseItem, PurchaseRequest, PurchasingExpenseType, Supplier, SupportDocumentType
 
 
 class PurchaseOrderFormSubmissionTests(TestCase):
@@ -44,6 +45,12 @@ class PurchaseOrderFormSubmissionTests(TestCase):
             support_document_type=self.support_type,
             status=PurchaseRequest.Status.APPROVED,
         )
+        self.purchase_item = PurchaseItem.objects.create(
+            purchase=self.purchase,
+            description='Motor',
+            quantity=Decimal('4'),
+            estimated_amount=Decimal('100000'),
+        )
 
     def test_save_order_updates_purchase_and_supplier(self) -> None:
         response = self.client.post(self._url(), data=self._payload())
@@ -76,11 +83,34 @@ class PurchaseOrderFormSubmissionTests(TestCase):
         self.purchase.refresh_from_db()
         self.assertEqual(PurchaseRequest.Status.ORDERED, self.purchase.status)
 
+    def test_confirm_order_with_immediate_delivery_autoreceives_items(self) -> None:
+        response = self.client.post(
+            self._url(),
+            data=self._payload(
+                intent='confirm_order',
+                delivery_condition=PurchaseRequest.DeliveryCondition.IMMEDIATE,
+                shipping_eta='',
+                shipping_notes='',
+            ),
+        )
+        self.assertRedirects(
+            response,
+            f"{self._url()}?scope={PurchaseRequest.Status.INVOICE}",
+            fetch_redirect_response=False,
+        )
+        self.purchase.refresh_from_db()
+        self.purchase_item.refresh_from_db()
+        self.assertEqual(PurchaseRequest.Status.INVOICE, self.purchase.status)
+        self.assertEqual(self.purchase_item.quantity, self.purchase_item.received_quantity)
+
     def test_confirm_order_with_credit_moves_purchase_to_payable(self) -> None:
         response = self.client.post(
             self._url(),
             data=self._payload(
                 intent='confirm_order',
+                delivery_condition=PurchaseRequest.DeliveryCondition.IMMEDIATE,
+                shipping_eta='',
+                shipping_notes='',
                 payment_condition=PurchaseRequest.PaymentCondition.CREDIT,
             ),
         )
@@ -91,6 +121,8 @@ class PurchaseOrderFormSubmissionTests(TestCase):
         )
         self.purchase.refresh_from_db()
         self.assertEqual(PurchaseRequest.Status.RECEPTION, self.purchase.status)
+        self.purchase_item.refresh_from_db()
+        self.assertEqual(self.purchase_item.quantity, self.purchase_item.received_quantity)
 
     def test_cash_payment_does_not_require_bank_data(self) -> None:
         response = self.client.post(

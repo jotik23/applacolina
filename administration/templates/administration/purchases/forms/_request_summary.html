@@ -65,6 +65,190 @@
         </div>
       {% endif %}
     {% endwith %}
+    {% with status=purchase.status %}
+      {% if status == 'ordenado' or status == 'recepcion' or status == 'factura' or status == 'pago' or status == 'archivada' %}
+        <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Gestión de compra</p>
+          <dl class="mt-3 grid gap-3 sm:grid-cols-2 text-slate-600">
+            {% if purchase.purchase_date %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Fecha de compra</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.purchase_date|date:"Y-m-d" }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.order_number %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Orden</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.order_number }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.delivery_condition %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Condición de entrega</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_delivery_condition_display }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.shipping_eta %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">ETA / llegada</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.shipping_eta|date:"Y-m-d" }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.shipping_notes %}
+              <div class="sm:col-span-2">
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Notas de envío</dt>
+                <dd class="mt-1 text-sm text-slate-700">{{ purchase.shipping_notes }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_condition %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Condición de pago</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_condition_display }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_method %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Medio de pago</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_method_display }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_source %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Origen del pago</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_source_display }}</dd>
+              </div>
+            {% endif %}
+          </dl>
+          {% if purchase.supplier_account_holder_name or purchase.supplier_account_number or purchase.supplier_bank_name %}
+            <div class="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 text-[11px] text-slate-600 sm:grid-cols-2">
+              <p class="sm:col-span-2 font-semibold uppercase tracking-wide text-slate-500">Datos bancarios registrados</p>
+              {% if purchase.supplier_account_holder_name %}
+                <div>
+                  <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Titular</dt>
+                  <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_holder_name }}</dd>
+                </div>
+              {% endif %}
+              {% if purchase.supplier_account_holder_id %}
+                <div>
+                  <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Identificación</dt>
+                  <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_holder_id }}</dd>
+                </div>
+              {% endif %}
+              {% if purchase.supplier_account_type %}
+                <div>
+                  <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Tipo</dt>
+                  <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_type|title }}</dd>
+                </div>
+              {% endif %}
+              {% if purchase.supplier_account_number %}
+                <div>
+                  <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Número</dt>
+                  <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_number }}</dd>
+                </div>
+              {% endif %}
+              {% if purchase.supplier_bank_name %}
+                <div>
+                  <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Banco</dt>
+                  <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_bank_name }}</dd>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+      {% if status == 'recepcion' or status == 'factura' or status == 'pago' or status == 'archivada' %}
+        <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Recepción registrada</p>
+          {% with reception_items=purchase.items.all %}
+            {% if reception_items %}
+              <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+                <table class="min-w-full divide-y divide-slate-200 text-xs">
+                  <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th class="px-3 py-2 text-left">Item</th>
+                      <th class="px-3 py-2 text-right">Solicitado</th>
+                      <th class="px-3 py-2 text-right">Recibido</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100 bg-white">
+                    {% for item in reception_items %}
+                      <tr>
+                        <td class="px-3 py-2 text-slate-900">{{ item.description }}</td>
+                        <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
+                        <td class="px-3 py-2 text-right">{{ item.received_quantity|default:"—" }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+          {% endwith %}
+          {% if purchase.reception_notes %}
+            <p class="mt-3 rounded-xl bg-slate-50 p-3 text-[11px] text-slate-600">
+              <span class="font-semibold">Notas:</span> {{ purchase.reception_notes }}
+            </p>
+          {% endif %}
+          {% with attachments=purchase.reception_attachments.all %}
+            {% if attachments %}
+              <div class="mt-3 space-y-2 text-[11px]">
+                <p class="font-semibold uppercase tracking-wide text-slate-500">Adjuntos</p>
+                <ul class="space-y-1 text-slate-600">
+                  {% for attachment in attachments %}
+                    <li>
+                      <a href="{{ attachment.file.url }}" target="_blank" class="inline-flex items-center gap-2 text-brand hover:text-brand/80">
+                        <span aria-hidden="true">⤓</span> {{ attachment.filename }}
+                      </a>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
+          {% endwith %}
+        </div>
+      {% endif %}
+      {% if status == 'factura' or status == 'pago' or status == 'archivada' %}
+        <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Pago registrado</p>
+          <dl class="mt-3 grid gap-3 sm:grid-cols-2 text-slate-600">
+            {% if purchase.payment_account %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Cuenta / referencia</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.payment_account }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_date %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Fecha</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.payment_date|date:"Y-m-d" }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_condition %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Condición</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_condition_display }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_method %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Medio</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_method_display }}</dd>
+              </div>
+            {% endif %}
+            {% if purchase.payment_source %}
+              <div>
+                <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Origen</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_source_display }}</dd>
+              </div>
+            {% endif %}
+          </dl>
+          {% if purchase.payment_notes %}
+            <p class="mt-3 rounded-xl bg-slate-50 p-3 text-[11px] text-slate-600">
+              <span class="font-semibold">Notas:</span> {{ purchase.payment_notes }}
+            </p>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endwith %}
   </div>
 </details>
 {% endif %}

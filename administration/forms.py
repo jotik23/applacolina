@@ -36,23 +36,12 @@ class PurchasingExpenseTypeForm(forms.ModelForm):
         model = PurchasingExpenseType
         fields = [
             "name",
-            "default_unit",
-            "scope",
             "parent_category",
             "default_support_document_type",
             "iva_rate",
             "withholding_rate",
-            "self_withholding_rate",
-            "is_active",
+            "assumed_withholding_rate",
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        scope_field = self.fields.get("scope")
-        if scope_field:
-            scope_field.choices = [
-                choice for choice in scope_field.choices if choice[0] != PurchasingExpenseType.Scope.HOUSE
-            ]
 
     def clean_parent_category(self):
         parent = self.cleaned_data.get("parent_category")
@@ -78,28 +67,13 @@ class SupportDocumentTypeForm(forms.ModelForm):
 
 
 class ExpenseTypeApprovalRuleForm(forms.ModelForm):
-    sequence = forms.IntegerField(min_value=1, label="Secuencia")
-
     class Meta:
         model = ExpenseTypeApprovalRule
-        fields = ["sequence", "name", "approver"]
+        fields = ["approver"]
 
 
 class BaseExpenseTypeWorkflowFormSet(BaseInlineFormSet):
-    def clean(self):
-        super().clean()
-        sequences: set[int] = set()
-        for form in self.forms:
-            if not hasattr(form, "cleaned_data"):
-                continue
-            if form.cleaned_data.get("DELETE"):
-                continue
-            sequence = form.cleaned_data.get("sequence")
-            if sequence is None:
-                continue
-            if sequence in sequences:
-                form.add_error("sequence", "La secuencia debe ser única dentro del flujo.")
-            sequences.add(sequence)
+    pass
 
 
 ExpenseTypeWorkflowFormSet = inlineformset_factory(

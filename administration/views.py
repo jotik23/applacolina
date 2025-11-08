@@ -38,6 +38,11 @@ from .services.purchase_orders import (
     PurchaseOrderService,
     PurchaseOrderValidationError,
 )
+from .services.purchase_payments import (
+    PurchasePaymentPayload,
+    PurchasePaymentService,
+    PurchasePaymentValidationError,
+)
 from .services.purchase_receptions import (
     PurchaseReceptionPayload,
     PurchaseReceptionService,
@@ -126,6 +131,40 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         else:
             context.setdefault('purchase_reception_field_errors', {})
             context.setdefault('purchase_reception_item_errors', {})
+        invoice_field_errors = kwargs.get('purchase_invoice_field_errors') or {}
+        invoice_overrides = kwargs.get('purchase_invoice_overrides')
+        should_build_invoice_form = (
+            invoice_overrides
+            or invoice_field_errors
+            or (state.panel and state.panel.panel.code == 'invoice')
+        )
+        if should_build_invoice_form:
+            context.update(
+                self._build_purchase_invoice_form_context(
+                    panel_state=state.panel,
+                    overrides=invoice_overrides,
+                    field_errors=invoice_field_errors,
+                )
+            )
+        else:
+            context.setdefault('purchase_invoice_field_errors', {})
+        payment_field_errors = kwargs.get('purchase_payment_field_errors') or {}
+        payment_overrides = kwargs.get('purchase_payment_overrides')
+        should_build_payment_form = (
+            payment_overrides
+            or payment_field_errors
+            or (state.panel and state.panel.panel.code == 'payment')
+        )
+        if should_build_payment_form:
+            context.update(
+                self._build_purchase_payment_form_context(
+                    panel_state=state.panel,
+                    overrides=payment_overrides,
+                    field_errors=payment_field_errors,
+                )
+            )
+        else:
+            context.setdefault('purchase_payment_field_errors', {})
         return context
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
@@ -136,6 +175,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             return self._handle_order_panel_post()
         if panel == 'reception':
             return self._handle_reception_panel_post()
+        if panel == 'payment':
+            return self._handle_payment_panel_post()
         messages.error(request, "El formulario enviado no está disponible todavía.")
         return redirect(self._build_base_url(scope=request.POST.get('scope')))
 
@@ -235,8 +276,44 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
 
         if intent == 'confirm_reception':
             messages.success(self.request, "Recepción registrada. Continúa con la facturación.")
+            return redirect(self._build_base_url(scope=purchase.status))
+        messages.success(self.request, "Recepción guardada.")
+        return redirect(
+            self._build_base_url(
+                scope=purchase.status,
+                extra={
+                    'panel': 'reception',
+                    'purchase': purchase.pk,
+                },
+            )
+        )
+
+    def _handle_payment_panel_post(self) -> HttpResponse:
+        intent = self.request.POST.get('intent') or 'save_payment'
+        purchase_id = _parse_int(self.request.POST.get('purchase'))
+        payload, overrides, field_errors = self._build_payment_payload(purchase_id=purchase_id, intent=intent)
+        if field_errors or payload is None:
+            return self._render_payment_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+            )
+        service = PurchasePaymentService(actor=self.request.user)
+        try:
+            purchase = service.save(payload=payload, intent=intent)
+        except PurchasePaymentValidationError as exc:
+            self._merge_field_errors(field_errors, exc.field_errors)
+            return self._render_payment_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+            )
+        if intent == 'confirm_payment':
+            messages.success(self.request, "Pago registrado. Continúa adjuntando los soportes.")
         else:
-            messages.success(self.request, "Recepción guardada.")
+            messages.success(self.request, "Información de pago guardada.")
         return redirect(self._build_base_url(scope=purchase.status))
 
     def _render_request_form_errors(
@@ -297,6 +374,24 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
         )
 
+    def _render_payment_form_errors(
+        self,
+        *,
+        scope: str | None,
+        purchase_id: int | None,
+        overrides: dict,
+        field_errors: dict[str, list[str]],
+    ) -> HttpResponse:
+        return self.render_to_response(
+            self.get_context_data(
+                scope_override=scope,
+                panel_override='payment',
+                purchase_pk_override=purchase_id,
+                purchase_payment_overrides=overrides,
+                purchase_payment_field_errors=field_errors,
+            )
+        )
+
     def _reopen_purchase_request(self, *, purchase_id: int | None) -> HttpResponse:
         if not purchase_id:
             messages.error(self.request, "No encontramos la solicitud que deseas modificar.")
@@ -339,7 +434,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'supplier_id': supplier_id,
             'scope_values': scope_values,
             'items': items_raw,
-            'scope_label': self._category_scope_label(expense_type_id),
         }
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, dict[str, list[str]]] = {}
@@ -537,6 +631,84 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
         return payload, overrides, field_errors, item_errors
 
+    def _build_payment_payload(
+        self,
+        *,
+        purchase_id: int | None,
+        intent: str,
+    ) -> tuple[PurchasePaymentPayload | None, dict, dict[str, list[str]]]:
+        payment_method = (self.request.POST.get('payment_method') or '').strip()
+        payment_condition = (self.request.POST.get('payment_condition') or '').strip()
+        payment_source = (self.request.POST.get('payment_source') or '').strip()
+        payment_notes = (self.request.POST.get('payment_notes') or '').strip()
+        supplier_account_holder_id = (self.request.POST.get('supplier_account_holder_id') or '').strip()
+        supplier_account_holder_name = (self.request.POST.get('supplier_account_holder_name') or '').strip()
+        supplier_account_type = (self.request.POST.get('supplier_account_type') or '').strip()
+        supplier_account_number = (self.request.POST.get('supplier_account_number') or '').strip()
+        supplier_bank_name = (self.request.POST.get('supplier_bank_name') or '').strip()
+        overrides = {
+            'payment_method': payment_method,
+            'payment_condition': payment_condition,
+            'payment_source': payment_source,
+            'payment_notes': payment_notes,
+            'supplier_account_holder_id': supplier_account_holder_id,
+            'supplier_account_holder_name': supplier_account_holder_name,
+            'supplier_account_type': supplier_account_type,
+            'supplier_account_number': supplier_account_number,
+            'supplier_bank_name': supplier_bank_name,
+        }
+        field_errors: dict[str, list[str]] = {}
+        if not purchase_id:
+            field_errors.setdefault('non_field', []).append("Selecciona una solicitud para registrar el pago.")
+        allowed_conditions = set(PurchaseRequest.PaymentCondition.values)
+        if payment_condition and payment_condition not in allowed_conditions:
+            field_errors.setdefault('payment_condition', []).append("Selecciona una condición de pago válida.")
+        if not payment_condition:
+            field_errors.setdefault('payment_condition', []).append("Selecciona una condición de pago.")
+        allowed_methods = set(PurchaseRequest.PaymentMethod.values)
+        if payment_method and payment_method not in allowed_methods:
+            field_errors.setdefault('payment_method', []).append("Selecciona un medio de pago válido.")
+        if not payment_method:
+            field_errors.setdefault('payment_method', []).append("Selecciona un medio de pago.")
+        payment_sources = set(PurchaseRequest.PaymentSource.values)
+        if payment_source and payment_source not in payment_sources:
+            field_errors.setdefault('payment_source', []).append("Selecciona el origen del pago.")
+        if not payment_source:
+            payment_source = PurchaseRequest.PaymentSource.TBD
+        account_types = {choice for choice, _ in Supplier.ACCOUNT_TYPE_CHOICES}
+        require_bank_data = payment_method == PurchaseRequest.PaymentMethod.TRANSFER
+        if require_bank_data:
+            if supplier_account_type and supplier_account_type not in account_types:
+                field_errors.setdefault('supplier_account_type', []).append("Selecciona un tipo de cuenta válido.")
+            if not supplier_account_type:
+                field_errors.setdefault('supplier_account_type', []).append("Selecciona el tipo de cuenta.")
+            if not supplier_account_holder_name:
+                field_errors.setdefault('supplier_account_holder_name', []).append("Ingresa el titular de la cuenta.")
+            if not supplier_account_holder_id:
+                field_errors.setdefault('supplier_account_holder_id', []).append("Ingresa la identificación del titular.")
+            if not supplier_account_number:
+                field_errors.setdefault('supplier_account_number', []).append("Ingresa el número de cuenta.")
+            if not supplier_bank_name:
+                field_errors.setdefault('supplier_bank_name', []).append("Ingresa el banco.")
+        else:
+            if supplier_account_type and supplier_account_type not in account_types:
+                field_errors.setdefault('supplier_account_type', []).append("Selecciona un tipo de cuenta válido.")
+        payload = None
+        if purchase_id and not field_errors:
+            payload = PurchasePaymentPayload(
+                purchase_id=purchase_id,
+                payment_method=payment_method,
+                payment_condition=payment_condition,
+                payment_source=payment_source,
+                payment_notes=payment_notes,
+                supplier_account_holder_id=supplier_account_holder_id,
+                supplier_account_holder_name=supplier_account_holder_name,
+                supplier_account_type=supplier_account_type,
+                supplier_account_number=supplier_account_number,
+                supplier_bank_name=supplier_bank_name,
+            )
+        return payload, overrides, field_errors
+
     def _parse_decimal(self, value: str | None, *, allow_empty: bool) -> Decimal | None:
         if value is None or value == '':
             return Decimal('0') if allow_empty else None
@@ -613,9 +785,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'initial': form_initial['values'],
                 'unit_label': form_initial['unit_label'],
                 'read_only': form_initial['read_only'],
-                'scope_code': form_initial['scope_code'],
-                'scope_label': form_initial['scope_label'],
-                'scope_requires_location': form_initial['scope_requires_location'],
                 'can_reopen': bool(purchase and purchase.status == PurchaseRequest.Status.SUBMITTED),
             },
             'purchase_request_field_errors': field_errors,
@@ -668,6 +837,57 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         }
         return context
 
+    def _build_purchase_payment_form_context(
+        self,
+        *,
+        panel_state,
+        overrides: dict | None,
+        field_errors: dict[str, list[str]],
+    ) -> dict:
+        purchase = panel_state.purchase if panel_state else None
+        supplier = purchase.supplier if purchase else None
+        initial = {
+            'payment_method': (
+                purchase.payment_method if purchase and purchase.payment_method else PurchaseRequest.PaymentMethod.TRANSFER
+            ),
+            'payment_condition': (
+                purchase.payment_condition if purchase and purchase.payment_condition else PurchaseRequest.PaymentCondition.CASH
+            ),
+            'payment_source': (
+                purchase.payment_source if purchase and purchase.payment_source else PurchaseRequest.PaymentSource.TBD
+            ),
+            'payment_notes': purchase.payment_notes if purchase and purchase.payment_notes else '',
+            'supplier_account_holder_id': purchase.supplier_account_holder_id
+            if purchase and purchase.supplier_account_holder_id
+            else (supplier.account_holder_id if supplier else ''),
+            'supplier_account_holder_name': purchase.supplier_account_holder_name
+            if purchase and purchase.supplier_account_holder_name
+            else (supplier.account_holder_name if supplier else ''),
+            'supplier_account_type': purchase.supplier_account_type
+            if purchase and purchase.supplier_account_type
+            else (supplier.account_type if supplier else ''),
+            'supplier_account_number': purchase.supplier_account_number
+            if purchase and purchase.supplier_account_number
+            else (supplier.account_number if supplier else ''),
+            'supplier_bank_name': purchase.supplier_bank_name
+            if purchase and purchase.supplier_bank_name
+            else (supplier.bank_name if supplier else ''),
+        }
+        if overrides:
+            initial.update({k: v for k, v in overrides.items() if v is not None})
+        context = {
+            'purchase_payment_form': {
+                'initial': initial,
+                'payment_conditions': PurchaseRequest.PaymentCondition.choices,
+                'payment_methods': PurchaseRequest.PaymentMethod.choices,
+                'payment_sources': PurchaseRequest.PaymentSource.choices,
+                'account_types': Supplier.ACCOUNT_TYPE_CHOICES,
+                'purchase': purchase,
+            },
+            'purchase_payment_field_errors': field_errors,
+        }
+        return context
+
     def _build_purchase_reception_form_context(
         self,
         *,
@@ -714,6 +934,31 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'purchase_reception_item_errors': item_errors,
         }
 
+    def _build_purchase_invoice_form_context(
+        self,
+        *,
+        panel_state,
+        overrides: dict | None,
+        field_errors: dict[str, list[str]],
+    ) -> dict:
+        purchase = panel_state.purchase if panel_state else None
+        selected_support_type = None
+        if overrides and overrides.get('support_document_type_id') is not None:
+            selected_support_type = overrides.get('support_document_type_id')
+        elif purchase:
+            selected_support_type = purchase.support_document_type_id
+        selected_support_type = _parse_int(selected_support_type)
+        form = {
+            'initial': {
+                'support_document_type_id': selected_support_type,
+            },
+            'support_types': self.purchase_form_options['support_types'],
+        }
+        return {
+            'purchase_invoice_form': form,
+            'purchase_invoice_field_errors': field_errors,
+        }
+
     def _resolve_form_initial(self, *, purchase, overrides: dict | None) -> dict:
         read_only = bool(purchase and purchase.status != PurchaseRequest.Status.DRAFT)
         if overrides:
@@ -727,15 +972,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             }
             scope = overrides.get('scope_values') or {'farm_id': None, 'chicken_house_id': None, 'batch_code': ''}
             items = overrides.get('items') or []
-            scope_code = self._category_scope_code(values.get('expense_type_id')) or (
-                purchase.expense_type.scope if purchase and purchase.expense_type else ''
-            )
-            scope_label = overrides.get('scope_label') or self._category_scope_label(values.get('expense_type_id')) or (
-                purchase.expense_type.get_scope_display() if purchase and purchase.expense_type else ''
-            )
-            unit_label = self._category_unit_label(values.get('expense_type_id')) or (
-                purchase.expense_type.default_unit if purchase and purchase.expense_type else ''
-            ) or 'Unidad'
         else:
             values = {
                 'summary': purchase.name if purchase else '',
@@ -747,32 +983,13 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             }
             scope = self._scope_values_from_purchase(purchase)
             items = self._serialize_items(purchase)
-            scope_code = purchase.expense_type.scope if purchase and purchase.expense_type else ''
-            unit_label = (
-                purchase.expense_type.default_unit
-                if purchase and purchase.expense_type and purchase.expense_type.default_unit
-                else 'Unidad'
-            )
-            scope_label = (
-                purchase.expense_type.get_scope_display()
-                if purchase and purchase.expense_type
-                else ''
-            )
-        if not unit_label:
-            unit_label = 'Unidad'
-        location_scopes = {
-            PurchasingExpenseType.Scope.FARM,
-            PurchasingExpenseType.Scope.LOT,
-        }
+        unit_label = 'Unidad'
         return {
             'values': values,
             'scope': scope,
             'items': items,
             'read_only': read_only,
             'unit_label': unit_label,
-            'scope_code': scope_code,
-            'scope_label': scope_label,
-            'scope_requires_location': scope_code in location_scopes,
         }
 
     def _serialize_items(self, purchase) -> list[dict[str, str]]:
@@ -813,13 +1030,10 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             {
                 'id': category.id,
                 'name': category.name,
-                'scope': category.scope,
-                'scope_label': category.get_scope_display(),
                 'approval_summary': category.approval_phase_summary,
-                'unit': category.default_unit or '',
                 'support_type_id': category.default_support_document_type_id,
             }
-            for category in PurchasingExpenseType.objects.filter(is_active=True).order_by('name')
+            for category in PurchasingExpenseType.objects.order_by('name')
         ]
         suppliers = [
             {'id': supplier.id, 'name': supplier.name}
@@ -859,30 +1073,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'bird_batches': bird_batches,
             'support_types': support_types,
         }
-
-    def _category_unit_label(self, category_id):
-        if not category_id:
-            return ''
-        for category in self.purchase_form_options['categories']:
-            if category['id'] == category_id:
-                return category.get('unit') or ''
-        return ''
-
-    def _category_scope_label(self, category_id):
-        if not category_id:
-            return ''
-        for category in self.purchase_form_options['categories']:
-            if category['id'] == category_id:
-                return category.get('scope_label') or ''
-        return ''
-
-    def _category_scope_code(self, category_id):
-        if not category_id:
-            return ''
-        for category in self.purchase_form_options['categories']:
-            if category['id'] == category_id:
-                return category.get('scope') or ''
-        return ''
 
     def _format_decimal(self, value: Decimal | None) -> str:
         if value is None:
@@ -1109,19 +1299,21 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
         return context
 
     def _expense_type_context(self, *, search: str, panel: str | None, expense_type_instance_override=None, **kwargs):
-        qs = PurchasingExpenseType.objects.prefetch_related('approval_rules')
+        qs = PurchasingExpenseType.objects.prefetch_related('approval_rules', 'parent_category').order_by('name')
         if search:
             qs = qs.filter(Q(name__icontains=search))
-        paginator = Paginator(qs.order_by('name'), 20)
-        page_number = self.request.GET.get('page') or 1
-        page_obj = paginator.get_page(page_number)
+        categories = list(qs)
+        tree_rows = self._build_expense_type_rows(categories)
+        total_categories = PurchasingExpenseType.objects.count()
         expense_type = expense_type_instance_override
         if not expense_type:
             expense_type = self._find_expense_type()
         form = kwargs.get('expense_type_form') or PurchasingExpenseTypeForm(instance=expense_type)
         workflow_formset = kwargs.get('workflow_formset') or self._build_workflow_formset(instance=expense_type)
         return {
-            'expense_types_page': page_obj,
+            'expense_type_rows': tree_rows,
+            'expense_type_total': total_categories,
+            'expense_type_display_count': len(tree_rows),
             'expense_type_form': form,
             'expense_type_instance': expense_type,
             'expense_types_panel_open': panel == 'expense_type',
@@ -1158,12 +1350,44 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
             kwargs['data'] = data
         return ExpenseTypeWorkflowFormSet(**kwargs)
 
+    def _build_expense_type_rows(self, categories):
+        nodes: dict[int, dict] = {}
+        for category in categories:
+            nodes[category.id] = {'category': category, 'children': []}
+        for node in nodes.values():
+            parent_id = node['category'].parent_category_id
+            if parent_id and parent_id in nodes:
+                nodes[parent_id]['children'].append(node)
+        for node in nodes.values():
+            node['children'].sort(key=lambda item: item['category'].name.lower())
+        roots = [
+            node
+            for node in nodes.values()
+            if not node['category'].parent_category_id or node['category'].parent_category_id not in nodes
+        ]
+        roots.sort(key=lambda item: item['category'].name.lower())
+        rows: list[dict] = []
+
+        def traverse(node: dict, depth: int, parent_id: int | None) -> None:
+            rows.append(
+                {
+                    'category': node['category'],
+                    'depth': depth,
+                    'parent_id': parent_id,
+                    'has_children': bool(node['children']),
+                }
+            )
+            for child in node['children']:
+                traverse(child, depth + 1, node['category'].id)
+
+        for root in roots:
+            traverse(root, 0, None)
+        return rows
+
     def _handle_expense_type_post(self) -> HttpResponse:
         action = self.request.POST.get('form_action')
         if action == 'expense_type':
             return self._save_expense_type()
-        if action in {'activate', 'deactivate'}:
-            return self._toggle_expense_type(is_active=(action == 'activate'))
         if action == 'delete':
             return self._delete_expense_type()
         messages.error(self.request, "Acción no soportada.")
@@ -1192,7 +1416,7 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
                 workflow_formset.instance = expense_type
                 workflow_formset.save()
             messages.success(self.request, "Categoría de gasto guardada.")
-            return redirect(self._base_url(section='expense_types'))
+            return redirect(self._base_url(section='expense_types', with_panel=False))
         messages.error(self.request, "Revisa los errores del formulario.")
         return self.render_to_response(
             self.get_context_data(
@@ -1202,20 +1426,6 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
                 workflow_formset=workflow_formset,
             )
         )
-
-    def _toggle_expense_type(self, *, is_active: bool) -> HttpResponse:
-        expense_type_id = _parse_int(self.request.POST.get('expense_type_id'))
-        expense_type = PurchasingExpenseType.objects.filter(pk=expense_type_id).first()
-        if not expense_type:
-            messages.error(self.request, "Categoría de gasto no encontrada.")
-            return redirect(self._base_url(section='expense_types'))
-        if expense_type.is_active == is_active:
-            messages.info(self.request, "El estado ya coincidía.")
-        else:
-            expense_type.is_active = is_active
-            expense_type.save(update_fields=['is_active'])
-            messages.success(self.request, "Estado actualizado.")
-        return redirect(self._base_url(section='expense_types', with_panel=False))
 
     def _delete_expense_type(self) -> HttpResponse:
         expense_type_id = _parse_int(self.request.POST.get('expense_type_id'))
@@ -1238,7 +1448,7 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
             support_type = form.save()
             verb = "actualizado" if instance else "registrado"
             messages.success(self.request, f"Tipo de soporte {verb} correctamente.")
-            return redirect(self._base_url(section='support_documents'))
+            return redirect(self._base_url(section='support_documents', with_panel=False))
         messages.error(self.request, "Revisa los errores del formulario.")
         return self.render_to_response(
             self.get_context_data(

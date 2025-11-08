@@ -165,7 +165,7 @@ ACTION_BY_STATUS = {
     PurchaseRequest.Status.SUBMITTED: PurchaseAction('Ver solicitud', 'request', 'ver_detalle'),
     PurchaseRequest.Status.APPROVED: PurchaseAction('Gestionar compra', 'order', 'gestionar_compra'),
     PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
-    PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
+    PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
     PurchaseRequest.Status.INVOICE: PurchaseAction('Registrar factura', 'invoice', 'registrar_factura'),
     PurchaseRequest.Status.PAYMENT: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
     PurchaseRequest.Status.ARCHIVED: None,

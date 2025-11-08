@@ -31,7 +31,7 @@ class PurchaseApprovalWorkflowService:
             rules = list(
                 ExpenseTypeApprovalRule.objects.filter(expense_type=self.purchase_request.expense_type)
                 .select_related("approver")
-                .order_by("sequence")
+                .order_by("id")
             )
 
             if not rules:
@@ -44,13 +44,13 @@ class PurchaseApprovalWorkflowService:
 
     def _create_approvals(self, rules: Sequence[ExpenseTypeApprovalRule]) -> list[PurchaseApproval]:
         approvals: list[PurchaseApproval] = []
-        for rule in rules:
+        for index, rule in enumerate(rules, start=1):
             approvals.append(
                 PurchaseApproval.objects.create(
                     purchase_request=self.purchase_request,
                     rule=rule,
-                    sequence=rule.sequence,
-                    role=rule.name,
+                    sequence=index,
+                    role=self._role_label(index=index, rule=rule),
                     approver=rule.approver,
                 )
             )
@@ -133,3 +133,14 @@ class PurchaseApprovalWorkflowService:
             payload=payload or {},
             actor=self.actor if getattr(self.actor, "is_authenticated", False) else None,
         )
+
+    def _role_label(self, *, index: int, rule: ExpenseTypeApprovalRule) -> str:
+        approver = rule.approver
+        label = ''
+        if approver:
+            get_full_name = getattr(approver, "get_full_name", None)
+            if callable(get_full_name):
+                label = (get_full_name() or '').strip()
+            if not label:
+                label = getattr(approver, "email", "") or str(approver)
+        return label or f"Aprobador {index}"

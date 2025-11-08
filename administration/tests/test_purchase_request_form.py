@@ -38,7 +38,6 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         )
         self.expense_type = PurchasingExpenseType.objects.create(
             name='CapEx Granjas',
-            default_unit='pzas',
             default_support_document_type=self.support_type,
         )
         self.farm = Farm.objects.create(name='Granja 1')
@@ -64,8 +63,6 @@ class PurchaseRequestFormSubmissionTests(TestCase):
     def test_send_purchase_request_runs_workflow(self) -> None:
         ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
-            sequence=1,
-            name='Revisor',
             approver=self.approver,
         )
         payload = self._base_payload() | {'intent': 'send_workflow'}
@@ -147,8 +144,6 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             'summary': 'Compra equipos críticos',
             'supplier': str(self.supplier.pk),
             'expense_type': str(self.expense_type.pk),
-            'support_document_type': str(self.support_type.pk),
-            'notes': 'Prioritario para mantener la producción.',
             'items[0][description]': 'Motor ventilador',
             'items[0][quantity]': '2',
             'items[0][estimated_amount]': '1200000',

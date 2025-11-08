@@ -53,36 +53,26 @@ class ExpenseTypeWorkflowViewTests(TestCase):
                 'panel': 'expense_type',
                 'form_action': 'expense_type',
                 'name': 'CapEx granjas',
-                'scope': str(PurchasingExpenseType.Scope.FARM),
                 'iva_rate': '19.00',
                 'withholding_rate': '0.00',
-                'self_withholding_rate': '3.50',
                 'parent_category': '',
-                'is_active': 'on',
                 'workflow-TOTAL_FORMS': '2',
                 'workflow-INITIAL_FORMS': '0',
                 'workflow-MIN_NUM_FORMS': '0',
                 'workflow-MAX_NUM_FORMS': '1000',
-                'workflow-0-sequence': '1',
-                'workflow-0-name': 'Solicitante',
                 'workflow-0-approver': str(self.user.pk),
-                'workflow-1-sequence': '',
-                'workflow-1-name': '',
                 'workflow-1-approver': '',
             },
         )
         self.assertEqual(response.status_code, 302)
         expense_type = PurchasingExpenseType.objects.get(name='CapEx granjas')
-        rules = expense_type.approval_rules.order_by('sequence')
+        rules = expense_type.approval_rules.order_by('id')
         self.assertEqual(1, rules.count())
-        self.assertEqual(1, rules.first().sequence)
         self.assertEqual(self.user, rules.first().approver)
 
     def test_update_category_updates_workflow(self) -> None:
         rule = ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
-            sequence=1,
-            name='Finanzas',
             approver=self.user,
         )
         reviewer = get_user_model().objects.create_user(
@@ -98,31 +88,22 @@ class ExpenseTypeWorkflowViewTests(TestCase):
                 'form_action': 'expense_type',
                 'expense_type_id': self.expense_type.pk,
                 'name': self.expense_type.name,
-                'scope': str(PurchasingExpenseType.Scope.FARM),
                 'iva_rate': '19.00',
                 'withholding_rate': '0.00',
-                'is_active': 'on',
-                'self_withholding_rate': '0.00',
                 'parent_category': '',
                 'workflow-TOTAL_FORMS': '2',
                 'workflow-INITIAL_FORMS': '1',
                 'workflow-MIN_NUM_FORMS': '0',
                 'workflow-MAX_NUM_FORMS': '1000',
                 'workflow-0-id': str(rule.pk),
-                'workflow-0-sequence': '2',
-                'workflow-0-name': 'Finanzas actualizadas',
                 'workflow-0-approver': str(reviewer.pk),
-                'workflow-1-sequence': '1',
-                'workflow-1-name': 'Solicitante',
                 'workflow-1-approver': str(self.user.pk),
             },
         )
         self.assertEqual(response.status_code, 302)
-        rules = list(self.expense_type.approval_rules.order_by('sequence'))
+        rules = list(self.expense_type.approval_rules.order_by('id'))
         self.assertEqual(2, len(rules))
-        self.assertEqual('Solicitante', rules[0].name)
         self.assertEqual(self.user, rules[0].approver)
-        self.assertEqual('Finanzas actualizadas', rules[1].name)
         self.assertEqual(reviewer, rules[1].approver)
 
 
@@ -154,14 +135,10 @@ class PurchaseApprovalWorkflowServiceTests(TestCase):
     def test_creates_approvals_and_auto_approves_requester_step(self) -> None:
         ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
-            sequence=1,
-            name='Solicitante',
             approver=self.requester,
         )
         ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
-            sequence=2,
-            name='Finanzas',
             approver=self.finance,
         )
         purchase_request = self._build_request()
@@ -181,14 +158,10 @@ class PurchaseApprovalWorkflowServiceTests(TestCase):
     def test_all_steps_auto_approved_marks_request_as_approved(self) -> None:
         ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
-            sequence=1,
-            name='Solicitante',
             approver=self.requester,
         )
         ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
-            sequence=2,
-            name='Revisión solicitante',
             approver=self.requester,
         )
         purchase_request = self._build_request(code='SOL-002')

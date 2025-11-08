@@ -1,4 +1,4 @@
-{% with purchase=purchases_panel.purchase %}
+{% with purchase=purchases_panel.purchase form=purchase_invoice_form field_errors=purchase_invoice_field_errors %}
 <section class="space-y-6 text-sm text-slate-700">
   <article class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
     <header>
@@ -25,6 +25,30 @@
           <option {% if purchase.currency == 'COP' %}selected{% endif %}>COP</option>
         </select>
       </label>
+      {% if purchase.status == 'factura' %}
+        {% with selected_support_type=form.initial.support_document_type_id|default:purchase.support_document_type_id %}
+          <label class="text-xs font-semibold text-slate-500">
+            Tipo de soporte
+            <select
+              name="support_document_type"
+              class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+            >
+              <option value="">Selecciona el tipo de soporte</option>
+              {% for option in form.support_types %}
+                <option value="{{ option.id }}" {% if option.id == selected_support_type %}selected{% endif %}>
+                  {{ option.name }} · {{ option.kind }}
+                </option>
+              {% endfor %}
+            </select>
+            {% if field_errors.support_document_type %}
+              <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.support_document_type.0 }}</p>
+            {% endif %}
+            {% if not form.support_types %}
+              <p class="mt-1 text-[11px] text-amber-600">Configura tipos de soporte en la pestaña de administración.</p>
+            {% endif %}
+          </label>
+        {% endwith %}
+      {% endif %}
     </div>
   </article>
 
@@ -81,5 +105,7 @@
       </button>
     </div>
   </div>
+
+  {% include "administration/purchases/forms/_request_summary.html" with purchase=purchase %}
 </section>
 {% endwith %}

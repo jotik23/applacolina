@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 
 from django.db import transaction
 from django.utils import timezone
@@ -10,15 +9,12 @@ from administration.models import PurchaseRequest, Supplier
 
 
 @dataclass
-class PurchaseOrderPayload:
+class PurchasePaymentPayload:
     purchase_id: int
-    purchase_date: date
-    delivery_condition: str
-    shipping_eta: date | None
-    shipping_notes: str
-    payment_condition: str
     payment_method: str
+    payment_condition: str
     payment_source: str
+    payment_notes: str
     supplier_account_holder_id: str
     supplier_account_holder_name: str
     supplier_account_type: str
@@ -26,25 +22,25 @@ class PurchaseOrderPayload:
     supplier_bank_name: str
 
 
-class PurchaseOrderValidationError(Exception):
+class PurchasePaymentValidationError(Exception):
     def __init__(self, *, field_errors: dict[str, list[str]] | None = None) -> None:
-        super().__init__("Invalid purchase order data")
+        super().__init__("Invalid payment payload")
         self.field_errors = field_errors or {}
 
 
-class PurchaseOrderService:
+class PurchasePaymentService:
     def __init__(self, *, actor) -> None:
         self.actor = actor
 
-    def save(self, *, payload: PurchaseOrderPayload, intent: str) -> PurchaseRequest:
+    def save(self, *, payload: PurchasePaymentPayload, intent: str) -> PurchaseRequest:
         if not payload.purchase_id:
-            raise PurchaseOrderValidationError(field_errors={"non_field": ["Selecciona una solicitud válida."]})
+            raise PurchasePaymentValidationError(field_errors={"non_field": ["Selecciona una solicitud válida."]})
         with transaction.atomic():
             purchase = self._load_purchase(payload.purchase_id)
-            field_errors = self._validate(payload, purchase)
+            field_errors = self._validate(payload, purchase, intent=intent)
             if field_errors:
-                raise PurchaseOrderValidationError(field_errors=field_errors)
-            self._persist_purchase(purchase, payload, intent=intent)
+                raise PurchasePaymentValidationError(field_errors=field_errors)
+            self._persist_payment(purchase, payload, intent=intent)
             return purchase
 
     def _load_purchase(self, purchase_id: int) -> PurchaseRequest:
@@ -55,28 +51,22 @@ class PurchaseOrderService:
                 .get(pk=purchase_id)
             )
         except PurchaseRequest.DoesNotExist as exc:
-            raise PurchaseOrderValidationError(field_errors={"non_field": ["La solicitud seleccionada no existe."]}) from exc
+            raise PurchasePaymentValidationError(field_errors={"non_field": ["La solicitud seleccionada no existe."]}) from exc
 
     def _validate(
         self,
-        payload: PurchaseOrderPayload,
+        payload: PurchasePaymentPayload,
         purchase: PurchaseRequest,
+        *,
+        intent: str,
     ) -> dict[str, list[str]]:
         errors: dict[str, list[str]] = {}
-        if purchase.status not in {PurchaseRequest.Status.APPROVED, PurchaseRequest.Status.ORDERED}:
-            errors.setdefault("non_field", []).append("Solo puedes gestionar compras aprobadas.")
-        if not payload.purchase_date:
-            errors.setdefault("purchase_date", []).append("Selecciona la fecha de compra.")
-        if payload.delivery_condition not in PurchaseRequest.DeliveryCondition.values:
-            errors.setdefault("delivery_condition", []).append("Selecciona una condición de entrega válida.")
-        elif payload.delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING and not payload.shipping_eta:
-            errors.setdefault("shipping_eta", []).append("Ingresa la fecha estimada de llegada.")
-        if payload.payment_condition not in PurchaseRequest.PaymentCondition.values:
-            errors.setdefault("payment_condition", []).append("Selecciona una condición de pago válida.")
-        if payload.payment_method not in PurchaseRequest.PaymentMethod.values:
-            errors.setdefault("payment_method", []).append("Selecciona un medio de pago válido.")
-        if payload.payment_source not in PurchaseRequest.PaymentSource.values:
-            errors.setdefault("payment_source", []).append("Selecciona el origen del pago.")
+        allowed_statuses = {
+            PurchaseRequest.Status.RECEPTION,
+            PurchaseRequest.Status.INVOICE,
+        }
+        if purchase.status not in allowed_statuses:
+            errors.setdefault("non_field", []).append("Solo puedes registrar pagos para compras en Por pagar.")
         require_bank_data = payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER
         if require_bank_data:
             account_types = dict(Supplier.ACCOUNT_TYPE_CHOICES)
@@ -92,38 +82,53 @@ class PurchaseOrderService:
                 errors.setdefault("supplier_bank_name", []).append("Ingresa el banco.")
         return errors
 
-    def _persist_purchase(self, purchase: PurchaseRequest, payload: PurchaseOrderPayload, *, intent: str) -> None:
-        purchase.purchase_date = payload.purchase_date
-        purchase.delivery_condition = payload.delivery_condition
-        purchase.shipping_eta = (
-            payload.shipping_eta if payload.delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else None
-        )
-        purchase.shipping_notes = (
-            payload.shipping_notes if payload.delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else ""
-        )
-        purchase.payment_condition = payload.payment_condition
+    def _persist_payment(self, purchase: PurchaseRequest, payload: PurchasePaymentPayload, *, intent: str) -> None:
         purchase.payment_method = payload.payment_method
+        purchase.payment_notes = payload.payment_notes
         purchase.payment_source = payload.payment_source
-        self._sync_payment_date(purchase, payload.payment_condition)
+        payment_condition = payload.payment_condition
+        if intent == "confirm_payment" and payment_condition == PurchaseRequest.PaymentCondition.CREDIT:
+            payment_condition = PurchaseRequest.PaymentCondition.CREDIT_PAID
+        purchase.payment_condition = payment_condition
         if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
             purchase.supplier_account_holder_id = payload.supplier_account_holder_id
             purchase.supplier_account_holder_name = payload.supplier_account_holder_name
             purchase.supplier_account_type = payload.supplier_account_type
             purchase.supplier_account_number = payload.supplier_account_number
             purchase.supplier_bank_name = payload.supplier_bank_name
-            purchase.payment_account = payload.supplier_account_number
-        if intent == "confirm_order":
-            purchase.status = self._determine_status_after_management(
-                delivery_condition=payload.delivery_condition,
-                payment_condition=payload.payment_condition,
+            purchase.payment_account = payload.supplier_account_number or purchase.payment_account
+        self._sync_payment_date(purchase, payment_condition)
+        update_fields = [
+            "payment_method",
+            "payment_condition",
+            "payment_notes",
+            "payment_source",
+            "updated_at",
+        ]
+        if payment_condition in {
+            PurchaseRequest.PaymentCondition.CASH,
+            PurchaseRequest.PaymentCondition.CREDIT_PAID,
+        } or purchase.payment_date:
+            update_fields.append("payment_date")
+        if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
+            update_fields.extend(
+                [
+                    "supplier_account_holder_id",
+                    "supplier_account_holder_name",
+                    "supplier_account_type",
+                    "supplier_account_number",
+                    "supplier_bank_name",
+                    "payment_account",
+                ]
             )
-        purchase.save()
-        if intent == "confirm_order" and payload.delivery_condition == PurchaseRequest.DeliveryCondition.IMMEDIATE:
-            self._auto_receive_items(purchase)
+        if intent == "confirm_payment":
+            purchase.status = PurchaseRequest.Status.INVOICE
+            update_fields.append("status")
+        purchase.save(update_fields=update_fields)
         if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
             self._sync_supplier_bank_data(purchase.supplier, payload)
 
-    def _sync_supplier_bank_data(self, supplier: Supplier, payload: PurchaseOrderPayload) -> None:
+    def _sync_supplier_bank_data(self, supplier: Supplier, payload: PurchasePaymentPayload) -> None:
         if not supplier:
             return
         updated_fields: list[str] = []
@@ -153,15 +158,3 @@ class PurchaseOrderService:
             purchase.payment_date = timezone.localdate()
         else:
             purchase.payment_date = None
-
-    def _auto_receive_items(self, purchase: PurchaseRequest) -> None:
-        for item in purchase.items.all():
-            item.received_quantity = item.quantity
-            item.save(update_fields=["received_quantity", "updated_at"])
-
-    def _determine_status_after_management(self, *, delivery_condition: str, payment_condition: str) -> str:
-        if delivery_condition == PurchaseRequest.DeliveryCondition.IMMEDIATE:
-            if payment_condition == PurchaseRequest.PaymentCondition.CREDIT:
-                return PurchaseRequest.Status.RECEPTION
-            return PurchaseRequest.Status.INVOICE
-        return PurchaseRequest.Status.ORDERED

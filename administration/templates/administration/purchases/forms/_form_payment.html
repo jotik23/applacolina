@@ -1,72 +1,177 @@
-{% with purchase=purchases_panel.purchase %}
-<section class="space-y-6 text-sm text-slate-700">
+{% load static %}
+{% with purchase=purchases_panel.purchase form=purchase_payment_form field_errors=purchase_payment_field_errors %}
+<section class="space-y-6 text-sm text-slate-700" data-purchase-payment-form>
+  {% if field_errors.non_field %}
+    <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700">
+      {% for message in field_errors.non_field %}
+        <p>{{ message }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
   <article class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-    <header>
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pago</p>
-      <h2 class="text-lg font-semibold text-slate-900">Programación</h2>
+    <header class="flex flex-col gap-2">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pago</p>
+        <h2 class="text-lg font-semibold text-slate-900">Detalles del pago</h2>
+      </div>
+      <p class="text-[11px] text-slate-500">
+        Puedes actualizar estos datos aunque la solicitud esté bloqueada. Si confirmas el pago se moverá a <strong>Por soportar</strong>.
+      </p>
     </header>
     <div class="grid gap-4 lg:grid-cols-2">
       <label class="text-xs font-semibold text-slate-500">
-        Banco / Cuenta
-        <select name="payment_account" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-          <option>Banco Agrario · 0001</option>
-          <option selected>Banco Andino · 3011</option>
-          <option>Banco Global · 8810</option>
+        Condición de pago
+        <select
+          name="payment_condition"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+          <option value="">Selecciona una opción</option>
+          {% for value,label in form.payment_conditions %}
+            <option value="{{ value }}" {% if value == form.initial.payment_condition %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
         </select>
-      </label>
-      <label class="text-xs font-semibold text-slate-500">
-        Fecha programada
-        <input type="date" name="payment_date" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+        {% if field_errors.payment_condition %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.payment_condition.0 }}</p>
+        {% endif %}
       </label>
       <label class="text-xs font-semibold text-slate-500">
         Medio de pago
-        <select name="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-          <option>Transferencia</option>
-          <option>Cheque</option>
-          <option>Tarjeta corporativa</option>
+        <select
+          name="payment_method"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+          data-payment-method
+        >
+          <option value="">Selecciona un medio</option>
+          {% for value,label in form.payment_methods %}
+            <option value="{{ value }}" {% if value == form.initial.payment_method %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
         </select>
+        {% if field_errors.payment_method %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.payment_method.0 }}</p>
+        {% endif %}
       </label>
       <label class="text-xs font-semibold text-slate-500">
-        Estado del pago
-        <select name="payment_status" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-          <option>Programado</option>
-          <option>Enviado</option>
-          <option>Conciliado</option>
+        Origen del pago
+        <select
+          name="payment_source"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+          {% for value,label in form.payment_sources %}
+            <option value="{{ value }}" {% if value == form.initial.payment_source %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
         </select>
+        {% if field_errors.payment_source %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.payment_source.0 }}</p>
+        {% endif %}
+      </label>
+    </div>
+  </article>
+
+  <article
+    class="space-y-4 rounded-2xl border border-slate-200 p-5"
+    data-bank-section
+    {% if form.initial.payment_method != 'transferencia' %}hidden{% endif %}
+  >
+    <header>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Datos bancarios del proveedor</p>
+      <p class="text-xs text-slate-500">Se usarán para la transferencia y se sincronizarán con la ficha del tercero.</p>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <label class="text-xs font-semibold text-slate-500">
+        Titular de la cuenta
+        <input
+          type="text"
+          name="supplier_account_holder_name"
+          value="{{ form.initial.supplier_account_holder_name }}"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+        {% if field_errors.supplier_account_holder_name %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier_account_holder_name.0 }}</p>
+        {% endif %}
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Identificación titular
+        <input
+          type="text"
+          name="supplier_account_holder_id"
+          value="{{ form.initial.supplier_account_holder_id }}"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+        {% if field_errors.supplier_account_holder_id %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier_account_holder_id.0 }}</p>
+        {% endif %}
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Tipo de cuenta
+        <select
+          name="supplier_account_type"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+          <option value="">Selecciona un tipo</option>
+          {% for value,label in form.account_types %}
+            <option value="{{ value }}" {% if value == form.initial.supplier_account_type %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if field_errors.supplier_account_type %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier_account_type.0 }}</p>
+        {% endif %}
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Número de cuenta
+        <input
+          type="text"
+          name="supplier_account_number"
+          value="{{ form.initial.supplier_account_number }}"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+        {% if field_errors.supplier_account_number %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier_account_number.0 }}</p>
+        {% endif %}
+      </label>
+      <label class="text-xs font-semibold text-slate-500 lg:col-span-2">
+        Banco
+        <input
+          type="text"
+          name="supplier_bank_name"
+          value="{{ form.initial.supplier_bank_name }}"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+        >
+        {% if field_errors.supplier_bank_name %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.supplier_bank_name.0 }}</p>
+        {% endif %}
       </label>
     </div>
   </article>
 
   <article class="space-y-4 rounded-2xl border border-slate-200 p-5">
-    <header class="flex items-center justify-between">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Montos</p>
-        <p class="text-xs text-slate-500">Ajusta descuentos o anticipos registrados.</p>
-      </div>
-      <button type="button" class="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">Conciliar</button>
+    <header>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas</p>
+      <p class="text-xs text-slate-500">Incluye instrucciones para tesorería o referencias de la transferencia.</p>
     </header>
-    <div class="grid gap-4">
-      <label class="text-xs font-semibold text-slate-500">
-        Total a pagar
-        <input type="number" name="payment_total" value="{{ purchase.total_amount }}" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-      </label>
-      <label class="text-xs font-semibold text-slate-500">
-        Observaciones para tesorería
-        <textarea name="payment_notes" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm" placeholder="Instrucciones adicionales, referencias externas, etc."></textarea>
-      </label>
-    </div>
+    <textarea
+      name="payment_notes"
+      rows="3"
+      class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+      placeholder="Instrucciones adicionales, referencias externas, etc."
+    >{{ form.initial.payment_notes }}</textarea>
+    {% if field_errors.payment_notes %}
+      <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.payment_notes.0 }}</p>
+    {% endif %}
   </article>
 
   <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
     <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cancelar</a>
-    <div class="flex gap-3">
+    <div class="flex flex-wrap gap-3">
       <button type="submit" name="intent" value="save_payment" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">
-        Guardar cambios
+        Guardar progreso
       </button>
       <button type="submit" name="intent" value="confirm_payment" class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90">
-        Registrar pago
+        Marcar como pagada
       </button>
     </div>
   </div>
+
+  {% include "administration/purchases/forms/_request_summary.html" with purchase=purchase %}
 </section>
+<script type="module" src="{% static 'administration/js/purchase-order-form.js' %}"></script>
 {% endwith %}

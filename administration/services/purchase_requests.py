@@ -127,13 +127,12 @@ class PurchaseRequestSubmissionService:
         expense_type = None
         if not payload.summary:
             field_errors["summary"] = ["Ingresa un nombre para la solicitud."]
-        scope_value = (payload.scope_batch_code or "").strip()
         if not payload.expense_type_id:
             field_errors["expense_type"] = ["Selecciona una categoría."]
         else:
             expense_type = (
-                PurchasingExpenseType.objects.filter(pk=payload.expense_type_id, is_active=True)
-                .only("id", "scope", "default_support_document_type_id")
+                PurchasingExpenseType.objects.filter(pk=payload.expense_type_id)
+                .only("id", "default_support_document_type_id")
                 .first()
             )
             if not expense_type:
@@ -164,33 +163,15 @@ class PurchaseRequestSubmissionService:
                 field_errors["scope_chicken_house_id"] = ["Selecciona un galpón válido."]
             elif farm and house.farm_id != farm.id:
                 field_errors["scope_chicken_house_id"] = ["El galpón debe pertenecer a la granja seleccionada."]
+            elif not farm and house.farm:
+                payload.scope_farm_id = house.farm_id
+                farm = house.farm
 
-        if expense_type:
-            scope = expense_type.scope
-            if scope == PurchasingExpenseType.Scope.FARM:
-                if not payload.scope_farm_id:
-                    field_errors["scope_farm_id"] = ["Esta categoría requiere una granja asociada."]
-            elif scope == PurchasingExpenseType.Scope.HOUSE:
-                if not payload.scope_chicken_house_id:
-                    field_errors["scope_chicken_house_id"] = ["Selecciona un galpón."]
-                elif house and not payload.scope_farm_id:
-                    payload.scope_farm_id = house.farm_id
-                    farm = house.farm
-            elif scope == PurchasingExpenseType.Scope.LOT:
-                if not scope_value:
-                    field_errors["scope_batch_code"] = ["Ingresa el lote asociado."]
-
-        support_type = None
         if payload.support_document_type_id:
-            support_type = (
-                SupportDocumentType.objects.filter(pk=payload.support_document_type_id).only("id").first()
-            )
-            if not support_type:
+            if not SupportDocumentType.objects.filter(pk=payload.support_document_type_id).only("id").exists():
                 field_errors["support_document_type"] = ["Selecciona un tipo de soporte válido."]
         elif expense_type and expense_type.default_support_document_type_id:
             payload.support_document_type_id = expense_type.default_support_document_type_id
-        else:
-            field_errors["support_document_type"] = ["Selecciona un tipo de soporte."]
 
         if purchase and purchase.status != PurchaseRequest.Status.DRAFT:
             field_errors.setdefault(

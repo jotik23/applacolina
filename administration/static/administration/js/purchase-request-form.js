@@ -7,11 +7,6 @@ purchaseForms.forEach((root) => {
   };
 
   const categorySelect = root.querySelector('[data-category-select]');
-  const scopeContainer =
-    root.querySelector('[data-scope-container]') || root.querySelector('[data-scope-fields]');
-  const scopeFarmSelect = root.querySelector('[data-scope-farm]');
-  const scopeBatchSelect = root.querySelector('[data-scope-batch]');
-  const scopeHouseInput = root.querySelector('input[name="scope_chicken_house_id"]');
   const supplierSelect = root.querySelector('[data-supplier-select]');
   const supplierCreateUrl = root.getAttribute('data-supplier-create-url');
   const supportTypeSelect = root.querySelector('[data-support-type-select]');
@@ -34,57 +29,6 @@ purchaseForms.forEach((root) => {
     return '';
   }
 
-  function toggleField(field, visible) {
-    if (!field) {
-      return;
-    }
-    if (visible) {
-      field.removeAttribute('hidden');
-    } else {
-      field.setAttribute('hidden', 'true');
-    }
-  }
-
-  function isLocationScope(scope) {
-    return scope === 'farm' || scope === 'lot';
-  }
-
-  function applyScope(scope) {
-    if (!scopeContainer) {
-      return;
-    }
-    const activeScope = scope || '';
-    scopeContainer.dataset.activeScope = activeScope;
-    const locationScope = isLocationScope(scope);
-    const farmField = scopeContainer.querySelector('[data-scope-field="farm"]');
-    const batchField = scopeContainer.querySelector('[data-scope-field="batch"]');
-    toggleField(farmField, scope === 'farm');
-    toggleField(batchField, scope === 'lot');
-    updateScopeMeta(scope);
-    if (!locationScope && scopeFarmSelect) {
-      scopeFarmSelect.value = '';
-    } else if (scope !== 'farm' && scopeFarmSelect) {
-      scopeFarmSelect.value = '';
-    }
-    if (scope !== 'lot' && scopeBatchSelect) {
-      scopeBatchSelect.value = '';
-    }
-  }
-
-  function updateScopeFromSelection(options = {}) {
-    if (!categorySelect) {
-      return;
-    }
-    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
-    const scopeValue = selectedOption ? selectedOption.dataset.scope : null;
-    applyScope(scopeValue);
-    if (scopeValue !== 'house' && scopeHouseInput) {
-      scopeHouseInput.value = '';
-    }
-    updateUnitLabel(selectedOption ? selectedOption.dataset.unit : null);
-    applySupportTypeFromCategory(selectedOption, { force: Boolean(options.forceSupportType) });
-  }
-
   function applySupportTypeFromCategory(option, { force = false } = {}) {
     if (!supportTypeSelect || !option) {
       return;
@@ -97,6 +41,17 @@ purchaseForms.forEach((root) => {
       return;
     }
     supportTypeSelect.value = supportType;
+  }
+
+  function syncCategoryEffects(options = {}) {
+    if (!categorySelect) {
+      return;
+    }
+    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+    if (!selectedOption) {
+      return;
+    }
+    applySupportTypeFromCategory(selectedOption, { force: Boolean(options.forceSupportType) });
   }
 
   function formatNumber(value) {
@@ -153,20 +108,6 @@ purchaseForms.forEach((root) => {
     const rows = Array.from(itemsRoot.querySelectorAll('[data-item-row]'));
     const total = rows.reduce((acc, row) => acc + syncRowSubtotal(row), 0);
     totalDisplay.textContent = formatNumber(total);
-  }
-
-  function updateUnitLabel(label) {
-    state.unitLabel = (label && label.trim()) || root.getAttribute('data-unit-label') || 'Unidad';
-    Array.from(root.querySelectorAll('[data-unit-chip]')).forEach((chip) => {
-      chip.textContent = state.unitLabel;
-    });
-  }
-
-  function updateScopeMeta(scope) {
-    const locationScope = isLocationScope(scope);
-    if (scopeContainer) {
-      toggleField(scopeContainer, locationScope);
-    }
   }
 
   function ensureAtLeastOneRow() {
@@ -481,14 +422,6 @@ purchaseForms.forEach((root) => {
     syncTotals();
   }
 
-  function setupScopeSelectors() {
-    if (scopeFarmSelect) {
-      scopeFarmSelect.addEventListener('change', () => {
-        syncTotals();
-      });
-    }
-  }
-
   function setupAddButton() {
     if (!addItemButton) {
       return;
@@ -501,13 +434,11 @@ purchaseForms.forEach((root) => {
   }
 
   function init() {
-    updateScopeMeta(scopeContainer ? scopeContainer.dataset.activeScope : null);
-    updateScopeFromSelection();
+    syncCategoryEffects();
     if (categorySelect) {
-      categorySelect.addEventListener('change', () => updateScopeFromSelection({ forceSupportType: true }));
+      categorySelect.addEventListener('change', () => syncCategoryEffects({ forceSupportType: true }));
     }
     setupExistingRows();
-    setupScopeSelectors();
     setupAddButton();
     initQuickSupplierForm();
   }
