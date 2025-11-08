@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from administration.models import (
+    Product,
     PurchaseItem,
     PurchaseRequest,
     PurchasingExpenseType,
@@ -25,6 +26,7 @@ class PurchaseItemPayload:
     description: str
     quantity: Decimal
     estimated_amount: Decimal
+    product_id: int | None = None
 
 
 @dataclass
@@ -39,6 +41,7 @@ class PurchaseRequestPayload:
     scope_farm_id: int | None
     scope_chicken_house_id: int | None
     scope_batch_code: str
+    scope_area: str
 
 
 class PurchaseRequestValidationError(Exception):
@@ -73,6 +76,7 @@ def generate_timeline_code() -> str:
 class PurchaseRequestSubmissionService:
     def __init__(self, *, actor):
         self.actor = actor
+        self._product_cache: dict[int, Product] = {}
 
     def submit(self, *, payload: PurchaseRequestPayload, intent: str) -> PurchaseRequest:
         intent = intent or "save_draft"
@@ -124,6 +128,22 @@ class PurchaseRequestSubmissionService:
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, dict[str, list[str]]] = {}
 
+        area_kind = payload.scope_area or PurchaseRequest.AreaScope.COMPANY
+        if area_kind not in PurchaseRequest.AreaScope.values:
+            field_errors["scope_area"] = ["Selecciona un área válida."]
+            area_kind = PurchaseRequest.AreaScope.COMPANY
+        if area_kind == PurchaseRequest.AreaScope.COMPANY:
+            payload.scope_farm_id = None
+            payload.scope_chicken_house_id = None
+        elif area_kind == PurchaseRequest.AreaScope.FARM:
+            payload.scope_chicken_house_id = None
+            if not payload.scope_farm_id:
+                field_errors["scope_area"] = ["Selecciona una granja para el área."]
+        elif area_kind == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
+            if not payload.scope_chicken_house_id:
+                field_errors["scope_area"] = ["Selecciona un galpón para el área."]
+        payload.scope_area = area_kind
+
         expense_type = None
         if not payload.summary:
             field_errors["summary"] = ["Ingresa un nombre para la solicitud."]
@@ -161,11 +181,16 @@ class PurchaseRequestSubmissionService:
             )
             if not house:
                 field_errors["scope_chicken_house_id"] = ["Selecciona un galpón válido."]
-            elif farm and house.farm_id != farm.id:
-                field_errors["scope_chicken_house_id"] = ["El galpón debe pertenecer a la granja seleccionada."]
-            elif not farm and house.farm:
-                payload.scope_farm_id = house.farm_id
-                farm = house.farm
+            else:
+                if farm and house.farm_id != farm.id:
+                    field_errors["scope_chicken_house_id"] = ["El galpón debe pertenecer a la granja seleccionada."]
+                elif not farm and house.farm:
+                    payload.scope_farm_id = house.farm_id
+                    farm = house.farm
+                payload.scope_area = PurchaseRequest.AreaScope.CHICKEN_HOUSE
+        elif payload.scope_area == PurchaseRequest.AreaScope.COMPANY:
+            payload.scope_farm_id = None
+            payload.scope_chicken_house_id = None
 
         if payload.support_document_type_id:
             if not SupportDocumentType.objects.filter(pk=payload.support_document_type_id).only("id").exists():
@@ -182,7 +207,8 @@ class PurchaseRequestSubmissionService:
         if not payload.items:
             field_errors["items"] = ["Agrega al menos un item a la solicitud."]
         else:
-            self._validate_items(payload.items, item_errors)
+            self._product_cache = self._load_products(payload.items)
+            self._validate_items(payload.items, item_errors, self._product_cache)
 
         if field_errors or item_errors:
             raise PurchaseRequestValidationError(
@@ -190,15 +216,30 @@ class PurchaseRequestSubmissionService:
                 item_errors=item_errors,
             )
 
+    def _load_products(self, items: Sequence[PurchaseItemPayload]) -> dict[int, Product]:
+        product_ids = {item.product_id for item in items if item.product_id}
+        if not product_ids:
+            return {}
+        products = Product.objects.filter(pk__in=product_ids)
+        return {product.id: product for product in products}
+
     def _validate_items(
         self,
         items: Sequence[PurchaseItemPayload],
         item_errors: dict[int, dict[str, list[str]]],
+        products: dict[int, Product],
     ) -> None:
         for index, item in enumerate(items):
             errors_for_row: dict[str, list[str]] = {}
-            if not item.description:
-                errors_for_row["description"] = ["La descripción es obligatoria."]
+            product = products.get(item.product_id) if item.product_id else None
+            if item.product_id and not product:
+                errors_for_row.setdefault("description", []).append("El producto seleccionado ya no existe.")
+            if not item.description and not product:
+                errors_for_row.setdefault("description", []).append(
+                    "Selecciona un producto o describe el item."
+                )
+            if product and not item.description:
+                item.description = product.name
             if item.quantity <= 0:
                 errors_for_row["quantity"] = ["La cantidad debe ser mayor que cero."]
             if item.estimated_amount < 0:
@@ -221,6 +262,7 @@ class PurchaseRequestSubmissionService:
         purchase.scope_farm_id = payload.scope_farm_id
         purchase.scope_chicken_house_id = payload.scope_chicken_house_id
         purchase.scope_batch_code = payload.scope_batch_code
+        purchase.scope_area = payload.scope_area
         if not purchase.requester_id and getattr(self.actor, "is_authenticated", False):
             purchase.requester = self.actor
         purchase.status = PurchaseRequest.Status.DRAFT
@@ -255,7 +297,9 @@ class PurchaseRequestSubmissionService:
             item = existing.get(item_payload.id) if item_payload.id in existing else None
             if item is None:
                 item = PurchaseItem(purchase=purchase)
-            item.description = item_payload.description
+            product = self._product_cache.get(item_payload.product_id) if item_payload.product_id else None
+            item.product = product
+            item.description = item_payload.description or (product.name if product else "")
             item.quantity = item_payload.quantity
             item.estimated_amount = item_payload.estimated_amount
             item.save()

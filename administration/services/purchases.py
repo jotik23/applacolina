@@ -34,6 +34,7 @@ class PurchaseRecord:
     requester: str
     supplier: str
     scope_label: str
+    area_label: str
     category_name: str
     support_type_label: str | None
     approvals_received: Sequence[str]
@@ -210,7 +211,14 @@ def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
 
 def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
     return (
-        PurchaseRequest.objects.select_related('supplier', 'requester', 'expense_type', 'support_document_type')
+        PurchaseRequest.objects.select_related(
+            'supplier',
+            'requester',
+            'expense_type',
+            'support_document_type',
+            'scope_farm',
+            'scope_chicken_house__farm',
+        )
         .prefetch_related('approvals__approver')
         .filter(status=scope_code)
         .order_by('-created_at')[:50]
@@ -248,6 +256,7 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
         requester=requester_name,
         supplier=purchase.supplier.name,
         scope_label=purchase.scope_label,
+        area_label=purchase.area_label,
         category_name=purchase.expense_type.name,
         support_type_label=purchase.support_document_type.name if purchase.support_document_type else None,
         approvals_received=approvals_received,

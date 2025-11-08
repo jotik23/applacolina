@@ -1,15 +1,431 @@
+let activeSelectPicker = null;
+let selectPickerGlobalsBound = false;
+const purchaseProductCatalog = (() => {
+  const script = document.getElementById('purchase-products-data');
+  if (!script) {
+    return { list: [], byId: new Map(), byName: new Map() };
+  }
+  try {
+    const list = JSON.parse(script.textContent || '[]');
+    const byId = new Map();
+    const byName = new Map();
+    list.forEach((product) => {
+      const id = String(product.id);
+      const name = typeof product.name === 'string' ? product.name.trim() : '';
+      if (id) {
+        byId.set(id, product);
+      }
+      if (name) {
+        byName.set(name.toLowerCase(), product);
+      }
+    });
+    return { list, byId, byName };
+  } catch (error) {
+    console.warn('No fue posible cargar el catálogo de productos.', error);
+    return { list: [], byId: new Map(), byName: new Map() };
+  }
+})();
+
+const productSuggestionPanel = (() => {
+  const panel = document.createElement('div');
+  panel.className = 'product-suggestions hidden fixed z-50 max-h-64 min-w-[12rem] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl';
+  document.body.appendChild(panel);
+  return panel;
+})();
+
+let productSuggestionContext = null;
+
+function hideProductSuggestions() {
+  if (!productSuggestionContext) {
+    return;
+  }
+  productSuggestionPanel.classList.add('hidden');
+  productSuggestionPanel.innerHTML = '';
+  productSuggestionContext = null;
+}
+
+function positionProductSuggestionPanel(input) {
+  const rect = input.getBoundingClientRect();
+  productSuggestionPanel.style.left = `${rect.left + window.scrollX}px`;
+  productSuggestionPanel.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  productSuggestionPanel.style.minWidth = `${rect.width}px`;
+}
+
+function showProductSuggestions(input, { forceQuery = null, allowEmpty = false } = {}) {
+  if (!input) {
+    return;
+  }
+  const querySource = forceQuery !== null ? forceQuery : input.value;
+  const query = (querySource || '').trim().toLowerCase();
+  let matches = purchaseProductCatalog.list;
+  if (query) {
+    matches = matches.filter((product) => product.name.toLowerCase().includes(query));
+  }
+  if (!matches.length) {
+    if (!allowEmpty) {
+      hideProductSuggestions();
+      return;
+    }
+  }
+  const limitedMatches = matches.slice(0, 10);
+  productSuggestionPanel.innerHTML = '';
+  if (!limitedMatches.length) {
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'px-3 py-2 text-[11px] font-semibold text-slate-400';
+    emptyMessage.textContent = query ? 'Sin coincidencias' : 'No hay productos registrados';
+    productSuggestionPanel.appendChild(emptyMessage);
+  } else {
+    limitedMatches.forEach((product) => {
+      const optionButton = document.createElement('button');
+      optionButton.type = 'button';
+      optionButton.className = 'flex w-full flex-col rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-slate-50';
+      optionButton.dataset.productOption = String(product.id);
+      optionButton.addEventListener('mousedown', (event) => event.preventDefault());
+      optionButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        input.dataset.productSelection = 'true';
+        applyProductToInput(input, product);
+        hideProductSuggestions();
+        input.focus();
+      });
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = product.name;
+      optionButton.appendChild(labelSpan);
+      if (product.unit) {
+        const unitSpan = document.createElement('span');
+        unitSpan.className = 'text-[11px] font-normal text-slate-500';
+        unitSpan.textContent = product.unit;
+        optionButton.appendChild(unitSpan);
+      }
+      productSuggestionPanel.appendChild(optionButton);
+    });
+  }
+  positionProductSuggestionPanel(input);
+  productSuggestionPanel.classList.remove('hidden');
+  productSuggestionContext = { input };
+}
+
+function applyProductToInput(input, product) {
+  if (!input) {
+    return;
+  }
+  input.value = product ? product.name : '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+document.addEventListener('click', (event) => {
+  if (!productSuggestionContext) {
+    return;
+  }
+  const { input } = productSuggestionContext;
+  if (productSuggestionPanel.contains(event.target)) {
+    return;
+  }
+  if (input && input.contains(event.target)) {
+    return;
+  }
+  hideProductSuggestions();
+});
+
+window.addEventListener('scroll', () => {
+  if (!productSuggestionContext) {
+    return;
+  }
+  hideProductSuggestions();
+}, true);
+
+function bindSelectPickerGlobals() {
+  if (selectPickerGlobalsBound) {
+    return;
+  }
+  document.addEventListener('click', (event) => {
+    if (!activeSelectPicker) {
+      return;
+    }
+    if (activeSelectPicker.contains(event.target)) {
+      return;
+    }
+    closeSelectPicker(activeSelectPicker);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && activeSelectPicker) {
+      closeSelectPicker(activeSelectPicker, { focusTrigger: true });
+    }
+  });
+  selectPickerGlobalsBound = true;
+}
+
+function openSelectPicker(picker) {
+  if (activeSelectPicker && activeSelectPicker !== picker) {
+    closeSelectPicker(activeSelectPicker);
+  }
+  const panel = picker.querySelector('[data-select-panel]');
+  const chevron = picker.querySelector('[data-select-chevron]');
+  const searchInput = panel ? panel.querySelector('[data-select-search]') : null;
+  if (panel) {
+    panel.classList.remove('hidden');
+  }
+  picker.setAttribute('data-open', 'true');
+  if (chevron) {
+    chevron.style.transform = 'rotate(180deg)';
+  }
+  filterSelectOptions(picker, '');
+  if (searchInput) {
+    searchInput.value = '';
+    window.requestAnimationFrame(() => searchInput.focus());
+  }
+  activeSelectPicker = picker;
+}
+
+function closeSelectPicker(picker, options = {}) {
+  const panel = picker.querySelector('[data-select-panel]');
+  const chevron = picker.querySelector('[data-select-chevron]');
+  if (panel) {
+    panel.classList.add('hidden');
+  }
+  picker.removeAttribute('data-open');
+  if (chevron) {
+    chevron.style.transform = '';
+  }
+  if (options.focusTrigger) {
+    const trigger = picker.querySelector('[data-select-trigger]');
+    if (trigger) {
+      trigger.focus();
+    }
+  }
+  if (activeSelectPicker === picker) {
+    activeSelectPicker = null;
+  }
+}
+
+function filterSelectOptions(picker, rawQuery) {
+  const query = (rawQuery || '').trim().toLowerCase();
+  let visibleCount = 0;
+  const groups = picker.querySelectorAll('[data-select-group]');
+  groups.forEach((group) => {
+    let groupVisible = 0;
+    const optionButtons = group.querySelectorAll('[data-select-option]');
+    optionButtons.forEach((button) => {
+      const searchable = button.dataset.searchText || button.dataset.label || '';
+      const match = !query || searchable.includes(query);
+      const container = button.closest('li') || button;
+      if (container) {
+        container.classList.toggle('hidden', !match);
+      }
+      if (match) {
+        groupVisible += 1;
+      }
+    });
+    group.classList.toggle('hidden', groupVisible === 0);
+    visibleCount += groupVisible;
+  });
+  const emptyState = picker.querySelector('[data-select-empty]');
+  if (emptyState) {
+    emptyState.classList.toggle('hidden', visibleCount > 0);
+  }
+}
+
+function selectPickerValue(picker, value, { sourceButton = null, silentNative = false } = {}) {
+  const placeholder = picker.getAttribute('data-select-placeholder') || '';
+  const nativeSelect = picker.querySelector('[data-native-select]');
+  const hiddenInput = picker.querySelector('[data-select-input]');
+  const labelEl = picker.querySelector('[data-select-label]');
+  const descriptionEl = picker.querySelector('[data-select-description]');
+  const buttons = Array.from(picker.querySelectorAll('[data-select-option]'));
+  let button = sourceButton;
+  if (!button && value) {
+    button = buttons.find((candidate) => (candidate.dataset.value || '') === value);
+  }
+  const label = button ? button.dataset.label || placeholder : placeholder;
+  const description = button ? button.dataset.description || '' : '';
+  if (hiddenInput) {
+    hiddenInput.value = value;
+  }
+  if (labelEl) {
+    labelEl.textContent = label || placeholder;
+  }
+  if (descriptionEl) {
+    descriptionEl.textContent = description;
+    descriptionEl.classList.toggle('hidden', !description);
+  }
+  buttons.forEach((candidate) => {
+    const isSelected = candidate === button;
+    candidate.dataset.selected = isSelected ? 'true' : 'false';
+    candidate.classList.toggle('bg-slate-100', isSelected);
+    candidate.classList.toggle('text-slate-900', isSelected);
+    candidate.classList.toggle('text-slate-600', !isSelected);
+  });
+  if (!silentNative && nativeSelect) {
+    nativeSelect.value = value;
+    nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+}
+
+function refreshSelectClearButton(picker) {
+  const clearButton = picker.querySelector('[data-select-clear]');
+  if (!clearButton) {
+    return;
+  }
+  const hiddenInput = picker.querySelector('[data-select-input]');
+  const hasValue = Boolean(hiddenInput && hiddenInput.value);
+  clearButton.classList.toggle('hidden', !hasValue);
+  const disabled = picker.getAttribute('data-disabled') === 'true';
+  clearButton.disabled = disabled;
+}
+
+function setupSelectPickers(root) {
+  const pickers = root.querySelectorAll('[data-select-picker]');
+  if (!pickers.length) {
+    return;
+  }
+  bindSelectPickerGlobals();
+  pickers.forEach((picker) => {
+    const trigger = picker.querySelector('[data-select-trigger]');
+    if (!trigger) {
+      return;
+    }
+    const clearButton = picker.querySelector('[data-select-clear]');
+    const updateClearButton = () => refreshSelectClearButton(picker);
+    const nativeSelect = picker.querySelector('[data-native-select]');
+    const panel = picker.querySelector('[data-select-panel]');
+    const searchInput = panel ? panel.querySelector('[data-select-search]') : null;
+    trigger.addEventListener('click', (event) => {
+      if (trigger.hasAttribute('disabled') || picker.getAttribute('data-disabled') === 'true') {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      const isOpen = picker.getAttribute('data-open') === 'true';
+      if (isOpen) {
+        closeSelectPicker(picker);
+      } else {
+        openSelectPicker(picker);
+      }
+    });
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        filterSelectOptions(picker, searchInput.value || '');
+      });
+    }
+    Array.from(picker.querySelectorAll('[data-select-option]')).forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        selectPickerValue(picker, button.dataset.value || '', { sourceButton: button });
+        closeSelectPicker(picker);
+        updateClearButton();
+      });
+    });
+    if (nativeSelect) {
+      nativeSelect.addEventListener('change', () => {
+        selectPickerValue(picker, nativeSelect.value || '', { silentNative: true });
+        updateClearButton();
+      });
+    }
+    const initialValue = nativeSelect ? nativeSelect.value : (picker.querySelector('[data-select-input]')?.value || '');
+    selectPickerValue(picker, initialValue, { silentNative: true });
+    updateClearButton();
+    if (clearButton) {
+      clearButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (clearButton.disabled) {
+          return;
+        }
+        selectPickerValue(picker, '', { silentNative: false });
+        updateClearButton();
+      });
+    }
+  });
+}
+
+function appendSelectPickerOption(picker, option) {
+  if (!picker) {
+    return;
+  }
+  const list = picker.querySelector('[data-select-list]');
+  const nativeSelect = picker.querySelector('[data-native-select]');
+  if (nativeSelect) {
+    let existing = nativeSelect.querySelector(`option[value="${option.value}"]`);
+    if (!existing) {
+      existing = document.createElement('option');
+      existing.value = option.value;
+      nativeSelect.appendChild(existing);
+    }
+    existing.textContent = option.label;
+  }
+  if (!list) {
+    return;
+  }
+  const groupLabel = option.groupLabel || (option.label || '').charAt(0).toUpperCase() || '#';
+  let group = list.querySelector(`[data-select-group][data-group-label="${groupLabel}"]`);
+  if (!group) {
+    group = document.createElement('div');
+    group.className = 'py-1';
+    group.setAttribute('data-select-group', '');
+    group.setAttribute('data-group-label', groupLabel);
+    const heading = document.createElement('p');
+    heading.className = 'px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500';
+    heading.textContent = groupLabel;
+    const listElement = document.createElement('ul');
+    listElement.className = 'mt-1 space-y-1';
+    group.appendChild(heading);
+    group.appendChild(listElement);
+    list.appendChild(group);
+  }
+  const listElement = group.querySelector('ul');
+  const listItem = document.createElement('li');
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'select-option-button flex w-full flex-col rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-slate-50';
+  button.dataset.selectOption = 'true';
+  button.dataset.value = option.value;
+  button.dataset.label = option.label;
+  button.dataset.description = option.description || '';
+  button.dataset.searchText = (option.searchText || option.label || '').toLowerCase();
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = option.label;
+  button.appendChild(labelSpan);
+  if (option.description) {
+    const descriptionSpan = document.createElement('span');
+    descriptionSpan.className = 'text-[11px] font-normal text-slate-500';
+    descriptionSpan.textContent = option.description;
+    button.appendChild(descriptionSpan);
+  }
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    selectPickerValue(picker, button.dataset.value || '', { sourceButton: button });
+    closeSelectPicker(picker);
+  });
+  listItem.appendChild(button);
+  listElement.appendChild(listItem);
+}
+
+function cssEscape(value) {
+  if (window.CSS && typeof window.CSS.escape === 'function') {
+    return window.CSS.escape(value);
+  }
+  return String(value || '').replace(/[^a-zA-Z0-9_-]/g, (char) => {
+    const hex = char.charCodeAt(0).toString(16).toUpperCase();
+    return `\\${hex} `;
+  });
+}
+
 const purchaseForms = document.querySelectorAll('[data-purchase-request-form]');
 
 purchaseForms.forEach((root) => {
   const state = {
     readOnly: root.getAttribute('data-read-only') === 'true',
-    unitLabel: root.getAttribute('data-unit-label') || 'Unidad',
   };
 
   const categorySelect = root.querySelector('[data-category-select]');
   const supplierSelect = root.querySelector('[data-supplier-select]');
   const supplierCreateUrl = root.getAttribute('data-supplier-create-url');
   const supportTypeSelect = root.querySelector('[data-support-type-select]');
+  const areaPicker = root.querySelector('[data-area-picker]');
+  const areaSelect =
+    areaPicker?.querySelector('[data-area-select]') || areaPicker?.querySelector('[data-native-select]');
+  const scopeFarmInput = root.querySelector('input[name="scope_farm_id"]');
+  const scopeHouseInput = root.querySelector('input[name="scope_chicken_house_id"]');
   const itemsRoot = root.querySelector('[data-purchase-items-root]');
   const addItemButton = root.querySelector('[data-add-item]');
   const totalDisplay = root.querySelector('[data-purchase-total]');
@@ -142,6 +558,7 @@ purchaseForms.forEach((root) => {
     } else if (removeButton && state.readOnly) {
       removeButton.disabled = true;
     }
+    initRowProductControls(row);
   }
 
   function hydrateRow(row, initialValues = {}) {
@@ -152,11 +569,104 @@ purchaseForms.forEach((root) => {
       }
       input.value = Object.prototype.hasOwnProperty.call(initialValues, field) ? initialValues[field] : '';
     });
-    const chips = row.querySelectorAll('[data-unit-chip]');
-    chips.forEach((chip) => {
-      chip.textContent = state.unitLabel;
-    });
     syncRowSubtotal(row);
+  }
+
+  function resolveProductById(productId) {
+    if (!productId) {
+      return null;
+    }
+    return purchaseProductCatalog.byId.get(String(productId)) || null;
+  }
+
+  function resolveProductByName(name) {
+    if (!name) {
+      return null;
+    }
+    return purchaseProductCatalog.byName.get(name.trim().toLowerCase()) || null;
+  }
+
+  function initRowProductControls(row) {
+    const descriptionInput = row.querySelector('[data-product-input]');
+    const productIdInput = row.querySelector('[data-product-id-input]');
+    const picker = row.querySelector('[data-product-picker]');
+    if (!descriptionInput || !productIdInput) {
+      return;
+    }
+
+    function applyProductSelection(product) {
+      if (product) {
+        productIdInput.value = String(product.id);
+      } else {
+        productIdInput.value = '';
+      }
+    }
+
+    function handleDescriptionChange() {
+      if (state.readOnly) {
+        return;
+      }
+      const value = descriptionInput.value || '';
+      const wasPickerSelection = descriptionInput.dataset.productSelection === 'true';
+      if (wasPickerSelection) {
+        delete descriptionInput.dataset.productSelection;
+      }
+      if (!value.trim()) {
+        applyProductSelection(null);
+        hideProductSuggestions();
+        return;
+      }
+      const product = resolveProductByName(value);
+      applyProductSelection(product || null);
+      if (!wasPickerSelection) {
+        showProductSuggestions(descriptionInput);
+      }
+    }
+
+    descriptionInput.addEventListener('input', handleDescriptionChange);
+    descriptionInput.addEventListener('change', handleDescriptionChange);
+    descriptionInput.addEventListener('focus', () => {
+      if (state.readOnly) {
+        return;
+      }
+      if ((descriptionInput.value || '').trim()) {
+        showProductSuggestions(descriptionInput);
+      }
+    });
+    descriptionInput.addEventListener('blur', () => {
+      window.setTimeout(() => {
+        if (!productSuggestionContext || productSuggestionContext.input !== descriptionInput) {
+          hideProductSuggestions();
+        }
+      }, 120);
+    });
+
+    if (picker) {
+      const toggleButton = picker.querySelector('[data-product-toggle]');
+      if (toggleButton) {
+        toggleButton.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (state.readOnly) {
+            return;
+          }
+          descriptionInput.focus();
+          showProductSuggestions(descriptionInput, { forceQuery: '', allowEmpty: true });
+        });
+      }
+    }
+
+    descriptionInput.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' && !state.readOnly) {
+        event.preventDefault();
+        showProductSuggestions(descriptionInput, { forceQuery: descriptionInput.value || '', allowEmpty: true });
+      }
+      if (event.key === 'Escape') {
+        hideProductSuggestions();
+      }
+    });
+
+    const initialProduct = resolveProductById(productIdInput.value || '');
+    applyProductSelection(initialProduct);
   }
 
   function upsertSupplierOption(option) {
@@ -169,9 +679,20 @@ purchaseForms.forEach((root) => {
       existing.value = option.id;
       supplierSelect.appendChild(existing);
     }
-    existing.textContent = option.display || option.name || `Proveedor ${option.id}`;
+    const optionLabel = option.display || option.name || `Proveedor ${option.id}`;
+    existing.textContent = optionLabel;
     supplierSelect.value = option.id;
     supplierSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    const picker = supplierSelect.closest('[data-select-picker]');
+    if (picker) {
+      appendSelectPickerOption(picker, {
+        value: String(option.id),
+        label: optionLabel,
+        description: '',
+        searchText: (optionLabel || '').toLowerCase(),
+        groupLabel: (optionLabel || '').charAt(0).toUpperCase() || '#',
+      });
+    }
   }
 
   function initQuickSupplierForm() {
@@ -383,8 +904,47 @@ purchaseForms.forEach((root) => {
       });
     }
 
-    if (submitButton) {
-      submitButton.addEventListener('click', submitSupplier);
+  if (submitButton) {
+    submitButton.addEventListener('click', submitSupplier);
+  }
+}
+
+  function syncAreaScopeInputs(value) {
+    if (!areaPicker) {
+      return;
+    }
+    const resolvedValue = value || '';
+    let optionButton = null;
+    if (resolvedValue) {
+      const selector = `[data-select-option][data-value="${cssEscape(resolvedValue)}"]`;
+      optionButton = areaPicker.querySelector(selector);
+    }
+    const kind = optionButton?.dataset.areaKind || 'company';
+    const farmId = optionButton?.dataset.areaFarmId || '';
+    const houseId = optionButton?.dataset.areaHouseId || '';
+    if (scopeFarmInput) {
+      if (kind === 'farm' || kind === 'chicken_house') {
+        scopeFarmInput.value = farmId;
+      } else {
+        scopeFarmInput.value = '';
+      }
+    }
+    if (scopeHouseInput) {
+      scopeHouseInput.value = kind === 'chicken_house' ? houseId : '';
+    }
+  }
+
+  function initAreaPicker() {
+    if (!areaPicker) {
+      return;
+    }
+    if (areaSelect) {
+      areaSelect.addEventListener('change', () => {
+        syncAreaScopeInputs(areaSelect.value || '');
+      });
+      syncAreaScopeInputs(areaSelect.value || '');
+    } else {
+      syncAreaScopeInputs('');
     }
   }
 
@@ -441,6 +1001,8 @@ purchaseForms.forEach((root) => {
     setupExistingRows();
     setupAddButton();
     initQuickSupplierForm();
+    setupSelectPickers(root);
+    initAreaPicker();
   }
 
   init();

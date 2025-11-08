@@ -6,7 +6,15 @@
       {% if active == 'purchases' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'purchases' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
-      Compras y Gastos
+      Compras
+    </a>
+    <a
+      href="{% url 'administration:purchases_products' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'products' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'products' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'products' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Productos
     </a>
     <a
       href="{% url 'administration:purchases_suppliers' %}"

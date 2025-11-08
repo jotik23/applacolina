@@ -22,12 +22,14 @@ from production.models import BirdBatch, ChickenHouse, Farm
 
 from .forms import (
     ExpenseTypeWorkflowFormSet,
+    ProductForm,
     PurchasingExpenseTypeForm,
     SupplierForm,
     SupportDocumentTypeForm,
 )
 from .models import (
     ExpenseTypeApprovalRule,
+    Product,
     PurchaseRequest,
     PurchasingExpenseType,
     Supplier,
@@ -420,30 +422,46 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         expense_type_id = _parse_int(self.request.POST.get('expense_type'))
         support_document_type_id = _parse_int(self.request.POST.get('support_document_type'))
         supplier_id = _parse_int(self.request.POST.get('supplier'))
-        scope_values = {
+        raw_scope = {
             'farm_id': _parse_int(self.request.POST.get('scope_farm_id')),
             'chicken_house_id': _parse_int(self.request.POST.get('scope_chicken_house_id')),
             'batch_code': (self.request.POST.get('scope_batch_code') or '').strip(),
         }
-        items_raw = self._extract_item_rows()
+        items_raw = self._enrich_item_rows(self._extract_item_rows())
         overrides = {
             'summary': summary,
             'notes': notes,
             'expense_type_id': expense_type_id,
             'support_document_type_id': support_document_type_id,
             'supplier_id': supplier_id,
-            'scope_values': scope_values,
             'items': items_raw,
         }
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, dict[str, list[str]]] = {}
 
+        scope_area_raw = (self.request.POST.get('scope_area') or '').strip()
+        area_selection = self._normalize_scope_area_selection(
+            raw_value=scope_area_raw,
+            farm_id=raw_scope['farm_id'],
+            chicken_house_id=raw_scope['chicken_house_id'],
+        )
+        scope_values = {
+            'farm_id': area_selection['farm_id'],
+            'chicken_house_id': area_selection['chicken_house_id'],
+            'batch_code': raw_scope['batch_code'],
+        }
+        overrides['scope_values'] = scope_values
+        overrides['scope_area'] = area_selection['value']
+        if area_selection['error']:
+            field_errors['scope_area'] = [area_selection['error']]
+
         item_payloads: list[PurchaseItemPayload] = []
         for index, row in enumerate(items_raw):
             row_errors: dict[str, list[str]] = {}
             description = (row.get('description') or '').strip()
-            if not description:
-                row_errors['description'] = ["La descripción es obligatoria."]
+            product_id = _parse_int(row.get('product_id'))
+            if not description and not product_id:
+                row_errors['description'] = ["Selecciona un producto o describe el item."]
 
             quantity = self._parse_decimal(row.get('quantity'), allow_empty=False)
             if quantity is None:
@@ -464,6 +482,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                     description=description,
                     quantity=quantity or Decimal('0'),
                     estimated_amount=estimated_amount or Decimal('0'),
+                    product_id=product_id,
                 )
             )
 
@@ -483,6 +502,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 scope_farm_id=scope_values['farm_id'],
                 scope_chicken_house_id=scope_values['chicken_house_id'],
                 scope_batch_code=scope_values['batch_code'],
+                scope_area=area_selection['kind'],
             )
         return payload, overrides, field_errors, item_errors
 
@@ -739,6 +759,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             row = rows[index]
             significant_fields = (
                 row.get('description'),
+                row.get('product_id'),
                 row.get('quantity'),
                 row.get('estimated_amount'),
             )
@@ -777,14 +798,20 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'categories': self.purchase_form_options['categories'],
                 'support_types': self.purchase_form_options['support_types'],
                 'suppliers': self.purchase_form_options['suppliers'],
+                'products': self.purchase_form_options['products'],
                 'farms': self.purchase_form_options['farms'],
                 'chicken_houses': self.purchase_form_options['chicken_houses'],
                 'bird_batches': self.purchase_form_options['bird_batches'],
                 'items': items,
                 'scope_values': form_initial['scope'],
+                'scope_area_value': form_initial['scope_area_value'],
                 'initial': form_initial['values'],
-                'unit_label': form_initial['unit_label'],
                 'read_only': form_initial['read_only'],
+                'category_picker': self._build_category_picker(form_initial['values'].get('expense_type_id')),
+                'supplier_picker': self._build_supplier_picker(form_initial['values'].get('supplier_id')),
+                'area_picker': self._build_area_picker(
+                    selected_value=form_initial['scope_area_value'],
+                ),
                 'can_reopen': bool(purchase and purchase.status == PurchaseRequest.Status.SUBMITTED),
             },
             'purchase_request_field_errors': field_errors,
@@ -971,7 +998,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'estimated_total': overrides.get('estimated_total') or '',
             }
             scope = overrides.get('scope_values') or {'farm_id': None, 'chicken_house_id': None, 'batch_code': ''}
-            items = overrides.get('items') or []
+            items = self._enrich_item_rows(overrides.get('items') or [])
+            scope_area_value = overrides.get('scope_area') or self._scope_area_value_from_scope(scope=scope, area_kind=None)
         else:
             values = {
                 'summary': purchase.name if purchase else '',
@@ -983,26 +1011,28 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             }
             scope = self._scope_values_from_purchase(purchase)
             items = self._serialize_items(purchase)
-        unit_label = 'Unidad'
+            scope_area_value = self._scope_area_value_from_purchase(purchase)
         return {
             'values': values,
             'scope': scope,
+            'scope_area_value': scope_area_value,
             'items': items,
             'read_only': read_only,
-            'unit_label': unit_label,
         }
 
     def _serialize_items(self, purchase) -> list[dict[str, str]]:
         if not purchase:
             return []
         serialized: list[dict[str, str]] = []
-        for item in purchase.items.all():
+        for item in purchase.items.select_related('product').all():
             serialized.append(
                 {
                     'id': str(item.id),
                     'description': item.description,
                     'quantity': self._format_decimal(item.quantity),
                     'estimated_amount': self._format_decimal(item.estimated_amount),
+                    'product_id': str(item.product_id) if item.product_id else '',
+                    'product_name': item.product.name if item.product else '',
                 }
             )
         return serialized
@@ -1016,12 +1046,287 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'batch_code': purchase.scope_batch_code or '',
         }
 
+    def _scope_area_value_from_purchase(self, purchase) -> str:
+        if not purchase:
+            return PurchaseRequest.AreaScope.COMPANY
+        if purchase.scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE and purchase.scope_chicken_house_id:
+            return f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{purchase.scope_chicken_house_id}'
+        if purchase.scope_area == PurchaseRequest.AreaScope.FARM and purchase.scope_farm_id:
+            return f'{PurchaseRequest.AreaScope.FARM}:{purchase.scope_farm_id}'
+        return PurchaseRequest.AreaScope.COMPANY
+
+    def _scope_area_value_from_scope(self, *, scope: dict, area_kind: str | None) -> str:
+        house_id = scope.get('chicken_house_id')
+        farm_id = scope.get('farm_id')
+        if area_kind == PurchaseRequest.AreaScope.CHICKEN_HOUSE and house_id:
+            return f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{house_id}'
+        if area_kind == PurchaseRequest.AreaScope.FARM and farm_id:
+            return f'{PurchaseRequest.AreaScope.FARM}:{farm_id}'
+        if house_id:
+            return f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{house_id}'
+        if farm_id:
+            return f'{PurchaseRequest.AreaScope.FARM}:{farm_id}'
+        return PurchaseRequest.AreaScope.COMPANY
+
+    def _normalize_scope_area_selection(
+        self,
+        *,
+        raw_value: str,
+        farm_id: int | None,
+        chicken_house_id: int | None,
+    ) -> dict:
+        normalized_farm = farm_id
+        normalized_house = chicken_house_id
+        raw_value = (raw_value or '').strip()
+        kind = PurchaseRequest.AreaScope.COMPANY
+        error = None
+        selection_value = raw_value
+        if not raw_value:
+            if normalized_house:
+                kind = PurchaseRequest.AreaScope.CHICKEN_HOUSE
+                selection_value = f'{kind}:{normalized_house}'
+            elif normalized_farm:
+                kind = PurchaseRequest.AreaScope.FARM
+                selection_value = f'{kind}:{normalized_farm}'
+            else:
+                selection_value = PurchaseRequest.AreaScope.COMPANY
+        elif raw_value == PurchaseRequest.AreaScope.COMPANY:
+            kind = PurchaseRequest.AreaScope.COMPANY
+            normalized_farm = None
+            normalized_house = None
+            selection_value = PurchaseRequest.AreaScope.COMPANY
+        else:
+            match = re.match(r'^(farm|chicken_house):(\d+)$', raw_value)
+            if not match:
+                error = "Selecciona un área válida."
+                kind = PurchaseRequest.AreaScope.COMPANY
+                normalized_farm = None
+                normalized_house = None
+                selection_value = PurchaseRequest.AreaScope.COMPANY
+            else:
+                target_kind = match.group(1)
+                target_id = int(match.group(2))
+                if target_kind == 'farm':
+                    kind = PurchaseRequest.AreaScope.FARM
+                    normalized_farm = target_id
+                    normalized_house = None
+                else:
+                    kind = PurchaseRequest.AreaScope.CHICKEN_HOUSE
+                    normalized_house = target_id
+        if kind != PurchaseRequest.AreaScope.CHICKEN_HOUSE:
+            normalized_house = None
+        if kind == PurchaseRequest.AreaScope.COMPANY:
+            normalized_farm = None
+        if not selection_value:
+            selection_value = PurchaseRequest.AreaScope.COMPANY
+        return {
+            'kind': kind,
+            'value': selection_value,
+            'farm_id': normalized_farm,
+            'chicken_house_id': normalized_house,
+            'error': error,
+        }
+
     def _blank_item_row(self) -> dict[str, str]:
         return {
             'id': '',
             'description': '',
             'quantity': '',
             'estimated_amount': '',
+            'product_id': '',
+            'product_name': '',
+        }
+
+    def _enrich_item_rows(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        if not rows:
+            return rows
+        product_index = {
+            str(product['id']): product
+            for product in self.purchase_form_options['products']
+        }
+        for row in rows:
+            product = product_index.get(str(row.get('product_id') or '').strip())
+            if product and not row.get('description'):
+                row['description'] = product['name']
+            row['product_name'] = product['name'] if product else ''
+        return rows
+
+    def _build_category_picker(self, selected_value):
+        groups: dict[str, list[dict[str, str]]] = {}
+        categories = self.purchase_form_options['categories']
+        category_map = {category['id']: category for category in categories}
+        grouped: dict[str, dict[str, object]] = {}
+
+        def build_option(category: dict) -> dict[str, str]:
+            return {
+                'value': str(category['id']),
+                'label': category['name'],
+                'description': category.get('approval_summary') or '',
+                'search_text': f"{category['name']} {category.get('approval_summary') or ''}".strip().lower(),
+            }
+
+        for category in categories:
+            parent_id = category.get('parent_id')
+            if parent_id:
+                parent = category_map.get(parent_id)
+                if parent:
+                    group_key = f"parent:{parent_id}"
+                    label = parent['name']
+                else:
+                    group_key = f"legacy:{parent_id}"
+                    label = category.get('parent_label') or 'Generales'
+                bucket = grouped.setdefault(
+                    group_key,
+                    {'label': label, 'children': [], 'parent_option': None},
+                )
+                bucket['children'].append(build_option(category))
+                if parent and bucket.get('parent_option') is None:
+                    bucket['parent_option'] = build_option(parent)
+            else:
+                group_key = f"parent:{category['id']}"
+                bucket = grouped.setdefault(
+                    group_key,
+                    {'label': category['name'], 'children': [], 'parent_option': None},
+                )
+                bucket['parent_option'] = build_option(category)
+
+        normalized_groups: dict[str, list[dict[str, str]]] = {}
+        for _, bucket in sorted(grouped.items(), key=lambda item: str(item[1]['label']).lower()):
+            label = str(bucket['label'])
+            options: list[dict[str, str]] = []
+            parent_option = bucket.get('parent_option')
+            if parent_option:
+                options.append(parent_option)
+            children = sorted(bucket['children'], key=lambda option: option['label'].lower())
+            options.extend(children)
+            if label in normalized_groups:
+                normalized_groups[label].extend(options)
+            else:
+                normalized_groups[label] = options
+        return self._build_select_picker_config(
+            name='expense_type',
+            selected_value=selected_value,
+            placeholder='Selecciona una categoría',
+            groups=normalized_groups,
+            search_enabled=True,
+        )
+
+    def _build_supplier_picker(self, selected_value):
+        groups: dict[str, list[dict[str, str]]] = {}
+        for supplier in self.purchase_form_options['suppliers']:
+            label = (supplier['name'][:1].upper() if supplier['name'] else '#')
+            option = {
+                'value': str(supplier['id']),
+                'label': supplier['name'],
+                'description': '',
+                'search_text': (supplier['name'] or '').lower(),
+            }
+            groups.setdefault(label, []).append(option)
+        return self._build_select_picker_config(
+            name='supplier',
+            selected_value=selected_value,
+            placeholder='Selecciona un tercero',
+            groups=groups,
+            search_enabled=True,
+        )
+
+    def _build_area_picker(self, *, selected_value: str | None) -> dict:
+        groups: dict[str, list[dict[str, str]]] = {}
+        groups['General'] = [
+            {
+                'value': PurchaseRequest.AreaScope.COMPANY,
+                'label': 'Empresa',
+                'description': 'Gasto corporativo',
+                'search_text': 'empresa',
+                'data_attrs': {'area-kind': PurchaseRequest.AreaScope.COMPANY},
+            }
+        ]
+        farm_options: list[dict[str, str]] = []
+        for farm in self.purchase_form_options['farms']:
+            farm_options.append(
+                {
+                    'value': f"{PurchaseRequest.AreaScope.FARM}:{farm['id']}",
+                    'label': farm['name'],
+                    'description': 'Granja',
+                    'search_text': farm['name'].lower(),
+                    'data_attrs': {
+                        'area-kind': PurchaseRequest.AreaScope.FARM,
+                        'area-farm-id': str(farm['id']),
+                    },
+                }
+            )
+        if farm_options:
+            groups['Granjas'] = farm_options
+        house_options: list[dict[str, str]] = []
+        for house in self.purchase_form_options['chicken_houses']:
+            farm_name = house.get('farm_name') or ''
+            label = house.get('label') or house['name']
+            description_bits = [bit for bit in ('Galpón', farm_name) if bit]
+            house_options.append(
+                {
+                    'value': f"{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{house['id']}",
+                    'label': label,
+                    'description': ' · '.join(description_bits),
+                    'search_text': f"{label} {farm_name}".strip().lower(),
+                    'data_attrs': {
+                        'area-kind': PurchaseRequest.AreaScope.CHICKEN_HOUSE,
+                        'area-farm-id': str(house.get('farm_id') or ''),
+                        'area-house-id': str(house['id']),
+                    },
+                }
+            )
+        if house_options:
+            groups['Galpones'] = house_options
+        return self._build_select_picker_config(
+            name='scope_area',
+            selected_value=selected_value,
+            placeholder='Selecciona un área',
+            groups=groups,
+            search_enabled=True,
+            sort_groups=False,
+        )
+
+    def _build_select_picker_config(
+        self,
+        *,
+        name: str,
+        selected_value: int | str | None,
+        placeholder: str,
+        groups: dict[str, list[dict[str, str]]],
+        search_enabled: bool,
+        sort_groups: bool = True,
+    ) -> dict:
+        selected_value_str = str(selected_value) if selected_value else ''
+        normalized_groups: list[dict[str, list[dict[str, str]]]] = []
+        selected_label = placeholder
+        selected_description = ''
+        group_keys = list(groups.keys())
+        if sort_groups:
+            group_keys = sorted(group_keys, key=lambda item: item.lower())
+        for label in group_keys:
+            raw_options = sorted(groups[label], key=lambda option: option['label'].lower())
+            normalized_options: list[dict[str, str]] = []
+            for option in raw_options:
+                normalized_option = {
+                    'value': option['value'],
+                    'label': option['label'],
+                    'description': option.get('description') or '',
+                    'search_text': option.get('search_text') or (option['label'] or '').lower(),
+                    'data_attrs': option.get('data_attrs') or {},
+                }
+                normalized_options.append(normalized_option)
+                if normalized_option['value'] == selected_value_str:
+                    selected_label = normalized_option['label']
+                    selected_description = normalized_option.get('description') or ''
+            normalized_groups.append({'label': label, 'options': normalized_options})
+        return {
+            'name': name,
+            'selected_value': selected_value_str,
+            'selected_label': selected_label,
+            'selected_description': selected_description,
+            'groups': normalized_groups,
+            'placeholder': placeholder,
+            'search_enabled': search_enabled,
         }
 
     @cached_property
@@ -1032,8 +1337,10 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'name': category.name,
                 'approval_summary': category.approval_phase_summary,
                 'support_type_id': category.default_support_document_type_id,
+                'parent_label': category.parent_category.name if category.parent_category else '',
+                'parent_id': category.parent_category_id,
             }
-            for category in PurchasingExpenseType.objects.order_by('name')
+            for category in PurchasingExpenseType.objects.select_related('parent_category').order_by('name')
         ]
         suppliers = [
             {'id': supplier.id, 'name': supplier.name}
@@ -1046,6 +1353,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'name': house.name,
                 'label': f'{house.farm.name} - {house.name}',
                 'farm_id': house.farm_id,
+                'farm_name': house.farm.name if house.farm else '',
             }
             for house in ChickenHouse.objects.select_related('farm').order_by('farm__name', 'name')
         ]
@@ -1065,6 +1373,14 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             }
             for support in SupportDocumentType.objects.order_by('name')
         ]
+        products = [
+            {
+                'id': product.id,
+                'name': product.name,
+                'unit': product.unit,
+            }
+            for product in Product.objects.order_by('name')
+        ]
         return {
             'categories': categories,
             'suppliers': suppliers,
@@ -1072,6 +1388,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'chicken_houses': houses,
             'bird_batches': bird_batches,
             'support_types': support_types,
+            'products': products,
         }
 
     def _format_decimal(self, value: Decimal | None) -> str:
@@ -1118,6 +1435,87 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             target.setdefault(index, {})
             for field, messages_list in row_errors.items():
                 target[index].setdefault(field, []).extend(messages_list)
+
+
+class ProductManagementView(StaffRequiredMixin, generic.TemplateView):
+    template_name = 'administration/purchases/products.html'
+
+    def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        action = request.POST.get('form_action')
+        if action == 'product':
+            return self._submit_product_form()
+        if action == 'delete':
+            return self._delete_product()
+        messages.error(request, 'Acción no soportada.')
+        return redirect(self._base_url())
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault('administration_active_submenu', 'products')
+        search = (self.request.GET.get('search') or '').strip()
+        panel_code = kwargs.get('panel') or self.request.GET.get('panel')
+        product_id = _parse_int(self.request.GET.get('product'))
+        qs = Product.objects.all()
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(unit__icontains=search))
+        paginator = Paginator(qs.order_by('name'), 20)
+        products_page = paginator.get_page(self.request.GET.get('page') or 1)
+        product_instance = None
+        if product_id:
+            product_instance = Product.objects.filter(pk=product_id).first()
+        product_form = kwargs.get('product_form') or ProductForm(instance=product_instance)
+        context.update(
+            product_search=search,
+            products_page=products_page,
+            product_form=product_form,
+            product_panel_open=kwargs.get('product_panel_force') or panel_code == 'product',
+            product_instance=product_instance,
+            delete_modal_open=self.request.GET.get('modal') == 'delete' and product_instance is not None,
+        )
+        return context
+
+    def _submit_product_form(self) -> HttpResponse:
+        product_id = _parse_int(self.request.POST.get('product_id'))
+        instance = Product.objects.filter(pk=product_id).first() if product_id else None
+        form = ProductForm(self.request.POST, instance=instance)
+        if form.is_valid():
+            form.save()
+            verb = 'actualizado' if instance else 'registrado'
+            messages.success(self.request, f'Producto {verb} correctamente.')
+            return redirect(self._base_url(with_panel=False))
+        messages.error(self.request, 'Revisa los errores del formulario.')
+        return self.render_to_response(
+            self.get_context_data(
+                product_form=form,
+                panel='product',
+                product_panel_force=True,
+                product_instance=instance,
+            )
+        )
+
+    def _delete_product(self) -> HttpResponse:
+        product_id = _parse_int(self.request.POST.get('product_id'))
+        product = Product.objects.filter(pk=product_id).first()
+        if not product:
+            messages.error(self.request, 'Producto no encontrado.')
+            return redirect(self._base_url())
+        product.delete()
+        messages.success(self.request, 'Producto eliminado.')
+        return redirect(self._base_url())
+
+    def _base_url(self, *, with_panel: bool = True) -> str:
+        base = reverse('administration:purchases_products')
+        params = {}
+        search = self.request.GET.get('search')
+        if search:
+            params['search'] = search
+        if with_panel and self.request.GET.get('panel'):
+            params['panel'] = self.request.GET.get('panel')
+        query = f"?{urlencode(params)}" if params else ""
+        return f"{base}{query}"
 
 
 class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):

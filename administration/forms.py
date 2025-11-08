@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 
 from .models import (
     ExpenseTypeApprovalRule,
+    Product,
     PurchasingExpenseType,
     Supplier,
     SupportDocumentType,
@@ -29,6 +30,12 @@ class SupplierForm(forms.ModelForm):
             "account_number",
             "bank_name",
         ]
+
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = ["name", "unit"]
 
 
 class PurchasingExpenseTypeForm(forms.ModelForm):

@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from administration.models import (
     ExpenseTypeApprovalRule,
+    Product,
     PurchaseItem,
     PurchaseRequest,
     PurchasingExpenseType,
@@ -42,6 +43,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         )
         self.farm = Farm.objects.create(name='Granja 1')
         self.house = ChickenHouse.objects.create(name='Galpón 1', farm=self.farm)
+        self.product = Product.objects.create(name='Motor ventilador', unit='Unidad')
 
     def test_create_purchase_request_in_draft(self) -> None:
         response = self.client.post(self._url(), data=self._base_payload())
@@ -55,6 +57,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(self.farm, purchase.scope_farm)
         self.assertEqual('', purchase.scope_batch_code)
         self.assertEqual(self.support_type, purchase.support_document_type)
+        self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, purchase.scope_area)
         self.assertEqual(1, purchase.items.count())
         item = purchase.items.first()
         assert item is not None
@@ -109,6 +112,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(Decimal('1650000'), purchase.estimated_total)
         self.assertEqual(self.house, purchase.scope_chicken_house)
         self.assertEqual(self.support_type, purchase.support_document_type)
+        self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, purchase.scope_area)
 
     def test_reopen_from_submitted_returns_to_draft(self) -> None:
         purchase = PurchaseRequest.objects.create(
@@ -134,6 +138,46 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         purchase.refresh_from_db()
         self.assertEqual(PurchaseRequest.Status.DRAFT, purchase.status)
 
+    def test_company_area_selection_clears_scope(self) -> None:
+        payload = self._base_payload() | {
+            'scope_area': PurchaseRequest.AreaScope.COMPANY,
+            'scope_farm_id': '',
+            'scope_chicken_house_id': '',
+        }
+        response = self.client.post(self._url(), data=payload)
+        expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}"
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+
+        purchase = PurchaseRequest.objects.get(name='Compra equipos críticos')
+        self.assertEqual(PurchaseRequest.AreaScope.COMPANY, purchase.scope_area)
+        self.assertIsNone(purchase.scope_farm)
+        self.assertIsNone(purchase.scope_chicken_house)
+
+    def test_item_can_reference_existing_product(self) -> None:
+        payload = self._base_payload() | {
+            'items[0][description]': '',
+            'items[0][product_id]': str(self.product.pk),
+        }
+        response = self.client.post(self._url(), data=payload)
+        expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}"
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+
+        purchase = PurchaseRequest.objects.get(name='Compra equipos críticos')
+        item = purchase.items.first()
+        assert item is not None
+        self.assertEqual(self.product, item.product)
+        self.assertEqual(self.product.name, item.description)
+
+    def test_invalid_product_reference_does_not_submit(self) -> None:
+        payload = self._base_payload() | {
+            'items[0][description]': '',
+            'items[0][product_id]': '99999',
+        }
+        response = self.client.post(self._url(), data=payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "El producto seleccionado ya no existe.", status_code=200)
+        self.assertFalse(PurchaseRequest.objects.filter(name='Compra equipos críticos').exists())
+
     def _url(self) -> str:
         return reverse('administration:purchases')
 
@@ -150,4 +194,5 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             'scope_farm_id': str(self.farm.pk),
             'scope_chicken_house_id': str(self.house.pk),
             'scope_batch_code': '',
+            'scope_area': f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{self.house.pk}',
         }

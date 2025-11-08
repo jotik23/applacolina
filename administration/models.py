@@ -19,6 +19,30 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class Product(TimeStampedModel):
+    class Unit(models.TextChoices):
+        BULK = "Bultos", "Bultos"
+        PACK_100 = "Paquete x 100", "Paquete x 100"
+        PACK_120 = "Paquete x 120", "Paquete x 120"
+        UNIT = "Unidad", "Unidad"
+
+    name = models.CharField("Nombre", max_length=150, unique=True)
+    unit = models.CharField(
+        "Unidad",
+        max_length=60,
+        choices=Unit.choices,
+        default=Unit.UNIT,
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Producto"
+        verbose_name_plural = "Productos"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Supplier(TimeStampedModel):
     name = models.CharField("Nombre / Razón social", max_length=255)
     tax_id = models.CharField("CC/NIT", max_length=50, unique=True)
@@ -182,6 +206,11 @@ class PurchaseRequest(TimeStampedModel):
         TBD = "tbd", "Por definir (TBD)"
         TREASURY = "treasury", "Tesorería"
 
+    class AreaScope(models.TextChoices):
+        COMPANY = "company", "Empresa"
+        FARM = "farm", "Granja"
+        CHICKEN_HOUSE = "chicken_house", "Galpón"
+
     class Status(models.TextChoices):
         DRAFT = "borrador", "Borrador"
         SUBMITTED = "aprobacion", "En aprobación"
@@ -283,6 +312,12 @@ class PurchaseRequest(TimeStampedModel):
         choices=PaymentSource.choices,
         default=PaymentSource.TBD,
     )
+    scope_area = models.CharField(
+        "Área",
+        max_length=20,
+        choices=AreaScope.choices,
+        default=AreaScope.COMPANY,
+    )
     supplier_account_holder_id = models.CharField("Identificación titular (compra)", max_length=50, blank=True)
     supplier_account_holder_name = models.CharField("Nombre titular (compra)", max_length=255, blank=True)
     supplier_account_type = models.CharField(
@@ -367,6 +402,21 @@ class PurchaseRequest(TimeStampedModel):
             return code
         return f"Lote {code}"
 
+    @property
+    def area_label(self) -> str:
+        if self.scope_area == self.AreaScope.CHICKEN_HOUSE:
+            if self.scope_chicken_house:
+                farm_name = self.scope_chicken_house.farm.name if self.scope_chicken_house.farm else ''
+                if farm_name:
+                    return f"{farm_name} · {self.scope_chicken_house.name}"
+                return self.scope_chicken_house.name
+            return self.AreaScope.CHICKEN_HOUSE.label
+        if self.scope_area == self.AreaScope.FARM:
+            if self.scope_farm:
+                return self.scope_farm.name
+            return self.AreaScope.FARM.label
+        return self.AreaScope.COMPANY.label
+
 
 class PurchaseItem(TimeStampedModel):
     purchase = models.ForeignKey(
@@ -374,6 +424,14 @@ class PurchaseItem(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="items",
         verbose_name="Solicitud",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        related_name="purchase_items",
+        verbose_name="Producto",
+        blank=True,
+        null=True,
     )
     description = models.CharField("Descripción", max_length=255)
     quantity = models.DecimalField(
