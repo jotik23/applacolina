@@ -9,6 +9,7 @@ from django.urls import reverse
 from administration.models import (
     ExpenseTypeApprovalRule,
     Product,
+    PurchaseApproval,
     PurchaseItem,
     PurchaseRequest,
     PurchasingExpenseType,
@@ -53,7 +54,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         purchase = PurchaseRequest.objects.get(name='Compra equipos críticos')
         self.assertEqual(PurchaseRequest.Status.DRAFT, purchase.status)
         self.assertEqual(self.user, purchase.requester)
-        self.assertEqual(Decimal('1200000'), purchase.estimated_total)
+        self.assertEqual(Decimal('2400000'), purchase.estimated_total)
         self.assertEqual(self.farm, purchase.scope_farm)
         self.assertEqual('', purchase.scope_batch_code)
         self.assertEqual(self.support_type, purchase.support_document_type)
@@ -109,7 +110,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(2, purchase.items.count())
         self.assertTrue(purchase.items.filter(description='Motor actualizado').exists())
         self.assertTrue(purchase.items.filter(description='Sistema eléctrico').exists())
-        self.assertEqual(Decimal('1650000'), purchase.estimated_total)
+        self.assertEqual(Decimal('3750000'), purchase.estimated_total)
         self.assertEqual(self.house, purchase.scope_chicken_house)
         self.assertEqual(self.support_type, purchase.support_document_type)
         self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, purchase.scope_area)
@@ -177,6 +178,227 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "El producto seleccionado ya no existe.", status_code=200)
         self.assertFalse(PurchaseRequest.objects.filter(name='Compra equipos críticos').exists())
+
+    def test_pending_approver_can_approve_request(self) -> None:
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-APROBACION-1',
+            name='Compra por aprobar',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            status=PurchaseRequest.Status.SUBMITTED,
+        )
+        rule = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.approver,
+        )
+        approval = PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule,
+            sequence=1,
+            role='Finanzas',
+            approver=self.approver,
+        )
+
+        self.client.force_login(self.approver)
+        payload = {
+            'panel': 'request',
+            'scope': PurchaseRequest.Status.SUBMITTED,
+            'purchase': str(purchase.pk),
+            'intent': 'approve_request',
+            'approval_note': 'Adelante',
+        }
+        response = self.client.post(self._url(), data=payload)
+        expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.SUBMITTED}"
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+
+        approval.refresh_from_db()
+        purchase.refresh_from_db()
+        self.assertEqual(PurchaseApproval.Status.APPROVED, approval.status)
+        self.assertEqual('Adelante', approval.comments)
+        self.assertEqual(PurchaseRequest.Status.APPROVED, purchase.status)
+        self.assertIsNotNone(purchase.approved_at)
+
+    def test_partial_approval_keeps_request_submitted(self) -> None:
+        finance_user = get_user_model().objects.create_user(
+            email='finance@example.com',
+            password='test123',
+            is_staff=True,
+        )
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-APROBACION-2',
+            name='Compra multi flujo',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            status=PurchaseRequest.Status.SUBMITTED,
+        )
+        rule_one = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.approver,
+        )
+        rule_two = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=finance_user,
+        )
+        approval_one = PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule_one,
+            sequence=1,
+            role='Operaciones',
+            approver=self.approver,
+        )
+        PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule_two,
+            sequence=2,
+            role='Finanzas',
+            approver=finance_user,
+        )
+        self.client.force_login(self.approver)
+        payload = {
+            'panel': 'request',
+            'scope': PurchaseRequest.Status.SUBMITTED,
+            'purchase': str(purchase.pk),
+            'intent': 'approve_request',
+            'approval_note': '',
+        }
+        response = self.client.post(self._url(), data=payload)
+        expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.SUBMITTED}"
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+
+        approval_one.refresh_from_db()
+        purchase.refresh_from_db()
+        self.assertEqual(PurchaseApproval.Status.APPROVED, approval_one.status)
+        self.assertEqual(PurchaseRequest.Status.SUBMITTED, purchase.status)
+        self.assertIsNone(purchase.approved_at)
+
+    def test_pending_approver_can_reject_request(self) -> None:
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-APROBACION-3',
+            name='Compra por rechazar',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            status=PurchaseRequest.Status.SUBMITTED,
+        )
+        rule = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.approver,
+        )
+        approval = PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule,
+            sequence=1,
+            role='Finanzas',
+            approver=self.approver,
+        )
+        self.client.force_login(self.approver)
+        payload = {
+            'panel': 'request',
+            'scope': PurchaseRequest.Status.SUBMITTED,
+            'purchase': str(purchase.pk),
+            'intent': 'reject_request',
+            'approval_note': 'Falta información',
+        }
+        response = self.client.post(self._url(), data=payload)
+        expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.SUBMITTED}"
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+
+        approval.refresh_from_db()
+        purchase.refresh_from_db()
+        self.assertEqual(PurchaseApproval.Status.REJECTED, approval.status)
+        self.assertEqual('Falta información', approval.comments)
+        self.assertEqual(PurchaseRequest.Status.DRAFT, purchase.status)
+        self.assertIsNone(purchase.approved_at)
+
+    def test_pending_approver_sees_action_buttons(self) -> None:
+        requester = get_user_model().objects.create_user(
+            email='requester@example.com',
+            password='test123',
+            is_staff=True,
+        )
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-APROBACION-4',
+            name='Compra visible en panel',
+            requester=requester,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            status=PurchaseRequest.Status.SUBMITTED,
+        )
+        rule = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.user,
+        )
+        PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule,
+            sequence=1,
+            role='Director',
+            approver=self.user,
+        )
+
+        response = self.client.get(
+            f"{self._url()}?scope={PurchaseRequest.Status.SUBMITTED}&panel=request&purchase={purchase.pk}"
+        )
+        self.assertContains(response, "Aprobar solicitud")
+        self.assertContains(response, "Rechazar solicitud")
+
+    def test_rejected_request_alert_displayed(self) -> None:
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-RECHAZADA',
+            name='Compra rechazada',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            status=PurchaseRequest.Status.DRAFT,
+        )
+        rule = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.approver,
+        )
+        PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule,
+            sequence=1,
+            role='Finanzas',
+            approver=self.approver,
+            status=PurchaseApproval.Status.REJECTED,
+            comments='Nota de rechazo',
+        )
+        response = self.client.get(
+            f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}&panel=request&purchase={purchase.pk}"
+        )
+        self.assertContains(response, "Solicitud rechazada")
+        self.assertContains(response, "Nota de rechazo")
+
+    def test_approval_note_visible_in_summary(self) -> None:
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-APROBADA',
+            name='Compra aprobada',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.expense_type,
+            status=PurchaseRequest.Status.ORDERED,
+        )
+        rule = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.approver,
+        )
+        PurchaseApproval.objects.create(
+            purchase_request=purchase,
+            rule=rule,
+            sequence=1,
+            role='Finanzas',
+            approver=self.approver,
+            status=PurchaseApproval.Status.APPROVED,
+            comments='Nota aprobada',
+        )
+        response = self.client.get(
+            f"{self._url()}?scope={PurchaseRequest.Status.ORDERED}&panel=request&purchase={purchase.pk}"
+        )
+        self.assertContains(response, "Nota de aprobación")
+        self.assertContains(response, "Nota aprobada")
 
     def _url(self) -> str:
         return reverse('administration:purchases')

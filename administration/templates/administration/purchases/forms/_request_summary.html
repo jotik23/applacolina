@@ -37,6 +37,12 @@
         <p class="mt-1 text-sm text-slate-700">{{ purchase.description }}</p>
       </div>
     {% endif %}
+    {% if purchase.latest_approval_note and purchase.status != 'borrador' %}
+      <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Nota de aprobación</p>
+        <p class="mt-1 text-sm text-emerald-900">{{ purchase.latest_approval_note }}</p>
+      </div>
+    {% endif %}
     {% with items=purchase.items.all %}
       {% if items %}
         <div class="overflow-x-auto rounded-xl border border-slate-200">

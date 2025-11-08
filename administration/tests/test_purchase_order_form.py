@@ -95,12 +95,12 @@ class PurchaseOrderFormSubmissionTests(TestCase):
         )
         self.assertRedirects(
             response,
-            f"{self._url()}?scope={PurchaseRequest.Status.INVOICE}",
+            f"{self._url()}?scope={PurchaseRequest.Status.RECEPTION}",
             fetch_redirect_response=False,
         )
         self.purchase.refresh_from_db()
         self.purchase_item.refresh_from_db()
-        self.assertEqual(PurchaseRequest.Status.INVOICE, self.purchase.status)
+        self.assertEqual(PurchaseRequest.Status.RECEPTION, self.purchase.status)
         self.assertEqual(self.purchase_item.quantity, self.purchase_item.received_quantity)
 
     def test_confirm_order_with_credit_moves_purchase_to_payable(self) -> None:
@@ -173,7 +173,6 @@ class PurchaseOrderFormSubmissionTests(TestCase):
             'shipping_notes': 'Coordinar transporte',
             'payment_condition': PurchaseRequest.PaymentCondition.CASH,
             'payment_method': PurchaseRequest.PaymentMethod.TRANSFER,
-            'payment_source': PurchaseRequest.PaymentSource.TBD,
             'supplier_account_holder_name': 'Nuevo Titular',
             'supplier_account_holder_id': '999',
             'supplier_account_type': 'corriente',

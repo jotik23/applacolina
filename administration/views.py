@@ -30,6 +30,7 @@ from .forms import (
 from .models import (
     ExpenseTypeApprovalRule,
     Product,
+    PurchaseApproval,
     PurchaseRequest,
     PurchasingExpenseType,
     Supplier,
@@ -58,6 +59,11 @@ from .services.purchase_requests import (
     PurchaseRequestValidationError,
 )
 from .services.purchases import get_dashboard_state
+from .services.workflows import (
+    ExpenseTypeWorkflowRefreshService,
+    PurchaseApprovalDecisionError,
+    PurchaseApprovalDecisionService,
+)
 
 
 class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
@@ -188,6 +194,11 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         purchase_id = _parse_int(self.request.POST.get('purchase'))
         if intent == 'reopen_request':
             return self._reopen_purchase_request(purchase_id=purchase_id)
+        if intent in {'approve_request', 'reject_request'}:
+            return self._handle_approval_decision(
+                purchase_id=purchase_id,
+                decision=intent,
+            )
         payload, overrides, field_errors, item_errors = self._build_submission_payload(purchase_id=purchase_id)
         if field_errors or item_errors or payload is None:
             return self._render_request_form_errors(
@@ -412,6 +423,48 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
         )
 
+    def _handle_approval_decision(self, *, purchase_id: int | None, decision: str) -> HttpResponse:
+        scope = self.request.POST.get('scope') or PurchaseRequest.Status.SUBMITTED
+        if not purchase_id:
+            messages.error(self.request, "Selecciona la solicitud que deseas aprobar.")
+            return redirect(self._build_base_url(scope=scope))
+        purchase = PurchaseRequest.objects.filter(pk=purchase_id).first()
+        if not purchase:
+            messages.error(self.request, "La solicitud seleccionada ya no existe.")
+            return redirect(self._build_base_url(scope=scope))
+        note = (self.request.POST.get('approval_note') or '').strip()
+        service = PurchaseApprovalDecisionService(
+            purchase_request=purchase,
+            actor=self.request.user,
+        )
+        try:
+            if decision == 'approve_request':
+                result = service.approve(note=note)
+            else:
+                result = service.reject(note=note)
+        except PurchaseApprovalDecisionError as exc:
+            messages.error(self.request, str(exc))
+            return redirect(
+                self._build_base_url(
+                    scope=purchase.status,
+                    extra={'panel': 'request', 'purchase': purchase.pk},
+                )
+            )
+
+        purchase.refresh_from_db()
+        if result.decision == 'approved':
+            if result.workflow_completed:
+                messages.success(self.request, "Solicitud aprobada completamente.")
+            else:
+                messages.success(
+                    self.request,
+                    "Tu aprobación fue registrada. El flujo continuará con el siguiente aprobador.",
+                )
+        else:
+            messages.warning(self.request, "Solicitud rechazada y devuelta a borrador.")
+
+        return redirect(self._build_base_url(scope=PurchaseRequest.Status.SUBMITTED))
+
     def _build_submission_payload(
         self,
         *,
@@ -517,7 +570,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         shipping_notes = (self.request.POST.get('shipping_notes') or '').strip()
         payment_condition = (self.request.POST.get('payment_condition') or '').strip()
         payment_method = (self.request.POST.get('payment_method') or '').strip()
-        payment_source = (self.request.POST.get('payment_source') or '').strip()
         supplier_account_holder_id = (self.request.POST.get('supplier_account_holder_id') or '').strip()
         supplier_account_holder_name = (self.request.POST.get('supplier_account_holder_name') or '').strip()
         supplier_account_type = (self.request.POST.get('supplier_account_type') or '').strip()
@@ -532,7 +584,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'shipping_notes': shipping_notes,
             'payment_condition': payment_condition,
             'payment_method': payment_method,
-            'payment_source': payment_source,
             'supplier_account_holder_id': supplier_account_holder_id,
             'supplier_account_holder_name': supplier_account_holder_name,
             'supplier_account_type': supplier_account_type,
@@ -566,11 +617,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             field_errors.setdefault('payment_method', []).append("Selecciona un medio de pago válido.")
         if not payment_method:
             field_errors.setdefault('payment_method', []).append("Selecciona un medio de pago.")
-        payment_sources = set(PurchaseRequest.PaymentSource.values)
-        if payment_source and payment_source not in payment_sources:
-            field_errors.setdefault('payment_source', []).append("Selecciona el origen del pago.")
-        if not payment_source:
-            payment_source = PurchaseRequest.PaymentSource.TBD
         require_bank_data = payment_method == PurchaseRequest.PaymentMethod.TRANSFER
         account_types = {choice for choice, _ in Supplier.ACCOUNT_TYPE_CHOICES}
         if require_bank_data:
@@ -600,7 +646,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 shipping_notes=shipping_notes if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else '',
                 payment_condition=payment_condition,
                 payment_method=payment_method,
-                payment_source=payment_source,
                 supplier_account_holder_id=supplier_account_holder_id,
                 supplier_account_holder_name=supplier_account_holder_name,
                 supplier_account_type=supplier_account_type,
@@ -793,6 +838,38 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         purchase = panel_state.purchase if panel_state else None
         form_initial = self._resolve_form_initial(purchase=purchase, overrides=overrides)
         items = form_initial['items'] or [self._blank_item_row()]
+        pending_approval = None
+        if (
+            purchase
+            and purchase.status == PurchaseRequest.Status.SUBMITTED
+            and self.request.user.is_authenticated
+        ):
+            pending_approval = (
+                purchase.approvals.filter(
+                    approver=self.request.user,
+                    status=PurchaseApproval.Status.PENDING,
+                )
+                .order_by('sequence')
+                .first()
+            )
+        rejection_alert = None
+        if purchase and purchase.status == PurchaseRequest.Status.DRAFT:
+            last_rejection = (
+                purchase.approvals.filter(status=PurchaseApproval.Status.REJECTED)
+                .order_by('-decided_at', '-updated_at')
+                .first()
+            )
+            if last_rejection:
+                rejection_alert = {
+                    'role': last_rejection.role,
+                    'note': last_rejection.comments or '',
+                    'decided_at': last_rejection.decided_at,
+                }
+        approval_note_value = ''
+        if overrides and overrides.get('approval_note') is not None:
+            approval_note_value = overrides.get('approval_note') or ''
+        elif self.request.method == 'POST':
+            approval_note_value = (self.request.POST.get('approval_note') or '').strip()
         context = {
             'purchase_request_form': {
                 'categories': self.purchase_form_options['categories'],
@@ -813,6 +890,9 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                     selected_value=form_initial['scope_area_value'],
                 ),
                 'can_reopen': bool(purchase and purchase.status == PurchaseRequest.Status.SUBMITTED),
+                'pending_approval': pending_approval,
+                'approval_note': approval_note_value,
+                'rejection_alert': rejection_alert,
             },
             'purchase_request_field_errors': field_errors,
             'purchase_request_item_errors': item_errors,
@@ -836,7 +916,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'shipping_notes': purchase.shipping_notes if purchase else '',
             'payment_condition': purchase.payment_condition or PurchaseRequest.PaymentCondition.CASH,
             'payment_method': purchase.payment_method or PurchaseRequest.PaymentMethod.TRANSFER,
-            'payment_source': purchase.payment_source or PurchaseRequest.PaymentSource.TBD,
             'supplier_account_holder_id': purchase.supplier_account_holder_id
             or (supplier.account_holder_id if supplier else ''),
             'supplier_account_holder_name': purchase.supplier_account_holder_name
@@ -854,7 +933,6 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'initial': initial,
                 'payment_conditions': PurchaseRequest.PaymentCondition.choices,
                 'payment_methods': PurchaseRequest.PaymentMethod.choices,
-                'payment_sources': PurchaseRequest.PaymentSource.choices,
                 'delivery_conditions': PurchaseRequest.DeliveryCondition.choices,
                 'account_types': Supplier.ACCOUNT_TYPE_CHOICES,
                 'purchase': purchase,
@@ -1808,12 +1886,31 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
             instance=instance,
             data=self.request.POST,
         )
-        if form.is_valid() and workflow_formset.is_valid():
+        workflow_formset_is_valid = workflow_formset.is_valid()
+        if form.is_valid() and workflow_formset_is_valid:
+            workflow_changed = workflow_formset.has_changed()
             with transaction.atomic():
                 expense_type = form.save()
                 workflow_formset.instance = expense_type
                 workflow_formset.save()
+                recalculated = 0
+                if workflow_changed:
+                    recalculated = ExpenseTypeWorkflowRefreshService(
+                        expense_type=expense_type,
+                        actor=self.request.user,
+                    ).run()
             messages.success(self.request, "Categoría de gasto guardada.")
+            if workflow_changed:
+                if recalculated:
+                    messages.info(
+                        self.request,
+                        f"Se recalcularon {recalculated} solicitudes en aprobación para esta categoría.",
+                    )
+                else:
+                    messages.info(
+                        self.request,
+                        "No había solicitudes pendientes para recalcular.",
+                    )
             return redirect(self._base_url(section='expense_types', with_panel=False))
         messages.error(self.request, "Revisa los errores del formulario.")
         return self.render_to_response(

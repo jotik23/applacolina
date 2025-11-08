@@ -18,7 +18,6 @@ class PurchaseOrderPayload:
     shipping_notes: str
     payment_condition: str
     payment_method: str
-    payment_source: str
     supplier_account_holder_id: str
     supplier_account_holder_name: str
     supplier_account_type: str
@@ -75,8 +74,6 @@ class PurchaseOrderService:
             errors.setdefault("payment_condition", []).append("Selecciona una condición de pago válida.")
         if payload.payment_method not in PurchaseRequest.PaymentMethod.values:
             errors.setdefault("payment_method", []).append("Selecciona un medio de pago válido.")
-        if payload.payment_source not in PurchaseRequest.PaymentSource.values:
-            errors.setdefault("payment_source", []).append("Selecciona el origen del pago.")
         require_bank_data = payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER
         if require_bank_data:
             account_types = dict(Supplier.ACCOUNT_TYPE_CHOICES)
@@ -103,7 +100,6 @@ class PurchaseOrderService:
         )
         purchase.payment_condition = payload.payment_condition
         purchase.payment_method = payload.payment_method
-        purchase.payment_source = payload.payment_source
         self._sync_payment_date(purchase, payload.payment_condition)
         if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
             purchase.supplier_account_holder_id = payload.supplier_account_holder_id
@@ -115,7 +111,6 @@ class PurchaseOrderService:
         if intent == "confirm_order":
             purchase.status = self._determine_status_after_management(
                 delivery_condition=payload.delivery_condition,
-                payment_condition=payload.payment_condition,
             )
         purchase.save()
         if intent == "confirm_order" and payload.delivery_condition == PurchaseRequest.DeliveryCondition.IMMEDIATE:
@@ -159,9 +154,5 @@ class PurchaseOrderService:
             item.received_quantity = item.quantity
             item.save(update_fields=["received_quantity", "updated_at"])
 
-    def _determine_status_after_management(self, *, delivery_condition: str, payment_condition: str) -> str:
-        if delivery_condition == PurchaseRequest.DeliveryCondition.IMMEDIATE:
-            if payment_condition == PurchaseRequest.PaymentCondition.CREDIT:
-                return PurchaseRequest.Status.RECEPTION
-            return PurchaseRequest.Status.INVOICE
-        return PurchaseRequest.Status.ORDERED
+    def _determine_status_after_management(self, *, delivery_condition: str) -> str:
+        return PurchaseRequest.Status.RECEPTION

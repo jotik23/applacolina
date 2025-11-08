@@ -106,6 +106,65 @@ class ExpenseTypeWorkflowViewTests(TestCase):
         self.assertEqual(self.user, rules[0].approver)
         self.assertEqual(reviewer, rules[1].approver)
 
+    def test_updating_workflow_rebuilds_existing_purchases(self) -> None:
+        requester = get_user_model().objects.create_user(
+            email='requester@example.com',
+            password='test123',
+            is_staff=True,
+        )
+        supplier = _create_supplier()
+        purchase = PurchaseRequest.objects.create(
+            timeline_code='SOL-010',
+            name='Compra en aprobación',
+            requester=requester,
+            supplier=supplier,
+            expense_type=self.expense_type,
+        )
+        rule = ExpenseTypeApprovalRule.objects.create(
+            expense_type=self.expense_type,
+            approver=self.user,
+        )
+        PurchaseApprovalWorkflowService(
+            purchase_request=purchase,
+            actor=requester,
+        ).run()
+        purchase.refresh_from_db()
+        self.assertEqual(PurchaseRequest.Status.SUBMITTED, purchase.status)
+        initial_approval = purchase.approvals.first()
+        assert initial_approval is not None
+        self.assertEqual(self.user, initial_approval.approver)
+
+        finance_user = get_user_model().objects.create_user(
+            email='finance@example.com',
+            password='test123',
+            is_staff=True,
+        )
+        response = self.client.post(
+            self._url({'section': 'expense_types', 'panel': 'expense_type'}),
+            {
+                'section': 'expense_types',
+                'panel': 'expense_type',
+                'form_action': 'expense_type',
+                'expense_type_id': self.expense_type.pk,
+                'name': self.expense_type.name,
+                'iva_rate': '0.00',
+                'withholding_rate': '0.00',
+                'parent_category': '',
+                'workflow-TOTAL_FORMS': '1',
+                'workflow-INITIAL_FORMS': '1',
+                'workflow-MIN_NUM_FORMS': '0',
+                'workflow-MAX_NUM_FORMS': '1000',
+                'workflow-0-id': str(rule.pk),
+                'workflow-0-approver': str(finance_user.pk),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        purchase.refresh_from_db()
+        approvals = list(purchase.approvals.order_by('sequence'))
+        self.assertEqual(1, len(approvals))
+        self.assertEqual(finance_user, approvals[0].approver)
+        self.assertEqual(PurchaseRequest.Status.SUBMITTED, purchase.status)
+
 
 class PurchaseApprovalWorkflowServiceTests(TestCase):
     def setUp(self) -> None:

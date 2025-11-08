@@ -63,8 +63,8 @@ class PurchaseReceptionService:
     ) -> tuple[dict[str, list[str]], dict[int, list[str]]]:
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, list[str]] = {}
-        if purchase.status not in {PurchaseRequest.Status.ORDERED, PurchaseRequest.Status.RECEPTION}:
-            field_errors.setdefault("non_field", []).append("Solo puedes registrar recepción para compras con orden emitida.")
+        if purchase.status != PurchaseRequest.Status.RECEPTION:
+            field_errors.setdefault("non_field", []).append("Solo puedes registrar recepción mientras la compra está en Revisar pago.")
         items_by_id = {item.id: item for item in purchase.items.all()}
         if not payload.items:
             field_errors.setdefault("non_field", []).append("Debes registrar al menos un item.")

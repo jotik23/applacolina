@@ -114,17 +114,17 @@ PURCHASE_STAGE_META = {
         'tooltip': 'Aprobada y en proceso de compra.',
         'palette': 'indigo',
     },
+    'payable': {
+        'label': 'Revisar pago',
+        'description': 'Verifica los datos bancarios y programa la transferencia.',
+        'tooltip': 'Aún falta registrar o confirmar el pago.',
+        'palette': 'orange',
+    },
     'receiving': {
         'label': 'Esperando llegada',
         'description': 'Órdenes emitidas pendientes de recepción.',
         'tooltip': 'Esperando recepción parcial o total.',
         'palette': 'blue',
-    },
-    'payable': {
-        'label': 'Por pagar',
-        'description': 'Recepciones registradas con pago pendiente.',
-        'tooltip': 'Listo para programar el pago.',
-        'palette': 'orange',
     },
     'support': {
         'label': 'Por soportar',
@@ -147,14 +147,34 @@ PURCHASE_STAGE_META = {
 }
 
 
+_STAGE_STATUS_MAP = dict(PurchaseRequest.STAGE_FLOW)
+BASE_SCOPE_STAGE_ORDER = (
+    "draft",
+    "approval",
+    "purchasing",
+    "payable",
+    "support",
+    "accounting",
+    "archived",
+)
 SCOPE_DEFINITIONS = tuple(
     (
-        status,
+        _STAGE_STATUS_MAP[stage_code],
         PURCHASE_STAGE_META[stage_code]['label'],
         PURCHASE_STAGE_META[stage_code]['description'],
     )
-    for stage_code, status in PurchaseRequest.STAGE_FLOW
+    for stage_code in BASE_SCOPE_STAGE_ORDER
+    if stage_code in _STAGE_STATUS_MAP
 )
+
+WAITING_SCOPE_CODE = "waiting_arrival"
+WAITING_SCOPE_LABEL = PURCHASE_STAGE_META['receiving']['label']
+WAITING_SCOPE_DESCRIPTION = PURCHASE_STAGE_META['receiving']['description']
+WAITING_SCOPE_STATUSES = {
+    PurchaseRequest.Status.RECEPTION,
+    PurchaseRequest.Status.INVOICE,
+    PurchaseRequest.Status.PAYMENT,
+}
 
 STATUS_BADGES = {
     status: (PURCHASE_STAGE_META[stage_code]['label'], PURCHASE_STAGE_META[stage_code]['palette'])
@@ -196,10 +216,26 @@ def _build_scopes() -> Sequence[PurchaseScope]:
     )
     for row in qs:
         counts[row['status']] = row['count']
-    return tuple(
+    scopes: list[PurchaseScope] = [
         PurchaseScope(code=code, label=label, description=description, count=counts.get(code, 0))
         for code, label, description in SCOPE_DEFINITIONS
+    ]
+    waiting_count = (
+        PurchaseRequest.objects.filter(
+            delivery_condition=PurchaseRequest.DeliveryCondition.SHIPPING,
+            status__in=WAITING_SCOPE_STATUSES,
+        ).count()
     )
+    scopes.insert(
+        BASE_SCOPE_STAGE_ORDER.index('payable') + 1,
+        PurchaseScope(
+            code=WAITING_SCOPE_CODE,
+            label=WAITING_SCOPE_LABEL,
+            description=WAITING_SCOPE_DESCRIPTION,
+            count=waiting_count,
+        ),
+    )
+    return tuple(scopes)
 
 
 def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
@@ -210,6 +246,23 @@ def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
 
 
 def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
+    if scope_code == WAITING_SCOPE_CODE:
+        return (
+            PurchaseRequest.objects.select_related(
+                'supplier',
+                'requester',
+                'expense_type',
+                'support_document_type',
+                'scope_farm',
+                'scope_chicken_house__farm',
+            )
+            .prefetch_related('approvals__approver')
+            .filter(
+                delivery_condition=PurchaseRequest.DeliveryCondition.SHIPPING,
+                status__in=WAITING_SCOPE_STATUSES,
+            )
+            .order_by('-created_at')[:50]
+        )
     return (
         PurchaseRequest.objects.select_related(
             'supplier',

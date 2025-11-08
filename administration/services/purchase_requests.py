@@ -305,7 +305,8 @@ class PurchaseRequestSubmissionService:
             item.save()
             if item.id:
                 seen_ids.add(item.id)
-            total += item_payload.estimated_amount
+            line_total = (item_payload.quantity or Decimal("0.00")) * (item_payload.estimated_amount or Decimal("0.00"))
+            total += line_total
         for item_id, item in existing.items():
             if item_id not in seen_ids:
                 item.delete()

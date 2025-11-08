@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from django import forms
-from django.forms import BaseInlineFormSet, inlineformset_factory
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db.models import Q
+from django.forms import BaseInlineFormSet, inlineformset_factory
 
 from .models import (
     ExpenseTypeApprovalRule,
@@ -77,6 +79,13 @@ class ExpenseTypeApprovalRuleForm(forms.ModelForm):
     class Meta:
         model = ExpenseTypeApprovalRule
         fields = ["approver"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        approver_field = self.fields.get("approver")
+        if approver_field is not None:
+            user_model = get_user_model()
+            approver_field.queryset = user_model.objects.filter(Q(is_staff=True) | Q(is_superuser=True))
 
 
 class BaseExpenseTypeWorkflowFormSet(BaseInlineFormSet):

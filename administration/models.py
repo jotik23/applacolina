@@ -216,7 +216,7 @@ class PurchaseRequest(TimeStampedModel):
         SUBMITTED = "aprobacion", "En aprobación"
         APPROVED = "aprobada", "Aprobada"
         ORDERED = "ordenado", "Orden emitida"
-        RECEPTION = "recepcion", "Recepción"
+        RECEPTION = "recepcion", "Revisar pago"
         INVOICE = "factura", "Factura"
         PAYMENT = "pago", "Pago"
         ARCHIVED = "archivada", "Archivada"
@@ -225,8 +225,8 @@ class PurchaseRequest(TimeStampedModel):
         ("draft", Status.DRAFT),
         ("approval", Status.SUBMITTED),
         ("purchasing", Status.APPROVED),
-        ("receiving", Status.ORDERED),
         ("payable", Status.RECEPTION),
+        ("receiving", Status.ORDERED),
         ("support", Status.INVOICE),
         ("accounting", Status.PAYMENT),
         ("archived", Status.ARCHIVED),
@@ -416,6 +416,17 @@ class PurchaseRequest(TimeStampedModel):
                 return self.scope_farm.name
             return self.AreaScope.FARM.label
         return self.AreaScope.COMPANY.label
+
+    @property
+    def latest_approval_note(self) -> str:
+        approval = (
+            self.approvals.filter(status=PurchaseApproval.Status.APPROVED)
+            .order_by('-decided_at', '-updated_at')
+            .first()
+        )
+        if approval and approval.comments:
+            return approval.comments
+        return ''
 
 
 class PurchaseItem(TimeStampedModel):

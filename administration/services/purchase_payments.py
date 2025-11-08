@@ -63,10 +63,9 @@ class PurchasePaymentService:
         errors: dict[str, list[str]] = {}
         allowed_statuses = {
             PurchaseRequest.Status.RECEPTION,
-            PurchaseRequest.Status.INVOICE,
         }
         if purchase.status not in allowed_statuses:
-            errors.setdefault("non_field", []).append("Solo puedes registrar pagos para compras en Por pagar.")
+            errors.setdefault("non_field", []).append("Solo puedes registrar pagos para compras en Revisar pago.")
         require_bank_data = payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER
         if require_bank_data:
             account_types = dict(Supplier.ACCOUNT_TYPE_CHOICES)
