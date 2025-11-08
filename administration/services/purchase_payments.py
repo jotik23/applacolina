@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
@@ -11,6 +12,7 @@ from administration.models import PurchaseRequest, Supplier
 @dataclass
 class PurchasePaymentPayload:
     purchase_id: int
+    payment_amount: Decimal
     payment_method: str
     payment_condition: str
     payment_source: str
@@ -61,11 +63,17 @@ class PurchasePaymentService:
         intent: str,
     ) -> dict[str, list[str]]:
         errors: dict[str, list[str]] = {}
+        if payload.payment_amount <= Decimal("0"):
+            errors.setdefault("payment_amount", []).append("Ingresa un monto mayor a cero.")
         allowed_statuses = {
             PurchaseRequest.Status.RECEPTION,
         }
         if purchase.status not in allowed_statuses:
             errors.setdefault("non_field", []).append("Solo puedes registrar pagos para compras en Revisar pago.")
+        if intent == "confirm_payment" and payload.payment_amount > purchase.estimated_total:
+            errors.setdefault("payment_amount", []).append(
+                "El monto a pagar supera el total estimado. Reabre la solicitud para ajustar y aprobar nuevamente."
+            )
         require_bank_data = payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER
         if require_bank_data:
             account_types = dict(Supplier.ACCOUNT_TYPE_CHOICES)
@@ -82,6 +90,7 @@ class PurchasePaymentService:
         return errors
 
     def _persist_payment(self, purchase: PurchaseRequest, payload: PurchasePaymentPayload, *, intent: str) -> None:
+        purchase.payment_amount = payload.payment_amount
         purchase.payment_method = payload.payment_method
         purchase.payment_notes = payload.payment_notes
         purchase.payment_source = payload.payment_source
@@ -98,6 +107,7 @@ class PurchasePaymentService:
             purchase.payment_account = payload.supplier_account_number or purchase.payment_account
         self._sync_payment_date(purchase, payment_condition)
         update_fields = [
+            "payment_amount",
             "payment_method",
             "payment_condition",
             "payment_notes",

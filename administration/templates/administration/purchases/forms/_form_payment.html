@@ -15,7 +15,7 @@
         <h2 class="text-lg font-semibold text-slate-900">Detalles del pago</h2>
       </div>
       <p class="text-[11px] text-slate-500">
-        Puedes actualizar estos datos aunque la solicitud esté bloqueada. Si confirmas el pago se moverá a <strong>Por soportar</strong>.
+        Puedes actualizar estos datos aunque la solicitud esté bloqueada. Si confirmas el pago se moverá a <strong>Gestionar soporte</strong>.
       </p>
     </header>
     <div class="grid gap-4 lg:grid-cols-2">
@@ -62,6 +62,25 @@
         </select>
         {% if field_errors.payment_source %}
           <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.payment_source.0 }}</p>
+        {% endif %}
+      </label>
+      <label class="text-xs font-semibold text-slate-500">
+        Monto a pagar
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          name="payment_amount"
+          value="{{ form.initial.payment_amount }}"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+          data-payment-amount-input
+          data-estimated-total="{{ purchase_payment_form.estimated_total|floatformat:'2' }}"
+        >
+        <p class="mt-1 text-[11px] text-slate-500">
+          Total estimado: {{ purchase.currency|default:"COP" }} {{ purchase_payment_form.estimated_total|floatformat:"2" }}
+        </p>
+        {% if field_errors.payment_amount %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.payment_amount.0 }}</p>
         {% endif %}
       </label>
     </div>
@@ -165,8 +184,25 @@
       <button type="submit" name="intent" value="save_payment" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">
         Guardar progreso
       </button>
-      <button type="submit" name="intent" value="confirm_payment" class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90">
+      <button
+        type="submit"
+        name="intent"
+        value="confirm_payment"
+        class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90 {% if purchase_payment_form.amount_exceeds_estimate %}hidden{% endif %}"
+        data-confirm-payment-button
+        {% if purchase_payment_form.amount_exceeds_estimate %}hidden{% endif %}
+      >
         Marcar como pagada
+      </button>
+      <button
+        type="submit"
+        name="intent"
+        value="reopen_request"
+        class="rounded-full border border-amber-200 px-5 py-2 text-sm font-semibold text-amber-700 hover:border-amber-300 hover:bg-amber-50 {% if not purchase_payment_form.amount_exceeds_estimate %}hidden{% endif %}"
+        data-reopen-payment-button
+        {% if not purchase_payment_form.amount_exceeds_estimate %}hidden{% endif %}
+      >
+        Reabrir solicitud
       </button>
     </div>
   </div>

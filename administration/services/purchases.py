@@ -50,10 +50,17 @@ class PurchaseRecord:
     status_badge: str
     status_palette: str
     description: str
+    has_reception_mismatch: bool
+    paid_amount: Decimal
+    show_payment_breakdown: bool
 
     @property
     def total_display(self) -> str:
         return f'{self.currency} {self.total_amount:,.2f}'
+
+    @property
+    def paid_display(self) -> str:
+        return f'{self.currency} {self.paid_amount:,.2f}'
 
 
 @dataclass(frozen=True)
@@ -90,7 +97,7 @@ PANEL_REGISTRY = {
     'request': PurchasePanel('request', 'Nueva solicitud de compra', 'administration/purchases/forms/_form_request.html'),
     'order': PurchasePanel('order', 'Gestionar compra', 'administration/purchases/forms/_form_order.html'),
     'reception': PurchasePanel('reception', 'Registrar recepción', 'administration/purchases/forms/_form_reception.html'),
-    'invoice': PurchasePanel('invoice', 'Registrar factura', 'administration/purchases/forms/_form_invoice.html'),
+    'invoice': PurchasePanel('invoice', 'Gestionar soporte', 'administration/purchases/forms/_form_invoice.html'),
     'payment': PurchasePanel('payment', 'Registrar pago', 'administration/purchases/forms/_form_payment.html'),
 }
 
@@ -127,9 +134,9 @@ PURCHASE_STAGE_META = {
         'palette': 'blue',
     },
     'support': {
-        'label': 'Por soportar',
-        'description': 'Pendiente cargar o validar los soportes.',
-        'tooltip': 'Falta adjuntar documentos soporte.',
+        'label': 'Gestionar soporte',
+        'description': 'Valida y adjunta los soportes contables antes de enviarlos a contabilidad.',
+        'tooltip': 'Revisa y completa el soporte documental.',
         'palette': 'emerald',
     },
     'accounting': {
@@ -187,7 +194,7 @@ ACTION_BY_STATUS = {
     PurchaseRequest.Status.APPROVED: PurchaseAction('Gestionar compra', 'order', 'gestionar_compra'),
     PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
-    PurchaseRequest.Status.INVOICE: PurchaseAction('Registrar factura', 'invoice', 'registrar_factura'),
+    PurchaseRequest.Status.INVOICE: PurchaseAction('Gestionar soporte', 'invoice', 'registrar_factura'),
     PurchaseRequest.Status.PAYMENT: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
     PurchaseRequest.Status.ARCHIVED: None,
 }
@@ -303,6 +310,8 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
     approvals_pending = tuple(
         _format_approval_actor(approval) for approval in approvals if approval.status == PurchaseApproval.Status.PENDING
     )
+    paid_amount = purchase.payment_amount or Decimal('0')
+    show_payment_breakdown = purchase.show_payment_breakdown
     return PurchaseRecord(
         pk=purchase.pk,
         timeline_code=purchase.timeline_code,
@@ -325,6 +334,9 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
         status_badge=badge,
         status_palette=palette,
         description=purchase.description or purchase.name,
+        has_reception_mismatch=purchase.reception_mismatch,
+        paid_amount=paid_amount,
+        show_payment_breakdown=show_payment_breakdown,
     )
 
 

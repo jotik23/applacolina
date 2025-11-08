@@ -6,6 +6,10 @@ orderForms.forEach((root) => {
   const shippingFields = root.querySelector('[data-shipping-fields]');
   const paymentSelect = root.querySelector('[data-payment-method]');
   const bankSection = root.querySelector('[data-bank-section]');
+  const paymentAmountInput = root.querySelector('[data-payment-amount-input]');
+  const confirmPaymentButton = root.querySelector('[data-confirm-payment-button]');
+  const reopenPaymentButton = root.querySelector('[data-reopen-payment-button]');
+  const paymentAmountAlert = root.querySelector('[data-payment-amount-alert]');
 
   function toggleSection(section, visible) {
     if (!section) {
@@ -42,6 +46,29 @@ orderForms.forEach((root) => {
     });
   }
 
+  function syncPaymentAmountWarning() {
+    if (!paymentAmountInput) {
+      return;
+    }
+    const estimated = parseFloat(paymentAmountInput.dataset.estimatedTotal || '0');
+    const entered = parseFloat(paymentAmountInput.value);
+    const normalizedEstimated = Number.isNaN(estimated) ? 0 : estimated;
+    const normalizedEntered = Number.isNaN(entered) ? 0 : entered;
+    const exceeds = normalizedEntered > normalizedEstimated;
+    if (confirmPaymentButton) {
+      confirmPaymentButton.hidden = exceeds;
+      confirmPaymentButton.classList.toggle('hidden', exceeds);
+    }
+    if (reopenPaymentButton) {
+      reopenPaymentButton.hidden = !exceeds;
+      reopenPaymentButton.classList.toggle('hidden', !exceeds);
+    }
+    if (paymentAmountAlert) {
+      paymentAmountAlert.hidden = !exceeds;
+      paymentAmountAlert.classList.toggle('hidden', !exceeds);
+    }
+  }
+
   if (deliverySelect) {
     deliverySelect.addEventListener('change', syncDelivery);
     deliverySelect.addEventListener('input', syncDelivery);
@@ -49,7 +76,12 @@ orderForms.forEach((root) => {
   if (paymentSelect) {
     paymentSelect.addEventListener('change', syncPayment);
   }
+  if (paymentAmountInput) {
+    paymentAmountInput.addEventListener('input', syncPaymentAmountWarning);
+    paymentAmountInput.addEventListener('change', syncPaymentAmountWarning);
+  }
 
   syncDelivery();
   syncPayment();
+  syncPaymentAmountWarning();
 });

@@ -1,0 +1,295 @@
+{% load form_extras %}
+{% if purchase %}
+<section class="space-y-5 rounded-2xl border border-slate-200 bg-white/80 p-5 text-sm text-slate-700">
+  <header class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ purchase.timeline_code }}</p>
+      <h2 class="text-lg font-semibold text-slate-900">{{ purchase.name }}</h2>
+    </div>
+    <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+      {{ purchase.get_status_display }}
+    </span>
+  </header>
+
+  <div class="grid gap-4 lg:grid-cols-2">
+    <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Contexto de la solicitud</p>
+      <dl class="mt-3 space-y-3 text-xs text-slate-600">
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Categoría</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.expense_type.name }}</dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Ámbito / soporte</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">
+            {{ purchase.scope_label }}
+            {% if purchase.support_document_type %}
+              · {{ purchase.support_document_type.name }}
+            {% endif %}
+          </dd>
+        </div>
+        {% if purchase.scope_area %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Tipo de área</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_scope_area_display }}</dd>
+          </div>
+        {% endif %}
+        {% if purchase.eta %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">ETA</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.eta|date:"Y-m-d" }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </article>
+
+    <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Resumen económico</p>
+      <dl class="mt-3 space-y-3 text-xs text-slate-600">
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">
+            {% if purchase.show_payment_breakdown %}
+              Monto aprobado
+            {% else %}
+              Total estimado
+            {% endif %}
+          </dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.currency }} {{ purchase.estimated_total|floatformat:0 }}</dd>
+        </div>
+        {% if purchase.show_payment_breakdown %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Monto pagado</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.currency }} {{ purchase.payment_amount|default_if_none:"0"|floatformat:0 }}</dd>
+          </div>
+        {% endif %}
+        {% if purchase.invoice_total %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Total factura</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.currency }} {{ purchase.invoice_total|floatformat:0 }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </article>
+  </div>
+
+  <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Proveedor y pago</p>
+    <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+      <div>
+        <dt class="font-semibold uppercase tracking-wide text-[11px]">Proveedor</dt>
+        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier.name }}</dd>
+      </div>
+      {% if purchase.requester %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Solicitante</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.requester.get_full_name|default:purchase.requester }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.payment_condition %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Condición de pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_condition_display }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.payment_method %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Medio de pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_method_display }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.payment_source %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Origen del pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_payment_source_display }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.payment_account %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Cuenta / referencia</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.payment_account }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.payment_date %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Fecha de pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.payment_date|date:"Y-m-d" }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+    {% if purchase.payment_notes %}
+      <p class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+        <span class="font-semibold">Notas de pago:</span> {{ purchase.payment_notes }}
+      </p>
+    {% endif %}
+    {% if purchase.supplier_account_holder_name or purchase.supplier_account_number or purchase.supplier_bank_name %}
+      <div class="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 text-[11px] text-slate-600 sm:grid-cols-2">
+        <p class="sm:col-span-2 font-semibold uppercase tracking-wide text-slate-500">Datos bancarios registrados</p>
+        {% if purchase.supplier_account_holder_name %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Titular</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_holder_name }}</dd>
+          </div>
+        {% endif %}
+        {% if purchase.supplier_account_holder_id %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Identificación</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_holder_id }}</dd>
+          </div>
+        {% endif %}
+        {% if purchase.supplier_account_type %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Tipo de cuenta</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_type|title }}</dd>
+          </div>
+        {% endif %}
+        {% if purchase.supplier_account_number %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Número de cuenta</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_account_number }}</dd>
+          </div>
+        {% endif %}
+        {% if purchase.supplier_bank_name %}
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-[11px]">Banco</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier_bank_name }}</dd>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </article>
+
+  {% if purchase.description %}
+    <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notas de la solicitud</p>
+      <p class="mt-2 text-sm text-slate-700">{{ purchase.description }}</p>
+    </article>
+  {% endif %}
+
+  {% if purchase.latest_approval_note and purchase.status != 'borrador' %}
+    <article class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Nota de aprobación</p>
+      <p class="mt-2 text-sm text-emerald-900">{{ purchase.latest_approval_note }}</p>
+    </article>
+  {% endif %}
+
+  {% with items=purchase.items.all %}
+    {% if items %}
+      <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Items solicitados</p>
+        <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2 text-left">Item</th>
+                <th class="px-3 py-2 text-right">Cantidad</th>
+                <th class="px-3 py-2 text-right">Valor unitario</th>
+                <th class="px-3 py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              {% for item in items %}
+                <tr>
+                  <td class="px-3 py-2 text-slate-900">{{ item.description }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.estimated_amount }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.quantity|multiply:item.estimated_amount|floatformat:2 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    {% endif %}
+  {% endwith %}
+
+  <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gestión de compra</p>
+    <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+      {% if purchase.purchase_date %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Fecha de compra</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.purchase_date|date:"Y-m-d" }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.order_number %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Orden</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.order_number }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.order_date %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Fecha de orden</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.order_date|date:"Y-m-d" }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.delivery_condition %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Condición de entrega</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_delivery_condition_display }}</dd>
+        </div>
+      {% endif %}
+      {% if purchase.shipping_eta %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Llegada estimada</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.shipping_eta|date:"Y-m-d" }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+    {% if purchase.shipping_notes %}
+      <p class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+        <span class="font-semibold">Notas de envío:</span> {{ purchase.shipping_notes }}
+      </p>
+    {% endif %}
+  </article>
+
+  <article class="rounded-xl border border-slate-100 bg-white/70 p-4">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recepción registrada</p>
+    {% with reception_items=purchase.items.all %}
+      {% if reception_items %}
+        <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2 text-left">Item</th>
+                <th class="px-3 py-2 text-right">Solicitado</th>
+                <th class="px-3 py-2 text-right">Recibido</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              {% for item in reception_items %}
+                <tr>
+                  <td class="px-3 py-2 text-slate-900">{{ item.description }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.received_quantity|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% if purchase.reception_notes %}
+      <p class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+        <span class="font-semibold">Notas de recepción:</span> {{ purchase.reception_notes }}
+      </p>
+    {% endif %}
+    {% with attachments=purchase.reception_attachments.all %}
+      {% if attachments %}
+        <div class="mt-3 space-y-2 text-[11px]">
+          <p class="font-semibold uppercase tracking-wide text-slate-500">Adjuntos</p>
+          <ul class="space-y-1 text-slate-600">
+            {% for attachment in attachments %}
+              <li>
+                <a href="{{ attachment.file.url }}" target="_blank" class="inline-flex items-center gap-2 text-brand hover:text-brand/80">
+                  <span aria-hidden="true">⤓</span> {{ attachment.filename }}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+  </article>
+</section>
+{% endif %}

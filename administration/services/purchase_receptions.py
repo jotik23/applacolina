@@ -88,7 +88,8 @@ class PurchaseReceptionService:
             purchase_item.received_quantity = item_payload.received_quantity
             purchase_item.save(update_fields=["received_quantity", "updated_at"])
         purchase.reception_notes = payload.notes
-        update_fields = ["reception_notes", "updated_at"]
+        purchase.reception_mismatch = any(item.quantity != item.received_quantity for item in purchase.items.all())
+        update_fields = ["reception_notes", "reception_mismatch", "updated_at"]
         if intent == "confirm_reception":
             purchase.status = PurchaseRequest.Status.RECEPTION
             update_fields.append("status")

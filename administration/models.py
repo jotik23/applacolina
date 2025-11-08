@@ -231,6 +231,12 @@ class PurchaseRequest(TimeStampedModel):
         ("accounting", Status.PAYMENT),
         ("archived", Status.ARCHIVED),
     )
+    POST_PAYMENT_STATUSES: ClassVar[set[str]] = {
+        Status.ORDERED,
+        Status.INVOICE,
+        Status.PAYMENT,
+        Status.ARCHIVED,
+    }
 
     timeline_code = models.CharField("Código", max_length=40, unique=True)
     name = models.CharField("Nombre", max_length=200)
@@ -303,6 +309,12 @@ class PurchaseRequest(TimeStampedModel):
         blank=True,
         null=True,
     )
+    payment_amount = models.DecimalField(
+        "Monto a pagar",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
     payment_account = models.CharField("Cuenta de pago", max_length=120, blank=True)
     payment_date = models.DateField("Fecha de pago", blank=True, null=True)
     payment_notes = models.TextField("Notas de pago", blank=True)
@@ -353,6 +365,10 @@ class PurchaseRequest(TimeStampedModel):
         verbose_name="Tipo de soporte",
         null=True,
         blank=True,
+    )
+    reception_mismatch = models.BooleanField(
+        "Recepción con diferencias",
+        default=False,
     )
 
     class Meta:
@@ -427,6 +443,14 @@ class PurchaseRequest(TimeStampedModel):
         if approval and approval.comments:
             return approval.comments
         return ''
+
+    @property
+    def has_reception_anomalies(self) -> bool:
+        return self.reception_mismatch
+
+    @property
+    def show_payment_breakdown(self) -> bool:
+        return self.status in self.POST_PAYMENT_STATUSES
 
 
 class PurchaseItem(TimeStampedModel):

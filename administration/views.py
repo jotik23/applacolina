@@ -304,6 +304,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
     def _handle_payment_panel_post(self) -> HttpResponse:
         intent = self.request.POST.get('intent') or 'save_payment'
         purchase_id = _parse_int(self.request.POST.get('purchase'))
+        if intent == 'reopen_request':
+            return self._reopen_purchase_request(purchase_id=purchase_id)
         payload, overrides, field_errors = self._build_payment_payload(purchase_id=purchase_id, intent=intent)
         if field_errors or payload is None:
             return self._render_payment_form_errors(
@@ -702,6 +704,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         purchase_id: int | None,
         intent: str,
     ) -> tuple[PurchasePaymentPayload | None, dict, dict[str, list[str]]]:
+        payment_amount_raw = (self.request.POST.get('payment_amount') or '').strip()
         payment_method = (self.request.POST.get('payment_method') or '').strip()
         payment_condition = (self.request.POST.get('payment_condition') or '').strip()
         payment_source = (self.request.POST.get('payment_source') or '').strip()
@@ -712,6 +715,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         supplier_account_number = (self.request.POST.get('supplier_account_number') or '').strip()
         supplier_bank_name = (self.request.POST.get('supplier_bank_name') or '').strip()
         overrides = {
+            'payment_amount': payment_amount_raw,
             'payment_method': payment_method,
             'payment_condition': payment_condition,
             'payment_source': payment_source,
@@ -723,6 +727,11 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'supplier_bank_name': supplier_bank_name,
         }
         field_errors: dict[str, list[str]] = {}
+        payment_amount = self._parse_decimal(payment_amount_raw, allow_empty=False)
+        if payment_amount is None:
+            field_errors.setdefault('payment_amount', []).append("Ingresa un monto válido.")
+        elif payment_amount <= Decimal('0'):
+            field_errors.setdefault('payment_amount', []).append("El monto debe ser mayor que cero.")
         if not purchase_id:
             field_errors.setdefault('non_field', []).append("Selecciona una solicitud para registrar el pago.")
         allowed_conditions = set(PurchaseRequest.PaymentCondition.values)
@@ -759,9 +768,10 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             if supplier_account_type and supplier_account_type not in account_types:
                 field_errors.setdefault('supplier_account_type', []).append("Selecciona un tipo de cuenta válido.")
         payload = None
-        if purchase_id and not field_errors:
+        if purchase_id and not field_errors and payment_amount is not None:
             payload = PurchasePaymentPayload(
                 purchase_id=purchase_id,
+                payment_amount=payment_amount,
                 payment_method=payment_method,
                 payment_condition=payment_condition,
                 payment_source=payment_source,
@@ -978,8 +988,20 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             if purchase and purchase.supplier_bank_name
             else (supplier.bank_name if supplier else ''),
         }
+        if purchase:
+            baseline_amount = purchase.payment_amount or purchase.estimated_total or Decimal('0.00')
+        else:
+            baseline_amount = Decimal('0.00')
+        initial.setdefault('payment_amount', f"{baseline_amount:.2f}")
         if overrides:
             initial.update({k: v for k, v in overrides.items() if v is not None})
+        amount_exceeds_estimate = False
+        if purchase:
+            try:
+                posted_amount = Decimal(str(initial.get('payment_amount') or '0'))
+            except (InvalidOperation, TypeError):
+                posted_amount = Decimal('0')
+            amount_exceeds_estimate = posted_amount > (purchase.estimated_total or Decimal('0'))
         context = {
             'purchase_payment_form': {
                 'initial': initial,
@@ -988,6 +1010,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'payment_sources': PurchaseRequest.PaymentSource.choices,
                 'account_types': Supplier.ACCOUNT_TYPE_CHOICES,
                 'purchase': purchase,
+                'estimated_total': purchase.estimated_total if purchase else Decimal('0.00'),
+                'amount_exceeds_estimate': amount_exceeds_estimate,
             },
             'purchase_payment_field_errors': field_errors,
         }
@@ -1013,6 +1037,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                         'requested_quantity': item.quantity,
                         'received_quantity': item.received_quantity,
                         'pending_quantity': pending if pending > 0 else Decimal('0'),
+                        'difference': item.received_quantity - item.quantity,
                     }
                 )
         if overrides and overrides.get('items'):
@@ -1028,6 +1053,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                         item['received_quantity'] = received_value
                         pending = item['requested_quantity'] - received_value
                         item['pending_quantity'] = pending if pending > 0 else Decimal('0')
+                        item['difference'] = received_value - item['requested_quantity']
         form = {
             'items': items,
             'notes': overrides.get('notes') if overrides else (purchase.reception_notes if purchase else ''),

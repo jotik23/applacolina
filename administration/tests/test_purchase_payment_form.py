@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -44,6 +46,7 @@ class PurchasePaymentFormSubmissionTests(TestCase):
             status=PurchaseRequest.Status.RECEPTION,
             payment_condition=PurchaseRequest.PaymentCondition.CREDIT,
             payment_method=PurchaseRequest.PaymentMethod.TRANSFER,
+            estimated_total=Decimal('100000.00'),
         )
 
     def test_save_payment_updates_purchase_fields(self) -> None:
@@ -63,6 +66,7 @@ class PurchasePaymentFormSubmissionTests(TestCase):
         self.assertEqual('Banco Uno', self.purchase.supplier_bank_name)
         self.assertEqual('555666', self.supplier.account_number)
         self.assertEqual('Banco Uno', self.supplier.bank_name)
+        self.assertEqual(Decimal('95000.00'), self.purchase.payment_amount)
 
     def test_confirm_payment_moves_to_support_and_marks_credit_paid(self) -> None:
         response = self.client.post(
@@ -78,6 +82,29 @@ class PurchasePaymentFormSubmissionTests(TestCase):
         self.assertEqual(PurchaseRequest.Status.INVOICE, self.purchase.status)
         self.assertEqual(PurchaseRequest.PaymentCondition.CREDIT_PAID, self.purchase.payment_condition)
         self.assertEqual(timezone.localdate(), self.purchase.payment_date)
+
+    def test_confirm_payment_blocked_when_amount_exceeds_estimate(self) -> None:
+        response = self.client.post(
+            self._url(),
+            data=self._payload(intent='confirm_payment', payment_amount='120000'),
+        )
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, "supera el total estimado")
+        self.purchase.refresh_from_db()
+        self.assertEqual(PurchaseRequest.Status.RECEPTION, self.purchase.status)
+
+    def test_reopen_request_from_payment_panel(self) -> None:
+        response = self.client.post(
+            self._url(),
+            data=self._payload(intent='reopen_request'),
+        )
+        self.assertRedirects(
+            response,
+            f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}&panel=request&purchase={self.purchase.pk}",
+            fetch_redirect_response=False,
+        )
+        self.purchase.refresh_from_db()
+        self.assertEqual(PurchaseRequest.Status.DRAFT, self.purchase.status)
 
     def test_cash_payment_does_not_require_bank_information(self) -> None:
         response = self.client.post(
@@ -109,6 +136,7 @@ class PurchasePaymentFormSubmissionTests(TestCase):
             'panel': 'payment',
             'scope': PurchaseRequest.Status.RECEPTION,
             'purchase': str(self.purchase.pk),
+            'payment_amount': '95000',
             'payment_method': PurchaseRequest.PaymentMethod.TRANSFER,
             'payment_condition': PurchaseRequest.PaymentCondition.CREDIT,
             'payment_source': PurchaseRequest.PaymentSource.TREASURY,

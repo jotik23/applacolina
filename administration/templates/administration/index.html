@@ -74,7 +74,7 @@
               <tbody class="divide-y divide-slate-100 bg-white">
                 {% if purchases_list %}
                   {% for purchase in purchases_list %}
-                    <tr class="align-top hover:bg-slate-50/70">
+                    <tr class="align-top hover:bg-slate-50/70 {% if purchase.has_reception_mismatch %}bg-amber-50/60 ring-1 ring-amber-200{% endif %}">
                       <td class="px-6 py-4">
                         <div class="flex flex-col gap-1">
                           <div class="flex items-center gap-2">
@@ -84,6 +84,11 @@
                             </span>
                           </div>
                           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ purchase.timeline_code }}</p>
+                          {% if purchase.has_reception_mismatch %}
+                            <span class="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                              Diferencias en recepción
+                            </span>
+                          {% endif %}
                           <div class="text-xs text-slate-500">
                             <span class="font-semibold text-slate-700">{{ purchase.requester }}</span>
                             ·
@@ -134,8 +139,21 @@
                           {% endif %}
                         </td>
                       {% endif %}
-                      <td class="px-6 py-4 text-right font-semibold text-slate-900 align-middle">
-                        {{ purchase.total_display }}
+                      <td class="px-6 py-4 text-right align-middle">
+                        {% if purchase.show_payment_breakdown %}
+                          <div class="space-y-2 text-right">
+                            <div>
+                              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monto aprobado</p>
+                              <p class="text-sm font-semibold text-slate-900">{{ purchase.total_display }}</p>
+                            </div>
+                            <div>
+                              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monto pagado</p>
+                              <p class="text-sm font-semibold text-slate-900">{{ purchase.paid_display }}</p>
+                            </div>
+                          </div>
+                        {% else %}
+                          <p class="text-sm font-semibold text-slate-900">{{ purchase.total_display }}</p>
+                        {% endif %}
                       </td>
                       <td class="px-6 py-4 text-right align-middle">
                         <div class="inline-flex flex-col gap-2 text-right">
