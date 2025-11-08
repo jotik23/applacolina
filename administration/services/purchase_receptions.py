@@ -5,6 +5,8 @@ from decimal import Decimal
 from typing import Iterable, Sequence
 
 from django.db import transaction
+from django.db.models import F
+from django.utils import timezone
 
 from administration.models import PurchaseItem, PurchaseReceptionAttachment, PurchaseRequest
 
@@ -63,8 +65,6 @@ class PurchaseReceptionService:
     ) -> tuple[dict[str, list[str]], dict[int, list[str]]]:
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, list[str]] = {}
-        if purchase.status != PurchaseRequest.Status.RECEPTION:
-            field_errors.setdefault("non_field", []).append("Solo puedes registrar recepción mientras la compra está en Revisar pago.")
         items_by_id = {item.id: item for item in purchase.items.all()}
         if not payload.items:
             field_errors.setdefault("non_field", []).append("Debes registrar al menos un item.")
@@ -81,18 +81,25 @@ class PurchaseReceptionService:
 
     def _persist_reception(self, purchase: PurchaseRequest, payload: PurchaseReceptionPayload, *, intent: str) -> None:
         items_by_id = {item.id: item for item in purchase.items.all()}
+        items_to_update: list[PurchaseItem] = []
         for item_payload in payload.items:
             purchase_item = items_by_id.get(item_payload.item_id)
             if not purchase_item:
                 continue
             purchase_item.received_quantity = item_payload.received_quantity
-            purchase_item.save(update_fields=["received_quantity", "updated_at"])
+            purchase_item.updated_at = timezone.now()
+            items_to_update.append(purchase_item)
+        if items_to_update:
+            PurchaseItem.objects.bulk_update(items_to_update, ["received_quantity", "updated_at"])
         purchase.reception_notes = payload.notes
-        purchase.reception_mismatch = any(item.quantity != item.received_quantity for item in purchase.items.all())
+        purchase.reception_mismatch = purchase.items.exclude(quantity=F("received_quantity")).exists()
         update_fields = ["reception_notes", "reception_mismatch", "updated_at"]
         if intent == "confirm_reception":
-            purchase.status = PurchaseRequest.Status.RECEPTION
-            update_fields.append("status")
+            delivery_was_shipping = purchase.delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING
+            if delivery_was_shipping:
+                purchase.delivery_condition = PurchaseRequest.DeliveryCondition.IMMEDIATE
+                purchase.shipping_eta = None
+                update_fields.extend(["delivery_condition", "shipping_eta"])
         purchase.save(update_fields=update_fields)
 
     def _persist_attachments(self, purchase: PurchaseRequest, attachments: Iterable) -> None:

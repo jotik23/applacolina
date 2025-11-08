@@ -1,33 +1,58 @@
-const receptionForms = document.querySelectorAll('[data-purchase-reception-form]');
+const highlightClasses = ['bg-amber-50/60', 'ring-1', 'ring-amber-200'];
 
-function formatNumber(value) {
-  const number = Number(value);
-  if (Number.isNaN(number)) {
-    return '0';
+function updateRowState(row) {
+  const requested = Number(row.dataset.requested || 0);
+  const input = row.querySelector('input[name*="[received_quantity]"]');
+  const mismatchBadge = row.querySelector('[data-reception-row-alert]');
+  if (!input) {
+    highlightClasses.forEach((cls) => row.classList.remove(cls));
+    if (mismatchBadge) {
+      mismatchBadge.hidden = true;
+    }
+    return false;
   }
-  return number.toLocaleString('es-CO', { minimumFractionDigits: number % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
+  const received = parseFloat(input.value);
+  const normalizedReceived = Number.isNaN(received) ? 0 : received;
+  const mismatch = Math.abs(requested - normalizedReceived) > 0.0001;
+  highlightClasses.forEach((cls) => row.classList.toggle(cls, mismatch));
+  if (mismatchBadge) {
+    mismatchBadge.hidden = !mismatch;
+  }
+  return mismatch;
 }
 
-receptionForms.forEach((root) => {
-  const rows = root.querySelectorAll('[data-reception-row]');
-  rows.forEach((row) => {
-    const requested = Number(row.dataset.requested || 0);
-    const input = row.querySelector('input[name*="[received_quantity]"]');
-    const pendingCell = row.querySelector('[data-pending-cell]');
+function initReceptionForms() {
+  const receptionForms = document.querySelectorAll('[data-purchase-reception-form]');
+  receptionForms.forEach((root) => {
+    const rows = Array.from(root.querySelectorAll('[data-reception-row]'));
+    const mismatchAlert = root.querySelector('[data-reception-mismatch-alert]');
 
-    function syncPending() {
-      if (!pendingCell || !input) {
+    function refreshFormState() {
+      let hasMismatch = false;
+      rows.forEach((row) => {
+        const rowMismatch = updateRowState(row);
+        hasMismatch = hasMismatch || rowMismatch;
+      });
+      if (mismatchAlert) {
+        mismatchAlert.hidden = !hasMismatch;
+      }
+    }
+
+    rows.forEach((row) => {
+      const input = row.querySelector('input[name*="[received_quantity]"]');
+      if (!input) {
         return;
       }
-      const received = parseFloat(input.value);
-      const pending = requested - (Number.isNaN(received) ? 0 : received);
-      pendingCell.textContent = formatNumber(pending);
-    }
+      input.addEventListener('input', refreshFormState);
+      input.addEventListener('change', refreshFormState);
+    });
 
-    if (input) {
-      input.addEventListener('input', syncPending);
-      input.addEventListener('change', syncPending);
-      syncPending();
-    }
+    refreshFormState();
   });
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initReceptionForms);
+} else {
+  initReceptionForms();
+}

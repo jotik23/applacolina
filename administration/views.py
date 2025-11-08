@@ -1028,15 +1028,13 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         purchase = panel_state.purchase if panel_state else None
         items: list[dict[str, Decimal | int | str]] = []
         if purchase:
-            for item in purchase.items.all():
-                pending = item.quantity - item.received_quantity
+            for item in purchase.items.all().order_by('id'):
                 items.append(
                     {
                         'id': item.id,
                         'description': item.description,
                         'requested_quantity': item.quantity,
                         'received_quantity': item.received_quantity,
-                        'pending_quantity': pending if pending > 0 else Decimal('0'),
                         'difference': item.received_quantity - item.quantity,
                     }
                 )
@@ -1051,13 +1049,13 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                         except (InvalidOperation, TypeError):
                             continue
                         item['received_quantity'] = received_value
-                        pending = item['requested_quantity'] - received_value
-                        item['pending_quantity'] = pending if pending > 0 else Decimal('0')
                         item['difference'] = received_value - item['requested_quantity']
+        has_mismatch = any(item['difference'] for item in items)
         form = {
             'items': items,
             'notes': overrides.get('notes') if overrides else (purchase.reception_notes if purchase else ''),
             'attachments': purchase.reception_attachments.all() if purchase else [],
+            'has_mismatch': has_mismatch,
         }
         return {
             'purchase_reception_form': form,

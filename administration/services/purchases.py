@@ -202,7 +202,7 @@ ACTION_BY_STATUS = {
 def get_dashboard_state(*, scope_code: str | None, panel_code: str | None, purchase_pk: int | None) -> PurchaseDashboardState:
     scopes = _build_scopes()
     selected_scope = _find_scope(scopes, scope_code or scopes[0].code)
-    purchases = tuple(_build_purchase_record(p) for p in _query_purchases(selected_scope.code))
+    purchases = tuple(_build_purchase_record(p, scope_code=selected_scope.code) for p in _query_purchases(selected_scope.code))
     panel_state = _resolve_panel(panel_code, purchase_pk)
     activity = _recent_activity()
     return PurchaseDashboardState(
@@ -285,7 +285,7 @@ def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
     )
 
 
-def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
+def _build_purchase_record(purchase: PurchaseRequest, *, scope_code: str | None = None) -> PurchaseRecord:
     requester_name = ""
     if purchase.requester:
         requester_name = purchase.requester.get_full_name() or purchase.requester.get_username()
@@ -303,6 +303,12 @@ def _build_purchase_record(purchase: PurchaseRequest) -> PurchaseRecord:
     )
     current_stage = next((stage for stage in stage_indicators if stage.status == 'active'), None)
     action = ACTION_BY_STATUS.get(purchase.status)
+    is_waiting_scope = scope_code == WAITING_SCOPE_CODE
+    if (
+        is_waiting_scope
+        and purchase.delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING
+    ):
+        action = PurchaseAction('Registrar entrega', 'reception', 'registrar_entrega')
     approvals = tuple(purchase.approvals.all())
     approvals_received = tuple(
         _format_approval_actor(approval) for approval in approvals if approval.status == PurchaseApproval.Status.APPROVED
@@ -354,7 +360,10 @@ def _resolve_panel(panel_code: str | None, purchase_pk: int | None) -> PurchaseP
         return None
     purchase = None
     if purchase_pk:
-        purchase = PurchaseRequest.objects.filter(pk=purchase_pk).first()
+        queryset = PurchaseRequest.objects.all()
+        if panel.code == 'reception':
+            queryset = queryset.prefetch_related('items', 'reception_attachments')
+        purchase = queryset.filter(pk=purchase_pk).first()
     return PurchasePanelState(panel=panel, purchase=purchase)
 
 
