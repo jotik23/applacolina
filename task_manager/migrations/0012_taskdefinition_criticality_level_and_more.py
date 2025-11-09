@@ -10,14 +10,29 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='taskdefinition',
-            name='criticality_level',
-            field=models.CharField(choices=[('low', 'Baja'), ('medium', 'Media'), ('high', 'Alta'), ('critical', 'Crítica')], default='medium', help_text='Define el nivel de impacto operativo si la tarea no se ejecuta.', max_length=16, verbose_name='Nivel de criticidad'),
-        ),
-        migrations.AddField(
-            model_name='taskdefinition',
-            name='is_mandatory',
-            field=models.BooleanField(default=False, help_text='Indica si la ejecución de la tarea es obligatoria.', verbose_name='Obligatoria'),
-        ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.AddField(
+                    model_name='taskdefinition',
+                    name='criticality_level',
+                    field=models.CharField(
+                        choices=[('low', 'Baja'), ('medium', 'Media'), ('high', 'Alta'), ('critical', 'Crítica')],
+                        default='medium',
+                        help_text='Define el nivel de impacto operativo si la tarea no se ejecuta.',
+                        max_length=16,
+                        verbose_name='Nivel de criticidad',
+                    ),
+                ),
+                migrations.AddField(
+                    model_name='taskdefinition',
+                    name='is_mandatory',
+                    field=models.BooleanField(
+                        default=False,
+                        help_text='Indica si la ejecución de la tarea es obligatoria.',
+                        verbose_name='Obligatoria',
+                    ),
+                ),
+            ],
+        )
     ]
