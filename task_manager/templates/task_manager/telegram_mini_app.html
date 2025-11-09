@@ -200,7 +200,7 @@
   >
     <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 py-6">
       {% if mini_app_access_granted and telegram_mini_app %}
-      <header class="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur">
+      <header class="relative rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur overflow-hidden">
         <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div class="flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
             <div class="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
@@ -252,20 +252,6 @@
             </form>
             {% endif %}
           </div>
-          {% if mini_app_pwa_config.vapid_public_key %}
-          <div class="flex w-full flex-col items-center gap-1 text-center sm:w-auto sm:items-end sm:text-right">
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 shadow-sm shadow-emerald-100/80 transition hover:border-emerald-300 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
-              data-enable-push
-              data-label-default="Activar notificaciones"
-            >
-              <span aria-hidden="true">🔔</span>
-              <span data-push-label>Activar notificaciones</span>
-            </button>
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-push-status></p>
-          </div>
-          {% endif %}
           {% if mini_app_card_permissions.motivation %}
           <div class="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-[220px]">
             <div
@@ -344,6 +330,42 @@
           </div>
           {% endif %}
         </div>
+        {% if mini_app_pwa_config.vapid_public_key %}
+        <div class="absolute right-5 top-5 flex flex-col items-center gap-1 text-center text-slate-500">
+          <button
+            type="button"
+            class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-white/95 text-rose-600 shadow shadow-rose-100/70 transition hover:border-rose-300 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-200 disabled:cursor-not-allowed"
+            data-enable-push
+            data-label-default="Notificaciones desactivadas"
+            aria-live="polite"
+          >
+            <span class="sr-only" data-push-label>Notificaciones desactivadas</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-5 w-5"
+              aria-hidden="true"
+              data-push-icon
+            >
+              <path d="M8 10V8a4 4 0 0 1 8 0v2" />
+              <path d="M6 10.5C6 7 8 4 12 4s6 3 6 6.5v3.5l1.5 1.5a1 1 0 0 1-.7 1.7H5.2a1 1 0 0 1-.7-1.7L6 14v-3.5z" />
+              <path d="M10 19a2 2 0 0 0 4 0" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition hover:text-rose-600 focus:outline-none"
+            data-disable-push
+          >
+            Suspender
+          </button>
+        </div>
+        {% endif %}
       </header>
 {% include "task_manager/includes/shift_confirmation_card.html" with shift=telegram_mini_app.shift_confirmation shift_empty=telegram_mini_app.shift_confirmation_empty %}
       <div
@@ -8538,35 +8560,75 @@
     <script>
       (function () {
         const pushButton = document.querySelector('[data-enable-push]');
-        const statusNode = document.querySelector('[data-push-status]');
         if (!pushButton) {
           return;
         }
 
         const hasBrowserSupport = 'Notification' in window && 'serviceWorker' in navigator;
-        const defaultLabel = pushButton.getAttribute('data-label-default') || pushButton.textContent;
+        const labelNode = pushButton.querySelector('[data-push-label]');
+        const pushIcon = pushButton.querySelector('[data-push-icon]');
+        const disableButton = document.querySelector('[data-disable-push]');
+        const defaultAnnouncement = (labelNode && labelNode.textContent) || 'Notificaciones desactivadas';
+        const variantButtonClasses = [
+          'text-rose-600',
+          'text-emerald-600',
+          'text-amber-600',
+          'border-rose-200',
+          'border-emerald-200',
+          'border-amber-200',
+          'shadow-rose-100/70',
+          'shadow-emerald-100/70',
+          'shadow-amber-100/70',
+          'hover:border-rose-300',
+          'hover:border-emerald-200',
+          'hover:border-amber-200',
+          'hover:text-rose-700',
+          'hover:text-emerald-700',
+          'hover:text-amber-700',
+        ];
+        const variantIconClasses = ['text-rose-600', 'text-emerald-600', 'text-amber-600'];
+        const stateStyles = {
+          idle: {
+            button: ['text-rose-600', 'border-rose-200', 'shadow-rose-100/70', 'hover:border-rose-300', 'hover:text-rose-700'],
+            icon: 'text-rose-600',
+            announce: 'Notificaciones desactivadas. Pulsa para activarlas.',
+            disabled: false,
+          },
+          loading: {
+            button: ['text-amber-600', 'border-amber-200', 'shadow-amber-100/70', 'hover:border-amber-200', 'hover:text-amber-700'],
+            icon: 'text-amber-600',
+            announce: 'Activando notificaciones…',
+            disabled: true,
+          },
+          active: {
+            button: ['text-emerald-600', 'border-emerald-200', 'shadow-emerald-100/70', 'hover:border-emerald-200', 'hover:text-emerald-700'],
+            icon: 'text-emerald-600',
+            announce: 'Notificaciones activadas.',
+            disabled: true,
+          },
+          error: {
+            button: ['text-rose-600', 'border-rose-200', 'shadow-rose-100/70', 'hover:border-rose-300', 'hover:text-rose-700'],
+            icon: 'text-rose-600',
+            announce: 'No se pudo activar. Intenta nuevamente.',
+            disabled: false,
+          },
+        };
 
-        function setStatus(message, tone) {
-          if (!statusNode) {
-            return;
+        function applyVisualState(stateKey, overrideAnnouncement) {
+          const style = stateStyles[stateKey] || stateStyles.idle;
+          pushButton.classList.remove(...variantButtonClasses);
+          pushButton.classList.add(...style.button);
+          if (pushIcon) {
+            pushIcon.classList.remove(...variantIconClasses);
+            pushIcon.classList.add(style.icon);
           }
-          statusNode.textContent = message || '';
-          statusNode.dataset.tone = tone || '';
-          statusNode.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
-          if (tone === 'success') {
-            statusNode.classList.add('text-emerald-600');
-          } else if (tone === 'error') {
-            statusNode.classList.add('text-rose-600');
-          } else {
-            statusNode.classList.add('text-slate-500');
-          }
-        }
-
-        function setButtonState({ disabled, label }) {
-          const labelNode = pushButton.querySelector('[data-push-label]');
-          pushButton.disabled = Boolean(disabled);
+          const announcement = overrideAnnouncement || style.announce || defaultAnnouncement;
           if (labelNode) {
-            labelNode.textContent = label || defaultLabel;
+            labelNode.textContent = announcement;
+          }
+          pushButton.disabled = Boolean(style.disabled);
+          if (disableButton) {
+            disableButton.hidden = stateKey !== 'active';
           }
         }
 
@@ -8589,24 +8651,20 @@
         }
 
         async function ensureSubscription() {
-          setStatus('Activando notificaciones…', 'info');
-          setButtonState({ disabled: true, label: 'Activando…' });
+          applyVisualState('loading');
           try {
             const bridge = await waitForBridge();
             await bridge.ensurePushSubscription();
-            setStatus('Notificaciones activadas', 'success');
-            setButtonState({ disabled: true, label: 'Notificaciones activas' });
+            applyVisualState('active');
           } catch (error) {
             console.error('No se pudo registrar la suscripción push.', error);
-            setStatus('No se pudo activar. Intenta de nuevo.', 'error');
-            setButtonState({ disabled: false, label: defaultLabel });
+            applyVisualState('error');
           }
         }
 
         async function requestPermission() {
           if (!hasBrowserSupport) {
-            setStatus('Este dispositivo no soporta notificaciones.', 'error');
-            setButtonState({ disabled: true, label: 'No disponible' });
+            applyVisualState('error', 'Este dispositivo no soporta notificaciones.');
             return;
           }
           if (Notification.permission === 'granted') {
@@ -8619,26 +8677,50 @@
             return;
           }
           if (permission === 'denied') {
-            setStatus('Debes permitir notificaciones en el navegador.', 'error');
+            applyVisualState('error', 'Debes permitir notificaciones en el navegador.');
           } else {
-            setStatus('Permiso pendiente. Intenta nuevamente.', 'info');
+            applyVisualState('loading', 'Permiso pendiente. Vuelve a intentarlo.');
           }
         }
 
         if (!hasBrowserSupport) {
-          setStatus('Notificaciones no soportadas.', 'error');
-          setButtonState({ disabled: true, label: 'No disponible' });
+          applyVisualState('error', 'Notificaciones no soportadas.');
           return;
         }
 
         if (Notification.permission === 'granted') {
-          setButtonState({ disabled: true, label: 'Verificando…' });
+          applyVisualState('loading', 'Verificando suscripción…');
           ensureSubscription();
+        } else {
+          applyVisualState('idle');
         }
 
         pushButton.addEventListener('click', function () {
           requestPermission();
         });
+
+        if (disableButton) {
+          disableButton.addEventListener('click', async function () {
+            if (!hasBrowserSupport) {
+              return;
+            }
+            pushButton.disabled = true;
+            if (labelNode) {
+              labelNode.textContent = 'Desactivando notificaciones…';
+            }
+            try {
+              const registration = await navigator.serviceWorker.ready;
+              const current = await registration.pushManager.getSubscription();
+              if (current) {
+                await current.unsubscribe();
+              }
+              applyVisualState('idle');
+            } catch (error) {
+              console.warn('No se pudo cancelar la suscripción push.', error);
+              applyVisualState('error', 'No pudimos suspenderla. Intenta nuevamente.');
+            }
+          });
+        }
       })();
     </script>
     <script src="{% static 'task_manager/js/production_card.js' %}" defer></script>
