@@ -113,6 +113,24 @@
           >{{ form.initial.shipping_notes }}</textarea>
         </label>
       </div>
+      <label class="text-xs font-semibold text-slate-500 lg:col-span-2">
+        Gestor asignado
+        <select
+          name="assigned_manager"
+          class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none"
+          {% if not form.manager_is_editable %}disabled{% endif %}
+        >
+          <option value="">Selecciona un gestor</option>
+          {% for manager in form.manager_options %}
+            <option value="{{ manager.id }}" {% if manager.id == form.initial.assigned_manager_id %}selected{% endif %}>
+              {{ manager.name }}
+            </option>
+          {% endfor %}
+        </select>
+        {% if purchase_order_field_errors.assigned_manager %}
+          <p class="mt-1 text-[11px] font-semibold text-red-600">{{ purchase_order_field_errors.assigned_manager.0 }}</p>
+        {% endif %}
+      </label>
     </div>
   </article>
 

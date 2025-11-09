@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -23,6 +24,7 @@ class PurchaseOrderPayload:
     supplier_account_type: str
     supplier_account_number: str
     supplier_bank_name: str
+    assigned_manager_id: int | None = None
 
 
 class PurchaseOrderValidationError(Exception):
@@ -87,6 +89,10 @@ class PurchaseOrderService:
                 errors.setdefault("supplier_account_number", []).append("Ingresa el número de cuenta.")
             if not payload.supplier_bank_name:
                 errors.setdefault("supplier_bank_name", []).append("Ingresa el banco.")
+        if payload.assigned_manager_id:
+            user_model = get_user_model()
+            if not user_model.objects.filter(pk=payload.assigned_manager_id).only("pk").exists():
+                errors.setdefault("assigned_manager", []).append("Selecciona un gestor válido.")
         return errors
 
     def _persist_purchase(self, purchase: PurchaseRequest, payload: PurchaseOrderPayload, *, intent: str) -> None:
@@ -101,6 +107,10 @@ class PurchaseOrderService:
         purchase.payment_condition = payload.payment_condition
         purchase.payment_method = payload.payment_method
         self._sync_payment_date(purchase, payload.payment_condition)
+        if payload.assigned_manager_id:
+            purchase.assigned_manager_id = payload.assigned_manager_id
+        elif not purchase.assigned_manager_id and purchase.requester_id:
+            purchase.assigned_manager_id = purchase.requester_id
         if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
             purchase.supplier_account_holder_id = payload.supplier_account_holder_id
             purchase.supplier_account_holder_name = payload.supplier_account_holder_name

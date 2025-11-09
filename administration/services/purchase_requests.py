@@ -5,6 +5,7 @@ from decimal import Decimal
 import re
 from typing import Iterable, Sequence
 
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -42,6 +43,7 @@ class PurchaseRequestPayload:
     scope_chicken_house_id: int | None
     scope_batch_code: str
     scope_area: str
+    assigned_manager_id: int | None = None
 
 
 class PurchaseRequestValidationError(Exception):
@@ -166,6 +168,18 @@ class PurchaseRequestSubmissionService:
             if not supplier:
                 field_errors["supplier"] = ["El proveedor seleccionado ya no existe."]
 
+        user_model = get_user_model()
+        if payload.assigned_manager_id:
+            if not user_model.objects.filter(pk=payload.assigned_manager_id).only("pk").exists():
+                field_errors["assigned_manager"] = ["Selecciona un gestor válido."]
+        else:
+            if purchase and purchase.assigned_manager_id:
+                payload.assigned_manager_id = purchase.assigned_manager_id
+            elif purchase and purchase.requester_id:
+                payload.assigned_manager_id = purchase.requester_id
+            elif getattr(self.actor, "is_authenticated", False):
+                payload.assigned_manager_id = getattr(self.actor, "pk", None)
+
         farm = None
         if payload.scope_farm_id:
             farm = Farm.objects.filter(pk=payload.scope_farm_id).first()
@@ -265,6 +279,15 @@ class PurchaseRequestSubmissionService:
         purchase.scope_area = payload.scope_area
         if not purchase.requester_id and getattr(self.actor, "is_authenticated", False):
             purchase.requester = self.actor
+        manager_id = payload.assigned_manager_id
+        if not manager_id:
+            if purchase.assigned_manager_id:
+                manager_id = purchase.assigned_manager_id
+            elif purchase.requester_id:
+                manager_id = purchase.requester_id
+            elif getattr(self.actor, "is_authenticated", False):
+                manager_id = getattr(self.actor, "pk", None)
+        purchase.assigned_manager_id = manager_id
         purchase.status = PurchaseRequest.Status.DRAFT
         purchase.currency = purchase.currency or "COP"
         self._save_with_code(purchase, force_code=is_new)

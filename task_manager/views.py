@@ -3334,6 +3334,7 @@ def mini_app_purchase_request_view(request):
         scope_chicken_house_id=scope_house_id,
         scope_batch_code=scope_batch_code,
         scope_area=scope_area,
+        assigned_manager_id=user.pk if user and getattr(user, "pk", None) else None,
     )
 
     action = (payload.get("action") or "").strip().lower()
@@ -3385,7 +3386,11 @@ def mini_app_purchase_request_modify_view(request, pk: int):
             status=403,
         )
 
-    purchase = PurchaseRequest.objects.filter(pk=pk, requester=user).first()
+    purchase = (
+        PurchaseRequest.objects.filter(pk=pk)
+        .filter(Q(requester=user) | Q(assigned_manager=user))
+        .first()
+    )
     if not purchase:
         return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
 
@@ -3436,7 +3441,11 @@ def mini_app_purchase_order_view(request, pk: int):
             status=403,
         )
 
-    purchase = PurchaseRequest.objects.filter(pk=pk, requester=user).first()
+    purchase = (
+        PurchaseRequest.objects.filter(pk=pk)
+        .filter(Q(requester=user) | Q(assigned_manager=user))
+        .first()
+    )
     if not purchase:
         return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
 
@@ -3501,7 +3510,11 @@ def mini_app_purchase_finalize_view(request, pk: int):
             status=403,
         )
 
-    purchase = PurchaseRequest.objects.filter(pk=pk, requester=user).first()
+    purchase = (
+        PurchaseRequest.objects.filter(pk=pk)
+        .filter(Q(requester=user) | Q(assigned_manager=user))
+        .first()
+    )
     if not purchase:
         return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
 

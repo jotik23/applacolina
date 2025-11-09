@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional, Tuple
 
-from django.db.models import Count, Prefetch, Sum
+from django.db.models import Count, Prefetch, Sum, Q
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -245,7 +245,10 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
         return None
 
     queryset = (
-        PurchaseRequest.objects.filter(requester=user, status__in=OVERVIEW_ALLOWED_STATUSES)
+        PurchaseRequest.objects.filter(
+            Q(requester=user) | Q(assigned_manager=user),
+            status__in=OVERVIEW_ALLOWED_STATUSES,
+        )
         .select_related("expense_type", "supplier")
         .prefetch_related(
             Prefetch(
@@ -323,7 +326,7 @@ def build_purchase_management_card(*, user: Optional[UserProfile]) -> Optional[P
         return None
 
     purchase = (
-        PurchaseRequest.objects.filter(requester=user, status__in=MANAGEMENT_STATUSES)
+        PurchaseRequest.objects.filter(assigned_manager=user, status__in=MANAGEMENT_STATUSES)
         .select_related("supplier")
         .prefetch_related(
             Prefetch(

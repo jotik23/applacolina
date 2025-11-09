@@ -247,6 +247,14 @@ class PurchaseRequest(TimeStampedModel):
         related_name="purchase_requests",
         verbose_name="Solicitante",
     )
+    assigned_manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="managed_purchase_requests",
+        verbose_name="Gestor asignado",
+    )
     supplier = models.ForeignKey(
         Supplier,
         on_delete=models.PROTECT,

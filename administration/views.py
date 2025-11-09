@@ -20,6 +20,7 @@ from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
 from production.models import BirdBatch, ChickenHouse, Farm
+from personal.models import UserProfile
 
 from .forms import (
     ExpenseTypeWorkflowFormSet,
@@ -593,6 +594,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         expense_type_id = _parse_int(self.request.POST.get('expense_type'))
         support_document_type_id = _parse_int(self.request.POST.get('support_document_type'))
         supplier_id = _parse_int(self.request.POST.get('supplier'))
+        assigned_manager_id = _parse_int(self.request.POST.get('assigned_manager'))
         raw_scope = {
             'farm_id': _parse_int(self.request.POST.get('scope_farm_id')),
             'chicken_house_id': _parse_int(self.request.POST.get('scope_chicken_house_id')),
@@ -605,6 +607,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'expense_type_id': expense_type_id,
             'support_document_type_id': support_document_type_id,
             'supplier_id': supplier_id,
+            'assigned_manager_id': assigned_manager_id,
             'items': items_raw,
         }
         field_errors: dict[str, list[str]] = {}
@@ -674,6 +677,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 scope_chicken_house_id=scope_values['chicken_house_id'],
                 scope_batch_code=scope_values['batch_code'],
                 scope_area=area_selection['kind'],
+                assigned_manager_id=assigned_manager_id,
             )
         return payload, overrides, field_errors, item_errors
 
@@ -693,6 +697,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         supplier_account_type = (self.request.POST.get('supplier_account_type') or '').strip()
         supplier_account_number = (self.request.POST.get('supplier_account_number') or '').strip()
         supplier_bank_name = (self.request.POST.get('supplier_bank_name') or '').strip()
+        assigned_manager_id = _parse_int(self.request.POST.get('assigned_manager'))
         purchase_date = self._parse_date(purchase_date_raw)
         shipping_eta = self._parse_date(shipping_eta_raw)
         overrides = {
@@ -707,6 +712,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'supplier_account_type': supplier_account_type,
             'supplier_account_number': supplier_account_number,
             'supplier_bank_name': supplier_bank_name,
+            'assigned_manager_id': assigned_manager_id,
         }
         field_errors: dict[str, list[str]] = {}
         if not purchase_id:
@@ -769,6 +775,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 supplier_account_type=supplier_account_type,
                 supplier_account_number=supplier_account_number,
                 supplier_bank_name=supplier_bank_name,
+                assigned_manager_id=assigned_manager_id,
             )
         return payload, overrides, field_errors
 
@@ -1010,6 +1017,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'scope_area_value': form_initial['scope_area_value'],
                 'initial': form_initial['values'],
                 'read_only': form_initial['read_only'],
+                'manager_options': self.purchase_form_options['managers'],
+                'manager_is_editable': (not form_initial['read_only']) or bool(pending_approval),
                 'category_picker': self._build_category_picker(form_initial['values'].get('expense_type_id')),
                 'supplier_picker': self._build_supplier_picker(form_initial['values'].get('supplier_id')),
                 'area_picker': self._build_area_picker(
@@ -1035,6 +1044,11 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         purchase = panel_state.purchase if panel_state else None
         supplier = purchase.supplier if purchase else None
         default_purchase_date = (purchase.purchase_date or timezone.localdate()).isoformat() if purchase else ''
+        assigned_manager_id = purchase.assigned_manager_id if purchase else None
+        if not assigned_manager_id and purchase and purchase.requester_id:
+            assigned_manager_id = purchase.requester_id
+        if not assigned_manager_id and self.request.user.is_authenticated:
+            assigned_manager_id = self.request.user.pk
         initial = {
             'purchase_date': default_purchase_date,
             'delivery_condition': purchase.delivery_condition if purchase else PurchaseRequest.DeliveryCondition.IMMEDIATE,
@@ -1051,6 +1065,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'supplier_account_number': purchase.supplier_account_number
             or (supplier.account_number if supplier else ''),
             'supplier_bank_name': purchase.supplier_bank_name or (supplier.bank_name if supplier else ''),
+            'assigned_manager_id': assigned_manager_id,
         }
         if overrides:
             initial.update({k: v for k, v in overrides.items() if v is not None})
@@ -1063,6 +1078,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'account_types': Supplier.ACCOUNT_TYPE_CHOICES,
                 'purchase': purchase,
                 'can_reopen': bool(purchase and purchase.status != PurchaseRequest.Status.DRAFT),
+                'manager_options': self.purchase_form_options['managers'],
+                'manager_is_editable': bool(purchase),
             },
             'purchase_order_field_errors': field_errors,
         }
@@ -1246,11 +1263,17 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'support_document_type_id': overrides.get('support_document_type_id'),
                 'supplier_id': overrides.get('supplier_id'),
                 'estimated_total': overrides.get('estimated_total') or '',
+                'assigned_manager_id': overrides.get('assigned_manager_id'),
             }
             scope = overrides.get('scope_values') or {'farm_id': None, 'chicken_house_id': None, 'batch_code': ''}
             items = self._enrich_item_rows(overrides.get('items') or [])
             scope_area_value = overrides.get('scope_area') or self._scope_area_value_from_scope(scope=scope, area_kind=None)
         else:
+            assigned_manager_id = purchase.assigned_manager_id if purchase else None
+            if not assigned_manager_id and purchase and purchase.requester_id:
+                assigned_manager_id = purchase.requester_id
+            if not assigned_manager_id and self.request.user.is_authenticated:
+                assigned_manager_id = self.request.user.pk
             values = {
                 'summary': purchase.name if purchase else '',
                 'notes': purchase.description if purchase else '',
@@ -1258,6 +1281,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'support_document_type_id': purchase.support_document_type_id if purchase else None,
                 'supplier_id': purchase.supplier_id if purchase else None,
                 'estimated_total': self._format_decimal(purchase.estimated_total) if purchase else '',
+                'assigned_manager_id': assigned_manager_id,
             }
             scope = self._scope_values_from_purchase(purchase)
             items = self._serialize_items(purchase)
@@ -1633,6 +1657,15 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             }
             for product in Product.objects.order_by('name')
         ]
+        managers = [
+            {
+                'id': user.id,
+                'name': user.get_full_name(),
+                'document': user.cedula,
+            }
+            for user in UserProfile.objects.only('id', 'nombres', 'apellidos', 'cedula')
+            .order_by('apellidos', 'nombres')
+        ]
         return {
             'categories': categories,
             'suppliers': suppliers,
@@ -1641,6 +1674,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'bird_batches': bird_batches,
             'support_types': support_types,
             'products': products,
+            'managers': managers,
         }
 
     def _format_decimal(self, value: Decimal | None) -> str:
