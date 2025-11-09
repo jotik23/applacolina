@@ -116,6 +116,17 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "task": "task_manager.view_mini_app_task_cards",
 }
 
+
+def _build_mini_app_pwa_config() -> dict[str, object]:
+    """Return the runtime config injected into the PWA bootstrap script."""
+
+    return {
+        "debug": settings.DEBUG,
+        "vapid_public_key": getattr(settings, "WEB_PUSH_PUBLIC_KEY", "") or "",
+        "subscription_endpoint": getattr(settings, "WEB_PUSH_SUBSCRIPTION_ENDPOINT", "") or "",
+    }
+
+
 _SESSION_TOKEN_KEY = "mini_app_session_token"
 
 
@@ -3088,6 +3099,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
         context["telegram_auth_error"] = self.telegram_auth_error
         context["mini_app_access_granted"] = has_access
         context["mini_app_card_permissions"] = card_permissions
+        context["mini_app_pwa_config"] = _build_mini_app_pwa_config()
 
         return context
 
@@ -3111,6 +3123,7 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
         )
         context["telegram_integration_enabled"] = False
         context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
+        context["mini_app_pwa_config"] = _build_mini_app_pwa_config()
         return context
 
 

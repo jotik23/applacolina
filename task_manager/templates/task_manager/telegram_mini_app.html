@@ -4,7 +4,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vista operario - Telegram</title>
+    <title>Granjas La Colina</title>
+    <link
+      rel="manifest"
+      href="{% static 'task_manager/pwa/manifest.json' %}"
+      crossorigin="use-credentials"
+    />
+    <meta name="theme-color" content="#d1fae5" />
+    <meta name="application-name" content="Granjas La Colina" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="{% static 'task_manager/pwa/icons/icon-192.png' %}"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="{% static 'task_manager/pwa/icons/icon-180.png' %}"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -8504,5 +8524,13 @@
     <script src="{% static 'task_manager/js/production_card.js' %}" defer></script>
     <script src="{% static 'task_manager/js/purchase_cards.js' %}" defer></script>
     {% endif %}
+    <script>
+      window.PWAPushConfig = Object.assign(window.PWAPushConfig || {}, {
+        debug: {% if mini_app_pwa_config.debug %}true{% else %}false{% endif %},
+        vapidPublicKey: "{{ mini_app_pwa_config.vapid_public_key|default_if_none:''|escapejs }}",
+        subscriptionEndpoint: "{{ mini_app_pwa_config.subscription_endpoint|default_if_none:''|escapejs }}",
+      });
+    </script>
+    <script src="{% static 'task_manager/pwa/pwa-init.js' %}" defer></script>
   </body>
 </html>
