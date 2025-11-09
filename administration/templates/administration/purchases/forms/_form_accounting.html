@@ -1,0 +1,173 @@
+{% load static %}
+{% with purchase=purchases_panel.purchase %}
+<section class="space-y-6 text-sm text-slate-700">
+  {% if not purchase %}
+    <article class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-slate-800">
+      <p class="text-sm font-semibold">No encontramos la información de la compra seleccionada.</p>
+      <p class="text-xs text-amber-700">Cierra el panel e intenta nuevamente desde el listado.</p>
+    </article>
+  {% else %}
+    <article class="space-y-4 rounded-2xl border border-slate-200 bg-white/80 p-5">
+      <header class="space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registrar en sistema contable</p>
+        <h2 class="text-lg font-semibold text-slate-900">Verifica y contabiliza la compra</h2>
+        <p class="text-xs text-slate-500">
+          Revisa la información registrada antes de moverla al archivo histórico. Una vez contabilizada no se podrá editar.
+        </p>
+      </header>
+      <div class="grid gap-4 text-xs text-slate-600 md:grid-cols-3">
+        <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Solicitud</p>
+          <p class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.timeline_code }}</p>
+          <p class="text-sm text-slate-600">{{ purchase.name }}</p>
+        </div>
+        <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Estado actual</p>
+          <p class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_status_display }}</p>
+          {% if purchase.accounted_in_system %}
+            <p class="mt-1 inline-flex items-center rounded-full bg-emerald-100 px-3 py-0.5 text-[11px] font-semibold text-emerald-700">
+              Contabilizada el {{ purchase.accounted_at|date:"M d · H:i" }}
+            </p>
+          {% else %}
+            <p class="mt-1 inline-flex items-center rounded-full bg-amber-100 px-3 py-0.5 text-[11px] font-semibold text-amber-700">
+              Pendiente de contabilizar
+            </p>
+          {% endif %}
+        </div>
+        <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
+          <p class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.supplier.name }}</p>
+          {% if purchase.invoice_number %}
+            <p class="text-xs text-slate-500">Factura {{ purchase.invoice_number }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+
+    {% include "administration/purchases/forms/_support_request_overview.html" with purchase=purchase %}
+
+    <article class="rounded-2xl border border-slate-200 bg-white/70 p-5">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Datos para contabilidad</p>
+      <dl class="mt-3 grid gap-4 text-xs text-slate-600 md:grid-cols-2">
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Total factura</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">
+            {{ purchase.currency }} {{ purchase.invoice_total|default_if_none:"0"|floatformat:2 }}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Monto pagado</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">
+            {{ purchase.currency }} {{ purchase.payment_amount|default_if_none:"0"|floatformat:2 }}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Condición / medio de pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">
+            {{ purchase.get_payment_condition_display|default:"—" }} · {{ purchase.get_payment_method_display|default:"—" }}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Fecha pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">
+            {{ purchase.payment_date|date:"Y-m-d"|default:"—" }}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Cuenta destino</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">
+            {% if purchase.supplier_account_number %}
+              {{ purchase.supplier_bank_name }} · {{ purchase.supplier_account_type|title }} · {{ purchase.supplier_account_number }}
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Notas de pago</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.payment_notes|default:"—" }}</dd>
+        </div>
+      </dl>
+    </article>
+
+    <article class="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Soportes anexos</p>
+        <p class="text-[11px] text-slate-400">{{ purchase.support_attachments.all|length }} archivo(s)</p>
+      </div>
+      {% with attachments=purchase.support_attachments.all %}
+        {% if attachments %}
+          <ul class="space-y-2 text-sm">
+            {% for attachment in attachments %}
+              <li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                <a
+                  href="{{ attachment.file.url }}"
+                  target="_blank"
+                  rel="noopener"
+                  class="inline-flex items-center gap-2 text-brand hover:text-brand/80"
+                >
+                  <span aria-hidden="true">⤓</span>
+                  {{ attachment.filename }}
+                </a>
+                <span class="text-[11px] text-slate-500">{{ attachment.created_at|date:"Y-m-d H:i" }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-xs text-slate-500">Aún no se han adjuntado soportes contables.</p>
+        {% endif %}
+      {% endwith %}
+    </article>
+
+    <article class="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recepción y evidencia</p>
+        <p class="text-[11px] text-slate-400">{{ purchase.reception_attachments.all|length }} archivo(s)</p>
+      </div>
+      {% with attachments=purchase.reception_attachments.all %}
+        {% if attachments %}
+          <ul class="space-y-2 text-sm">
+            {% for attachment in attachments %}
+              <li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                <a
+                  href="{{ attachment.file.url }}"
+                  target="_blank"
+                  rel="noopener"
+                  class="inline-flex items-center gap-2 text-slate-700 hover:text-slate-900"
+                >
+                  <span aria-hidden="true">⤓</span>
+                  {{ attachment.filename }}
+                </a>
+                <span class="text-[11px] text-slate-500">{{ attachment.created_at|date:"Y-m-d H:i" }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-xs text-slate-500">No se han adjuntado soportes de recepción.</p>
+        {% endif %}
+      {% endwith %}
+    </article>
+
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+      <a
+        href="?scope={{ purchases_scope.code }}"
+        class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+      >
+        Cerrar panel
+      </a>
+      {% if purchase.status == 'pago' and not purchase.accounted_in_system %}
+        <button
+          type="submit"
+          name="intent"
+          value="confirm_accounting"
+          class="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand/90"
+        >
+          Contabilizar y mover a archivo
+        </button>
+      {% else %}
+        <span class="rounded-full bg-slate-100 px-5 py-2 text-sm font-semibold text-slate-500">Ya contabilizada</span>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endwith %}

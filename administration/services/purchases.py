@@ -99,6 +99,11 @@ PANEL_REGISTRY = {
     'reception': PurchasePanel('reception', 'Registrar recepción', 'administration/purchases/forms/_form_reception.html'),
     'invoice': PurchasePanel('invoice', 'Gestionar soporte', 'administration/purchases/forms/_form_invoice.html'),
     'payment': PurchasePanel('payment', 'Registrar pago', 'administration/purchases/forms/_form_payment.html'),
+    'accounting': PurchasePanel(
+        'accounting',
+        'Registrar en sistema contable',
+        'administration/purchases/forms/_form_accounting.html',
+    ),
 }
 
 
@@ -195,7 +200,11 @@ ACTION_BY_STATUS = {
     PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
     PurchaseRequest.Status.INVOICE: PurchaseAction('Gestionar soporte', 'invoice', 'registrar_factura'),
-    PurchaseRequest.Status.PAYMENT: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
+    PurchaseRequest.Status.PAYMENT: PurchaseAction(
+        'Registrar en sistema contable',
+        'accounting',
+        'registrar_contabilidad',
+    ),
     PurchaseRequest.Status.ARCHIVED: None,
 }
 
@@ -362,7 +371,18 @@ def _resolve_panel(panel_code: str | None, purchase_pk: int | None) -> PurchaseP
     if purchase_pk:
         queryset = PurchaseRequest.objects.all()
         if panel.code == 'reception':
-            queryset = queryset.prefetch_related('items', 'reception_attachments')
+            queryset = queryset.prefetch_related('items', 'reception_attachments', 'support_attachments')
+        if panel.code in {'invoice', 'accounting'}:
+            queryset = queryset.select_related(
+                'supplier',
+                'expense_type',
+                'requester',
+                'support_document_type',
+                'scope_farm',
+                'scope_chicken_house__farm',
+            ).prefetch_related('items', 'support_attachments')
+        if panel.code == 'accounting':
+            queryset = queryset.prefetch_related('reception_attachments', 'approvals__approver')
         purchase = queryset.filter(pk=purchase_pk).first()
     return PurchasePanelState(panel=panel, purchase=purchase)
 

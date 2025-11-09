@@ -1,5 +1,6 @@
+{% load static %}
 {% with purchase=purchases_panel.purchase form=purchase_invoice_form field_errors=purchase_invoice_field_errors %}
-<section class="space-y-6 text-sm text-slate-700">
+<section class="space-y-6 text-sm text-slate-700" data-purchase-invoice-form>
   {% if field_errors.non_field %}
     <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700">
       {% for message in field_errors.non_field %}
@@ -28,7 +29,7 @@
               <option value="">Selecciona el tipo de soporte</option>
               {% for option in form.support_types %}
                 <option value="{{ option.id }}" {% if option.id == selected_support_type %}selected{% endif %}>
-                  {{ option.name }} · {{ option.kind }}
+                  {{ option.name }} · {{ option.kind_label }}
                 </option>
               {% endfor %}
             </select>
@@ -43,21 +44,84 @@
       {% endif %}
 
       <div class="space-y-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Adjuntar documentos</p>
-            <p class="text-[11px] text-slate-500">Puedes subir facturas, cuentas de cobro u otros soportes.</p>
+            <p class="text-[11px] text-slate-500">Sube facturas, extractos u otra evidencia contable.</p>
           </div>
           <label class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900">
-            Subir archivo
-            <input type="file" name="invoice_attachment" class="hidden">
+            Subir archivos
+            <input type="file" name="invoice_attachments" class="hidden" multiple data-invoice-attachment-input>
           </label>
         </div>
-        {% if field_errors.invoice_attachment %}
-          <p class="text-[11px] font-semibold text-red-600">{{ field_errors.invoice_attachment.0 }}</p>
+        {% if field_errors.invoice_attachments %}
+          <p class="text-[11px] font-semibold text-red-600">{{ field_errors.invoice_attachments.0 }}</p>
         {% endif %}
-        <p class="text-[11px] text-slate-400">Los documentos quedan disponibles inmediatamente en el detalle de la solicitud.</p>
+        <ul class="space-y-1 text-[11px] text-slate-500" data-invoice-attachment-preview hidden></ul>
+        {% if form.attachments %}
+          <div class="space-y-1 text-[11px]">
+            <p class="font-semibold uppercase tracking-wide text-slate-500">Adjuntos guardados</p>
+            <ul class="space-y-1 text-slate-600">
+              {% for attachment in form.attachments %}
+                <li>
+                  <a href="{{ attachment.file.url }}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 text-brand hover:text-brand/80">
+                    <span aria-hidden="true">⤓</span> {{ attachment.filename }}
+                  </a>
+                  <span class="text-slate-400">· {{ attachment.created_at|date:"M d, H:i" }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
       </div>
+    </div>
+  </article>
+
+  <article class="space-y-4 rounded-2xl border border-slate-200 bg-white/60 p-5" data-support-template-root>
+    <header class="space-y-1">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Plantilla de soporte interno</p>
+    </header>
+    <div class="grid gap-5 lg:grid-cols-5">
+      <section class="space-y-3 lg:col-span-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Campos dinámicos</h3>
+          <button type="button" class="text-[11px] font-semibold text-brand hover:text-brand/80" data-support-template-reset hidden>Restablecer valores</button>
+        </div>
+        <div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600" data-support-template-fields>
+          <p class="text-[11px] text-slate-500" data-support-template-empty>
+            Selecciona un tipo de soporte interno con plantilla para habilitar los campos editables.
+          </p>
+        </div>
+      </section>
+      <section class="space-y-4 lg:col-span-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Vista previa</h3>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900" data-support-template-refresh>
+              Actualizar vista previa
+            </button>
+            <button type="button" class="rounded-full bg-brand px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand/90" data-support-template-print disabled>
+              Imprimir / Guardar PDF
+            </button>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <iframe
+              class="h-[520px] max-h-[70vh] w-full rounded-bl-2xl rounded-br-2xl border-t border-slate-100 bg-slate-50"
+              data-support-template-preview
+              sandbox="allow-same-origin allow-forms"
+              referrerpolicy="no-referrer"
+              hidden
+            ></iframe>
+          </div>
+          <p class="text-center text-[11px] font-medium text-slate-500" data-support-template-preview-empty>
+            Selecciona un tipo de soporte interno para visualizar la plantilla.
+          </p>
+        </div>
+      </section>
     </div>
   </article>
 
@@ -75,4 +139,8 @@
     </div>
   </div>
 </section>
+{% if form.template_config %}
+  {{ form.template_config|json_script:"purchase-invoice-config" }}
+{% endif %}
+<script type="module" src="{% static 'administration/js/purchase-invoice-form.js' %}"></script>
 {% endwith %}

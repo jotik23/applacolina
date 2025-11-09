@@ -41,6 +41,16 @@ from .services.purchase_orders import (
     PurchaseOrderService,
     PurchaseOrderValidationError,
 )
+from .services.purchase_accounting import (
+    PurchaseAccountingPayload,
+    PurchaseAccountingService,
+    PurchaseAccountingValidationError,
+)
+from .services.purchase_invoices import (
+    PurchaseInvoicePayload,
+    PurchaseInvoiceService,
+    PurchaseInvoiceValidationError,
+)
 from .services.purchase_payments import (
     PurchasePaymentPayload,
     PurchasePaymentService,
@@ -183,8 +193,12 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             return self._handle_order_panel_post()
         if panel == 'reception':
             return self._handle_reception_panel_post()
+        if panel == 'invoice':
+            return self._handle_invoice_panel_post()
         if panel == 'payment':
             return self._handle_payment_panel_post()
+        if panel == 'accounting':
+            return self._handle_accounting_panel_post()
         messages.error(request, "El formulario enviado no está disponible todavía.")
         return redirect(self._build_base_url(scope=request.POST.get('scope')))
 
@@ -285,7 +299,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 overrides=overrides,
                 field_errors=field_errors,
                 item_errors=item_errors,
-            )
+        )
 
         if intent == 'confirm_reception':
             messages.success(self.request, "Recepción registrada. Continúa con la facturación.")
@@ -296,6 +310,45 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 scope=purchase.status,
                 extra={
                     'panel': 'reception',
+                    'purchase': purchase.pk,
+                },
+            )
+        )
+
+    def _handle_invoice_panel_post(self) -> HttpResponse:
+        intent = self.request.POST.get('intent') or 'save_invoice'
+        purchase_id = _parse_int(self.request.POST.get('purchase'))
+        payload, overrides, field_errors = self._build_invoice_payload(purchase_id=purchase_id)
+        if field_errors or payload is None:
+            return self._render_invoice_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+            )
+
+        files = self.request.FILES.getlist('invoice_attachments')
+        service = PurchaseInvoiceService(actor=self.request.user)
+        try:
+            purchase = service.save(payload=payload, intent=intent, attachments=files)
+        except PurchaseInvoiceValidationError as exc:
+            self._merge_field_errors(field_errors, exc.field_errors)
+            return self._render_invoice_form_errors(
+                scope=self.request.POST.get('scope'),
+                purchase_id=purchase_id,
+                overrides=overrides,
+                field_errors=field_errors,
+            )
+
+        if intent == 'confirm_invoice':
+            messages.success(self.request, "Soporte listo y enviado a contabilidad.")
+            return redirect(self._build_base_url(scope=purchase.status))
+        messages.success(self.request, "Soporte actualizado.")
+        return redirect(
+            self._build_base_url(
+                scope=purchase.status,
+                extra={
+                    'panel': 'invoice',
                     'purchase': purchase.pk,
                 },
             )
@@ -329,6 +382,33 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             messages.success(self.request, "Pago registrado. Continúa adjuntando los soportes.")
         else:
             messages.success(self.request, "Información de pago guardada.")
+        return redirect(self._build_base_url(scope=purchase.status))
+
+    def _handle_accounting_panel_post(self) -> HttpResponse:
+        scope = self.request.POST.get('scope') or PurchaseRequest.Status.PAYMENT
+        purchase_id = _parse_int(self.request.POST.get('purchase'))
+        intent = self.request.POST.get('intent') or 'close_panel'
+        if intent != 'confirm_accounting':
+            return redirect(self._build_base_url(scope=scope))
+        if not purchase_id:
+            messages.error(self.request, "Selecciona la solicitud que deseas contabilizar.")
+            return redirect(self._build_base_url(scope=scope))
+        service = PurchaseAccountingService(actor=self.request.user)
+        payload = PurchaseAccountingPayload(purchase_id=purchase_id)
+        try:
+            purchase = service.mark_accounted(payload=payload)
+        except PurchaseAccountingValidationError as exc:
+            messages.error(self.request, self._first_error_message(exc.field_errors))
+            return redirect(
+                self._build_base_url(
+                    scope=scope,
+                    extra={
+                        'panel': 'accounting',
+                        'purchase': purchase_id,
+                    },
+                )
+            )
+        messages.success(self.request, "Compra contabilizada y archivada.")
         return redirect(self._build_base_url(scope=purchase.status))
 
     def _render_request_form_errors(
@@ -386,6 +466,24 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 purchase_reception_overrides=overrides,
                 purchase_reception_field_errors=field_errors,
                 purchase_reception_item_errors=item_errors,
+            )
+        )
+
+    def _render_invoice_form_errors(
+        self,
+        *,
+        scope: str | None,
+        purchase_id: int | None,
+        overrides: dict,
+        field_errors: dict[str, list[str]],
+    ) -> HttpResponse:
+        return self.render_to_response(
+            self.get_context_data(
+                scope_override=scope,
+                panel_override='invoice',
+                purchase_pk_override=purchase_id,
+                purchase_invoice_overrides=overrides,
+                purchase_invoice_field_errors=field_errors,
             )
         )
 
@@ -1077,16 +1175,48 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         elif purchase:
             selected_support_type = purchase.support_document_type_id
         selected_support_type = _parse_int(selected_support_type)
+        template_values = overrides.get('template_fields') if overrides else (purchase.support_template_values if purchase else {})
+        template_catalog = self._build_support_template_catalog(purchase=purchase)
+        template_config = {
+            'purchaseId': purchase.pk if purchase else None,
+            'selectedSupportTypeId': selected_support_type,
+            'supportTypes': self.purchase_form_options['support_types'],
+            'fieldCatalog': template_catalog,
+            'savedValues': template_values or {},
+        }
         form = {
             'initial': {
                 'support_document_type_id': selected_support_type,
             },
             'support_types': self.purchase_form_options['support_types'],
+            'attachments': purchase.support_attachments.all() if purchase else [],
+            'template_config': template_config,
         }
         return {
             'purchase_invoice_form': form,
             'purchase_invoice_field_errors': field_errors,
         }
+
+    def _build_invoice_payload(
+        self,
+        *,
+        purchase_id: int | None,
+    ) -> tuple[PurchaseInvoicePayload | None, dict, dict[str, list[str]]]:
+        field_errors: dict[str, list[str]] = {}
+        template_fields = self._parse_template_fields()
+        overrides = {
+            'support_document_type_id': self.request.POST.get('support_document_type'),
+            'template_fields': template_fields,
+        }
+        if not purchase_id:
+            field_errors.setdefault('non_field', []).append("Selecciona una solicitud válida.")
+            return None, overrides, field_errors
+        payload = PurchaseInvoicePayload(
+            purchase_id=purchase_id,
+            support_document_type_id=_parse_int(overrides['support_document_type_id']),
+            template_values=template_fields,
+        )
+        return payload, overrides, field_errors
 
     def _resolve_form_initial(self, *, purchase, overrides: dict | None) -> dict:
         read_only = bool(purchase and purchase.status != PurchaseRequest.Status.DRAFT)
@@ -1471,7 +1601,9 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             {
                 'id': support.id,
                 'name': support.name,
-                'kind': support.get_kind_display(),
+                'kind': support.kind,
+                'kind_label': support.get_kind_display(),
+                'template': support.template,
             }
             for support in SupportDocumentType.objects.order_by('name')
         ]
@@ -1515,6 +1647,125 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             params.update({k: str(v) for k, v in extra.items()})
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
+
+    def _first_error_message(self, field_errors: dict[str, list[str]] | None) -> str:
+        default_message = "No se pudo contabilizar la compra."
+        if not field_errors:
+            return default_message
+        for messages_list in field_errors.values():
+            if messages_list:
+                return messages_list[0]
+        return default_message
+
+    def _build_support_template_catalog(self, *, purchase: PurchaseRequest | None) -> dict[str, dict[str, str]]:
+        if not purchase:
+            return {}
+
+        supplier = purchase.supplier
+        requester = purchase.requester
+        catalog: dict[str, dict[str, str]] = {}
+
+        def add(key: str, label: str, value: str | None) -> None:
+            catalog[key] = {
+                'label': label,
+                'value': (value or '').strip(),
+            }
+
+        add('timeline_code', 'Código solicitud', purchase.timeline_code)
+        add('request_name', 'Nombre de la solicitud', purchase.name)
+        add('request_description', 'Descripción', purchase.description)
+        add('category_name', 'Categoría', purchase.expense_type.name if purchase.expense_type else '')
+        add('scope_label', 'Ámbito', purchase.scope_label)
+        add('scope_area', 'Tipo de área', purchase.get_scope_area_display() if purchase.scope_area else '')
+        add('scope_batch', 'Lote asociado', purchase.scope_batch_code)
+        add('farm_name', 'Granja', purchase.scope_farm.name if purchase.scope_farm else '')
+        add('chicken_house_name', 'Galpón', purchase.scope_chicken_house.name if purchase.scope_chicken_house else '')
+        add('support_type_name', 'Tipo de soporte', purchase.support_document_type.name if purchase.support_document_type else '')
+        add('status', 'Estado actual', purchase.get_status_display())
+
+        add('eta', 'ETA', self._format_support_date(purchase.eta))
+        add('order_number', 'Número de orden', purchase.order_number)
+        add('order_date', 'Fecha orden', self._format_support_date(purchase.order_date))
+        add('purchase_date', 'Fecha de compra', self._format_support_date(purchase.purchase_date))
+        add('invoice_number', 'Número de factura', purchase.invoice_number)
+        add('invoice_date', 'Fecha factura', self._format_support_date(purchase.invoice_date))
+        add('invoice_total', 'Total factura', self._format_currency_value(purchase.currency, purchase.invoice_total))
+        add('estimated_total', 'Total estimado', self._format_currency_value(purchase.currency, purchase.estimated_total))
+        add('payment_amount', 'Monto pagado', self._format_currency_value(purchase.currency, purchase.payment_amount))
+
+        add('currency', 'Moneda', purchase.currency)
+        add('payment_condition', 'Condición de pago', purchase.get_payment_condition_display() if purchase.payment_condition else '')
+        add('payment_method', 'Medio de pago', purchase.get_payment_method_display() if purchase.payment_method else '')
+        add('payment_source', 'Origen del pago', purchase.get_payment_source_display() if purchase.payment_source else '')
+        add('payment_account', 'Cuenta de pago', purchase.payment_account)
+        add('payment_notes', 'Notas de pago', purchase.payment_notes)
+        add('reception_notes', 'Notas de recepción', purchase.reception_notes)
+        add('shipping_notes', 'Notas de envío', purchase.shipping_notes)
+        add('delivery_condition', 'Condición de entrega', purchase.get_delivery_condition_display() if purchase.delivery_condition else '')
+        add('shipping_eta', 'Fecha estimada de despacho', self._format_support_date(purchase.shipping_eta))
+
+        add('requester_name', 'Solicitante', requester.get_full_name() if requester else '')
+        requester_email = ''
+        if requester:
+            requester_email = getattr(requester, 'email', '') or getattr(getattr(requester, 'user', None), 'email', '')
+        add('requester_email', 'Correo solicitante', requester_email)
+
+        add('supplier_name', 'Proveedor', supplier.name if supplier else '')
+        add('supplier_tax_id', 'Identificación proveedor', supplier.tax_id if supplier else '')
+        add('supplier_contact_name', 'Contacto proveedor', supplier.contact_name if supplier else '')
+        add('supplier_contact_email', 'Correo proveedor', supplier.contact_email if supplier else '')
+        add('supplier_contact_phone', 'Teléfono proveedor', supplier.contact_phone if supplier else '')
+        add('supplier_address', 'Dirección proveedor', supplier.address if supplier else '')
+        add('supplier_city', 'Ciudad proveedor', supplier.city if supplier else '')
+        add('supplier_account_holder_name', 'Titular de cuenta proveedor', supplier.account_holder_name if supplier else '')
+        add('supplier_account_holder_id', 'ID titular proveedor', supplier.account_holder_id if supplier else '')
+        add('supplier_account_type', 'Tipo de cuenta proveedor', dict(Supplier.ACCOUNT_TYPE_CHOICES).get(supplier.account_type, '') if supplier and supplier.account_type else '')
+        add('supplier_account_number', 'Número de cuenta proveedor', supplier.account_number if supplier else '')
+        add('supplier_bank_name', 'Banco proveedor', supplier.bank_name if supplier else '')
+
+        add('created_at', 'Fecha de creación', self._format_datetime_value(purchase.created_at))
+        add('updated_at', 'Última actualización', self._format_datetime_value(purchase.updated_at))
+        add('approved_at', 'Aprobado en', self._format_datetime_value(purchase.approved_at))
+
+        add('items_summary', 'Items solicitados', self._build_items_summary(purchase))
+
+        return catalog
+
+    def _format_support_date(self, value) -> str:
+        if not value:
+            return ''
+        return value.strftime("%Y-%m-%d")
+
+    def _format_datetime_value(self, value) -> str:
+        if not value:
+            return ''
+        localized = timezone.localtime(value)
+        return localized.strftime("%Y-%m-%d %H:%M")
+
+    def _format_currency_value(self, currency: str | None, amount) -> str:
+        if amount in (None, ''):
+            return ''
+        formatted = f"{amount:,.2f}"
+        return f"{currency or ''} {formatted}".strip()
+
+    def _build_items_summary(self, purchase: PurchaseRequest) -> str:
+        if not hasattr(purchase, "items"):
+            return ''
+        lines: list[str] = []
+        for item in purchase.items.all():
+            qty = self._format_decimal(item.quantity)
+            lines.append(f"- {item.description} · {qty}")
+        return "\n".join(lines)
+
+    def _parse_template_fields(self) -> dict[str, str]:
+        values: dict[str, str] = {}
+        field_pattern = re.compile(r"^template_fields\[(?P<name>[^\]]+)\]$")
+        for key in self.request.POST.keys():
+            match = field_pattern.match(key)
+            if not match:
+                continue
+            values[match.group('name')] = (self.request.POST.get(key) or '').strip()
+        return values
 
     def _merge_field_errors(
         self,
@@ -1618,7 +1869,6 @@ class ProductManagementView(StaffRequiredMixin, generic.TemplateView):
             params['panel'] = self.request.GET.get('panel')
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
-
 
 class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
     template_name = 'administration/purchases/suppliers.html'

@@ -19,10 +19,6 @@
         <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.expense_type.name }}</dd>
       </div>
       <div>
-        <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Ámbito / soporte</dt>
-        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.scope_label }}{% if purchase.support_document_type %} · {{ purchase.support_document_type.name }}{% endif %}</dd>
-      </div>
-      <div>
         <dt class="font-semibold text-slate-500 uppercase tracking-wide text-[11px]">Estado</dt>
         <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_status_display }}</dd>
       </div>
@@ -50,7 +46,8 @@
             <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th class="px-3 py-2 text-left">Item</th>
-                <th class="px-3 py-2 text-right">Cantidad</th>
+                <th class="px-3 py-2 text-right">Cantidad solicitada</th>
+                <th class="px-3 py-2 text-right">Cantidad recibida</th>
                 <th class="px-3 py-2 text-right">Valor unitario</th>
                 <th class="px-3 py-2 text-right">Subtotal</th>
               </tr>
@@ -60,6 +57,7 @@
                 <tr>
                   <td class="px-3 py-2 text-slate-900">{{ item.description }}</td>
                   <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
+                  <td class="px-3 py-2 text-right">{{ item.received_quantity|default:"—" }}</td>
                   <td class="px-3 py-2 text-right">{{ item.estimated_amount }}</td>
                   <td class="px-3 py-2 text-right">
                     {{ item.quantity|multiply:item.estimated_amount|floatformat:2 }}
@@ -165,30 +163,6 @@
       {% if status == 'recepcion' or status == 'factura' or status == 'pago' or status == 'archivada' %}
         <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
           <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Recepción registrada</p>
-          {% with reception_items=purchase.items.all %}
-            {% if reception_items %}
-              <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-                <table class="min-w-full divide-y divide-slate-200 text-xs">
-                  <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th class="px-3 py-2 text-left">Item</th>
-                      <th class="px-3 py-2 text-right">Solicitado</th>
-                      <th class="px-3 py-2 text-right">Recibido</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-100 bg-white">
-                    {% for item in reception_items %}
-                      <tr>
-                        <td class="px-3 py-2 text-slate-900">{{ item.description }}</td>
-                        <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
-                        <td class="px-3 py-2 text-right">{{ item.received_quantity|default:"—" }}</td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-            {% endif %}
-          {% endwith %}
           {% if purchase.reception_notes %}
             <p class="mt-3 rounded-xl bg-slate-50 p-3 text-[11px] text-slate-600">
               <span class="font-semibold">Notas:</span> {{ purchase.reception_notes }}
@@ -198,6 +172,22 @@
             {% if attachments %}
               <div class="mt-3 space-y-2 text-[11px]">
                 <p class="font-semibold uppercase tracking-wide text-slate-500">Adjuntos</p>
+                <ul class="space-y-1 text-slate-600">
+                  {% for attachment in attachments %}
+                    <li>
+                      <a href="{{ attachment.file.url }}" target="_blank" class="inline-flex items-center gap-2 text-brand hover:text-brand/80">
+                        <span aria-hidden="true">⤓</span> {{ attachment.filename }}
+                      </a>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
+          {% endwith %}
+          {% with attachments=purchase.support_attachments.all %}
+            {% if attachments %}
+              <div class="mt-3 space-y-2 text-[11px]">
+                <p class="font-semibold uppercase tracking-wide text-slate-500">Soportes contables</p>
                 <ul class="space-y-1 text-slate-600">
                   {% for attachment in attachments %}
                     <li>

@@ -366,9 +366,25 @@ class PurchaseRequest(TimeStampedModel):
         null=True,
         blank=True,
     )
+    support_template_values = models.JSONField(
+        "Valores personalizados del soporte",
+        default=dict,
+        blank=True,
+        help_text="Valores usados para completar la plantilla interna.",
+    )
     reception_mismatch = models.BooleanField(
         "Recepción con diferencias",
         default=False,
+    )
+    accounted_in_system = models.BooleanField(
+        "Contabilizado en sistema",
+        default=False,
+        help_text="Indica si la compra ya fue registrada en el sistema contable.",
+    )
+    accounted_at = models.DateTimeField(
+        "Fecha de contabilización",
+        blank=True,
+        null=True,
     )
 
     class Meta:
@@ -518,6 +534,37 @@ class PurchaseReceptionAttachment(TimeStampedModel):
     class Meta:
         verbose_name = "Adjunto de recepción"
         verbose_name_plural = "Adjuntos de recepción"
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.filename
+
+    @property
+    def filename(self) -> str:
+        return os.path.basename(self.file.name)
+
+
+class PurchaseSupportAttachment(TimeStampedModel):
+    purchase = models.ForeignKey(
+        PurchaseRequest,
+        on_delete=models.CASCADE,
+        related_name="support_attachments",
+        verbose_name="Solicitud",
+    )
+    file = models.FileField("Archivo", upload_to="purchases/support/%Y/%m/")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchase_support_attachments",
+        verbose_name="Subido por",
+    )
+    notes = models.CharField("Notas", max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "Adjunto de soporte"
+        verbose_name_plural = "Adjuntos de soporte"
         ordering = ("-created_at",)
 
     def __str__(self) -> str:
