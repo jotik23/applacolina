@@ -95,7 +95,6 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'production.apps.ProductionConfig',  # Must load before apps that depend on it
-    'notifications.apps.NotificationsConfig',
     'personal.apps.PersonalConfig',
     'task_manager.apps.TaskManagerConfig',
     'administration.apps.AdministrationConfig',

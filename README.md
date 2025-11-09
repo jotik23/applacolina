@@ -5,8 +5,7 @@ Plataforma Django para la gestión operativa de granjas, calendarios de turnos y
 ## Arquitectura funcional
 - `personal`: núcleo del calendario, reglas de turnos/descansos y portal de operadores.
 - `production`: entidades de granja, lotes de aves, registros de producción.
-- `task_manager`: mini apps, tareas operativas y sincronización con Telegram.
-- `notifications`: eventos y despachos de mensajería.
+- `task_manager`: mini apps y tareas operativas.
 - `applacolina/settings.py`: configuración central (pendiente de modularizar por entorno).
 
 Consulta los lineamientos ampliados en `agents.md`.

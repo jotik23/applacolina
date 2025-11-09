@@ -1,13 +1,10 @@
-import hashlib
-import hmac
 import json
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple, cast
-from urllib.parse import parse_qsl
+from typing import Any, Iterable, Mapping, Optional, Sequence, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -30,7 +27,6 @@ from django.views import View, generic
 from django.views.decorators.http import require_POST
 from pywebpush import WebPushException, webpush
 
-from notifications.models import TelegramBotConfig, TelegramChatLink
 from administration.models import PurchaseRequest, Supplier
 from administration.services.purchase_orders import (
     PurchaseOrderPayload,
@@ -723,33 +719,6 @@ def _resolve_mini_app_card_permissions(user, *, force_allow: bool = False) -> di
     return {key: user.has_perm(permission) for key, permission in MINI_APP_CARD_PERMISSION_MAP.items()}
 
 
-def _resolve_default_mini_app_bot() -> Optional[TelegramBotConfig]:
-    """Return the Telegram bot configured for the mini app, if any."""
-
-    configured_name = getattr(settings, "TASK_MANAGER_MINI_APP_BOT_NAME", "").strip()
-    queryset = TelegramBotConfig.objects.filter(is_active=True)
-
-    if configured_name:
-        bot = queryset.filter(name=configured_name).first()
-        if bot:
-            return bot
-
-    return queryset.order_by("name").first()
-
-
-def _default_auth_backend() -> str:
-    """Return the default authentication backend for explicit login calls."""
-
-    backends = getattr(settings, "AUTHENTICATION_BACKENDS", None)
-    if backends:
-        if isinstance(backends, (list, tuple)) and backends:
-            return backends[0]
-        if isinstance(backends, str):
-            return backends
-
-    return "django.contrib.auth.backends.ModelBackend"
-
-
 def _mini_app_json_guard(request) -> Optional[JsonResponse]:
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_authenticated", False):
@@ -987,58 +956,6 @@ def _get_user_assignment_for_mini_app(pk: int, *, user: UserProfile) -> TaskAssi
         .filter(collaborator=user)
     )
     return get_object_or_404(queryset, pk=pk)
-
-
-def _get_telegram_init_data(request) -> Optional[str]:
-    """Extract the signed init data sent by Telegram Web Apps."""
-
-    candidates = [
-        request.GET.get("tgWebAppData"),
-        request.GET.get("init_data"),
-        request.GET.get("telegram_init_data"),
-        request.META.get("HTTP_X_TELEGRAM_INIT_DATA"),
-    ]
-
-    for candidate in candidates:
-        if candidate:
-            return candidate
-    return None
-
-
-def _verify_telegram_signature(init_data: str, *, bot_token: str) -> dict[str, str]:
-    """Validate the Telegram init data signature and return the parsed payload."""
-
-    parsed_pairs = dict(parse_qsl(init_data, strict_parsing=True))
-    received_hash = parsed_pairs.pop("hash", None)
-    if not received_hash:
-        raise ValueError("Telegram no incluyó la firma de verificación.")
-
-    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed_pairs.items()))
-    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(calculated_hash, received_hash):
-        raise ValueError("La firma de Telegram no es válida.")
-
-    return parsed_pairs
-
-
-def _extract_telegram_user(payload: Mapping[str, str]) -> dict[str, object]:
-    """Load the Telegram user information from the init data payload."""
-
-    user_json = payload.get("user")
-    if not user_json:
-        raise ValueError("Telegram no incluyó la información del usuario.")
-
-    try:
-        user_payload = json.loads(user_json)
-    except json.JSONDecodeError as exc:  # pragma: no cover - defensive parsing
-        raise ValueError("No se pudo interpretar la información del usuario de Telegram.") from exc
-
-    if "id" not in user_payload:
-        raise ValueError("El payload de Telegram no incluye el identificador del usuario.")
-
-    return user_payload
 
 
 def _resolve_primary_group_label(user: UserProfile) -> Optional[str]:
@@ -2874,18 +2791,6 @@ class TaskManagerMiniAppView(generic.TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.mini_app_client = _resolve_mini_app_client(request)
-        self.telegram_auth_error: Optional[str] = None
-        self.telegram_user_payload: Optional[dict[str, object]] = None
-
-        if self.mini_app_client == MiniAppClient.TELEGRAM and not request.user.is_authenticated:
-            user, error = self._attempt_telegram_login(request)
-            if user:
-                backend = _default_auth_backend()
-                user.backend = backend  # type: ignore[attr-defined]
-                login(request, user)
-            else:
-                self.telegram_auth_error = error
-
         return super().dispatch(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
@@ -2895,63 +2800,6 @@ class TaskManagerMiniAppView(generic.TemplateView):
             return redirect(request.path)
 
         return self.render_to_response(self.get_context_data(form=form))
-
-    def _attempt_telegram_login(self, request) -> Tuple[Optional[UserProfile], Optional[str]]:
-        init_data = _get_telegram_init_data(request)
-        if not init_data:
-            return None, _("No se recibieron las credenciales de Telegram.")
-
-        bot = _resolve_default_mini_app_bot()
-        if not bot:
-            return None, _("No hay un bot de Telegram activo configurado para la mini app.")
-
-        try:
-            payload = _verify_telegram_signature(init_data, bot_token=bot.token)
-            user_payload = _extract_telegram_user(payload)
-        except ValueError as exc:
-            return None, str(exc)
-
-        telegram_user_id = user_payload.get("id")
-        chat_link = (
-            TelegramChatLink.objects.filter(bot=bot, telegram_user_id=telegram_user_id)
-            .select_related("user")
-            .first()
-        )
-
-        if not chat_link:
-            return None, _("No encontramos un chat verificado asociado a tu cuenta de Telegram.")
-
-        if chat_link.status != TelegramChatLink.Status.VERIFIED:
-            return None, _("Tu chat de Telegram aún no ha sido verificado.")
-
-        user = chat_link.user
-        if not getattr(user, "is_active", False):
-            return None, _("Tu cuenta está inactiva. Contacta al administrador.")
-
-        if not user.has_perm("task_manager.access_mini_app"):
-            return None, _("No tienes permisos para acceder a la mini app.")
-
-        self.telegram_user_payload = user_payload
-        self._refresh_chat_link_metadata(chat_link, user_payload)
-        return user, None
-
-    def _refresh_chat_link_metadata(self, chat_link: TelegramChatLink, user_payload: Mapping[str, object]) -> None:
-        update_fields: list[str] = []
-        for attr in ("username", "first_name", "last_name", "language_code"):
-            value = user_payload.get(attr)
-            if value is None:
-                continue
-            if getattr(chat_link, attr) != value:
-                setattr(chat_link, attr, value)
-                update_fields.append(attr)
-
-        chat_link.last_interaction_at = timezone.now()
-        update_fields.append("last_interaction_at")
-
-        if update_fields:
-            if "updated_at" not in update_fields:
-                update_fields.append("updated_at")
-            chat_link.save(update_fields=update_fields)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3044,7 +2892,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
 
         context["mini_app_client"] = self.mini_app_client.value
         context["telegram_integration_enabled"] = self.mini_app_client == MiniAppClient.TELEGRAM
-        context["telegram_auth_error"] = self.telegram_auth_error
+        context["telegram_auth_error"] = None
         context["mini_app_access_granted"] = has_access
         context["mini_app_card_permissions"] = card_permissions
         context["mini_app_pwa_config"] = _build_mini_app_pwa_config()

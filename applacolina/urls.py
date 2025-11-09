@@ -43,7 +43,6 @@ urlpatterns = [
     path('administracion/', include('administration.urls', namespace='administration')),
     path('task-manager/', include('task_manager.urls', namespace='task_manager')),
     re_path(r'^producci[oó]n-avicola/', include('production.urls', namespace='production')),
-    path('notificaciones/', include('notifications.urls', namespace='notifications')),
     path('api/', include('personal.api_urls', namespace='personal-api')),
 ]
 

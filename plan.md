@@ -5,7 +5,7 @@ El objetivo es modernizar la base de código con pasos incrementales que prioric
 ## Fase 0 · Línea base y diagnóstico
 - Ejecutar la suite actual (`docker compose exec web python manage.py test`) y documentar el estado de los casos fallidos o pendientes.
 - Identificar rutas críticas (generador de calendarios, vistas JSON, autenticación de portal) y listar los archivos clave por app.
-- Elaborar un mapa de dependencias entre apps (`personal`, `production`, `task_manager`, `notifications`) destacando puntos de acoplamiento.
+- Elaborar un mapa de dependencias entre apps (`personal`, `production`, `task_manager`) destacando puntos de acoplamiento.
 - Registrar hallazgos en `docs/audits/diagnostico-inicial.md` para que el equipo conozca riesgos antes de tocar código.
 
 ## Fase 1 · Red de seguridad mínima para refactors

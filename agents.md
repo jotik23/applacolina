@@ -9,12 +9,11 @@
 - Si surge un conflicto inevitable, pausa y comunica la situación en el canal indicado por la coordinación (o en el resumen final) para que otro agente pueda resolverlo sin perder avances.
 
 ## 1. Panorama del sistema
-- Plataforma Django 5 que agrupa varias apps de dominio (`personal`, `production`, `task_manager`, `notifications`) bajo la configuración central `applacolina/`.
+- Plataforma Django 5 que agrupa varias apps de dominio (`personal`, `production`, `task_manager`) bajo la configuración central `applacolina/`.
 - Servicios críticos:
   - Core de calendarios y asignaciones automáticas (`personal`).
   - Gestión agrícola y de producción (`production`).
-  - Integración con mini apps de Telegram y tareas (`task_manager`).
-  - Eventos y mensajería (app `notifications`).
+  - Integración con mini apps y tareas operativas (`task_manager`).
 - Persistencia en PostgreSQL con infraestructura local y en Railway; los contenedores Docker montan el repositorio en `/app` para desarrollo en caliente.
 
 ## 2. Flujo operativo diario
