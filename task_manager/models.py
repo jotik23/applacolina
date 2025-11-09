@@ -529,11 +529,52 @@ class TaskAssignmentEvidence(models.Model):
                 guessed, _ = mimetypes.guess_type(self.file.name)
                 content_type = guessed or ""
             self.content_type = content_type or ""
-        if self.content_type:
-            self.media_type = self._detect_media_type(self.content_type)
+            if self.content_type:
+                self.media_type = self._detect_media_type(self.content_type)
         elif getattr(self.file, "name", None):
             guessed, _ = mimetypes.guess_type(self.file.name)
             self.content_type = guessed or ""
             if self.content_type:
                 self.media_type = self._detect_media_type(self.content_type)
         super().save(*args, **kwargs)
+
+
+class MiniAppPushSubscription(models.Model):
+    class Client(models.TextChoices):
+        TELEGRAM = "telegram", _("Telegram")
+        EMBEDDED = "embedded", _("Embebido")
+        WEB = "web", _("Web")
+
+    user = models.ForeignKey(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name="mini_app_push_subscriptions",
+        verbose_name=_("Usuario"),
+    )
+    client = models.CharField(
+        _("Cliente"),
+        max_length=16,
+        choices=Client.choices,
+        default=Client.WEB,
+    )
+    endpoint = models.URLField(_("Endpoint"), unique=True, max_length=1024)
+    p256dh_key = models.CharField(_("Clave P256DH"), max_length=255)
+    auth_key = models.CharField(_("Clave Auth"), max_length=128)
+    content_encoding = models.CharField(_("Codificación"), max_length=32, default="aes128gcm")
+    expiration_time = models.DateTimeField(_("Expira"), null=True, blank=True)
+    user_agent = models.CharField(_("User agent"), max_length=255, blank=True)
+    is_active = models.BooleanField(_("Activo"), default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Suscripción push mini app")
+        verbose_name_plural = _("Suscripciones push mini app")
+        ordering = ("-updated_at",)
+
+    def __str__(self) -> str:
+        return f"{self.user} → {self.client}"
+
+    def mark_inactive(self) -> None:
+        self.is_active = False
+        self.save(update_fields=["is_active", "updated_at"])

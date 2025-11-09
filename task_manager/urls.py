@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     mini_app_logout_view,
+    mini_app_push_subscription_view,
     mini_app_production_record_view,
     mini_app_purchase_order_view,
     mini_app_purchase_finalize_view,
@@ -79,6 +80,11 @@ urlpatterns = [
         "telegram/mini-app/weight-registry/",
         mini_app_weight_registry_view,
         name="mini-app-weight-registry",
+    ),
+    path(
+        "api/pwa/subscriptions/",
+        mini_app_push_subscription_view,
+        name="mini-app-pwa-subscriptions",
     ),
     path("definitions/create/", task_definition_create_view, name="definition-create"),
     path("definitions/<int:pk>/", task_definition_detail_view, name="definition-detail"),

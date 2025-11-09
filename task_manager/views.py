@@ -22,6 +22,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.formats import date_format
 from django.utils.text import capfirst, slugify
 from django.utils.translation import gettext as _, ngettext
@@ -84,7 +85,14 @@ from task_manager.mini_app.features.purchases import (
 )
 
 from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
-from .models import TaskAssignment, TaskAssignmentEvidence, TaskCategory, TaskDefinition, TaskStatus
+from .models import (
+    MiniAppPushSubscription,
+    TaskAssignment,
+    TaskAssignmentEvidence,
+    TaskCategory,
+    TaskDefinition,
+    TaskStatus,
+)
 
 
 class MiniAppClient(Enum):
@@ -757,6 +765,27 @@ def _mini_app_json_guard(request) -> Optional[JsonResponse]:
         return JsonResponse({"error": _("Debes iniciar sesión en la mini app.")}, status=401)
     if not user.has_perm("task_manager.access_mini_app"):
         return JsonResponse({"error": _("No tienes permisos para la mini app.")}, status=403)
+    return None
+
+
+def _coerce_subscription_expiration(raw_value) -> Optional[datetime]:
+    if raw_value in (None, "", "null"):
+        return None
+    try:
+        if isinstance(raw_value, (int, float)):
+            timestamp = float(raw_value)
+            # Chrome envía milisegundos, navegadores older segundos.
+            if timestamp > 1e12:
+                timestamp /= 1000.0
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        if isinstance(raw_value, str):
+            parsed = parse_datetime(raw_value)
+            if parsed:
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, timezone=timezone.utc)
+                return parsed
+    except (ValueError, OSError, OverflowError):
+        return None
     return None
 
 
@@ -3269,6 +3298,63 @@ def mini_app_task_reset_view(request, pk: int):
             "assignment_id": assignment.pk,
             "completed_on": None,
         }
+    )
+
+
+@require_POST
+def mini_app_push_subscription_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"error": _("No pudimos procesar la suscripción enviada.")}, status=400)
+
+    subscription_payload = payload.get("subscription")
+    if not isinstance(subscription_payload, Mapping):
+        return JsonResponse({"error": _("Suscripción inválida.")}, status=400)
+
+    endpoint = subscription_payload.get("endpoint")
+    keys = subscription_payload.get("keys") or {}
+    p256dh_key = keys.get("p256dh")
+    auth_key = keys.get("auth")
+    content_encoding = (
+        subscription_payload.get("contentEncoding")
+        or payload.get("contentEncoding")
+        or "aes128gcm"
+    )
+
+    if not endpoint or not p256dh_key or not auth_key:
+        return JsonResponse({"error": _("Faltan datos obligatorios de la suscripción.")}, status=400)
+
+    expiration_at = _coerce_subscription_expiration(subscription_payload.get("expirationTime"))
+    client_label = _resolve_mini_app_client(request).value
+    user_agent = (request.META.get("HTTP_USER_AGENT") or "")[:255]
+
+    subscription, created = MiniAppPushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            "user": request.user,
+            "client": client_label,
+            "p256dh_key": p256dh_key,
+            "auth_key": auth_key,
+            "content_encoding": content_encoding,
+            "expiration_time": expiration_at,
+            "user_agent": user_agent,
+            "is_active": True,
+        },
+    )
+
+    status_code = 201 if created else 200
+    return JsonResponse(
+        {
+            "status": "ok",
+            "subscription_id": subscription.pk,
+            "created": created,
+        },
+        status=status_code,
     )
 
 

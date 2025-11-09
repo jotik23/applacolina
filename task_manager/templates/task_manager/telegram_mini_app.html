@@ -252,6 +252,20 @@
             </form>
             {% endif %}
           </div>
+          {% if mini_app_pwa_config.vapid_public_key %}
+          <div class="flex w-full flex-col items-center gap-1 text-center sm:w-auto sm:items-end sm:text-right">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 shadow-sm shadow-emerald-100/80 transition hover:border-emerald-300 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+              data-enable-push
+              data-label-default="Activar notificaciones"
+            >
+              <span aria-hidden="true">🔔</span>
+              <span data-push-label>Activar notificaciones</span>
+            </button>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-push-status></p>
+          </div>
+          {% endif %}
           {% if mini_app_card_permissions.motivation %}
           <div class="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-[220px]">
             <div
@@ -8519,6 +8533,112 @@
             redirectToLogin();
           });
         }
+      })();
+    </script>
+    <script>
+      (function () {
+        const pushButton = document.querySelector('[data-enable-push]');
+        const statusNode = document.querySelector('[data-push-status]');
+        if (!pushButton) {
+          return;
+        }
+
+        const hasBrowserSupport = 'Notification' in window && 'serviceWorker' in navigator;
+        const defaultLabel = pushButton.getAttribute('data-label-default') || pushButton.textContent;
+
+        function setStatus(message, tone) {
+          if (!statusNode) {
+            return;
+          }
+          statusNode.textContent = message || '';
+          statusNode.dataset.tone = tone || '';
+          statusNode.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
+          if (tone === 'success') {
+            statusNode.classList.add('text-emerald-600');
+          } else if (tone === 'error') {
+            statusNode.classList.add('text-rose-600');
+          } else {
+            statusNode.classList.add('text-slate-500');
+          }
+        }
+
+        function setButtonState({ disabled, label }) {
+          const labelNode = pushButton.querySelector('[data-push-label]');
+          pushButton.disabled = Boolean(disabled);
+          if (labelNode) {
+            labelNode.textContent = label || defaultLabel;
+          }
+        }
+
+        function waitForBridge() {
+          return new Promise((resolve, reject) => {
+            if (window.PWABridge && typeof window.PWABridge.ensurePushSubscription === 'function') {
+              resolve(window.PWABridge);
+              return;
+            }
+            const handler = function () {
+              if (window.PWABridge && typeof window.PWABridge.ensurePushSubscription === 'function') {
+                resolve(window.PWABridge);
+              } else {
+                reject(new Error('Bridge no disponible'));
+              }
+            };
+            window.addEventListener('pwa:service-worker-registered', handler, { once: true });
+            setTimeout(() => reject(new Error('Timeout esperando el Service Worker')), 8000);
+          });
+        }
+
+        async function ensureSubscription() {
+          setStatus('Activando notificaciones…', 'info');
+          setButtonState({ disabled: true, label: 'Activando…' });
+          try {
+            const bridge = await waitForBridge();
+            await bridge.ensurePushSubscription();
+            setStatus('Notificaciones activadas', 'success');
+            setButtonState({ disabled: true, label: 'Notificaciones activas' });
+          } catch (error) {
+            console.error('No se pudo registrar la suscripción push.', error);
+            setStatus('No se pudo activar. Intenta de nuevo.', 'error');
+            setButtonState({ disabled: false, label: defaultLabel });
+          }
+        }
+
+        async function requestPermission() {
+          if (!hasBrowserSupport) {
+            setStatus('Este dispositivo no soporta notificaciones.', 'error');
+            setButtonState({ disabled: true, label: 'No disponible' });
+            return;
+          }
+          if (Notification.permission === 'granted') {
+            ensureSubscription();
+            return;
+          }
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            ensureSubscription();
+            return;
+          }
+          if (permission === 'denied') {
+            setStatus('Debes permitir notificaciones en el navegador.', 'error');
+          } else {
+            setStatus('Permiso pendiente. Intenta nuevamente.', 'info');
+          }
+        }
+
+        if (!hasBrowserSupport) {
+          setStatus('Notificaciones no soportadas.', 'error');
+          setButtonState({ disabled: true, label: 'No disponible' });
+          return;
+        }
+
+        if (Notification.permission === 'granted') {
+          setButtonState({ disabled: true, label: 'Verificando…' });
+          ensureSubscription();
+        }
+
+        pushButton.addEventListener('click', function () {
+          requestPermission();
+        });
       })();
     </script>
     <script src="{% static 'task_manager/js/production_card.js' %}" defer></script>

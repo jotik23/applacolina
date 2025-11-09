@@ -3,7 +3,14 @@ from django.contrib import admin
 
 from personal.models import DayOfWeek
 
-from .models import TaskAssignment, TaskAssignmentEvidence, TaskCategory, TaskDefinition, TaskStatus
+from .models import (
+    MiniAppPushSubscription,
+    TaskAssignment,
+    TaskAssignmentEvidence,
+    TaskCategory,
+    TaskDefinition,
+    TaskStatus,
+)
 
 
 class TaskDefinitionAdminForm(forms.ModelForm):
@@ -183,3 +190,12 @@ class TaskAssignmentEvidenceAdmin(admin.ModelAdmin):
     search_fields = ("assignment__task_definition__name", "uploaded_by__nombres", "uploaded_by__apellidos")
     autocomplete_fields = ("assignment", "uploaded_by")
     readonly_fields = ("uploaded_at", "content_type", "file_size")
+
+
+@admin.register(MiniAppPushSubscription)
+class MiniAppPushSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("user", "client", "is_active", "updated_at")
+    list_filter = ("client", "is_active")
+    search_fields = ("user__nombres", "user__apellidos", "user__cedula", "endpoint")
+    readonly_fields = ("endpoint", "created_at", "updated_at")
+    autocomplete_fields = ("user",)

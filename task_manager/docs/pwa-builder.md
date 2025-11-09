@@ -25,8 +25,8 @@ Solo asegúrate de que la URL `https://applacolina-production.up.railway.app/tas
    ```
 5. Configura la firma (usar/crear tu `keystore.jks`). Ejemplo:
    ```bash
-   keytool -genkey -v -keystore lacolina.keystore -alias lacolina -keyalg RSA -keysize 2048 -validity 10000
-   bubblewrap signing --ks lacolina.keystore --alias lacolina
+   /Users/jhonvergara/Documents/APP Secrets /PWA La Colina /android.keystore
+   BLOST..1
    ```
 6. Compila:
    ```bash
@@ -37,39 +37,37 @@ Solo asegúrate de que la URL `https://applacolina-production.up.railway.app/tas
 
 > Si necesitas regenerar el paquete, solo vuelve a ejecutar `bubblewrap build`. Mantén el mismo keystore para que las actualizaciones se instalen sin desinstalar.
 
-## 3. Notificaciones push (web → Android)
+## 3. Notificaciones push con Firebase Cloud Messaging (Railway)
 
-El service worker expone los eventos `push`, `notificationclick` y `pushsubscriptionchange`. Para activarlos necesitas:
+El service worker ya maneja `push`, `notificationclick` y `pushsubscriptionchange`. Para conectarlo a Firebase y Railway sigue estos pasos:
 
-1. **Elegir emisor**
-   - **FCM Web Push** (control total): crea un proyecto Firebase, habilita Cloud Messaging y genera claves VAPID.
-   - **OneSignal**: crea una app, habilita "Web Push" y usa sus claves públicas. Puedes seguir usando OneSignal para disparar campañas sin backend propio.
+### 3.1 Configuración en Firebase
+1. Crea (o reutiliza) un proyecto en [Firebase Console](https://console.firebase.google.com/).
+2. Habilita **Cloud Messaging** y registra una aplicación Web (ej: `lacolina-miniapp`). Agrega el dominio `https://applacolina-production.up.railway.app` como origin autorizado.
+3. En *Project Settings › Cloud Messaging › Web configuration* genera un **key pair**. Copia la **Public key (VAPID)** y guarda también la Private key/Server key; se usan para enviar mensajes.
+4. Descarga las credenciales de servicio (`firebase-admin` JSON) si vas a disparar mensajes desde Django o desde un worker en Railway.
 
-2. **Configurar la clave pública (VAPID / OneSignal)**
-   - Exporta la clave a la variable `WEB_PUSH_PUBLIC_KEY` (env) o define `window.PWAPushConfig.vapidPublicKey` manualmente en el template.
-   - Opcional: define `WEB_PUSH_SUBSCRIPTION_ENDPOINT` o asigna `window.PWAPushConfig.subscriptionEndpoint` a un endpoint tuyo que guarde las suscripciones (por ejemplo, una view Django que almacene el JSON en la base).
+### 3.2 Variables en Railway
+1. En el panel del servicio (Project › Variables) agrega:
+   - `WEB_PUSH_PUBLIC_KEY`: pega la public key VAPID generada en Firebase.
+   - `WEB_PUSH_SUBSCRIPTION_ENDPOINT`: apunta a `https://applacolina-production.up.railway.app/task-manager/api/pwa/subscriptions/` (vista incluida en este repo).
+2. Redepliega para que Django propague esos valores. `task_manager/views.py` inyecta esta info en `window.PWAPushConfig`, y `pwa-init.js` la usa para registrar la suscripción.
 
-3. **Guardar la suscripción**
-   - `pwa-init.js` expone `window.PWABridge.ensurePushSubscription(...)`. Llama a esta función cuando el usuario conceda permisos y envía el JSON al backend o a OneSignal según corresponda.
-   - Ejemplo mínimo:
-     ```javascript
-     document.querySelector('[data-enable-push]').addEventListener('click', async () => {
-       try {
-         const subscription = await window.PWABridge.ensurePushSubscription();
-         console.log('Suscripción activa', subscription);
-       } catch (error) {
-         console.error('No se pudo activar push', error);
-       }
-     });
-     ```
+### 3.3 Guardar suscripciones en tu backend
+1. La ruta `POST /task-manager/api/pwa/subscriptions/` ya valida sesión + permiso `access_mini_app` y persiste el JSON (`endpoint`, `keys.p256dh`, `keys.auth`, expiración, cliente, user-agent) en `MiniAppPushSubscription`.
+2. Con las variables anteriores, `pwa-init.js` envía automáticamente la suscripción a ese endpoint cada vez que el usuario concede permisos.
+3. La interfaz muestra un botón “Activar notificaciones” (atributo `[data-enable-push]`) en el header de la mini app que ejecuta `window.PWABridge.ensurePushSubscription()` y refleja los estados al usuario.
 
-4. **Enviar mensajes**
-   - Con FCM: usa la API `fcm.googleapis.com/fcm/send` o Cloud Functions apuntando a los endpoints guardados.
-   - Con OneSignal: usa su panel o la API REST y selecciona los usuarios/web push device IDs.
+### 3.4 Enviar notificaciones desde Firebase
+1. Usa la **Server key** o un service account para llamar a `https://fcm.googleapis.com/fcm/send` pasando el `endpoint` (o usando `topic`s si los agrupas).
+2. En Python puedes instalar `firebase-admin` dentro de Railway y disparar mensajes desde un management command o Celery worker, enviando la suscripción guardada.
+3. También puedes crear una Cloud Function en Firebase que lea las suscripciones desde Firestore/postgres y envié notificaciones (ideal para integrarlo con eventos del sistema).
 
-5. **Probar**
-   - Navega a la mini app en Chrome, abre DevTools › Application › Service Workers para verificar el registro.
-   - Usa "Push" → "Payload" en DevTools o la API de tu proveedor para enviar un mensaje de prueba. El service worker mostrará la notificación con icono/badge definidos.
+### 3.5 Pruebas
+1. Abre la mini app en Chrome/Android, ve a DevTools › Application › Service Workers y confirma que `service-worker.js` está *activated*.
+2. Concede permisos de notificación y ejecuta el snippet de `data-enable-push` para registrar al usuario.
+3. Desde Firebase Console › Cloud Messaging envía un mensaje de prueba dirigido al token guardado; el service worker lo mostrará con los íconos definidos.
+4. También puedes usar DevTools › Application › Service Workers › “Push” para simular payloads JSON y verificar la UI offline.
 
 ## 4. Checklist previo a distribución
 
