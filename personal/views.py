@@ -1070,30 +1070,6 @@ def _identify_calendar_issues(
                         "score": max_streak - rest_max_limit,
                     }
                 )
-            elif rest_max_limit and max_streak == rest_max_limit and max_streak >= 2:
-                issues.append(
-                    {
-                        "severity": "warning",
-                        "title": f"{name} está al límite de días consecutivos permitidos",
-                        "detail": (
-                            f"{max_streak} días consecutivos del {streak_start:%d/%m} al {max_streak_end:%d/%m}. "
-                            f"Verifica descansos para {category_name or 'la categoría'}."
-                        ),
-                        "score": max_streak,
-                    }
-                )
-            elif not rest_max_limit and max_streak >= 6:
-                issues.append(
-                    {
-                        "severity": "info",
-                        "title": f"{name} suma {max_streak} días seguidos de turno",
-                        "detail": (
-                            f"Sin dato de límite configurado para evaluar descansos. "
-                            f"Periodo {streak_start:%d/%m} → {max_streak_end:%d/%m}."
-                        ),
-                        "score": max_streak,
-                    }
-                )
 
         rest_days: set[date] = data.get("rest_days", set())
         unassigned_days: set[date] = data.get("unassigned_days", set())
@@ -1208,7 +1184,7 @@ def _identify_calendar_issues(
     issues.sort(key=_issue_sort_key)
 
     result: list[dict[str, Any]] = []
-    for issue in issues[:6]:
+    for issue in issues:
         styles = ISSUE_STYLE_MAP.get(issue.get("severity", "info"), ISSUE_STYLE_MAP["info"]).copy()
         sanitized = {key: value for key, value in issue.items() if key not in {"score"}}
         sanitized.update(

@@ -48,7 +48,7 @@
     </style>
   </head>
   <body
-    class="min-h-screen bg-slate-100 text-slate-800 flex flex-col"
+    class="min-h-screen bg-slate-100 text-slate-800 flex flex-col overflow-x-hidden"
     data-calendar-list-url="{% url 'personal-api:calendar-list' %}"
     data-calendar-detail-template="{% url 'personal:calendar-detail' 0 %}"
     data-calendar-create-url="{% url 'personal:calendar-create' %}"
@@ -708,9 +708,9 @@
 
     {% with view_match=request.resolver_match %}
       {% if view_match and view_match.namespace == 'personal' and view_match.url_name != 'configurator' %}
-        <main class="mx-auto mt-6 max-w-[3000px] flex-1 px-3 pb-16 sm:px-4 lg:px-6">
+        <main class="mx-auto mt-6 w-full max-w-[1600px] min-w-0 flex-1 px-3 pb-16 sm:px-4 lg:px-6 overflow-x-hidden">
       {% else %}
-        <main class="mx-auto mt-6 max-w-[3000px] flex-1 px-3 pb-16 sm:px-4 lg:px-6 app-shell-main">
+        <main class="mx-auto mt-6 w-full max-w-[3000px] min-w-0 flex-1 px-3 pb-16 sm:px-4 lg:px-6 app-shell-main">
       {% endif %}
           {% block content %}{% endblock %}
         </main>
