@@ -37,12 +37,6 @@ from administration.services.purchase_orders import (
     PurchaseOrderService,
     PurchaseOrderValidationError,
 )
-from administration.services.purchase_requests import (
-    PurchaseItemPayload,
-    PurchaseRequestPayload,
-    PurchaseRequestSubmissionService,
-    PurchaseRequestValidationError,
-)
 from administration.services.workflows import (
     PurchaseApprovalDecisionError,
     PurchaseApprovalDecisionService,
@@ -64,7 +58,6 @@ from task_manager.mini_app.features import (
     build_shift_confirmation_empty_card,
     build_production_registry,
     build_weight_registry,
-    build_purchase_request_form_card,
     build_purchase_requests_overview,
     build_purchase_management_card,
     build_purchase_approval_card,
@@ -74,7 +67,6 @@ from task_manager.mini_app.features import (
     serialize_shift_confirmation_empty_card,
     serialize_production_registry,
     serialize_weight_registry,
-    serialize_purchase_request_form_card,
     serialize_purchase_requests_overview,
     serialize_purchase_management_card,
     serialize_purchase_management_empty_state,
@@ -109,7 +101,6 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "production": "task_manager.view_mini_app_production_card",
     "production_summary": "task_manager.view_mini_app_production_summary_card",
     "weight_registry": "task_manager.view_mini_app_weight_registry_card",
-    "purchase_request": "task_manager.view_mini_app_purchase_request_card",
     "purchase_overview": "task_manager.view_mini_app_purchase_overview_card",
     "purchase_approval": "task_manager.view_mini_app_purchase_approval_card",
     "purchase_management": "task_manager.view_mini_app_purchase_management_card",
@@ -812,18 +803,6 @@ def _coerce_int(value: object) -> Optional[int]:
         return None
 
 
-def _parse_decimal_value(value: object, *, allow_zero: bool = False) -> Decimal:
-    if value in (None, ""):
-        raise ValueError("empty")
-    try:
-        number = Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError) as exc:
-        raise ValueError("invalid") from exc
-    if number < 0 or (not allow_zero and number <= 0):
-        raise ValueError("range")
-    return number.quantize(Decimal("0.01"))
-
-
 def _parse_iso_date(value: object) -> Optional[date]:
     if value in (None, ""):
         return None
@@ -923,44 +902,6 @@ def _build_mini_app_order_payload(
         supplier_bank_name=supplier_bank_name,
     )
     return payload, field_errors
-
-
-def _ensure_supplier_id(payload: Mapping[str, object]) -> int:
-    supplier_id = _coerce_int(payload.get("id"))
-    if supplier_id:
-        exists = Supplier.objects.filter(pk=supplier_id).only("id").exists()
-        if not exists:
-            raise ValueError(_("El proveedor seleccionado ya no está disponible."))
-        return supplier_id
-
-    name = (payload.get("name") or "").strip()
-    tax_id = (payload.get("tax_id") or "").strip()
-    if not name or not tax_id:
-        raise ValueError(_("Debes ingresar el nombre y el NIT/CC del proveedor."))
-
-    supplier = Supplier(
-        name=name,
-        tax_id=tax_id,
-        contact_name=(payload.get("contact_name") or "").strip(),
-        contact_email=(payload.get("contact_email") or "").strip(),
-        contact_phone=(payload.get("contact_phone") or "").strip(),
-        address=(payload.get("address") or "").strip(),
-        city=(payload.get("city") or "").strip(),
-        account_holder_name=(payload.get("account_holder_name") or "").strip(),
-        account_holder_id=(payload.get("account_holder_id") or "").strip(),
-        bank_name=(payload.get("bank_name") or "").strip(),
-        account_number=(payload.get("account_number") or "").strip(),
-    )
-    account_type = (payload.get("account_type") or "").strip().lower()
-    valid_account_types = {choice[0] for choice in Supplier.ACCOUNT_TYPE_CHOICES}
-    if account_type in valid_account_types:
-        supplier.account_type = account_type
-
-    try:
-        supplier.save()
-    except IntegrityError as exc:
-        raise ValueError(_("Ya existe un proveedor con ese NIT/CC.")) from exc
-    return supplier.pk
 
 
 def _format_currency_label(amount: Decimal, currency: str) -> str:
@@ -3060,14 +3001,6 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if registry:
                     weight_registry_payload = serialize_weight_registry(registry)
                     weight_registry_payload["submit_url"] = weight_submit_url
-            if card_permissions.get("purchase_request"):
-                purchase_form_card = build_purchase_request_form_card(
-                    user=user,
-                    submit_url=reverse("task_manager:mini-app-purchase-requests"),
-                )
-                if purchase_form_card:
-                    purchases_payload = purchases_payload or {}
-                    purchases_payload["request_form"] = serialize_purchase_request_form_card(purchase_form_card)
             if card_permissions.get("purchase_overview"):
                 overview_payload = _build_purchase_overview_payload(user)
                 if overview_payload:
@@ -3457,156 +3390,6 @@ def mini_app_push_subscription_view(request):
             "created": created,
         },
         status=status_code,
-    )
-
-
-@require_POST
-def mini_app_purchase_request_view(request):
-    guard = _mini_app_json_guard(request)
-    if guard:
-        return guard
-
-    user = cast(UserProfile, request.user)
-    if not user.has_perm("task_manager.view_mini_app_purchase_request_card"):
-        return JsonResponse(
-            {"error": _("No tienes permisos para crear solicitudes de compra.")},
-            status=403,
-        )
-
-    try:
-        payload = json.loads(request.body.decode() or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
-
-    supplier_payload = payload.get("supplier")
-    if not isinstance(supplier_payload, Mapping):
-        return JsonResponse({"error": _("Selecciona o registra un proveedor válido.")}, status=400)
-
-    try:
-        supplier_id = _ensure_supplier_id(supplier_payload)
-    except ValueError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
-
-    items_payload = payload.get("items")
-    if not isinstance(items_payload, list) or not items_payload:
-        return JsonResponse({"error": _("Agrega al menos un ítem a la solicitud.")}, status=400)
-    if len(items_payload) > MINI_APP_PURCHASE_MAX_ITEMS:
-        return JsonResponse(
-            {
-                "error": _(
-                    "Puedes registrar máximo %(count)s ítems por solicitud en la mini app."
-                )
-                % {"count": MINI_APP_PURCHASE_MAX_ITEMS}
-            },
-            status=400,
-        )
-
-    items: list[PurchaseItemPayload] = []
-    for index, item in enumerate(items_payload):
-        if not isinstance(item, Mapping):
-            return JsonResponse({"error": _("El listado de ítems no es válido.")}, status=400)
-        description = (item.get("description") or "").strip()
-        if not description:
-            return JsonResponse(
-                {"error": _("El ítem %(index)s requiere una descripción.") % {"index": index + 1}},
-                status=400,
-            )
-        try:
-            quantity = _parse_decimal_value(item.get("quantity"))
-            unit_value = _parse_decimal_value(item.get("unit_value"), allow_zero=True)
-        except ValueError:
-            return JsonResponse(
-                {
-                    "error": _(
-                        "Revisa la cantidad y el valor del ítem %(index)s. Deben ser números mayores a cero."
-                    )
-                    % {"index": index + 1}
-                },
-                status=400,
-            )
-        estimated_amount = (quantity * unit_value).quantize(Decimal("0.01"))
-        product_id = _coerce_int(item.get("product_id"))
-        items.append(
-            PurchaseItemPayload(
-                id=_coerce_int(item.get("id")),
-                description=description,
-                quantity=quantity,
-                estimated_amount=estimated_amount,
-                product_id=product_id,
-            )
-        )
-
-    area_payload = payload.get("area") if isinstance(payload.get("area"), Mapping) else {}
-    summary = (payload.get("name") or payload.get("summary") or "").strip()
-    expense_type_id = _coerce_int(payload.get("expense_type_id") or payload.get("expense_type"))
-    support_document_type_id = _coerce_int(payload.get("support_document_type_id"))
-    scope_area = (
-        (area_payload.get("scope") or payload.get("scope") or PurchaseRequest.AreaScope.COMPANY)
-        or PurchaseRequest.AreaScope.COMPANY
-    )
-    scope_farm_id = _coerce_int(area_payload.get("farm_id") or payload.get("scope_farm_id") or payload.get("farm_id"))
-    scope_house_id = _coerce_int(
-        area_payload.get("chicken_house_id") or payload.get("scope_chicken_house_id") or payload.get("chicken_house_id")
-    )
-    scope_batch_code = (area_payload.get("batch_code") or payload.get("scope_batch_code") or payload.get("batch_code") or "").strip()
-
-    assigned_manager_id = _coerce_int(payload.get("assigned_manager_id"))
-    if not assigned_manager_id and user and getattr(user, "pk", None):
-        assigned_manager_id = user.pk
-
-    request_payload = PurchaseRequestPayload(
-        purchase_id=_coerce_int(payload.get("purchase_id")),
-        summary=summary,
-        notes=(payload.get("notes") or "").strip(),
-        expense_type_id=expense_type_id,
-        support_document_type_id=support_document_type_id,
-        supplier_id=supplier_id,
-        items=tuple(items),
-        scope_farm_id=scope_farm_id,
-        scope_chicken_house_id=scope_house_id,
-        scope_batch_code=scope_batch_code,
-        scope_area=scope_area,
-        assigned_manager_id=assigned_manager_id,
-    )
-
-    action = (payload.get("action") or "").strip().lower()
-    intent = "send_workflow" if action in {"send", "submit", "approval"} else "save_draft"
-
-    service = PurchaseRequestSubmissionService(actor=user)
-    try:
-        purchase = service.submit(payload=request_payload, intent=intent)
-    except PurchaseRequestValidationError as exc:
-        return JsonResponse(
-            {
-                "error": _("Revisa los datos ingresados antes de continuar."),
-                "field_errors": exc.field_errors,
-                "item_errors": exc.item_errors,
-            },
-            status=400,
-        )
-
-    overview_payload = _build_purchase_overview_payload(user)
-    management_payload = _build_purchase_management_payload(user, request)
-    approval_payload = _build_purchase_approval_payload(user, request)
-    approval_payload = _build_purchase_approval_payload(user, request)
-    approval_payload = _build_purchase_approval_payload(user, request)
-    approval_payload = _build_purchase_approval_payload(user, request)
-    message = (
-        _("Solicitud enviada a aprobación.")
-        if intent == "send_workflow"
-        else _("Borrador guardado correctamente.")
-    )
-
-    return JsonResponse(
-        {
-            "status": "ok",
-            "message": message,
-            "intent": intent,
-            "purchase": _serialize_purchase_summary(purchase),
-            "requests": overview_payload,
-            "management": management_payload,
-            "approvals": approval_payload,
-        }
     )
 
 

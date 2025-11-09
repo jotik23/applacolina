@@ -15,16 +15,8 @@ from production.models import ChickenHouse, Farm
 from personal.models import UserProfile
 
 
-MAX_SUPPLIERS = 60
-MAX_PRODUCTS = 60
 MAX_PURCHASE_ENTRIES = 6
 MAX_APPROVAL_ENTRIES = 6
-
-REQUEST_SCOPE_HELPERS: dict[str, str] = {
-    PurchaseRequest.AreaScope.COMPANY: _("Úsalo para compras corporativas o multi-granja."),
-    PurchaseRequest.AreaScope.FARM: _("Asocia la solicitud a una granja específica."),
-    PurchaseRequest.AreaScope.CHICKEN_HOUSE: _("Detalla el galpón y lote para agilizar la entrega."),
-}
 
 PURCHASE_STATUS_THEME: dict[str, str] = {
     PurchaseRequest.Status.DRAFT: "slate",
@@ -45,22 +37,6 @@ OVERVIEW_ALLOWED_STATUSES: Tuple[str, ...] = (
     PurchaseRequest.Status.SUBMITTED,
     PurchaseRequest.Status.RECEPTION,
 )
-
-
-@dataclass(frozen=True)
-class PurchaseRequestFormCard:
-    submit_url: str
-    currency: str
-    expense_types: Tuple[dict[str, object], ...]
-    suppliers: Tuple[dict[str, object], ...]
-    products: Tuple[dict[str, object], ...]
-    farms: Tuple[dict[str, object], ...]
-    chicken_houses: Tuple[dict[str, object], ...]
-    area_scopes: Tuple[dict[str, object], ...]
-    defaults: dict[str, object]
-    messages: dict[str, str]
-    manager_options: Tuple[dict[str, object], ...]
-    max_items: int = MAX_PURCHASE_ENTRIES
 
 
 @dataclass(frozen=True)
@@ -165,109 +141,6 @@ class PurchaseApprovalCard:
     entries: Tuple[PurchaseApprovalEntry, ...]
     manager_options: Tuple[dict[str, object], ...]
 
-
-def build_purchase_request_form_card(
-    *,
-    user: Optional[UserProfile],
-    submit_url: str,
-) -> Optional[PurchaseRequestFormCard]:
-    if not user or not getattr(user, "is_authenticated", False):
-        return None
-
-    expense_queryset = PurchasingExpenseType.objects.order_by("name").prefetch_related("approval_rules__approver")
-    expense_types = tuple(
-        {
-            "id": expense.pk,
-            "name": expense.name,
-            "approval_summary": expense.approval_phase_summary,
-        }
-        for expense in expense_queryset
-    )
-
-    suppliers = tuple(
-        {
-            "id": supplier.pk,
-            "name": supplier.name,
-            "tax_id": supplier.tax_id,
-            "city": supplier.city or "",
-            "has_bank_data": bool(supplier.bank_name and supplier.account_number),
-        }
-        for supplier in Supplier.objects.only(
-            "id",
-            "name",
-            "tax_id",
-            "city",
-            "bank_name",
-            "account_number",
-        )
-        .order_by("name")[:MAX_SUPPLIERS]
-    )
-
-    manager_options = _build_manager_options()
-
-    products = tuple(
-        {
-            "id": product.pk,
-            "name": product.name,
-            "unit": product.get_unit_display(),
-        }
-        for product in AdministrationProduct.objects.only("id", "name", "unit")
-        .order_by("name")[:MAX_PRODUCTS]
-    )
-
-    farms = tuple(
-        {
-            "id": farm.pk,
-            "name": farm.name,
-        }
-        for farm in Farm.objects.only("id", "name").order_by("name")
-    )
-
-    chicken_houses = tuple(
-        {
-            "id": house.pk,
-            "name": house.name,
-            "farm_id": house.farm_id,
-            "farm_name": house.farm.name if house.farm_id else "",
-        }
-        for house in ChickenHouse.objects.select_related("farm")
-        .only("id", "name", "farm_id", "farm__name")
-        .order_by("name")
-    )
-
-    area_scopes = tuple(
-        {
-            "id": scope.value,
-            "label": scope.label,
-            "helper": REQUEST_SCOPE_HELPERS.get(scope.value, ""),
-        }
-        for scope in PurchaseRequest.AreaScope
-    )
-
-    defaults = {
-        "scope": PurchaseRequest.AreaScope.COMPANY,
-    }
-
-    messages = {
-        "items_helper": _(
-            "Describe los ítems en lenguaje sencillo. Puedes combinar descripción libre y el listado de productos sugeridos."
-        ),
-        "suppliers_helper": _("Selecciona un proveedor existente o regístralo sin salir de la mini app."),
-    }
-
-    return PurchaseRequestFormCard(
-        submit_url=submit_url,
-        currency="COP",
-        expense_types=expense_types,
-        suppliers=suppliers,
-        products=products,
-        farms=farms,
-        chicken_houses=chicken_houses,
-        area_scopes=area_scopes,
-        defaults=defaults,
-        messages=messages,
-        manager_options=manager_options,
-    )
 
 
 def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional[PurchaseRequestsOverview]:
@@ -551,23 +424,6 @@ def build_purchase_approval_card(*, user: Optional[UserProfile]) -> Optional[Pur
 
     return PurchaseApprovalCard(entries=tuple(entries), manager_options=manager_options)
 
-
-def serialize_purchase_request_form_card(card: PurchaseRequestFormCard) -> dict[str, object]:
-    return {
-        "submit_url": card.submit_url,
-        "currency": card.currency,
-        "currency_symbol": _currency_symbol(card.currency),
-        "max_items": card.max_items,
-        "expense_types": list(card.expense_types),
-        "suppliers": list(card.suppliers),
-        "products": list(card.products),
-        "farms": list(card.farms),
-        "chicken_houses": list(card.chicken_houses),
-        "area_scopes": list(card.area_scopes),
-        "defaults": card.defaults,
-        "messages": card.messages,
-        "manager_options": list(card.manager_options),
-    }
 
 
 def serialize_purchase_requests_overview(card: PurchaseRequestsOverview) -> dict[str, object]:

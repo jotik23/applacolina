@@ -1,6 +1,7 @@
 {% load i18n %}
 
 {% with roster=roster %}
+{% if roster and roster.days %}
 <div class="rounded-3xl border border-slate-200/60 bg-gradient-to-br from-white via-slate-50 to-amber-50 p-5 shadow-xl shadow-amber-100/60">
   <header class="flex flex-wrap items-center justify-between gap-4">
     <div class="space-y-1">
@@ -27,7 +28,6 @@
     {% endif %}
   </header>
 
-  {% if roster and roster.days %}
   {% trans "Sin rol asignado" as fallback_role %}
   <ul class="mt-6 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
     {% for day in roster.days %}
@@ -104,8 +104,6 @@
     </li>
     {% endfor %}
   </ul>
-  {% else %}
-  <p class="mt-4 text-xs text-slate-500">{% trans "No hay asignaciones próximas." %}</p>
-  {% endif %}
 </div>
+{% endif %}
 {% endwith %}
