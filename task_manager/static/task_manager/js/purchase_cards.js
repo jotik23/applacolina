@@ -478,13 +478,24 @@ class PurchaseRequestsListController {
     if (supplierNode) supplierNode.textContent = entry.supplier_label || '—';
     if (categoryNode) categoryNode.textContent = entry.category_label || '—';
     if (amountNode) amountNode.textContent = entry.amount_label || '—';
-    if (stageChip) stageChip.textContent = entry.stage_label || entry.status_label || '';
+    if (stageChip) {
+      stageChip.textContent = entry.stage_label || entry.status_label || '';
+      this.applyStageChipTone(stageChip, !!entry.stage_is_alert);
+    }
     if (updatedNode) updatedNode.textContent = entry.updated_label || '';
     if (statusChip) statusChip.textContent = entry.status_label || '';
     this.populateItems(node, entry);
     this.populatePaymentDetails(node, entry);
     this.populateReceptionDetails(node, entry);
     return node;
+  }
+
+  applyStageChipTone(stageChip, isAlert) {
+    const alertClasses = ['border-rose-200', 'bg-rose-50', 'text-rose-700'];
+    const neutralClasses = ['border-slate-200', 'bg-slate-50', 'text-slate-600'];
+    stageChip.dataset.entryStageAlert = isAlert ? 'true' : 'false';
+    stageChip.classList.remove(...alertClasses, ...neutralClasses);
+    stageChip.classList.add(...(isAlert ? alertClasses : neutralClasses));
   }
 
   populateItems(node, entry) {
@@ -582,6 +593,17 @@ class PurchaseRequestsListController {
         target.textContent = mapping[key];
       }
     });
+    const alertWrapper = container.querySelector('[data-entry-reception-alert]');
+    const alertTarget = container.querySelector('[data-entry-reception-status_hint]');
+    if (alertWrapper && alertTarget) {
+      const hint = details.status_hint || '';
+      alertTarget.textContent = hint;
+      if (hint) {
+        alertWrapper.classList.remove('hidden');
+      } else {
+        alertWrapper.classList.add('hidden');
+      }
+    }
   }
 }
 
@@ -715,10 +737,23 @@ class PurchaseRequestsListController {
     }
 
     handleFinalize() {
-      if (!this.card.getAttribute('data-finalize-url')) {
+      const finalizeUrl = this.card.getAttribute('data-finalize-url');
+      if (!finalizeUrl) {
+        this.showFeedback('No encontramos la ruta para finalizar la gestión.', 'error');
         return;
       }
-      this.sendAction(this.card.getAttribute('data-finalize-url'), {}, 'finalize');
+      if (!this.form || !this.orderUrl) {
+        this.showFeedback('Completa los datos de la compra antes de finalizar.', 'error');
+        return;
+      }
+      this.displayFieldErrors({});
+      const payload = this.collectOrderPayload('confirm_order');
+      this.sendOrderUpdate(payload, this.finalizeButton, { silentSuccess: true }).then((saved) => {
+        if (!saved) {
+          return;
+        }
+        this.sendAction(finalizeUrl, {}, 'finalize');
+      });
     }
 
     handleSave(intent, button) {
@@ -763,15 +798,16 @@ class PurchaseRequestsListController {
       };
     }
 
-    sendOrderUpdate(payload, button) {
+    sendOrderUpdate(payload, button, options) {
+      const { silentSuccess = false } = options || {};
       if (!this.orderUrl) {
         this.showFeedback('No encontramos la ruta para guardar la gestión.', 'error');
-        return;
+        return Promise.resolve(false);
       }
       if (button) {
         button.disabled = true;
       }
-      fetch(this.orderUrl, {
+      return fetch(this.orderUrl, {
         method: 'POST',
         credentials: 'include',
         headers: Object.assign(
@@ -790,10 +826,10 @@ class PurchaseRequestsListController {
             if (result.data && result.data.field_errors) {
               this.displayFieldErrors(result.data.field_errors);
             }
-            return;
+            return false;
           }
           const data = result.data || {};
-          if (data.message) {
+          if (data.message && !silentSuccess) {
             this.showFeedback(data.message, 'success');
           }
           this.displayFieldErrors({});
@@ -809,9 +845,11 @@ class PurchaseRequestsListController {
           if (data.management) {
             this.refresh(data.management);
           }
+          return true;
         })
         .catch(() => {
           this.showFeedback('No pudimos contactar al servidor. Intenta más tarde.', 'error');
+          return false;
         })
         .finally(() => {
           if (button) {

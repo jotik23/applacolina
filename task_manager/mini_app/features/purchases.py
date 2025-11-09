@@ -29,7 +29,6 @@ PURCHASE_STATUS_THEME: dict[str, str] = {
     PurchaseRequest.Status.DRAFT: "slate",
     PurchaseRequest.Status.SUBMITTED: "amber",
     PurchaseRequest.Status.APPROVED: "brand",
-    PurchaseRequest.Status.ORDERED: "indigo",
     PurchaseRequest.Status.RECEPTION: "orange",
     PurchaseRequest.Status.INVOICE: "emerald",
     PurchaseRequest.Status.PAYMENT: "emerald",
@@ -44,7 +43,6 @@ OVERVIEW_ALLOWED_STATUSES: Tuple[str, ...] = (
     PurchaseRequest.Status.DRAFT,
     PurchaseRequest.Status.SUBMITTED,
     PurchaseRequest.Status.RECEPTION,
-    PurchaseRequest.Status.ORDERED,
 )
 
 
@@ -85,6 +83,7 @@ class PurchaseRequestListEntry:
     area_label: str
     updated_label: str
     stage_label: str
+    stage_is_alert: bool
     items: Tuple[dict[str, object], ...]
     payment_details: dict[str, object]
     reception_details: dict[str, object]
@@ -271,6 +270,7 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
         reception_details = _build_reception_details(purchase=purchase)
         item_payloads = tuple(_serialize_purchase_item(item=item, currency=purchase.currency or currency) for item in purchase.items.all())
 
+        stage_label, stage_is_alert = _resolve_stage_label(purchase)
         entries.append(
             PurchaseRequestListEntry(
                 pk=purchase.pk,
@@ -284,7 +284,8 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
                 supplier_label=purchase.supplier.name if purchase.supplier else "",
                 area_label=purchase.area_label,
                 updated_label=updated_label,
-                stage_label=_resolve_stage_label(purchase.status),
+                stage_label=stage_label,
+                stage_is_alert=stage_is_alert,
                 items=item_payloads,
                 payment_details=payment_details,
                 reception_details=reception_details,
@@ -371,10 +372,7 @@ def build_purchase_management_card(*, user: Optional[UserProfile]) -> Optional[P
         notes.append(purchase.reception_notes.strip())
 
     allow_finalize = purchase.status == PurchaseRequest.Status.APPROVED
-    allow_modification = purchase.status in {
-        PurchaseRequest.Status.APPROVED,
-        PurchaseRequest.Status.ORDERED,
-    }
+    allow_modification = purchase.status == PurchaseRequest.Status.APPROVED
 
     purchase_date_value = (
         purchase.purchase_date.isoformat() if purchase.purchase_date else timezone.localdate().isoformat()
@@ -497,6 +495,7 @@ def serialize_purchase_requests_overview(card: PurchaseRequestsOverview) -> dict
                 "area_label": entry.area_label,
                 "updated_label": entry.updated_label,
                 "stage_label": entry.stage_label,
+                "stage_is_alert": entry.stage_is_alert,
                 "items": list(entry.items),
                 "payment_details": entry.payment_details,
                 "reception_details": entry.reception_details,
@@ -573,18 +572,22 @@ def _format_currency(amount: Decimal, currency: str) -> str:
     return f"{symbol} {quantized:,.2f}"
 
 
-def _resolve_stage_label(status: str) -> str:
+def _resolve_stage_label(purchase: PurchaseRequest) -> tuple[str, bool]:
+    if purchase.status == PurchaseRequest.Status.RECEPTION:
+        if purchase.reception_mismatch:
+            return _("Recepción con diferencias"), True
+        if _has_pending_reception_items(purchase):
+            return _("Esperando llegada"), False
+        return _("Recibida"), False
     stage_map: dict[str, str] = {
         PurchaseRequest.Status.DRAFT: _("Borrador"),
         PurchaseRequest.Status.SUBMITTED: _("En aprobación"),
         PurchaseRequest.Status.APPROVED: _("En Gestión"),
-        PurchaseRequest.Status.ORDERED: _("Orden emitida"),
-        PurchaseRequest.Status.RECEPTION: _("Esperando llegada"),
         PurchaseRequest.Status.INVOICE: _("Soportes"),
         PurchaseRequest.Status.PAYMENT: _("Pago"),
         PurchaseRequest.Status.ARCHIVED: _("Archivada"),
     }
-    return stage_map.get(status, status)
+    return stage_map.get(purchase.status, purchase.status), False
 
 
 def _serialize_purchase_item(*, item: PurchaseItem, currency: str) -> dict[str, object]:
@@ -642,6 +645,11 @@ def _build_payment_details(*, purchase: PurchaseRequest, currency: str) -> dict[
 
 
 def _build_reception_details(*, purchase: PurchaseRequest) -> dict[str, object]:
+    status_hint = ""
+    if purchase.reception_mismatch:
+        status_hint = _("Cantidades recibidas distintas a las solicitadas. Revisa la recepción antes de continuar.")
+    elif purchase.status == PurchaseRequest.Status.RECEPTION and not _has_pending_reception_items(purchase):
+        status_hint = _("Recepción completa registrada.")
     return {
         "delivery_condition_label": (
             PurchaseRequest.DeliveryCondition(purchase.delivery_condition).label if purchase.delivery_condition else ""
@@ -649,7 +657,17 @@ def _build_reception_details(*, purchase: PurchaseRequest) -> dict[str, object]:
         "shipping_eta_label": _format_date(purchase.shipping_eta) or "",
         "shipping_notes": (purchase.shipping_notes or "").strip(),
         "reception_notes": (purchase.reception_notes or "").strip(),
+        "status_hint": status_hint,
     }
+
+
+def _has_pending_reception_items(purchase: PurchaseRequest) -> bool:
+    for item in purchase.items.all():
+        requested = item.quantity or Decimal("0")
+        received = item.received_quantity or Decimal("0")
+        if received < requested:
+            return True
+    return False
 
 
 def _currency_symbol(currency: Optional[str]) -> str:

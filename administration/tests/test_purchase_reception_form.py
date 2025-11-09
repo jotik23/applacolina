@@ -26,7 +26,7 @@ class PurchaseReceptionFormTests(TestCase):
             name='Compra insumos',
             supplier=self.supplier,
             expense_type=self.expense_type,
-            status=PurchaseRequest.Status.ORDERED,
+            status=PurchaseRequest.Status.RECEPTION,
         )
         self.item = PurchaseItem.objects.create(
             purchase=self.purchase,
@@ -42,14 +42,14 @@ class PurchaseReceptionFormTests(TestCase):
         )
         self.assertRedirects(
             response,
-            f"{self._url()}?scope={PurchaseRequest.Status.ORDERED}",
+            f"{self._url()}?scope={PurchaseRequest.Status.RECEPTION}",
             fetch_redirect_response=False,
         )
         self.item.refresh_from_db()
         self.purchase.refresh_from_db()
         self.assertEqual(Decimal('6'), self.item.received_quantity)
         self.assertEqual('', self.purchase.reception_notes)
-        self.assertEqual(PurchaseRequest.Status.ORDERED, self.purchase.status)
+        self.assertEqual(PurchaseRequest.Status.RECEPTION, self.purchase.status)
 
     def test_confirm_reception_changes_status_and_saves_notes(self) -> None:
         uploaded = SimpleUploadedFile("remision.txt", b"ok", content_type="text/plain")
@@ -70,7 +70,7 @@ class PurchaseReceptionFormTests(TestCase):
     def _payload(self, *, received: str, intent: str = 'save_reception', notes: str = '') -> dict[str, str]:
         return {
             'panel': 'reception',
-            'scope': PurchaseRequest.Status.ORDERED,
+            'scope': PurchaseRequest.Status.RECEPTION,
             'purchase': str(self.purchase.pk),
             'receipts[0][item_id]': str(self.item.pk),
             'receipts[0][received_quantity]': received,

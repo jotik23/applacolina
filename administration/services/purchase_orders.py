@@ -62,8 +62,8 @@ class PurchaseOrderService:
         purchase: PurchaseRequest,
     ) -> dict[str, list[str]]:
         errors: dict[str, list[str]] = {}
-        if purchase.status not in {PurchaseRequest.Status.APPROVED, PurchaseRequest.Status.ORDERED}:
-            errors.setdefault("non_field", []).append("Solo puedes gestionar compras aprobadas.")
+        if purchase.status not in {PurchaseRequest.Status.APPROVED, PurchaseRequest.Status.RECEPTION}:
+            errors.setdefault("non_field", []).append("Solo puedes gestionar compras aprobadas o en gestión de pago.")
         if not payload.purchase_date:
             errors.setdefault("purchase_date", []).append("Selecciona la fecha de compra.")
         if payload.delivery_condition not in PurchaseRequest.DeliveryCondition.values:

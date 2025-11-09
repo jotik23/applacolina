@@ -379,7 +379,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             requester=self.user,
             supplier=self.supplier,
             expense_type=self.expense_type,
-            status=PurchaseRequest.Status.ORDERED,
+            status=PurchaseRequest.Status.RECEPTION,
         )
         rule = ExpenseTypeApprovalRule.objects.create(
             expense_type=self.expense_type,
@@ -395,7 +395,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             comments='Nota aprobada',
         )
         response = self.client.get(
-            f"{self._url()}?scope={PurchaseRequest.Status.ORDERED}&panel=request&purchase={purchase.pk}"
+            f"{self._url()}?scope={PurchaseRequest.Status.RECEPTION}&panel=request&purchase={purchase.pk}"
         )
         self.assertContains(response, "Nota de aprobación")
         self.assertContains(response, "Nota aprobada")

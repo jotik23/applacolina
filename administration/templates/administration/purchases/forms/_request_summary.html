@@ -70,7 +70,7 @@
       {% endif %}
     {% endwith %}
     {% with status=purchase.status %}
-      {% if status == 'ordenado' or status == 'recepcion' or status == 'factura' or status == 'pago' or status == 'archivada' %}
+      {% if status == 'recepcion' or status == 'factura' or status == 'pago' or status == 'archivada' %}
         <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
           <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Gestión de compra</p>
           <dl class="mt-3 grid gap-3 sm:grid-cols-2 text-slate-600">

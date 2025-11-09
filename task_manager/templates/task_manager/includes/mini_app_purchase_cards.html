@@ -429,8 +429,9 @@
               </div>
               <div class="flex flex-col items-end gap-2">
                 <span
-                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600"
+                  class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if entry.stage_is_alert %}border-rose-200 bg-rose-50 text-rose-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
                   data-entry-stage-chip
+                  data-entry-stage-alert="{{ entry.stage_is_alert|yesno:'true,false' }}"
                 >
                   {{ entry.stage_label }}
                 </span>
@@ -516,6 +517,10 @@
                       <dt class="uppercase tracking-wide text-slate-500">Notas de recepción</dt>
                       <dd class="mt-0.5 text-slate-700" data-entry-reception-reception_notes></dd>
                     </div>
+                    <div class="sm:col-span-2 hidden" data-entry-reception-alert>
+                      <dt class="uppercase tracking-wide text-slate-500">Alertas</dt>
+                      <dd class="mt-0.5 font-semibold text-rose-600" data-entry-reception-status_hint></dd>
+                    </div>
                   </dl>
                 </section>
               </div>
@@ -543,7 +548,7 @@
             </div>
             <div class="flex flex-col items-end gap-2">
               <span
-                class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide border-slate-200 bg-slate-50 text-slate-600"
                 data-entry-stage-chip
               ></span>
               <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide border-slate-200 bg-slate-50 text-slate-600" data-entry-status-chip></span>

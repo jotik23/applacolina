@@ -70,18 +70,18 @@ class PurchaseOrderFormSubmissionTests(TestCase):
         self.assertEqual('Banco ACME', self.supplier.bank_name)
         self.assertEqual(PurchaseRequest.Status.APPROVED, self.purchase.status)
 
-    def test_confirm_order_with_shipping_moves_purchase_to_ordered(self) -> None:
+    def test_confirm_order_with_shipping_moves_purchase_to_payable(self) -> None:
         response = self.client.post(
             self._url(),
             data=self._payload(intent='confirm_order'),
         )
         self.assertRedirects(
             response,
-            f"{self._url()}?scope={PurchaseRequest.Status.ORDERED}",
+            f"{self._url()}?scope={PurchaseRequest.Status.RECEPTION}",
             fetch_redirect_response=False,
         )
         self.purchase.refresh_from_db()
-        self.assertEqual(PurchaseRequest.Status.ORDERED, self.purchase.status)
+        self.assertEqual(PurchaseRequest.Status.RECEPTION, self.purchase.status)
 
     def test_confirm_order_with_immediate_delivery_autoreceives_items(self) -> None:
         response = self.client.post(
@@ -143,13 +143,13 @@ class PurchaseOrderFormSubmissionTests(TestCase):
         )
 
     def test_reopen_request_moves_back_to_draft(self) -> None:
-        self.purchase.status = PurchaseRequest.Status.ORDERED
+        self.purchase.status = PurchaseRequest.Status.RECEPTION
         self.purchase.save(update_fields=['status'])
         response = self.client.post(
             self._url(),
             data={
                 'panel': 'order',
-                'scope': PurchaseRequest.Status.ORDERED,
+                'scope': PurchaseRequest.Status.RECEPTION,
                 'purchase': str(self.purchase.pk),
                 'intent': 'reopen_request',
             },

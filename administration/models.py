@@ -215,7 +215,6 @@ class PurchaseRequest(TimeStampedModel):
         DRAFT = "borrador", "Borrador"
         SUBMITTED = "aprobacion", "En aprobación"
         APPROVED = "aprobada", "Aprobada"
-        ORDERED = "ordenado", "Orden emitida"
         RECEPTION = "recepcion", "Gestionar pago"
         INVOICE = "factura", "Factura"
         PAYMENT = "pago", "Pago"
@@ -226,13 +225,12 @@ class PurchaseRequest(TimeStampedModel):
         ("approval", Status.SUBMITTED),
         ("purchasing", Status.APPROVED),
         ("payable", Status.RECEPTION),
-        ("receiving", Status.ORDERED),
         ("support", Status.INVOICE),
         ("accounting", Status.PAYMENT),
         ("archived", Status.ARCHIVED),
     )
     POST_PAYMENT_STATUSES: ClassVar[set[str]] = {
-        Status.ORDERED,
+        Status.RECEPTION,
         Status.INVOICE,
         Status.PAYMENT,
         Status.ARCHIVED,

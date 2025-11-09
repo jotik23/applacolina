@@ -152,7 +152,7 @@ PURCHASE_STAGE_META = {
     },
     'receiving': {
         'label': 'Esperando llegada',
-        'description': 'Órdenes emitidas pendientes de recepción.',
+        'description': 'Compras aprobadas pendientes de recepción.',
         'tooltip': 'Esperando recepción parcial o total.',
         'palette': 'blue',
     },
@@ -215,7 +215,6 @@ ACTION_BY_STATUS = {
     PurchaseRequest.Status.DRAFT: PurchaseAction('Solicitar aprobación', 'request', 'solicitar_aprobacion'),
     PurchaseRequest.Status.SUBMITTED: PurchaseAction('Ver solicitud', 'request', 'ver_detalle'),
     PurchaseRequest.Status.APPROVED: PurchaseAction('Gestionar compra', 'order', 'gestionar_compra'),
-    PurchaseRequest.Status.ORDERED: PurchaseAction('Registrar recepción', 'reception', 'registrar_recepcion'),
     PurchaseRequest.Status.RECEPTION: PurchaseAction('Registrar pago', 'payment', 'registrar_pago'),
     PurchaseRequest.Status.INVOICE: PurchaseAction('Gestionar soporte', 'invoice', 'registrar_factura'),
     PurchaseRequest.Status.PAYMENT: PurchaseAction(

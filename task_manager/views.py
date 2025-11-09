@@ -3505,14 +3505,14 @@ def mini_app_purchase_finalize_view(request, pk: int):
     if not purchase:
         return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
 
-    if purchase.status not in {PurchaseRequest.Status.APPROVED, PurchaseRequest.Status.ORDERED}:
+    if purchase.status not in {PurchaseRequest.Status.APPROVED, PurchaseRequest.Status.RECEPTION}:
         return JsonResponse(
             {"error": _("Esta solicitud ya no puede marcarse como gestionada.")},
             status=400,
         )
 
     if purchase.status == PurchaseRequest.Status.APPROVED:
-        purchase.status = PurchaseRequest.Status.ORDERED
+        purchase.status = PurchaseRequest.Status.RECEPTION
     if not purchase.order_date:
         purchase.order_date = timezone.localdate()
     purchase.save(update_fields=["status", "order_date", "updated_at"])
