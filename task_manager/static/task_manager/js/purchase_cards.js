@@ -937,6 +937,7 @@ class PurchaseRequestsListController {
       const shouldShow =
         this.deliveryField && this.deliveryField.value === 'shipping';
       this.shippingFields.toggleAttribute('hidden', !shouldShow);
+      this.shippingFields.style.display = shouldShow ? '' : 'none';
     }
 
     toggleBankPanel() {
@@ -946,6 +947,7 @@ class PurchaseRequestsListController {
       const requiresBank =
         this.paymentMethodField && this.paymentMethodField.value === 'transferencia';
       this.bankPanel.toggleAttribute('hidden', !requiresBank);
+      this.bankPanel.style.display = requiresBank ? '' : 'none';
       if (requiresBank) {
         this.bankPanel.open = true;
       } else {

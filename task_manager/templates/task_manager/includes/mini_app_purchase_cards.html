@@ -764,7 +764,7 @@
         <div
           class="grid gap-2 sm:grid-cols-2"
           data-management-shipping-fields
-          {% if purchase.form.delivery_condition != 'shipping' %}hidden{% endif %}
+          {% if purchase.form.delivery_condition != 'shipping' %}hidden style="display:none"{% endif %}
         >
           <label class="flex flex-col gap-1 rounded-2xl border border-dashed border-indigo-100 bg-white px-3 py-2">
             <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha estimada de llegada</span>
@@ -788,7 +788,7 @@
         <details
           class="rounded-2xl border border-indigo-100 bg-white/90 px-3 py-2 text-slate-600 shadow-inner shadow-indigo-50"
           data-management-bank-panel
-          {% if purchase.form.payment_method == 'transferencia' %}open{% else %}hidden{% endif %}
+          {% if purchase.form.payment_method == 'transferencia' %}open{% else %}hidden style="display:none"{% endif %}
         >
           <summary class="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
             <span>Datos bancarios del proveedor</span>
