@@ -219,6 +219,10 @@ def build_shift_confirmation_empty_card(
     if not user or not getattr(user, "is_authenticated", False):
         return None
 
+    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        # Staff/admin users can enter the mini app without blocking on shift confirmation.
+        return None
+
     target_date = reference_date or UserProfile.colombia_today()
 
     operator_name = (

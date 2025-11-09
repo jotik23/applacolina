@@ -103,7 +103,6 @@ class MiniAppClient(Enum):
 
 
 MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
-    "motivation": "task_manager.view_mini_app_motivation_card",
     "goals_selection": "task_manager.view_mini_app_goals_selection_card",
     "goals_overview": "task_manager.view_mini_app_goals_overview_card",
     "shift_confirmation": "task_manager.view_mini_app_shift_confirmation_card",

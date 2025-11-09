@@ -202,12 +202,12 @@
       {% if mini_app_access_granted and telegram_mini_app %}
       <header class="relative rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur overflow-hidden">
         <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-          <div class="flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
-            <div class="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
-              <span
-                class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-200/80"
-              >
-                Granjas la Colina
+        <div class="flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <div class="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+            <span
+              class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-200/80"
+            >
+              Granjas la Colina
               </span>
               <h1 data-telegram-display-name class="text-base font-semibold text-slate-900">
                 {{ telegram_mini_app.user.display_name }}
@@ -252,75 +252,6 @@
             </form>
             {% endif %}
           </div>
-          {% if mini_app_card_permissions.motivation %}
-          <div class="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-[220px]">
-            <div
-              data-motivation-card
-              class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-100 via-white to-sky-50 p-3 shadow-md shadow-amber-200/60"
-            >
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Tu ranking</p>
-              <div class="mt-2 flex items-baseline justify-between">
-                <span class="text-3xl font-semibold text-amber-600">#3</span>
-                <span class="text-xs text-slate-600">de 18</span>
-              </div>
-              <p class="mt-2 text-[11px] text-slate-600">Continúa así para alcanzar el top 2 esta semana.</p>
-            </div>
-            <div
-              data-motivation-card
-              class="hidden rounded-2xl border border-sky-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-3 shadow-md shadow-sky-200/60"
-            >
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Puntos de hoy</p>
-              <div class="mt-2 flex items-center gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white text-lg font-semibold text-sky-600 shadow-inner shadow-sky-200/70">
-                  28
-                </div>
-                <div class="flex-1">
-                  <p class="text-sm font-semibold text-slate-900">Meta: 35 pts</p>
-                  <div class="mt-1 h-2 w-full rounded-full bg-slate-200">
-                    <span class="block h-full w-3/4 rounded-full bg-sky-400"></span>
-                  </div>
-                  <p class="mt-1 text-[11px] text-slate-600">Solo te faltan 7 puntos.</p>
-                </div>
-              </div>
-            </div>
-            <div
-              data-motivation-card
-              class="hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-3 shadow-md shadow-emerald-200/50"
-            >
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Racha activa</p>
-              <p class="mt-2 text-sm font-semibold text-emerald-600">3 días al 100%</p>
-              <div class="mt-3 flex items-center gap-2 text-[11px] text-slate-600">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 font-semibold">4</span>
-                <span>Completa mañana para alcanzar la racha dorada.</span>
-              </div>
-            </div>
-            <div
-              data-motivation-card
-              class="hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-amber-50 p-3 shadow-md shadow-rose-200/50"
-            >
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Reconocimiento</p>
-              <p class="mt-2 text-sm font-semibold text-rose-600">Destacado en limpieza</p>
-              <p class="mt-2 text-[11px] text-slate-600">Tu atención en Galpón 4 aceleró toda la jornada.</p>
-              <p class="mt-2 text-[11px] text-slate-500">Sigue entregando esta energía.</p>
-            </div>
-            <div
-              data-motivation-card
-              class="hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-amber-50 to-sky-50 p-3 shadow-md shadow-slate-200/60"
-            >
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-700">Siguiente objetivo</p>
-              <div class="mt-2 space-y-2 text-[11px] text-slate-600">
-                <div class="flex items-center gap-2">
-                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-xs font-semibold">1</span>
-                  Completa dos tareas más para desbloquear 50 puntos.
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 text-sky-600 text-xs font-semibold">2</span>
-                  Asigna una sugerencia y comparte la mejora.
-                </div>
-              </div>
-            </div>
-          </div>
-          {% else %}
           <div class="flex w-full items-center justify-center py-4 sm:flex-1">
             <img
               src="{% static 'task_manager/img/mini_app_motivation_placeholder.png' %}"
@@ -328,7 +259,6 @@
               class="h-24 w-24 object-contain drop-shadow-md sm:h-28 sm:w-28"
             />
           </div>
-          {% endif %}
         </div>
         {% if mini_app_pwa_config.vapid_public_key %}
         <div class="absolute right-5 top-5 flex flex-col items-center gap-1 text-center text-slate-500">
@@ -4158,19 +4088,6 @@
 
         applyFilters();
         refreshMetrics();
-      })();
-    </script>
-
-    <script>
-      (function () {
-        var cards = document.querySelectorAll('[data-motivation-card]');
-        if (!cards.length) {
-          return;
-        }
-        var selectedIndex = Math.floor(Math.random() * cards.length);
-        cards.forEach(function (card, index) {
-          card.classList.toggle('hidden', index !== selectedIndex);
-        });
       })();
     </script>
 

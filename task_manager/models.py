@@ -251,7 +251,6 @@ class TaskDefinition(models.Model):
         ordering = ("display_order", "name", "pk")
         permissions = [
             ("access_mini_app", _("Puede acceder a la mini app de tareas")),
-            ("view_mini_app_motivation_card", _("Puede ver el card de motivación en la mini app")),
             (
                 "view_mini_app_goals_selection_card",
                 _("Puede ver el card de selección de plan de premio en la mini app"),

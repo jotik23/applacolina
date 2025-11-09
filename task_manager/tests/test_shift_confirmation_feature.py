@@ -159,6 +159,14 @@ class ShiftConfirmationFeatureTests(TestCase):
         assert empty_card  # type checkers
         self.assertIn("no encontramos", empty_card.body_lines[0].lower())
 
+    def test_staff_without_assignment_skips_empty_state(self):
+        reference_date = date(2024, 11, 2)
+        self.operator.is_staff = True
+        self.operator.save(update_fields=["is_staff"])
+
+        self.assertIsNone(build_shift_confirmation_card(user=self.operator, reference_date=reference_date))
+        self.assertIsNone(build_shift_confirmation_empty_card(user=self.operator, reference_date=reference_date))
+
     def test_adjacent_assignments_prioritizes_modified_but_allows_draft(self):
         reference_date = date(2024, 11, 2)
         base_calendar = ShiftCalendar.objects.create(
