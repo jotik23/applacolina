@@ -247,8 +247,8 @@ MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))
 if not MEDIA_ROOT.is_absolute():
     MEDIA_ROOT = BASE_DIR / MEDIA_ROOT
 
-WEB_PUSH_PUBLIC_KEY = os.getenv("WEB_PUSH_PUBLIC_KEY", "")
-WEB_PUSH_SUBSCRIPTION_ENDPOINT = os.getenv("WEB_PUSH_SUBSCRIPTION_ENDPOINT", "")
+WEB_PUSH_PUBLIC_KEY = os.getenv("WEB_PUSH_PUBLIC_KEY", "BPJfP7W8RMefs3I39YB5q9QSQZr6QWY6DBWI24LYVRa-SB81GQMQzv3vxanHMYz02gfPeuItQDIVFgsvbaJGH18")
+WEB_PUSH_SUBSCRIPTION_ENDPOINT = os.getenv("WEB_PUSH_SUBSCRIPTION_ENDPOINT", "https://applacolina-production.up.railway.app/task-manager/api/pwa/subscriptions/")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
