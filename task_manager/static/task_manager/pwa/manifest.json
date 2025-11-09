@@ -87,5 +87,10 @@
       "description": "Abrir el panel de producción y registros",
       "url": "/task-manager/telegram/mini-app/?view=production"
     }
-  ]
+  ],
+  "serviceworker": {
+    "src": "/service-worker.js",
+    "scope": "/",
+    "use_cache": false
+  }
 }
