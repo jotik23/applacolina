@@ -12,3 +12,5 @@ db.sqlite3
 .env
 
 reademe - calendar - 2.md
+
+tmp/

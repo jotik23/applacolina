@@ -6,6 +6,9 @@ from .views import (
     mini_app_push_test_view,
     mini_app_push_subscription_view,
     mini_app_production_record_view,
+    mini_app_purchase_request_view,
+    mini_app_purchase_supplier_search_view,
+    mini_app_purchase_supplier_create_view,
     mini_app_purchase_order_view,
     mini_app_purchase_finalize_view,
     mini_app_purchase_approval_view,
@@ -56,6 +59,21 @@ urlpatterns = [
         "telegram/mini-app/purchases/<int:pk>/request-modification/",
         mini_app_purchase_request_modify_view,
         name="mini-app-purchase-request-modify",
+    ),
+    path(
+        "telegram/mini-app/purchases/requests/",
+        mini_app_purchase_request_view,
+        name="mini-app-purchase-request",
+    ),
+    path(
+        "telegram/mini-app/purchases/suppliers/",
+        mini_app_purchase_supplier_search_view,
+        name="mini-app-purchase-suppliers",
+    ),
+    path(
+        "telegram/mini-app/purchases/suppliers/create/",
+        mini_app_purchase_supplier_create_view,
+        name="mini-app-purchase-suppliers-create",
     ),
     path(
         "telegram/mini-app/purchases/<int:pk>/order/",

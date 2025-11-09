@@ -3,14 +3,44 @@
 
   const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
 
-  const currencyFormatter = new Intl.NumberFormat('es-CO', {
+  const supportsIntl = typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function';
+
+  function buildNumberFormatter(options) {
+    if (supportsIntl) {
+      return new Intl.NumberFormat('es-CO', options);
+    }
+    const config = options || {};
+    const maxFraction =
+      typeof config.maximumFractionDigits === 'number'
+        ? config.maximumFractionDigits
+        : typeof config.minimumFractionDigits === 'number'
+          ? config.minimumFractionDigits
+          : 0;
+    return {
+      format(value) {
+        const number = typeof value === 'number' && !Number.isNaN(value) ? value : 0;
+        const sign = number < 0 ? '-' : '';
+        const absolute = Math.abs(number);
+        const formatted =
+          maxFraction > 0 ? absolute.toFixed(maxFraction) : Math.round(absolute).toString();
+        const parts = formatted.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        if (parts.length === 1) {
+          return sign + parts[0];
+        }
+        return sign + parts[0] + ',' + parts[1];
+      },
+    };
+  }
+
+  const currencyFormatter = buildNumberFormatter({
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
 
-  const twoDecimalsFormatter = new Intl.NumberFormat('es-CO', {
+  const twoDecimalsFormatter = buildNumberFormatter({
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 2,
@@ -33,21 +63,37 @@
     if (symbol !== '$') {
       return `${symbol} ${amount.toFixed(2)}`;
     }
-    return amount >= 100000
-      ? currencyFormatter.format(amount)
-      : twoDecimalsFormatter.format(amount);
+  return amount >= 100000
+    ? currencyFormatter.format(amount)
+    : twoDecimalsFormatter.format(amount);
+  }
+
+  function safeParseJSON(value) {
+    if (!value) {
+      return null;
+    }
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return null;
+    }
   }
 
 
   class PurchaseRequestsListController {
-    constructor(card) {
+    constructor(card, helpers) {
       this.card = card;
+      this.helpers = helpers || {};
       this.listNode = card.querySelector('[data-purchase-requests-list]');
       this.totalNode = card.querySelector('[data-purchase-requests-total]');
       this.countNode = card.querySelector('[data-purchase-requests-count]');
       this.emptyStateNode = card.querySelector('[data-purchase-requests-empty]');
       this.template = card.querySelector('template[data-purchase-request-entry-template]');
       this.summaryChips = Array.prototype.slice.call(card.querySelectorAll('[data-purchase-status-chip]'));
+      this.handleListClick = this.handleListClick.bind(this);
+      if (this.listNode) {
+        this.listNode.addEventListener('click', this.handleListClick);
+      }
     }
 
   render(payload) {
@@ -124,6 +170,12 @@
     }
     if (updatedNode) updatedNode.textContent = entry.updated_label || '';
     if (statusChip) statusChip.textContent = entry.status_label || '';
+    const editButton = node.querySelector('[data-purchase-request-edit]');
+    if (editButton) {
+      const shouldShowEdit = Boolean(entry.can_edit);
+      editButton.classList.toggle('hidden', !shouldShowEdit);
+      editButton.disabled = !shouldShowEdit;
+    }
     this.populateItems(node, entry);
     this.populatePaymentDetails(node, entry);
     this.populateReceptionDetails(node, entry);
@@ -244,6 +296,46 @@
         alertWrapper.classList.add('hidden');
       }
     }
+  }
+
+  handleListClick(event) {
+    const trigger = event.target.closest('[data-purchase-request-edit]');
+    if (!trigger) {
+      return;
+    }
+    const entryNode = trigger.closest('[data-purchase-request-entry]');
+    if (!entryNode || entryNode.dataset.canEdit !== 'true') {
+      return;
+    }
+    const payload = this.resolveEditPayload(entryNode);
+    if (typeof this.helpers.onEditRequest === 'function') {
+      this.helpers.onEditRequest(payload || null);
+    }
+  }
+
+  resolveEditPayload(entryNode) {
+    if (!entryNode) {
+      return null;
+    }
+    const datasetPayload = entryNode.dataset.editPayload;
+    if (datasetPayload) {
+      try {
+        return JSON.parse(datasetPayload);
+      } catch (error) {
+        // Ignore invalid payloads and fall back to cached data.
+      }
+    }
+    const entryId = entryNode.getAttribute('data-entry-id');
+    const purchases = (window.tmMiniApp && window.tmMiniApp.purchases) || {};
+    const overview = purchases.overview || {};
+    if (!entryId || !Array.isArray(overview.entries)) {
+      return null;
+    }
+    const matched = overview.entries.find((entry) => String(entry.id) === String(entryId));
+    if (matched && matched.edit_payload) {
+      return matched.edit_payload;
+    }
+    return null;
   }
 }
 
@@ -564,7 +656,7 @@ class PurchaseApprovalCardController {
   }
 }
 
-class PurchaseManagementCardController {
+  class PurchaseManagementCardController {
   constructor(card, csrfToken, helpers) {
     this.card = card;
     this.csrfToken = csrfToken || null;
@@ -952,6 +1044,659 @@ class PurchaseManagementCardController {
     }
   }
 
+  class PurchaseRequestDraftCard {
+    constructor(node, options) {
+      const config = options || {};
+      this.node = node;
+      this.composer = config.composer || {};
+      this.csrfToken = config.csrfToken || null;
+      this.itemTemplate = config.itemTemplate || null;
+      this.callbacks = config.callbacks || {};
+      this.form = node.querySelector('[data-purchase-compose-form]');
+      this.titleNode = node.querySelector('[data-compose-title]');
+      this.subtitleNode = node.querySelector('[data-compose-subtitle]');
+      this.referenceNode = node.querySelector('[data-compose-reference]');
+      this.summaryInput = this.form ? this.form.querySelector('[data-compose-field="summary"]') : null;
+      this.categorySelect = this.form ? this.form.querySelector('[data-compose-field="expense_type_id"]') : null;
+      this.scopeSelect = this.form ? this.form.querySelector('[data-compose-field="scope"]') : null;
+      this.managerSelect = this.form ? this.form.querySelector('[data-compose-field="assigned_manager_id"]') : null;
+      this.addItemButton = this.form ? this.form.querySelector('[data-compose-add-item]') : null;
+      this.itemsContainer = this.form ? this.form.querySelector('[data-compose-items-container]') : null;
+      this.totalNode = this.form ? this.form.querySelector('[data-compose-total]') : null;
+      this.feedbackNode = this.form ? this.form.querySelector('[data-compose-feedback]') : null;
+      this.closeButton = node.querySelector('[data-compose-close]');
+      this.supplierSelect = this.form ? this.form.querySelector('[data-compose-field="supplier_id"]') : null;
+      this.areaFieldWrappers = this.form
+        ? Array.prototype.slice.call(this.form.querySelectorAll('[data-area-field]'))
+        : [];
+      this.areaFieldNodes = {};
+      this.areaInputs = {};
+      this.areaFieldWrappers.forEach((wrapper) => {
+        const key = wrapper.getAttribute('data-area-field');
+        if (!key) {
+          return;
+        }
+        const field =
+          wrapper.querySelector('[data-area-input]') ||
+          wrapper.querySelector('select') ||
+          wrapper.querySelector('input');
+        this.areaFieldNodes[key] = wrapper;
+        this.areaInputs[key] = field;
+      });
+      this.actionButtons = this.form
+        ? Array.prototype.slice.call(this.form.querySelectorAll('[data-compose-action]'))
+        : [];
+      this.submitUrl = this.composer.submit_url || '';
+      this.maxItems = Number(this.composer.max_items || 0) || 10;
+      this.currentPurchaseId = null;
+      this.boundHandleScopeChange = this.handleScopeChange.bind(this);
+    }
+
+    init(initialData) {
+      if (!this.form) {
+        return;
+      }
+      this.populateStaticOptions();
+      this.bindEvents();
+      this.resetForm(initialData || null);
+    }
+
+    refreshComposerData(composerData) {
+      this.composer = composerData || this.composer;
+      this.populateStaticOptions();
+      this.renderSupplierSuggestions();
+      if (this.composer && this.composer.max_items) {
+        this.maxItems = Number(this.composer.max_items) || this.maxItems;
+      }
+    }
+
+    populateStaticOptions() {
+      const includePlaceholder = { includePlaceholder: true };
+      this.fillSelect(this.categorySelect, this.composer.categories || [], includePlaceholder);
+      this.fillSelect(this.scopeSelect, this.composer.area_scopes || [], includePlaceholder);
+      this.fillSelect(this.managerSelect, this.composer.manager_options || [], includePlaceholder);
+      this.fillSelect(this.supplierSelect, this.composer.supplier_suggestions || [], includePlaceholder);
+      if (this.areaInputs.farm_id) {
+        this.fillSelect(this.areaInputs.farm_id, this.composer.farms || [], includePlaceholder);
+      }
+      this.renderHouseOptions({
+        scope: this.scopeSelect ? this.scopeSelect.value : '',
+        preserveValue: true,
+      });
+    }
+
+    fillSelect(select, options, config) {
+      if (!select) {
+        return;
+      }
+      const settings = Object.assign(
+        {
+          includePlaceholder: false,
+          preserveValue: true,
+          fallbackValue: '',
+          resetOnMissing: false,
+        },
+        config || {}
+      );
+      const previousValue = settings.preserveValue ? select.value : '';
+      const normalizedPrev = previousValue != null ? String(previousValue) : '';
+      const fragment = document.createDocumentFragment();
+      if (settings.includePlaceholder) {
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = settings.placeholder || 'Selecciona una opción';
+        fragment.appendChild(placeholder);
+      }
+      options.forEach((option) => {
+        const opt = document.createElement('option');
+        opt.value = option.id != null ? option.id : option.value || '';
+        opt.textContent = option.label || option.name || '';
+        if (option.support_document_type_id) {
+          opt.dataset.supportTypeId = option.support_document_type_id;
+        }
+        fragment.appendChild(opt);
+      });
+      select.innerHTML = '';
+      select.appendChild(fragment);
+      if (settings.preserveValue) {
+        if (normalizedPrev) {
+          select.value = normalizedPrev;
+          if (select.value !== normalizedPrev) {
+            if (settings.fallbackValue !== undefined) {
+              select.value = settings.fallbackValue;
+            } else if (settings.resetOnMissing) {
+              select.selectedIndex = 0;
+            }
+          }
+        } else {
+          select.value = '';
+        }
+      } else if (settings.defaultValue !== undefined) {
+        select.value = settings.defaultValue;
+      }
+    }
+
+    bindEvents() {
+      if (this.closeButton) {
+        this.closeButton.addEventListener('click', () => this.close());
+      }
+      if (this.scopeSelect) {
+        this.scopeSelect.addEventListener('change', this.boundHandleScopeChange);
+      }
+      if (this.areaInputs.farm_id) {
+        this.areaInputs.farm_id.addEventListener('change', () =>
+          this.renderHouseOptions({
+            farmId: this.areaInputs.farm_id.value || null,
+            preserveValue: false,
+          })
+        );
+      }
+      if (this.addItemButton) {
+        this.addItemButton.addEventListener('click', () => this.addItemRow());
+      }
+      this.actionButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const intent = button.getAttribute('data-compose-action') || 'save_draft';
+          this.submit(intent, button);
+        });
+      });
+    }
+
+    resetForm(initialData) {
+      const defaults = this.composer.defaults || {};
+      this.currentPurchaseId = initialData && initialData.purchase_id ? initialData.purchase_id : null;
+      if (this.titleNode) {
+        this.titleNode.textContent = this.currentPurchaseId ? 'Editar solicitud' : 'Nueva solicitud';
+      }
+      if (this.subtitleNode) {
+        this.subtitleNode.textContent = this.currentPurchaseId
+          ? 'Actualiza la información y vuelve a enviar la solicitud.'
+          : 'Captura el requerimiento, agrega los ítems y envía a aprobación.';
+      }
+      if (this.referenceNode) {
+        this.referenceNode.textContent = initialData && initialData.code ? initialData.code : '';
+      }
+      if (this.summaryInput) {
+        this.summaryInput.value = (initialData && initialData.name) || defaults.summary || '';
+      }
+      if (this.categorySelect) {
+        this.categorySelect.value = (initialData && initialData.expense_type_id) || '';
+      }
+      if (this.managerSelect) {
+        this.managerSelect.value = (initialData && initialData.assigned_manager_id) || defaults.assigned_manager_id || '';
+      }
+      const areaPayload = (initialData && initialData.area) || defaults.area || {};
+      if (this.scopeSelect) {
+        const defaultScope = defaults.area && defaults.area.scope ? defaults.area.scope : '';
+        this.scopeSelect.value = areaPayload.scope || defaultScope || '';
+        this.handleScopeChange();
+      }
+      if (this.areaInputs.farm_id) {
+        this.areaInputs.farm_id.value = areaPayload.farm_id || '';
+      }
+      this.renderHouseOptions({
+        scope: this.scopeSelect ? this.scopeSelect.value : '',
+        farmId: areaPayload.farm_id || null,
+        preserveValue: false,
+      });
+      if (this.areaInputs.chicken_house_id) {
+        this.areaInputs.chicken_house_id.value = areaPayload.chicken_house_id || '';
+      }
+      this.setSupplier(initialData && initialData.supplier ? initialData.supplier : null);
+      this.resetItems(initialData && initialData.items ? initialData.items : null);
+      this.clearFieldErrors();
+      this.showFeedback('');
+    }
+
+    resetItems(items) {
+      if (!this.itemsContainer) {
+        return;
+      }
+      this.itemsContainer.innerHTML = '';
+      const initialItems = Array.isArray(items) && items.length ? items : [null];
+      initialItems.forEach((item) => this.addItemRow(item));
+      this.updateTotals();
+    }
+
+    setSupplier(option) {
+      if (!this.supplierSelect) {
+        return;
+      }
+      const value = option && option.id ? option.id : '';
+      this.supplierSelect.value = value;
+    }
+
+    addItemRow(initialItem) {
+      if (!this.itemsContainer || !this.itemTemplate) {
+        return;
+      }
+      if (this.maxItems && this.itemsContainer.children.length >= this.maxItems) {
+        return;
+      }
+      const fragment = document.importNode(this.itemTemplate.content, true);
+      const row = fragment.querySelector('[data-compose-item-row]');
+      if (!row) {
+        return;
+      }
+      const idInput = row.querySelector('input[data-item-field="id"]');
+      const descriptionInput = row.querySelector('input[data-item-field="description"]');
+      const quantityInput = row.querySelector('input[data-item-field="quantity"]');
+      const valueInput = row.querySelector('input[data-item-field="unit_value"]');
+      const subtotalNode = row.querySelector('[data-item-subtotal]');
+      const removeButton = row.querySelector('[data-compose-remove-item]');
+      if (initialItem) {
+        if (idInput) {
+          idInput.value = initialItem.id || '';
+        }
+        if (descriptionInput) {
+          descriptionInput.value = initialItem.description || '';
+        }
+        if (quantityInput) {
+          quantityInput.value = initialItem.quantity || initialItem.requested_label || '';
+        }
+        if (valueInput) {
+          valueInput.value = initialItem.unit_value || initialItem.unit_value_label || initialItem.unit_value_display || initialItem.unit_value_input || '';
+        }
+        if (subtotalNode) {
+          subtotalNode.textContent = initialItem.subtotal || initialItem.subtotal_label || '$ 0';
+        }
+      }
+      if (removeButton) {
+        removeButton.addEventListener('click', () => {
+          row.remove();
+          this.updateTotals();
+        });
+      }
+      [descriptionInput, quantityInput, valueInput].forEach((input) => {
+        if (!input) {
+          return;
+        }
+        input.addEventListener('input', () => {
+          this.updateTotals();
+        });
+      });
+      this.itemsContainer.appendChild(row);
+    }
+
+    toggleAreaFieldVisibility(fieldName, shouldShow) {
+      const wrapper = this.areaFieldNodes[fieldName];
+      if (!wrapper) {
+        return;
+      }
+      wrapper.classList.toggle('hidden', !shouldShow);
+      if (typeof wrapper.toggleAttribute === 'function') {
+        wrapper.toggleAttribute('hidden', !shouldShow);
+      } else if (!shouldShow) {
+        wrapper.setAttribute('hidden', 'hidden');
+      } else {
+        wrapper.removeAttribute('hidden');
+      }
+      if (!shouldShow && this.areaInputs[fieldName]) {
+        const input = this.areaInputs[fieldName];
+        if (input.tagName && input.tagName.toLowerCase() === 'select') {
+          input.selectedIndex = 0;
+        } else if ('value' in input) {
+          input.value = '';
+        }
+      }
+    }
+
+    handleScopeChange() {
+      const scope = this.scopeSelect ? this.scopeSelect.value : '';
+      const showFarm = scope === 'farm';
+      const showHouse = scope === 'chicken_house';
+      this.toggleAreaFieldVisibility('farm_id', showFarm);
+      this.toggleAreaFieldVisibility('chicken_house_id', showHouse);
+      const farmFilter = showFarm && this.areaInputs.farm_id ? this.areaInputs.farm_id.value || null : null;
+      this.renderHouseOptions({
+        scope,
+        farmId: farmFilter,
+        preserveValue: showHouse,
+      });
+    }
+
+    renderHouseOptions(config) {
+      if (!this.areaInputs.chicken_house_id) {
+        return;
+      }
+      const settings = config || {};
+      const scopeValue =
+        typeof settings.scope === 'string' && settings.scope
+          ? settings.scope
+          : this.scopeSelect
+            ? this.scopeSelect.value
+            : '';
+      const farmValue =
+        Object.prototype.hasOwnProperty.call(settings, 'farmId') && settings.farmId !== undefined
+          ? settings.farmId
+          : this.areaInputs.farm_id
+            ? this.areaInputs.farm_id.value
+            : null;
+      const houses = this.composer.chicken_houses || [];
+      const shouldFilterByFarm = scopeValue !== 'chicken_house' && farmValue;
+      const filtered = shouldFilterByFarm
+        ? houses.filter((house) => String(house.farm_id) === String(farmValue))
+        : houses;
+      const normalized = filtered.map((house) => ({
+        id: house.id != null ? house.id : house.value || '',
+        label: house.full_label || house.label || house.name || '',
+      }));
+      const preserveValue = Object.prototype.hasOwnProperty.call(settings, 'preserveValue')
+        ? settings.preserveValue
+        : true;
+      this.fillSelect(this.areaInputs.chicken_house_id, normalized, {
+        includePlaceholder: true,
+        preserveValue,
+        resetOnMissing: true,
+      });
+    }
+
+    collectPayload(intent) {
+      if (!this.form) {
+        return null;
+      }
+      const areaPayload = {
+        scope: this.scopeSelect ? this.scopeSelect.value : '',
+        farm_id: this.areaInputs.farm_id ? this.areaInputs.farm_id.value : '',
+        chicken_house_id: this.areaInputs.chicken_house_id ? this.areaInputs.chicken_house_id.value : '',
+      };
+      const items = [];
+      if (this.itemsContainer) {
+        Array.prototype.forEach.call(this.itemsContainer.querySelectorAll('[data-compose-item-row]'), (row) => {
+          const getInput = (name) => row.querySelector(`[data-item-field="${name}"]`);
+          const toNumber = (input) => {
+            if (!input) {
+              return '';
+            }
+            const raw = parseFloat(input.value);
+            return Number.isNaN(raw) ? '' : raw;
+          };
+          const itemPayload = {
+            id: getInput('id') ? getInput('id').value || null : null,
+            description: getInput('description') ? getInput('description').value.trim() : '',
+            quantity: getInput('quantity') ? getInput('quantity').value.trim() : '',
+            estimated_amount: getInput('unit_value') ? getInput('unit_value').value.trim() : '',
+          };
+          const quantityNumber = parseFloat(itemPayload.quantity);
+          const valueNumber = parseFloat(itemPayload.estimated_amount);
+          if (!Number.isNaN(quantityNumber)) {
+            itemPayload.quantity = quantityNumber;
+          }
+          if (!Number.isNaN(valueNumber)) {
+            itemPayload.estimated_amount = valueNumber;
+          }
+          items.push(itemPayload);
+        });
+      }
+      return {
+        intent: intent || 'save_draft',
+        purchase_id: this.currentPurchaseId,
+        summary: this.summaryInput ? this.summaryInput.value.trim() : '',
+        expense_type_id: this.categorySelect ? this.categorySelect.value : '',
+        assigned_manager_id: this.managerSelect ? this.managerSelect.value : '',
+        supplier_id: this.supplierSelect ? this.supplierSelect.value : '',
+        area: areaPayload,
+        items,
+      };
+    }
+
+    submit(intent, button) {
+      if (!this.submitUrl || !this.form) {
+        this.showFeedback('No encontramos la ruta para registrar la solicitud.', 'error');
+        return;
+      }
+      const payload = this.collectPayload(intent);
+      if (!payload) {
+        return;
+      }
+      this.clearFieldErrors();
+      this.showFeedback('', 'neutral');
+      if (button) {
+        button.disabled = true;
+      }
+      fetch(this.submitUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : {}
+        ),
+        body: JSON.stringify(payload),
+      })
+        .then((response) => response.json().catch(() => ({})).then((data) => ({ ok: response.ok, data })))
+        .then((result) => {
+          if (!result.ok || (result.data && result.data.error)) {
+            const message =
+              (result.data && result.data.error) ||
+              'No pudimos guardar la solicitud. Revisa la información.';
+            this.showFeedback(message, 'error');
+            if (result.data) {
+              this.displayFieldErrors(result.data.field_errors || {}, result.data.item_errors || {});
+            }
+            return;
+          }
+          const data = result.data || {};
+          if (data.message) {
+            this.showFeedback(data.message, 'success');
+          }
+          this.currentPurchaseId = data.purchase ? data.purchase.id : null;
+          if (data.requests && typeof this.callbacks.onRequestsUpdated === 'function') {
+            try {
+              this.callbacks.onRequestsUpdated(data.requests);
+            } catch (error) {
+              console.warn('No se pudo refrescar la lista de solicitudes.', error);
+            }
+          }
+          if (data.composer && typeof this.callbacks.onComposerRefresh === 'function') {
+            try {
+              this.callbacks.onComposerRefresh(data.composer);
+            } catch (error) {
+              console.warn('No se pudo actualizar el compositor de compras.', error);
+            }
+          }
+          if (!this.currentPurchaseId || payload.intent === 'send_workflow') {
+            this.close();
+          }
+        })
+        .catch(() => {
+          this.showFeedback('No pudimos contactar al servidor. Intenta más tarde.', 'error');
+        })
+        .finally(() => {
+          if (button) {
+            button.disabled = false;
+          }
+        });
+    }
+
+    displayFieldErrors(fieldErrors, itemErrors) {
+      if (!this.form) {
+        return;
+      }
+      const errorMap = fieldErrors || {};
+      Object.keys(errorMap).forEach((key) => {
+        const target = this.form.querySelector(`[data-compose-error="${key}"]`);
+        if (target) {
+          target.textContent = errorMap[key][0] || '';
+          target.classList.remove('hidden');
+        }
+      });
+      if (itemErrors && this.itemsContainer) {
+        Array.prototype.forEach.call(this.itemsContainer.querySelectorAll('[data-compose-item-row]'), (row, index) => {
+          const errorsForRow = itemErrors[index];
+          if (!errorsForRow) {
+            return;
+          }
+          Object.keys(errorsForRow).forEach((field) => {
+            const target = row.querySelector(`[data-item-error="${field}"]`);
+            if (target) {
+              target.textContent = errorsForRow[field][0] || '';
+              target.classList.remove('hidden');
+            }
+          });
+        });
+      }
+    }
+
+    clearFieldErrors() {
+      if (!this.form) {
+        return;
+      }
+      Array.prototype.forEach.call(this.form.querySelectorAll('[data-compose-error]'), (node) => {
+        node.classList.add('hidden');
+        node.textContent = '';
+      });
+      if (this.itemsContainer) {
+        Array.prototype.forEach.call(this.itemsContainer.querySelectorAll('[data-item-error]'), (node) => {
+          node.classList.add('hidden');
+          node.textContent = '';
+        });
+      }
+    }
+
+    updateTotals() {
+      if (!this.itemsContainer || !this.totalNode) {
+        return;
+      }
+      let total = 0;
+      Array.prototype.forEach.call(this.itemsContainer.querySelectorAll('[data-compose-item-row]'), (row) => {
+        const quantityInput = row.querySelector('[data-item-field="quantity"]');
+        const valueInput = row.querySelector('[data-item-field="unit_value"]');
+        const subtotalNode = row.querySelector('[data-item-subtotal]');
+        const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
+        const unitValue = valueInput ? parseFloat(valueInput.value) : 0;
+        const subtotal = (Number.isNaN(quantity) ? 0 : quantity) * (Number.isNaN(unitValue) ? 0 : unitValue);
+        if (subtotalNode) {
+          subtotalNode.textContent = formatCurrency(subtotal, '$');
+        }
+        total += subtotal;
+      });
+      this.totalNode.textContent = formatCurrency(total, '$');
+    }
+
+    showFeedback(message, tone) {
+      if (!this.feedbackNode) {
+        return;
+      }
+      this.feedbackNode.textContent = message || '';
+      this.feedbackNode.classList.toggle('hidden', !message);
+      this.feedbackNode.classList.remove('text-rose-600', 'text-emerald-600', 'text-slate-500');
+      if (!message) {
+        return;
+      }
+      if (tone === 'success') {
+        this.feedbackNode.classList.add('text-emerald-600');
+      } else if (tone === 'error') {
+        this.feedbackNode.classList.add('text-rose-600');
+      } else {
+        this.feedbackNode.classList.add('text-slate-500');
+      }
+    }
+
+    close() {
+      if (typeof this.callbacks.onClose === 'function') {
+        this.callbacks.onClose(this);
+      }
+      this.node.remove();
+    }
+  }
+
+  class PurchaseRequestComposerController {
+    constructor(root, options) {
+      this.root = root;
+      const config = options || {};
+      this.csrfToken = config.csrfToken || null;
+      this.callbacks = config.callbacks || {};
+      this.container = root.querySelector('[data-purchase-compose-container]');
+      this.template = root.querySelector('template[data-purchase-compose-template]');
+      this.itemTemplate = root.querySelector('template[data-purchase-compose-item-template]');
+      const scriptId = root.getAttribute('data-composer-source');
+      if (scriptId) {
+        const scriptElement = document.getElementById(scriptId);
+        const scriptContent = scriptElement ? scriptElement.textContent || '' : '';
+        this.composerData = safeParseJSON(scriptContent);
+      } else {
+        this.composerData = null;
+      }
+      this.cards = new Set();
+      this.launchButtons = document.querySelectorAll('[data-purchase-request-launch]');
+      this.boundLaunchHandler = this.handleLaunchRequest.bind(this);
+      this.delegateBound = false;
+    }
+
+    init(payload) {
+      if (payload) {
+        this.setComposerData(payload);
+      }
+      this.bindLaunchers();
+    }
+
+    setComposerData(payload) {
+      this.composerData = payload || this.composerData;
+      const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
+      tmMiniApp.purchases = tmMiniApp.purchases || {};
+      tmMiniApp.purchases.composer = this.composerData;
+      this.cards.forEach((cardInstance) => {
+        cardInstance.refreshComposerData(this.composerData);
+      });
+    }
+
+    bindLaunchers() {
+      if (this.launchButtons && this.launchButtons.length) {
+        this.launchButtons.forEach((button) => {
+          button.addEventListener('click', this.boundLaunchHandler);
+        });
+      }
+      if (!this.delegateBound) {
+        document.addEventListener('click', this.boundLaunchHandler);
+        this.delegateBound = true;
+      }
+    }
+
+    handleLaunchRequest(event) {
+      const trigger = event && event.target ? event.target.closest('[data-purchase-request-launch]') : null;
+      if (!trigger) {
+        return;
+      }
+      if (typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      if (typeof event.stopPropagation === 'function') {
+        event.stopPropagation();
+      }
+      this.launch();
+    }
+
+    launch(initialData) {
+      if (!this.container || !this.template) {
+        return;
+      }
+      const fragment = document.importNode(this.template.content, true);
+      const cardNode = fragment.querySelector('[data-purchase-compose-card]');
+      if (!cardNode) {
+        return;
+      }
+      this.container.appendChild(fragment);
+      const card = new PurchaseRequestDraftCard(cardNode, {
+        composer: this.composerData || {},
+        csrfToken: this.csrfToken,
+        itemTemplate: this.itemTemplate,
+        callbacks: {
+          onClose: () => this.cards.delete(card),
+          onRequestsUpdated: (payload) => {
+            if (typeof this.callbacks.onRequestsUpdated === 'function') {
+              this.callbacks.onRequestsUpdated(payload);
+            }
+          },
+          onComposerRefresh: (payload) => {
+            this.setComposerData(payload);
+          },
+        },
+      });
+      this.cards.add(card);
+      card.init(initialData || null);
+    }
+  }
+
   function reorderPurchaseCards() {
     const container = document.querySelector('#tm-purchases .space-y-4');
     if (!container) {
@@ -997,9 +1742,31 @@ class PurchaseManagementCardController {
       }
     };
 
+    const composerRoot = document.querySelector('[data-purchase-compose-root]');
+    if (composerRoot) {
+      controllers.composer = new PurchaseRequestComposerController(composerRoot, {
+        csrfToken,
+        callbacks: {
+          onRequestsUpdated: notifyRequestsUpdated,
+        },
+      });
+      controllers.composer.init(purchasesPayload.composer || null);
+      tmMiniApp.launchPurchaseComposer = (initialData) => {
+        if (controllers.composer) {
+          controllers.composer.launch(initialData || null);
+        }
+      };
+    }
+
     const requestsCard = document.querySelector('[data-purchase-requests-card]');
     if (requestsCard) {
-      controllers.requestsList = new PurchaseRequestsListController(requestsCard);
+      controllers.requestsList = new PurchaseRequestsListController(requestsCard, {
+        onEditRequest: (payload) => {
+          if (controllers.composer) {
+            controllers.composer.launch(payload || null);
+          }
+        },
+      });
       controllers.requestsList.render(purchasesPayload.overview);
     }
 

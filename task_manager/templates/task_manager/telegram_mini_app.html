@@ -3023,7 +3023,7 @@
 
       </section>
 
-      <footer class="sticky bottom-4 mt-auto flex justify-center">
+      <footer class="sticky bottom-4 mt-auto flex justify-center" data-mini-app-floating-action>
         <button
           type="button"
           class="w-full rounded-full bg-brand px-5 py-3 text-sm font-semibold text-slate-900 shadow-xl shadow-amber-200/70 transition hover:bg-brand-dark"
@@ -4452,6 +4452,13 @@
         }
 
         const telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        if (telegram && typeof telegram.ready === 'function') {
+          try {
+            telegram.ready();
+          } catch (error) {
+            console.warn('Telegram WebApp no pudo inicializarse correctamente.', error);
+          }
+        }
         const eggWorkflow = payload && payload.egg_workflow ? payload.egg_workflow : null;
         const productionReference = payload && payload.production_reference ? payload.production_reference : null;
         const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
@@ -4465,9 +4472,11 @@
         }
         const confirmMessageText = '¿Deseas finalizar tu turno y cerrar sesión?';
         const mainAction = document.querySelector('[data-telegram-main-action]');
+        const fallbackActionContainer = document.querySelector('[data-mini-app-floating-action]');
         const finishTriggers = Array.prototype.slice.call(
           document.querySelectorAll('[data-mini-app-finish-trigger]')
         );
+        const mainButton = telegram && telegram.MainButton ? telegram.MainButton : null;
         const loginUrl =
           mainAction && mainAction.getAttribute('data-login-url')
             ? mainAction.getAttribute('data-login-url')
@@ -8244,6 +8253,34 @@
             });
         }
 
+        function updateTelegramMainButtonLoading(isLoading) {
+          if (!mainButton) {
+            return;
+          }
+          try {
+            if (isLoading) {
+              if (typeof mainButton.showProgress === 'function') {
+                mainButton.showProgress();
+              }
+              if (typeof mainButton.disable === 'function') {
+                mainButton.disable();
+              }
+            } else {
+              if (typeof mainButton.hideProgress === 'function') {
+                mainButton.hideProgress();
+              }
+              if (typeof mainButton.enable === 'function') {
+                mainButton.enable();
+              }
+              if (typeof mainButton.show === 'function') {
+                mainButton.show();
+              }
+            }
+          } catch (error) {
+            console.info('No se pudo actualizar el botón principal de Telegram.', error);
+          }
+        }
+
         function hideConfirmError() {
           if (confirmErrorNode) {
             confirmErrorNode.textContent = '';
@@ -8284,6 +8321,8 @@
           if (confirmStatusNode) {
             confirmStatusNode.classList.toggle('hidden', !isLoading);
           }
+
+          updateTelegramMainButtonLoading(isLoading);
         }
 
         function closeDialogs() {
@@ -8419,6 +8458,52 @@
           }
         }
 
+        function setupTelegramMainButton() {
+          if (!mainButton) {
+            return;
+          }
+
+          try {
+            if (typeof mainButton.setParams === 'function') {
+              mainButton.setParams({
+                text: 'Finalizar mi turno',
+                color: '#fcd34d',
+                text_color: '#0f172a',
+                is_active: true,
+                is_visible: true,
+              });
+            } else {
+              if (typeof mainButton.setText === 'function') {
+                mainButton.setText('Finalizar mi turno');
+              }
+              if ('color' in mainButton) {
+                mainButton.color = '#fcd34d';
+              }
+              if ('textColor' in mainButton) {
+                mainButton.textColor = '#0f172a';
+              }
+            }
+            if (typeof mainButton.show === 'function') {
+              mainButton.show();
+            }
+            if (typeof mainButton.onClick === 'function') {
+              mainButton.onClick(handleCompleteShift);
+            }
+          } catch (error) {
+            console.info('No se pudo configurar el botón principal de Telegram.', error);
+            return;
+          }
+
+          if (fallbackActionContainer) {
+            fallbackActionContainer.setAttribute('aria-hidden', 'true');
+            fallbackActionContainer.classList.add('pointer-events-none', 'opacity-0', 'hidden');
+          } else if (mainAction) {
+            mainAction.setAttribute('tabindex', '-1');
+            mainAction.setAttribute('aria-hidden', 'true');
+            mainAction.classList.add('pointer-events-none', 'opacity-0', 'hidden');
+          }
+        }
+
         finishTriggers.forEach(function (trigger) {
           trigger.addEventListener('click', function (event) {
             if (event && typeof event.preventDefault === 'function') {
@@ -8466,6 +8551,8 @@
             redirectToLogin();
           });
         }
+
+        setupTelegramMainButton();
       })();
     </script>
     <script>

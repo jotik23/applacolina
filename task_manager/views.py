@@ -27,11 +27,18 @@ from django.views import View, generic
 from django.views.decorators.http import require_POST
 from pywebpush import WebPushException, webpush
 
+from administration.forms import SupplierForm
 from administration.models import PurchaseRequest, Supplier
 from administration.services.purchase_orders import (
     PurchaseOrderPayload,
     PurchaseOrderService,
     PurchaseOrderValidationError,
+)
+from administration.services.purchase_requests import (
+    PurchaseItemPayload,
+    PurchaseRequestPayload,
+    PurchaseRequestSubmissionService,
+    PurchaseRequestValidationError,
 )
 from administration.services.workflows import (
     PurchaseApprovalDecisionError,
@@ -57,6 +64,7 @@ from task_manager.mini_app.features import (
     build_purchase_requests_overview,
     build_purchase_management_card,
     build_purchase_approval_card,
+    build_purchase_request_composer,
     persist_production_records,
     persist_weight_registry,
     serialize_shift_confirmation_card,
@@ -67,10 +75,13 @@ from task_manager.mini_app.features import (
     serialize_purchase_management_card,
     serialize_purchase_management_empty_state,
     serialize_purchase_approval_card,
+    serialize_purchase_request_composer,
 )
 from task_manager.mini_app.features.purchases import (
     PURCHASE_STATUS_THEME as MINI_APP_PURCHASE_STATUS_THEME,
     MAX_PURCHASE_ENTRIES as MINI_APP_PURCHASE_MAX_ITEMS,
+    MAX_PURCHASE_REQUEST_ITEMS as MINI_APP_PURCHASE_FORM_MAX_ITEMS,
+    RECENT_SUPPLIER_SUGGESTIONS as MINI_APP_PURCHASE_SUPPLIER_LIMIT,
 )
 
 from .forms import MiniAppAuthenticationForm, MiniAppPushTestForm, TaskDefinitionQuickCreateForm
@@ -772,6 +783,15 @@ def _coerce_int(value: object) -> Optional[int]:
         return None
 
 
+def _coerce_decimal(value: object) -> Optional[Decimal]:
+    if value in (None, "", False):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
 def _parse_iso_date(value: object) -> Optional[date]:
     if value in (None, ""):
         return None
@@ -785,6 +805,116 @@ def _normalize_string(value: object) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _build_mini_app_purchase_request_payload(
+    data: Mapping[str, object],
+    *,
+    user: UserProfile,
+) -> tuple[Optional[PurchaseRequestPayload], dict[str, list[str]], dict[int, dict[str, list[str]]]]:
+    summary = _normalize_string(data.get("summary") or data.get("name"))
+    notes = _normalize_string(data.get("notes"))
+    expense_type_id = _coerce_int(data.get("expense_type_id"))
+    supplier_id = _coerce_int(data.get("supplier_id"))
+    assigned_manager_id = _coerce_int(data.get("assigned_manager_id")) or getattr(user, "pk", None)
+    support_document_type_id = _coerce_int(data.get("support_document_type_id"))
+    purchase_id = _coerce_int(data.get("purchase_id"))
+    area_data = data.get("area") if isinstance(data.get("area"), Mapping) else {}
+    scope_area = _normalize_string(area_data.get("scope")) if isinstance(area_data, Mapping) else ""
+    if scope_area not in PurchaseRequest.AreaScope.values:
+        scope_area = PurchaseRequest.AreaScope.COMPANY
+    scope_farm_id = _coerce_int(area_data.get("farm_id") if isinstance(area_data, Mapping) else None)
+    scope_house_id = _coerce_int(area_data.get("chicken_house_id") if isinstance(area_data, Mapping) else None)
+    scope_batch_code = _normalize_string(area_data.get("batch_code") if isinstance(area_data, Mapping) else "")
+    field_errors: dict[str, list[str]] = {}
+    item_errors: dict[int, dict[str, list[str]]] = {}
+
+    if not summary:
+        field_errors.setdefault("summary", []).append(_("Ingresa el nombre del requerimiento."))
+    if not expense_type_id:
+        field_errors.setdefault("expense_type_id", []).append(_("Selecciona una categoría."))
+    if not supplier_id:
+        field_errors.setdefault("supplier_id", []).append(_("Selecciona un tercero."))
+    if scope_area == PurchaseRequest.AreaScope.FARM and not scope_farm_id:
+        field_errors.setdefault("scope_area", []).append(_("Selecciona la granja para el área."))
+    if scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
+        if not scope_house_id:
+            field_errors.setdefault("scope_area", []).append(_("Selecciona el galpón para el área."))
+        elif not scope_farm_id:
+            # Attempt to infer the farm from the selected chicken house.
+            house = ChickenHouse.objects.filter(pk=scope_house_id).only("farm_id").first()
+            if house and house.farm_id:
+                scope_farm_id = house.farm_id
+            else:
+                field_errors.setdefault("scope_area", []).append(_("Selecciona un galpón válido."))
+
+    items_raw = data.get("items")
+    if not isinstance(items_raw, Sequence):
+        items_raw = []
+    items_list = list(items_raw)[:MINI_APP_PURCHASE_FORM_MAX_ITEMS]
+    if not items_list:
+        field_errors.setdefault("items", []).append(_("Agrega al menos un ítem a la solicitud."))
+    elif len(items_raw) > MINI_APP_PURCHASE_FORM_MAX_ITEMS:
+        field_errors.setdefault("items", []).append(
+            _("Solo puedes registrar hasta %(count)s ítems por solicitud.") % {"count": MINI_APP_PURCHASE_FORM_MAX_ITEMS}
+        )
+
+    item_payloads: list[PurchaseItemPayload] = []
+    for index, raw_row in enumerate(items_list):
+        row = raw_row if isinstance(raw_row, Mapping) else {}
+        row_errors: dict[str, list[str]] = {}
+        description = _normalize_string(row.get("description"))
+        product_id = _coerce_int(row.get("product_id"))
+        quantity_value = _coerce_decimal(row.get("quantity"))
+        unit_value_input = row.get("unit_value", row.get("estimated_amount"))
+        estimated_amount = _coerce_decimal(unit_value_input)
+        item_id = _coerce_int(row.get("id"))
+
+        if not description and not product_id:
+            row_errors.setdefault("description", []).append(_("Describe el ítem o selecciona un producto."))
+        if quantity_value is None or quantity_value <= Decimal("0"):
+            row_errors.setdefault("quantity", []).append(_("Ingresa una cantidad válida."))
+        if estimated_amount is None or estimated_amount < Decimal("0"):
+            row_errors.setdefault("estimated_amount", []).append(_("Ingresa un valor unitario válido."))
+
+        if row_errors:
+            item_errors[index] = row_errors
+            continue
+
+        item_payloads.append(
+            PurchaseItemPayload(
+                id=item_id,
+                description=description,
+                quantity=quantity_value,
+                estimated_amount=estimated_amount,
+                product_id=product_id,
+            )
+        )
+
+    if not item_payloads and "items" not in field_errors:
+        field_errors.setdefault("items", []).append(_("Agrega al menos un ítem a la solicitud."))
+
+    if field_errors or item_errors:
+        return None, field_errors, item_errors
+
+    farm_value = scope_farm_id if scope_area in {PurchaseRequest.AreaScope.FARM, PurchaseRequest.AreaScope.CHICKEN_HOUSE} else None
+    house_value = scope_house_id if scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE else None
+
+    payload = PurchaseRequestPayload(
+        purchase_id=purchase_id,
+        summary=summary,
+        notes=notes,
+        expense_type_id=expense_type_id,
+        support_document_type_id=support_document_type_id,
+        supplier_id=supplier_id,
+        items=item_payloads,
+        scope_farm_id=farm_value,
+        scope_chicken_house_id=house_value,
+        scope_batch_code=scope_batch_code,
+        scope_area=scope_area,
+        assigned_manager_id=assigned_manager_id,
+    )
+    return payload, field_errors, item_errors
 
 
 def _build_mini_app_order_payload(
@@ -895,6 +1025,19 @@ def _build_purchase_overview_payload(user: UserProfile) -> Optional[dict[str, ob
     if not overview_card:
         return None
     return serialize_purchase_requests_overview(overview_card)
+
+
+def _build_purchase_request_composer_payload(user: UserProfile, request) -> Optional[dict[str, object]]:
+    if not user.has_perm("task_manager.view_mini_app_purchase_overview_card"):
+        return None
+    composer = build_purchase_request_composer(user=user)
+    if not composer:
+        return None
+    payload = serialize_purchase_request_composer(composer)
+    payload["submit_url"] = reverse("task_manager:mini-app-purchase-request")
+    payload["supplier_search_url"] = reverse("task_manager:mini-app-purchase-suppliers")
+    payload["supplier_create_url"] = reverse("task_manager:mini-app-purchase-suppliers-create")
+    return payload
 
 
 def _build_purchase_management_payload(user: UserProfile, request) -> Optional[dict[str, object]]:
@@ -2854,6 +2997,10 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if overview_payload:
                     purchases_payload = purchases_payload or {}
                     purchases_payload["overview"] = overview_payload
+                composer_payload = _build_purchase_request_composer_payload(user, self.request)
+                if composer_payload:
+                    purchases_payload = purchases_payload or {}
+                    purchases_payload["composer"] = composer_payload
             if card_permissions.get("purchase_approval"):
                 approval_payload = _build_purchase_approval_payload(user, self.request)
                 if approval_payload:
@@ -3242,6 +3389,167 @@ def mini_app_push_subscription_view(request):
 
 
 @require_POST
+def mini_app_purchase_request_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_overview_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para registrar solicitudes de compra desde la mini app.")},
+            status=403,
+        )
+
+    try:
+        payload_data = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        payload_data = {}
+
+    intent = (_normalize_string(payload_data.get("intent")) or "save_draft").lower()
+    if intent not in {"save_draft", "send_workflow"}:
+        intent = "save_draft"
+
+    payload, field_errors, item_errors = _build_mini_app_purchase_request_payload(payload_data, user=user)
+    if field_errors or item_errors or payload is None:
+        return JsonResponse(
+            {
+                "error": _("Revisa la información ingresada antes de continuar."),
+                "field_errors": field_errors,
+                "item_errors": item_errors,
+            },
+            status=400,
+        )
+
+    service = PurchaseRequestSubmissionService(actor=user)
+    try:
+        purchase = service.submit(payload=payload, intent=intent)
+    except PurchaseRequestValidationError as exc:
+        return JsonResponse(
+            {
+                "error": _("No pudimos guardar la solicitud."),
+                "field_errors": exc.field_errors,
+                "item_errors": exc.item_errors,
+            },
+            status=400,
+        )
+
+    overview_payload = _build_purchase_overview_payload(user)
+    composer_payload = _build_purchase_request_composer_payload(user, request)
+
+    message = _("Solicitud enviada a aprobación.") if intent == "send_workflow" else _("Solicitud guardada en borrador.")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": message,
+            "purchase": _serialize_purchase_summary(purchase),
+            "requests": overview_payload,
+            "composer": composer_payload,
+        }
+    )
+
+
+def mini_app_purchase_supplier_search_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_overview_card"):
+        return JsonResponse({"error": _("No tienes permisos para consultar terceros.")}, status=403)
+
+    query = _normalize_string(request.GET.get("q"))
+    suppliers = Supplier.objects.all()
+    if query:
+        suppliers = suppliers.filter(Q(name__icontains=query) | Q(tax_id__icontains=query))
+    suppliers = suppliers.order_by("name")[:MINI_APP_PURCHASE_SUPPLIER_LIMIT]
+
+    results = []
+    for supplier in suppliers:
+        display = supplier.name
+        if supplier.tax_id:
+            display = f"{supplier.name} · {supplier.tax_id}"
+        results.append(
+            {
+                "id": supplier.pk,
+                "label": supplier.name,
+                "tax_id": supplier.tax_id or "",
+                "city": supplier.city or "",
+                "display": display,
+            }
+        )
+    return JsonResponse({"results": results})
+
+
+@require_POST
+def mini_app_purchase_supplier_create_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_overview_card"):
+        return JsonResponse({"error": _("No tienes permisos para registrar terceros.")}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+
+    form_data = {
+        "name": _normalize_string(payload.get("name")),
+        "tax_id": _normalize_string(payload.get("tax_id")),
+        "contact_name": _normalize_string(payload.get("contact_name")),
+        "contact_email": _normalize_string(payload.get("contact_email")),
+        "contact_phone": _normalize_string(payload.get("contact_phone")),
+        "address": _normalize_string(payload.get("address")),
+        "city": _normalize_string(payload.get("city")),
+        "account_holder_id": _normalize_string(payload.get("account_holder_id")),
+        "account_holder_name": _normalize_string(payload.get("account_holder_name")),
+        "account_type": _normalize_string(payload.get("account_type")),
+        "account_number": _normalize_string(payload.get("account_number")),
+        "bank_name": _normalize_string(payload.get("bank_name")),
+    }
+    if not form_data["account_holder_id"] and form_data["tax_id"]:
+        form_data["account_holder_id"] = form_data["tax_id"]
+    if not form_data["account_holder_name"] and form_data["name"]:
+        form_data["account_holder_name"] = form_data["name"]
+
+    form = SupplierForm(form_data)
+    if form.is_valid():
+        supplier = form.save()
+        display = supplier.name
+        if supplier.tax_id:
+            display = f"{supplier.name} · {supplier.tax_id}"
+        composer_payload = _build_purchase_request_composer_payload(user, request)
+        return JsonResponse(
+            {
+                "supplier": {
+                    "id": supplier.pk,
+                    "label": supplier.name,
+                    "tax_id": supplier.tax_id or "",
+                    "city": supplier.city or "",
+                    "display": display,
+                },
+                "composer": composer_payload,
+            },
+            status=201,
+        )
+
+    errors = {
+        field: [str(error) for error in error_list]
+        for field, error_list in form.errors.items()
+    }
+    return JsonResponse(
+        {
+            "error": _("Revisa los datos del tercero antes de continuar."),
+            "field_errors": errors,
+        },
+        status=400,
+    )
+
+
 def mini_app_purchase_request_modify_view(request, pk: int):
     guard = _mini_app_json_guard(request)
     if guard:

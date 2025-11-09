@@ -17,6 +17,8 @@ from personal.models import UserProfile
 
 MAX_PURCHASE_ENTRIES = 6
 MAX_APPROVAL_ENTRIES = 6
+MAX_PURCHASE_REQUEST_ITEMS = 12
+RECENT_SUPPLIER_SUGGESTIONS = 12
 
 PURCHASE_STATUS_THEME: dict[str, str] = {
     PurchaseRequest.Status.DRAFT: "slate",
@@ -140,6 +142,31 @@ class PurchaseApprovalEntry:
 class PurchaseApprovalCard:
     entries: Tuple[PurchaseApprovalEntry, ...]
     manager_options: Tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True)
+class PurchaseRequestCategoryOption:
+    id: int
+    label: str
+    support_document_type_id: Optional[int]
+
+
+@dataclass(frozen=True)
+class PurchaseRequestAreaScopeOption:
+    id: str
+    label: str
+
+
+@dataclass(frozen=True)
+class PurchaseRequestComposer:
+    categories: Tuple[PurchaseRequestCategoryOption, ...]
+    manager_options: Tuple[dict[str, object], ...]
+    area_scopes: Tuple[PurchaseRequestAreaScopeOption, ...]
+    farms: Tuple[dict[str, object], ...]
+    chicken_houses: Tuple[dict[str, object], ...]
+    supplier_suggestions: Tuple[dict[str, object], ...]
+    default_scope: dict[str, object]
+    default_manager_id: Optional[int]
 
 
 
@@ -551,6 +578,109 @@ def serialize_purchase_approval_card(card: PurchaseApprovalCard) -> dict[str, ob
         ],
         "manager_options": list(card.manager_options),
     }
+
+
+def serialize_purchase_request_composer(card: PurchaseRequestComposer) -> dict[str, object]:
+    return {
+        "title": _("Solicitar compra"),
+        "subtitle": _(
+            "Abre múltiples solicitudes en paralelo, captura los ítems y envíalas a aprobación en el mismo flujo."
+        ),
+        "max_items": MAX_PURCHASE_REQUEST_ITEMS,
+        "defaults": {
+            "summary": "",
+            "notes": "",
+            "assigned_manager_id": card.default_manager_id,
+            "area": card.default_scope,
+        },
+        "categories": [
+            {
+                "id": option.id,
+                "label": option.label,
+                "support_document_type_id": option.support_document_type_id,
+            }
+            for option in card.categories
+        ],
+        "manager_options": list(card.manager_options),
+        "area_scopes": [
+            {
+                "id": scope.id,
+                "label": scope.label,
+            }
+            for scope in card.area_scopes
+        ],
+        "farms": list(card.farms),
+        "chicken_houses": list(card.chicken_houses),
+        "supplier_suggestions": list(card.supplier_suggestions),
+    }
+
+
+def build_purchase_request_composer(*, user: Optional[UserProfile]) -> Optional[PurchaseRequestComposer]:
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    categories = tuple(
+        PurchaseRequestCategoryOption(
+            id=category.pk,
+            label=category.name,
+            support_document_type_id=category.default_support_document_type_id,
+        )
+        for category in PurchasingExpenseType.objects.only("id", "name", "default_support_document_type")
+        .order_by("name")
+    )
+    if not categories:
+        return None
+
+    manager_options = _build_manager_options()
+    area_scopes = tuple(
+        PurchaseRequestAreaScopeOption(id=value, label=label)
+        for value, label in PurchaseRequest.AreaScope.choices
+    )
+    farms = tuple(
+        {
+            "id": farm["id"],
+            "label": farm["name"],
+        }
+        for farm in Farm.objects.order_by("name").values("id", "name")
+    )
+    chicken_houses = tuple(
+        {
+            "id": house["id"],
+            "label": house["name"],
+            "farm_id": house["farm_id"],
+            "full_label": f"{house['farm__name']} · {house['name']}",
+        }
+        for house in ChickenHouse.objects.select_related("farm")
+        .order_by("farm__name", "name")
+        .values("id", "name", "farm_id", "farm__name")
+    )
+    supplier_suggestions = tuple(
+        {
+            "id": supplier["id"],
+            "label": supplier["name"],
+            "tax_id": supplier.get("tax_id") or "",
+            "city": supplier.get("city") or "",
+        }
+        for supplier in Supplier.objects.order_by("name")
+        .values("id", "name", "tax_id", "city")[:RECENT_SUPPLIER_SUGGESTIONS]
+    )
+
+    default_scope = {
+        "scope": PurchaseRequest.AreaScope.COMPANY,
+        "farm_id": None,
+        "chicken_house_id": None,
+    }
+
+    return PurchaseRequestComposer(
+        categories=categories,
+        manager_options=manager_options,
+        area_scopes=area_scopes,
+        farms=farms,
+        chicken_houses=chicken_houses,
+        supplier_suggestions=supplier_suggestions,
+        default_scope=default_scope,
+        default_manager_id=getattr(user, "pk", None),
+    )
 
 
 def _build_manager_options() -> Tuple[dict[str, object], ...]:
