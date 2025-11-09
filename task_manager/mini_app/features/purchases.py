@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
-from administration.models import PurchaseRequest, PurchasingExpenseType, Supplier
+from administration.models import PurchaseApproval, PurchaseRequest, PurchasingExpenseType, Supplier
 from administration.models import Product as AdministrationProduct, PurchaseItem
 from production.models import ChickenHouse, Farm
 from personal.models import UserProfile
@@ -18,6 +18,7 @@ from personal.models import UserProfile
 MAX_SUPPLIERS = 60
 MAX_PRODUCTS = 60
 MAX_PURCHASE_ENTRIES = 6
+MAX_APPROVAL_ENTRIES = 6
 
 REQUEST_SCOPE_HELPERS: dict[str, str] = {
     PurchaseRequest.AreaScope.COMPANY: _("Úsalo para compras corporativas o multi-granja."),
@@ -139,6 +140,29 @@ class PurchaseManagementCard:
     items: Tuple[dict[str, object], ...]
 
 
+@dataclass(frozen=True)
+class PurchaseApprovalEntry:
+    purchase_id: int
+    approval_id: int
+    code: str
+    name: str
+    supplier_label: str
+    area_label: str
+    amount_label: str
+    status_label: str
+    status_theme: str
+    role_label: str
+    updated_label: str
+    assigned_manager_id: Optional[int]
+    items: Tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True)
+class PurchaseApprovalCard:
+    entries: Tuple[PurchaseApprovalEntry, ...]
+    manager_options: Tuple[dict[str, object], ...]
+
+
 def build_purchase_request_form_card(
     *,
     user: Optional[UserProfile],
@@ -244,9 +268,13 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
     if not user or not getattr(user, "is_authenticated", False):
         return None
 
+    user_id = getattr(user, "pk", None)
+    if not user_id:
+        return None
+
     queryset = (
         PurchaseRequest.objects.filter(
-            Q(requester=user) | Q(assigned_manager=user),
+            Q(requester_id=user_id) | Q(assigned_manager_id=user_id),
             status__in=OVERVIEW_ALLOWED_STATUSES,
         )
         .select_related("expense_type", "supplier")
@@ -450,6 +478,78 @@ def build_purchase_management_card(*, user: Optional[UserProfile]) -> Optional[P
     )
 
 
+def build_purchase_approval_card(*, user: Optional[UserProfile]) -> Optional[PurchaseApprovalCard]:
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    approvals = (
+        PurchaseApproval.objects.filter(
+            approver=user,
+            status=PurchaseApproval.Status.PENDING,
+        )
+        .select_related(
+            "purchase_request",
+            "purchase_request__supplier",
+            "purchase_request__assigned_manager",
+        )
+        .prefetch_related(
+            Prefetch(
+                "purchase_request__items",
+                queryset=PurchaseItem.objects.select_related("product").order_by("pk"),
+            )
+        )
+        .order_by("sequence", "-purchase_request__updated_at")
+    )
+    entries: list[PurchaseApprovalEntry] = []
+
+    for approval in approvals[:MAX_APPROVAL_ENTRIES]:
+        purchase = approval.purchase_request
+        if not purchase:
+            continue
+        currency = purchase.currency or "COP"
+        amount_label = _format_currency(purchase.estimated_total or Decimal("0.00"), currency)
+        updated_label = _(
+            "Actualizado %(date)s"
+        ) % {
+            "date": date_format(timezone.localtime(purchase.updated_at), "SHORT_DATETIME_FORMAT"),
+        }
+        manager_id = _resolve_default_manager_id(purchase=purchase, fallback_user=user)
+        item_payloads = tuple(
+            _serialize_purchase_item(item=item, currency=purchase.currency or currency) for item in purchase.items.all()
+        )
+        entries.append(
+            PurchaseApprovalEntry(
+                purchase_id=purchase.pk,
+                approval_id=approval.pk,
+                code=purchase.timeline_code,
+                name=purchase.name,
+                supplier_label=purchase.supplier.name if purchase.supplier else "",
+                area_label=purchase.area_label,
+                amount_label=amount_label,
+                status_label=purchase.get_status_display(),
+                status_theme=PURCHASE_STATUS_THEME.get(purchase.status, "slate"),
+                role_label=approval.role or _("Aprobador"),
+                updated_label=updated_label,
+                assigned_manager_id=manager_id,
+                items=item_payloads,
+            )
+        )
+
+    if not entries:
+        return None
+
+    manager_options = tuple(
+        {
+            "id": profile.pk,
+            "label": profile.get_full_name() or profile.get_username() or _("Sin nombre"),
+        }
+        for profile in UserProfile.objects.only("id", "nombres", "apellidos", "cedula")
+        .order_by("apellidos", "nombres", "id")
+    )
+
+    return PurchaseApprovalCard(entries=tuple(entries), manager_options=manager_options)
+
+
 def serialize_purchase_request_form_card(card: PurchaseRequestFormCard) -> dict[str, object]:
     return {
         "submit_url": card.submit_url,
@@ -566,6 +666,40 @@ def serialize_purchase_management_empty_state() -> dict[str, object]:
         "has_purchase": False,
         "message": _("No tienes solicitudes aprobadas pendientes de gestionar en este momento."),
     }
+
+
+def serialize_purchase_approval_card(card: PurchaseApprovalCard) -> dict[str, object]:
+    return {
+        "entries": [
+            {
+                "id": entry.purchase_id,
+                "approval_id": entry.approval_id,
+                "code": entry.code,
+                "name": entry.name,
+                "supplier_label": entry.supplier_label,
+                "area_label": entry.area_label,
+                "amount_label": entry.amount_label,
+                "status_label": entry.status_label,
+                "status_theme": entry.status_theme,
+                "role_label": entry.role_label,
+                "updated_label": entry.updated_label,
+                "assigned_manager_id": entry.assigned_manager_id,
+                "items": list(entry.items),
+            }
+            for entry in card.entries
+        ],
+        "manager_options": list(card.manager_options),
+    }
+
+
+def _resolve_default_manager_id(*, purchase: PurchaseRequest, fallback_user: Optional[UserProfile]) -> Optional[int]:
+    if purchase.assigned_manager_id:
+        return purchase.assigned_manager_id
+    if purchase.requester_id:
+        return purchase.requester_id
+    if fallback_user and getattr(fallback_user, "pk", None):
+        return fallback_user.pk
+    return None
 
 
 def _format_currency(amount: Decimal, currency: str) -> str:

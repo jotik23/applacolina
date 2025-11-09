@@ -41,6 +41,10 @@ from administration.services.purchase_requests import (
     PurchaseRequestSubmissionService,
     PurchaseRequestValidationError,
 )
+from administration.services.workflows import (
+    PurchaseApprovalDecisionError,
+    PurchaseApprovalDecisionService,
+)
 from applacolina.mixins import StaffRequiredMixin
 
 from personal.models import (
@@ -61,6 +65,7 @@ from task_manager.mini_app.features import (
     build_purchase_request_form_card,
     build_purchase_requests_overview,
     build_purchase_management_card,
+    build_purchase_approval_card,
     persist_production_records,
     persist_weight_registry,
     serialize_shift_confirmation_card,
@@ -71,6 +76,7 @@ from task_manager.mini_app.features import (
     serialize_purchase_requests_overview,
     serialize_purchase_management_card,
     serialize_purchase_management_empty_state,
+    serialize_purchase_approval_card,
 )
 from task_manager.mini_app.features.purchases import (
     PURCHASE_STATUS_THEME as MINI_APP_PURCHASE_STATUS_THEME,
@@ -97,6 +103,7 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "weight_registry": "task_manager.view_mini_app_weight_registry_card",
     "purchase_request": "task_manager.view_mini_app_purchase_request_card",
     "purchase_overview": "task_manager.view_mini_app_purchase_overview_card",
+    "purchase_approval": "task_manager.view_mini_app_purchase_approval_card",
     "purchase_management": "task_manager.view_mini_app_purchase_management_card",
     "pending_classification": "task_manager.view_mini_app_pending_classification_card",
     "transport_queue": "task_manager.view_mini_app_transport_queue_card",
@@ -960,6 +967,21 @@ def _build_purchase_management_payload(user: UserProfile, request) -> Optional[d
         )
         return payload
     return serialize_purchase_management_empty_state()
+
+
+def _build_purchase_approval_payload(user: UserProfile, request) -> Optional[dict[str, object]]:
+    if not user.has_perm("task_manager.view_mini_app_purchase_approval_card"):
+        return None
+    approval_card = build_purchase_approval_card(user=user)
+    if not approval_card:
+        return None
+    payload = serialize_purchase_approval_card(approval_card)
+    for entry in payload.get("entries", []):
+        entry["decision_url"] = reverse(
+            "task_manager:mini-app-purchase-approval",
+            kwargs={"pk": entry.get("id")},
+        )
+    return payload
 
 
 def _serialize_purchase_summary(purchase: PurchaseRequest) -> dict[str, object]:
@@ -3025,6 +3047,11 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if overview_payload:
                     purchases_payload = purchases_payload or {}
                     purchases_payload["overview"] = overview_payload
+            if card_permissions.get("purchase_approval"):
+                approval_payload = _build_purchase_approval_payload(user, self.request)
+                if approval_payload:
+                    purchases_payload = purchases_payload or {}
+                    purchases_payload["approvals"] = approval_payload
             if card_permissions.get("purchase_management"):
                 management_payload = _build_purchase_management_payload(user, self.request)
                 if management_payload:
@@ -3355,6 +3382,10 @@ def mini_app_purchase_request_view(request):
 
     overview_payload = _build_purchase_overview_payload(user)
     management_payload = _build_purchase_management_payload(user, request)
+    approval_payload = _build_purchase_approval_payload(user, request)
+    approval_payload = _build_purchase_approval_payload(user, request)
+    approval_payload = _build_purchase_approval_payload(user, request)
+    approval_payload = _build_purchase_approval_payload(user, request)
     message = (
         _("Solicitud enviada a aprobación.")
         if intent == "send_workflow"
@@ -3369,6 +3400,7 @@ def mini_app_purchase_request_view(request):
             "purchase": _serialize_purchase_summary(purchase),
             "requests": overview_payload,
             "management": management_payload,
+            "approvals": approval_payload,
         }
     )
 
@@ -3424,6 +3456,7 @@ def mini_app_purchase_request_modify_view(request, pk: int):
             "purchase": _serialize_purchase_summary(purchase),
             "requests": overview_payload,
             "management": management_payload,
+            "approvals": approval_payload,
         }
     )
 
@@ -3482,6 +3515,7 @@ def mini_app_purchase_order_view(request, pk: int):
 
     overview_payload = _build_purchase_overview_payload(user)
     management_payload = _build_purchase_management_payload(user, request)
+    approval_payload = _build_purchase_approval_payload(user, request)
     message = _("Información de la compra guardada.")
     if intent == "confirm_order":
         message = _("Compra gestionada. Continúa con la recepción cuando corresponda.")
@@ -3493,6 +3527,7 @@ def mini_app_purchase_order_view(request, pk: int):
             "purchase": _serialize_purchase_summary(purchase),
             "requests": overview_payload,
             "management": management_payload,
+            "approvals": approval_payload,
         }
     )
 
@@ -3540,6 +3575,87 @@ def mini_app_purchase_finalize_view(request, pk: int):
             "purchase": _serialize_purchase_summary(purchase),
             "requests": overview_payload,
             "management": management_payload,
+            "approvals": approval_payload,
+        }
+    )
+
+
+@require_POST
+def mini_app_purchase_approval_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_approval_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para aprobar solicitudes desde la mini app.")},
+            status=403,
+        )
+
+    purchase = PurchaseRequest.objects.filter(pk=pk).first()
+    if not purchase:
+        return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+
+    assigned_manager_id = _coerce_int(payload.get("assigned_manager_id"))
+    if not assigned_manager_id:
+        return JsonResponse(
+            {"error": _("Selecciona el gestor asignado antes de continuar.")},
+            status=400,
+        )
+
+    manager_exists = UserProfile.objects.filter(pk=assigned_manager_id).only("pk").exists()
+    if not manager_exists:
+        return JsonResponse({"error": _("Selecciona un gestor válido.")}, status=400)
+
+    decision = (_normalize_string(payload.get("decision")) or "approve").lower()
+    if decision not in {"approve", "reject"}:
+        decision = "approve"
+    note = (payload.get("note") or "").strip()
+
+    if purchase.assigned_manager_id != assigned_manager_id:
+        purchase.assigned_manager_id = assigned_manager_id
+        purchase.save(update_fields=["assigned_manager", "updated_at"])
+
+    service = PurchaseApprovalDecisionService(
+        purchase_request=purchase,
+        actor=user,
+    )
+
+    try:
+        if decision == "approve":
+            result = service.approve(note=note)
+        else:
+            result = service.reject(note=note)
+    except PurchaseApprovalDecisionError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    purchase.refresh_from_db()
+    overview_payload = _build_purchase_overview_payload(user)
+    management_payload = _build_purchase_management_payload(user, request)
+    approval_payload = _build_purchase_approval_payload(user, request)
+
+    if result.decision == "rejected":
+        message = _("Solicitud rechazada y devuelta a borrador.")
+    elif result.workflow_completed:
+        message = _("Solicitud aprobada completamente.")
+    else:
+        message = _("Tu aprobación fue registrada. El flujo continuará con el siguiente aprobador.")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": message,
+            "decision": result.decision,
+            "purchase": _serialize_purchase_summary(purchase),
+            "requests": overview_payload,
+            "management": management_payload,
+            "approvals": approval_payload,
         }
     )
 

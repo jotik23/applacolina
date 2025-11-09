@@ -267,6 +267,9 @@
           if (typeof this.helpers.onManagementUpdated === 'function' && data.management) {
             this.helpers.onManagementUpdated(data.management);
           }
+          if (typeof this.helpers.onApprovalsUpdated === 'function') {
+            this.helpers.onApprovalsUpdated(data.approvals || null);
+          }
           if (data.intent === 'send_workflow') {
             this.resetForm();
           }
@@ -607,11 +610,329 @@ class PurchaseRequestsListController {
   }
 }
 
-  class PurchaseManagementCardController {
-    constructor(card, csrfToken) {
-      this.card = card;
-      this.csrfToken = csrfToken || null;
-      this.form = card.querySelector('[data-management-form]');
+class PurchaseApprovalCardController {
+  constructor(card, csrfToken, helpers) {
+    this.card = card;
+    this.csrfToken = csrfToken || null;
+    this.helpers = helpers || {};
+    this.listNode = card.querySelector('[data-purchase-approval-list]');
+    this.template = card.querySelector('template[data-purchase-approval-entry-template]');
+    this.managerOptions = [];
+  }
+
+  init(payload) {
+    this.refresh(payload || null);
+  }
+
+  refresh(payload) {
+    if (!this.card) {
+      return;
+    }
+    if (payload && Array.isArray(payload.manager_options)) {
+      this.managerOptions = payload.manager_options.slice();
+    }
+    const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
+    tmMiniApp.purchases = tmMiniApp.purchases || {};
+    tmMiniApp.purchases.approvals = payload || null;
+
+    const entries = (payload && payload.entries) || [];
+    if (!entries.length) {
+      if (this.listNode) {
+        this.listNode.innerHTML = '';
+      }
+      this.card.classList.add('hidden');
+      return;
+    }
+    this.card.classList.remove('hidden');
+    this.renderEntries(entries);
+  }
+
+  renderEntries(entries) {
+    if (!this.listNode || !this.template) {
+      return;
+    }
+    this.listNode.innerHTML = '';
+    entries.forEach((entry) => {
+      const fragment = document.importNode(this.template.content, true);
+      const node = fragment.querySelector('[data-purchase-approval-entry]');
+      if (!node) {
+        return;
+      }
+      node.setAttribute('data-entry-id', entry.id);
+      node.setAttribute('data-decision-url', entry.decision_url || '');
+      this.assignText(node, '[data-entry-name]', entry.name);
+      this.assignText(node, '[data-entry-code]', entry.code);
+      this.assignText(node, '[data-entry-code-inline]', entry.code);
+      this.assignText(node, '[data-entry-area]', entry.area_label);
+      this.assignText(node, '[data-entry-role]', entry.role_label ? `Rol: ${entry.role_label}` : '');
+      this.assignText(node, '[data-entry-updated]', entry.updated_label || '');
+      this.assignText(node, '[data-entry-supplier]', entry.supplier_label || '—');
+      this.assignText(node, '[data-entry-amount]', entry.amount_label || '—');
+      this.assignText(node, '[data-entry-status]', entry.status_label || '');
+      this.applyStatusTone(node.querySelector('[data-entry-status]'), entry.status_theme);
+      this.populateManagerSelect(
+        node.querySelector('[data-approval-manager-select]'),
+        entry.assigned_manager_id
+      );
+      this.renderItems(node.querySelector('[data-entry-items]'), entry.items || []);
+      const feedback = node.querySelector('[data-approval-feedback]');
+      if (feedback) {
+        feedback.classList.add('hidden');
+        feedback.textContent = '';
+      }
+      this.attachEntryEvents(node);
+      this.listNode.appendChild(node);
+    });
+  }
+
+  assignText(scope, selector, value) {
+    if (!scope) {
+      return;
+    }
+    const target = scope.querySelector(selector);
+    if (target) {
+      target.textContent = value || '';
+    }
+  }
+
+  applyStatusTone(node, theme) {
+    if (!node) {
+      return;
+    }
+    const baseClasses = [
+      'inline-flex',
+      'items-center',
+      'gap-2',
+      'rounded-full',
+      'border',
+      'px-3',
+      'py-1',
+      'text-[11px]',
+      'font-semibold',
+      'uppercase',
+      'tracking-wide',
+    ];
+    const variants = {
+      amber: ['border-amber-200', 'bg-amber-50', 'text-amber-700'],
+      brand: ['border-brand/40', 'bg-brand/10', 'text-brand'],
+      emerald: ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700'],
+      indigo: ['border-indigo-200', 'bg-indigo-50', 'text-indigo-700'],
+      slate: ['border-slate-200', 'bg-slate-50', 'text-slate-600'],
+    };
+    const classes = variants[theme] || variants.slate;
+    node.className = baseClasses.join(' ');
+    node.classList.add(...classes);
+  }
+
+  populateManagerSelect(select, selectedId) {
+    if (!select) {
+      return;
+    }
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Selecciona un gestor';
+    select.appendChild(placeholder);
+    this.managerOptions.forEach((option) => {
+      const opt = document.createElement('option');
+      opt.value = String(option.id);
+      opt.textContent = option.label;
+      if (selectedId && String(option.id) === String(selectedId)) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+  }
+
+  renderItems(container, items) {
+    if (!container) {
+      return;
+    }
+    container.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-xs text-slate-500';
+      empty.textContent = 'Sin ítems registrados.';
+      container.appendChild(empty);
+      return;
+    }
+    items.forEach((item) => {
+      container.appendChild(this.buildItemNode(item));
+    });
+  }
+
+  buildItemNode(item) {
+    const node = document.createElement('article');
+    node.className =
+      'rounded-2xl border border-slate-100 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm shadow-slate-100';
+    const header = document.createElement('div');
+    header.className = 'flex items-start justify-between gap-2';
+    const title = document.createElement('p');
+    title.className = 'text-sm font-semibold text-slate-900';
+    title.textContent = item.description || 'Ítem solicitado';
+    header.appendChild(title);
+    if (item.product_label) {
+      const badge = document.createElement('p');
+      badge.className = 'text-[11px] font-semibold uppercase tracking-wide text-slate-500';
+      badge.textContent = item.product_label;
+      header.appendChild(badge);
+    }
+    node.appendChild(header);
+    const stats = document.createElement('dl');
+    stats.className =
+      'mt-2 grid gap-2 text-[11px] uppercase tracking-wide text-slate-500 sm:grid-cols-3';
+    [
+      { label: 'Cantidad', value: item.requested_label || item.quantity_label || '—' },
+      { label: 'Valor unitario', value: item.unit_value_label || '—' },
+      { label: 'Subtotal', value: item.subtotal_label || item.amount_label || '—' },
+    ].forEach((stat) => {
+      const group = document.createElement('div');
+      const dt = document.createElement('dt');
+      dt.textContent = stat.label;
+      const dd = document.createElement('dd');
+      dd.className = 'mt-0.5 text-base font-semibold normal-case text-slate-900';
+      dd.textContent = stat.value;
+      group.appendChild(dt);
+      group.appendChild(dd);
+      stats.appendChild(group);
+    });
+    node.appendChild(stats);
+    return node;
+  }
+
+  attachEntryEvents(node) {
+    const buttons = node.querySelectorAll('[data-approval-action]');
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = button.getAttribute('data-approval-action') || 'approve';
+        this.handleDecision(node, action);
+      });
+    });
+  }
+
+  handleDecision(node, action) {
+    if (!node) {
+      return;
+    }
+    const url = node.getAttribute('data-decision-url');
+    if (!url) {
+      this.showEntryFeedback(node, 'No encontramos la ruta para registrar tu decisión.', 'error');
+      return;
+    }
+    const managerSelect = node.querySelector('[data-approval-manager-select]');
+    const noteField = node.querySelector('[data-approval-note]');
+    const managerId = managerSelect ? managerSelect.value : '';
+    if (!managerId) {
+      this.showEntryFeedback(node, 'Selecciona el gestor asignado antes de continuar.', 'error');
+      if (managerSelect && typeof managerSelect.focus === 'function') {
+        try {
+          managerSelect.focus({ preventScroll: true });
+        } catch (error) {
+          managerSelect.focus();
+        }
+      }
+      return;
+    }
+    const payload = {
+      assigned_manager_id: managerId,
+      note: noteField ? noteField.value.trim() : '',
+      decision: action === 'reject' ? 'reject' : 'approve',
+    };
+    this.setEntryBusy(node, true);
+    this.sendDecision(url, payload)
+      .then((data) => {
+        if (data && data.message) {
+          this.showEntryFeedback(node, data.message, 'success');
+        }
+        if (data && typeof this.helpers.onRequestsUpdated === 'function' && data.requests) {
+          this.helpers.onRequestsUpdated(data.requests);
+        }
+        if (data && typeof this.helpers.onManagementUpdated === 'function' && data.management) {
+          this.helpers.onManagementUpdated(data.management);
+        }
+        if (typeof this.helpers.onApprovalsUpdated === 'function') {
+          this.helpers.onApprovalsUpdated((data && data.approvals) || null);
+        } else if (data && data.approvals) {
+          this.refresh(data.approvals);
+        } else {
+          this.refresh(null);
+        }
+      })
+      .catch((error) => {
+        const message = error && error.message ? error.message : null;
+        this.showEntryFeedback(
+          node,
+          message || 'No pudimos registrar tu decisión. Intenta nuevamente.',
+          'error'
+        );
+      })
+      .finally(() => {
+        this.setEntryBusy(node, false);
+      });
+  }
+
+  setEntryBusy(node, isBusy) {
+    if (!node) {
+      return;
+    }
+    const controls = node.querySelectorAll('button, select, textarea');
+    controls.forEach((control) => {
+      control.disabled = isBusy;
+    });
+  }
+
+  showEntryFeedback(node, message, tone) {
+    if (!node) {
+      return;
+    }
+    const feedback = node.querySelector('[data-approval-feedback]');
+    if (!feedback) {
+      return;
+    }
+    if (!message) {
+      feedback.classList.add('hidden');
+      feedback.textContent = '';
+      return;
+    }
+    feedback.textContent = message;
+    feedback.classList.remove('hidden', 'text-emerald-600', 'text-rose-600');
+    feedback.classList.add(tone === 'success' ? 'text-emerald-600' : 'text-rose-600');
+  }
+
+  sendDecision(url, payload) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: Object.assign(
+        { 'Content-Type': 'application/json' },
+        this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : {}
+      ),
+      body: JSON.stringify(payload),
+    })
+      .then((response) =>
+        response
+          .json()
+          .catch(() => ({}))
+          .then((data) => ({ ok: response.ok, data }))
+      )
+      .then((result) => {
+        if (!result.ok || (result.data && result.data.error)) {
+          const message =
+            (result.data && result.data.error) ||
+            'No pudimos registrar tu decisión. Intenta nuevamente.';
+          throw new Error(message);
+        }
+        return result.data || {};
+      });
+  }
+}
+
+class PurchaseManagementCardController {
+  constructor(card, csrfToken, helpers) {
+    this.card = card;
+    this.csrfToken = csrfToken || null;
+    this.helpers = helpers || {};
+    this.form = card.querySelector('[data-management-form]');
       this.saveButtons = Array.prototype.slice.call(
         card.querySelectorAll('[data-purchase-management-action="save"]')
       );
@@ -833,17 +1154,16 @@ class PurchaseRequestsListController {
             this.showFeedback(data.message, 'success');
           }
           this.displayFieldErrors({});
-          const tmMiniApp = window.tmMiniApp || {};
-          if (
-            data.requests &&
-            tmMiniApp.purchasesControllers &&
-            tmMiniApp.purchasesControllers.requestsList &&
-            typeof tmMiniApp.purchasesControllers.requestsList.render === 'function'
-          ) {
-            tmMiniApp.purchasesControllers.requestsList.render(data.requests);
+          if (typeof this.helpers.onRequestsUpdated === 'function' && data.requests) {
+            this.helpers.onRequestsUpdated(data.requests);
           }
-          if (data.management) {
+          if (typeof this.helpers.onManagementUpdated === 'function' && data.management) {
+            this.helpers.onManagementUpdated(data.management);
+          } else if (data.management) {
             this.refresh(data.management);
+          }
+          if (typeof this.helpers.onApprovalsUpdated === 'function') {
+            this.helpers.onApprovalsUpdated(data.approvals || null);
           }
           return true;
         })
@@ -892,17 +1212,16 @@ class PurchaseRequestsListController {
           if (action === 'modify' && this.noteInput) {
             this.noteInput.value = '';
           }
-          const tmMiniApp = window.tmMiniApp || {};
-          if (
-            data.requests &&
-            tmMiniApp.purchasesControllers &&
-            tmMiniApp.purchasesControllers.requestsList &&
-            typeof tmMiniApp.purchasesControllers.requestsList.render === 'function'
-          ) {
-            tmMiniApp.purchasesControllers.requestsList.render(data.requests);
+          if (typeof this.helpers.onRequestsUpdated === 'function' && data.requests) {
+            this.helpers.onRequestsUpdated(data.requests);
           }
-          if (data.management) {
+          if (typeof this.helpers.onManagementUpdated === 'function' && data.management) {
+            this.helpers.onManagementUpdated(data.management);
+          } else if (data.management) {
             this.refresh(data.management);
+          }
+          if (typeof this.helpers.onApprovalsUpdated === 'function') {
+            this.helpers.onApprovalsUpdated(data.approvals || null);
           }
         })
         .catch(() => {
@@ -1000,6 +1319,7 @@ class PurchaseRequestsListController {
       return;
     }
     const cardOrder = [
+      '[data-purchase-approval-card]',
       '[data-purchase-management-card]',
       '[data-purchase-requests-card]',
       '[data-purchase-request-card]',
@@ -1024,6 +1344,21 @@ class PurchaseRequestsListController {
     const purchasesPayload = tmMiniApp.purchases || {};
     const controllers = (tmMiniApp.purchasesControllers = tmMiniApp.purchasesControllers || {});
     const csrfToken = tmMiniApp.csrfToken || null;
+    const notifyRequestsUpdated = (payload) => {
+      if (controllers.requestsList && payload) {
+        controllers.requestsList.render(payload);
+      }
+    };
+    const notifyManagementUpdated = (payload) => {
+      if (controllers.management && payload) {
+        controllers.management.refresh(payload);
+      }
+    };
+    const notifyApprovalsUpdated = (payload) => {
+      if (controllers.approvals) {
+        controllers.approvals.refresh(payload || null);
+      }
+    };
 
     const requestsCard = document.querySelector('[data-purchase-requests-card]');
     if (requestsCard) {
@@ -1031,9 +1366,23 @@ class PurchaseRequestsListController {
       controllers.requestsList.render(purchasesPayload.overview);
     }
 
+    const approvalsCard = document.querySelector('[data-purchase-approval-card]');
+    if (approvalsCard) {
+      controllers.approvals = new PurchaseApprovalCardController(approvalsCard, csrfToken, {
+        onRequestsUpdated: notifyRequestsUpdated,
+        onManagementUpdated: notifyManagementUpdated,
+        onApprovalsUpdated: notifyApprovalsUpdated,
+      });
+      controllers.approvals.init(purchasesPayload.approvals || null);
+    }
+
     const managementCard = document.querySelector('[data-purchase-management-card]');
     if (managementCard) {
-      controllers.management = new PurchaseManagementCardController(managementCard, csrfToken);
+      controllers.management = new PurchaseManagementCardController(managementCard, csrfToken, {
+        onRequestsUpdated: notifyRequestsUpdated,
+        onManagementUpdated: notifyManagementUpdated,
+        onApprovalsUpdated: notifyApprovalsUpdated,
+      });
       controllers.management.init();
       controllers.management.refresh(purchasesPayload.management);
     }
@@ -1042,16 +1391,9 @@ class PurchaseRequestsListController {
     if (requestCard && purchasesPayload.request_form) {
       controllers.requestForm = new PurchaseRequestCardController(requestCard, purchasesPayload.request_form, {
         csrfToken,
-        onRequestsUpdated: (payload) => {
-          if (controllers.requestsList && payload) {
-            controllers.requestsList.render(payload);
-          }
-        },
-        onManagementUpdated: (payload) => {
-          if (controllers.management && payload) {
-            controllers.management.refresh(payload);
-          }
-        },
+        onRequestsUpdated: notifyRequestsUpdated,
+        onManagementUpdated: notifyManagementUpdated,
+        onApprovalsUpdated: notifyApprovalsUpdated,
       });
       controllers.requestForm.init();
       const createRequestButtons = Array.prototype.slice.call(

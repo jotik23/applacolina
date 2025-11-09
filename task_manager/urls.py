@@ -5,6 +5,7 @@ from .views import (
     mini_app_production_record_view,
     mini_app_purchase_order_view,
     mini_app_purchase_finalize_view,
+    mini_app_purchase_approval_view,
     mini_app_purchase_request_modify_view,
     mini_app_purchase_request_view,
     mini_app_task_complete_view,
@@ -68,6 +69,11 @@ urlpatterns = [
         "telegram/mini-app/purchases/<int:pk>/finalize/",
         mini_app_purchase_finalize_view,
         name="mini-app-purchase-finalize",
+    ),
+    path(
+        "telegram/mini-app/purchases/<int:pk>/approval/",
+        mini_app_purchase_approval_view,
+        name="mini-app-purchase-approval",
     ),
     path(
         "telegram/mini-app/weight-registry/",

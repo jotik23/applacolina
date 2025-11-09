@@ -279,6 +279,10 @@ class TaskDefinition(models.Model):
                 _("Puede ver el card de solicitudes de compra en la mini app"),
             ),
             (
+                "view_mini_app_purchase_approval_card",
+                _("Puede ver el card de aprobación de compras en la mini app"),
+            ),
+            (
                 "view_mini_app_purchase_management_card",
                 _("Puede ver el card de gestión de compras en la mini app"),
             ),
