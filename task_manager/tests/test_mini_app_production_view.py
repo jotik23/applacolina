@@ -139,6 +139,20 @@ class MiniAppProductionViewTests(TestCase):
         self.assertEqual(room_payload["birds"], 960)
         self.assertIsNone(room_payload["production"])
 
+    def test_production_card_hidden_without_lots(self):
+        user = self._create_user(grant_permission=True)
+        self._create_assignment(operator=user)
+        BirdBatchRoomAllocation.objects.all().delete()
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("task_manager:telegram-mini-app"))
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.context["telegram_mini_app"]
+        self.assertIsNotNone(payload)
+        self.assertIsNone(payload["production"])
+        self.assertEqual(payload["production_reference"]["active_hens"], 0)
+
     def test_production_card_hidden_without_permission(self):
         user = self._create_user(grant_permission=False)
         self._create_assignment(operator=user)

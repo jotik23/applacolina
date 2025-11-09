@@ -253,6 +253,8 @@ WEB_PUSH_CONTACT = os.getenv("WEB_PUSH_CONTACT", "mailto:soporte@lacolina.com")
 WEB_PUSH_SUBSCRIPTION_ENDPOINT = os.getenv(
     "WEB_PUSH_SUBSCRIPTION_ENDPOINT", "https://applacolina-production.up.railway.app/task-manager/api/pwa/subscriptions/"
 )
+ANDROID_TWA_PACKAGE_NAME = os.getenv("ANDROID_TWA_PACKAGE_NAME", "app.railway.up.applacolina_production.twa")
+ANDROID_TWA_SHA256_FINGERPRINTS = "90:41:D2:3C:92:53:A3:FD:76:24:CB:0B:5D:AC:55:47:07:FD:B7:24:B7:3E:B4:2B:68:22:8D:4A:AF:D9:CE:D7"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

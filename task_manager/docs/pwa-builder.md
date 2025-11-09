@@ -55,6 +55,13 @@ El service worker ya maneja `push`, `notificationclick` y `pushsubscriptionchang
    - `WEB_PUSH_SUBSCRIPTION_ENDPOINT`: apunta a `https://applacolina-production.up.railway.app/task-manager/api/pwa/subscriptions/` (vista incluida en este repo).
 2. Redepliega para que Django propague esos valores. `task_manager/views.py` inyecta esta info en `window.PWAPushConfig`, y `pwa-init.js` la usa para registrar la suscripción.
 
+> Nota: puedes copiar la clave privada exactamente como la provee Firebase (PEM). El backend la normaliza internamente para generar el formato base64 requerido por Web Push, así que no necesitas convertirla manualmente.
+
+3. **Vincula el dominio con el APK (Trusted Web Activity)**
+   - Define `ANDROID_TWA_PACKAGE_NAME` (ej. `com.lacolina.taskmanager`) y `ANDROID_TWA_SHA256_FINGERPRINTS` (lista separada por comas con los fingerprints SHA‑256 de tu keystore) en Railway.
+   - Django expone automáticamente `https://applacolina-production.up.railway.app/.well-known/assetlinks.json` con esos valores, que es lo que Chrome verifica para abrir la TWA sin barra de URL.
+   - Cada vez que generes un keystore nuevo debes actualizar la variable de fingerprint.
+
 ### 3.3 Guardar suscripciones en tu backend
 1. La ruta `POST /task-manager/api/pwa/subscriptions/` ya valida sesión + permiso `access_mini_app` y persiste el JSON (`endpoint`, `keys.p256dh`, `keys.auth`, expiración, cliente, user-agent) en `MiniAppPushSubscription`.
 2. Con las variables anteriores, `pwa-init.js` envía automáticamente la suscripción a ese endpoint cada vez que el usuario concede permisos.

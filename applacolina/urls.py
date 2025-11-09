@@ -20,6 +20,8 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView, TemplateView
 
+from applacolina.views import digital_asset_links_view
+
 admin.site.site_header = "Administracion de La Colina"
 admin.site.site_title = "Administracion de La Colina"
 admin.site.index_title = "Panel de administracion"
@@ -27,6 +29,7 @@ admin.site.index_title = "Panel de administracion"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', RedirectView.as_view(pattern_name='task_manager:index', permanent=False)),
+    path('.well-known/assetlinks.json', digital_asset_links_view, name='asset-links'),
     path(
         'service-worker.js',
         TemplateView.as_view(

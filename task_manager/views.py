@@ -3050,21 +3050,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 registry = build_production_registry(user=user, reference_date=today)
                 if registry:
                     production_payload = serialize_production_registry(registry)
-                submit_url = reverse("task_manager:mini-app-production-records")
-                if production_payload is not None:
-                    production_payload["submit_url"] = submit_url
-                else:
-                    production_payload = {
-                        "submit_url": submit_url,
-                        "lots": [],
-                        "active_hens": 0,
-                        "date": today.isoformat(),
-                        "date_label": date_format(today, "DATE_FORMAT"),
-                        "weekday_label": date_format(today, "l").capitalize(),
-                        "position_label": None,
-                        "chicken_house": None,
-                        "farm": None,
-                    }
+                    production_payload["submit_url"] = reverse("task_manager:mini-app-production-records")
             if card_permissions.get("weight_registry"):
                 weight_submit_url = reverse("task_manager:mini-app-weight-registry")
                 registry = build_weight_registry(

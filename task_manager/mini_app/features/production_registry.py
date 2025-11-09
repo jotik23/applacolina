@@ -185,14 +185,7 @@ def build_production_registry(
 
     batches: list[BirdBatch] = list(batches_queryset)
     if not batches:
-        return ProductionRegistry(
-            date=target_date,
-            assignment_id=assignment.pk,
-            position_label=position.name,
-            chicken_house_name=chicken_house.name if chicken_house else None,
-            farm_name=position.farm.name if position.farm_id else None,
-            lots=tuple(),
-        )
+        return None
 
     room_record_queryset = ProductionRoomRecord.objects.select_related("room", "room__chicken_house")
     records = {
@@ -257,6 +250,9 @@ def build_production_registry(
                 record=record_snapshot,
             )
         )
+
+    if not lots:
+        return None
 
     return ProductionRegistry(
         date=target_date,
