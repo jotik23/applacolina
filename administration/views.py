@@ -14,6 +14,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.functional import cached_property
 from django.views import generic
 
@@ -85,17 +86,34 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         scope_override = kwargs.get('scope_override')
         panel_override = kwargs.get('panel_override')
         purchase_pk_override = kwargs.get('purchase_pk_override')
+        search_query = (self.request.GET.get('search') or self.request.POST.get('search') or '').strip()
+        start_date_raw = (self.request.GET.get('start_date') or self.request.POST.get('start_date') or '').strip()
+        end_date_raw = (self.request.GET.get('end_date') or self.request.POST.get('end_date') or '').strip()
+        page_number_raw = self.request.GET.get('page') or self.request.POST.get('page')
+        page_number = _parse_int(page_number_raw) or 1
+        if page_number < 1:
+            page_number = 1
+        start_date = parse_date(start_date_raw)
+        end_date = parse_date(end_date_raw)
         state = get_dashboard_state(
             scope_code=scope_override or self.request.GET.get('scope'),
             panel_code=panel_override or self.request.GET.get('panel'),
             purchase_pk=purchase_pk_override or _parse_int(self.request.GET.get('purchase')),
+            search_query=search_query or None,
+            start_date=start_date,
+            end_date=end_date,
+            page_number=page_number,
         )
         context.update(
             purchases_scope=state.scope,
             purchases_scopes=state.scopes,
-            purchases_list=state.purchases,
+            purchases_list=state.pagination.records,
+            purchases_page=state.pagination,
             purchases_panel=state.panel,
             purchases_recent_activity=state.recent_activity,
+            purchases_search=search_query,
+            purchases_start_date=start_date_raw,
+            purchases_end_date=end_date_raw,
         )
         field_errors = kwargs.get('purchase_request_field_errors') or {}
         item_errors = kwargs.get('purchase_request_item_errors') or {}
@@ -1645,6 +1663,18 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             params['scope'] = scope
         if extra:
             params.update({k: str(v) for k, v in extra.items()})
+        search_query = (self.request.GET.get('search') or self.request.POST.get('search') or '').strip()
+        if search_query and 'search' not in params:
+            params['search'] = search_query
+        start_date_value = (self.request.GET.get('start_date') or self.request.POST.get('start_date') or '').strip()
+        if start_date_value and 'start_date' not in params:
+            params['start_date'] = start_date_value
+        end_date_value = (self.request.GET.get('end_date') or self.request.POST.get('end_date') or '').strip()
+        if end_date_value and 'end_date' not in params:
+            params['end_date'] = end_date_value
+        page_value = (self.request.GET.get('page') or self.request.POST.get('page') or '').strip()
+        if page_value and 'page' not in params:
+            params['page'] = page_value
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
 

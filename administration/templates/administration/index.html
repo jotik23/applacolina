@@ -12,9 +12,62 @@
         <h1 class="text-2xl font-semibold text-slate-900">Compras</h1>
       </div>
       <div class="flex flex-wrap items-center gap-3">
-        {% if purchases_panel %}
+        <form method="get" class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2">
+          <input type="hidden" name="scope" value="{{ purchases_scope.code }}">
+          {% if purchases_start_date %}
+            <input type="hidden" name="start_date" value="{{ purchases_start_date }}">
+          {% endif %}
+          {% if purchases_end_date %}
+            <input type="hidden" name="end_date" value="{{ purchases_end_date }}">
+          {% endif %}
+          <input
+            type="search"
+            name="search"
+            value="{{ purchases_search }}"
+            placeholder="Buscar por código, descripción o proveedor"
+            class="w-44 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none"
+            aria-label="Buscar compra"
+          >
+          <button type="submit" class="text-xs font-semibold text-slate-500">Buscar</button>
+        </form>
+        <form method="get" class="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2">
+          <input type="hidden" name="scope" value="{{ purchases_scope.code }}">
+          {% if purchases_search %}
+            <input type="hidden" name="search" value="{{ purchases_search }}">
+          {% endif %}
+          <label class="text-xs font-semibold text-slate-500">
+            Inicio
+            <input
+              type="date"
+              name="start_date"
+              value="{{ purchases_start_date }}"
+              class="mt-1 w-36 rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-600 focus:outline-none"
+              aria-label="Fecha inicial"
+            >
+          </label>
+          <label class="text-xs font-semibold text-slate-500">
+            Fin
+            <input
+              type="date"
+              name="end_date"
+              value="{{ purchases_end_date }}"
+              class="mt-1 w-36 rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-600 focus:outline-none"
+              aria-label="Fecha final"
+            >
+          </label>
+          <button type="submit" class="text-xs font-semibold text-slate-500">Aplicar</button>
+        </form>
+        {% if purchases_search or purchases_start_date or purchases_end_date %}
           <a
             href="?scope={{ purchases_scope.code }}"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white px-4 py-2 text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+          >
+            Limpiar filtros
+          </a>
+        {% endif %}
+        {% if purchases_panel %}
+          <a
+            href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}{% if purchases_page %}&page={{ purchases_page.page_number }}{% endif %}"
             class="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
           >
             <span aria-hidden="true" class="size-1.5 rounded-full bg-slate-400"></span>
@@ -22,7 +75,7 @@
           </a>
         {% endif %}
         <a
-          href="?scope={{ purchases_scope.code }}&panel=request"
+          href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}{% if purchases_page %}&page={{ purchases_page.page_number }}{% endif %}&panel=request"
           class="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
         >
           <span aria-hidden="true" class="text-base">＋</span>
@@ -32,15 +85,15 @@
     </header>
 
     <div class="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/70">
-      <div class="flex flex-wrap gap-2 border-b border-slate-200/70 pb-4">
-        {% for scope in purchases_scopes %}
-          <a
-            href="?scope={{ scope.code }}"
-            class="group inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition {% if scope.code == purchases_scope.code %}border-slate-900 bg-slate-900 text-white shadow{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900{% endif %}"
-            aria-current="{% if scope.code == purchases_scope.code %}page{% else %}false{% endif %}"
-          >
-            <span class="inline-flex size-5 items-center justify-center rounded-full text-xs font-bold {% if scope.code == purchases_scope.code %}bg-white/20 text-white{% else %}bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700{% endif %}">
-              {{ scope.count }}
+        <div class="flex flex-wrap gap-2 border-b border-slate-200/70 pb-4">
+          {% for scope in purchases_scopes %}
+            <a
+              href="?scope={{ scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}"
+              class="group inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition {% if scope.code == purchases_scope.code %}border-slate-900 bg-slate-900 text-white shadow{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900{% endif %}"
+              aria-current="{% if scope.code == purchases_scope.code %}page{% else %}false{% endif %}"
+            >
+              <span class="inline-flex size-5 items-center justify-center rounded-full text-xs font-bold {% if scope.code == purchases_scope.code %}bg-white/20 text-white{% else %}bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700{% endif %}">
+                {{ scope.count }}
             </span>
             {{ scope.label }}
           </a>
@@ -53,6 +106,27 @@
             <div>
               <p class="text-sm font-semibold text-slate-900">{{ purchases_scope.label }}</p>
               <p class="text-xs text-slate-500">{{ purchases_scope.description }}</p>
+              {% if purchases_search %}
+                <p class="mt-1 text-xs text-slate-500">
+                  Resultados para “{{ purchases_search }}”
+                </p>
+              {% endif %}
+              {% if purchases_start_date or purchases_end_date %}
+                <p class="text-xs text-slate-500">
+                  Rango: {{ purchases_start_date|default:"—" }} – {{ purchases_end_date|default:"—" }}
+                </p>
+              {% endif %}
+              {% if purchases_page %}
+                <p class="text-xs text-slate-500">
+                  Mostrando
+                  {% if purchases_page.count %}
+                    <span class="font-semibold text-slate-900">{{ purchases_page.start_index }}–{{ purchases_page.end_index }}</span>
+                  {% else %}
+                    <span class="font-semibold text-slate-900">0</span>
+                  {% endif %}
+                  de {{ purchases_page.count }} compras
+                </p>
+              {% endif %}
             </div>
             <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">Listado</span>
           </div>
@@ -159,7 +233,7 @@
                         <div class="inline-flex flex-col gap-2 text-right">
                           {% if purchase.action %}
                             <a
-                              href="?scope={{ purchases_scope.code }}&panel={{ purchase.action.panel }}&purchase={{ purchase.pk }}"
+                              href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}{% if purchases_page %}&page={{ purchases_page.page_number }}{% endif %}&panel={{ purchase.action.panel }}&purchase={{ purchase.pk }}"
                               class="inline-flex items-center justify-end gap-2 text-sm font-semibold text-brand hover:text-brand/80"
                             >
                               {{ purchase.action.label }}
@@ -174,8 +248,16 @@
                   <tr>
                     <td colspan="{% if purchases_scope.code == 'aprobacion' %}7{% else %}5{% endif %}" class="px-6 py-16 text-center">
                       <div class="mx-auto max-w-lg space-y-2">
-                        <p class="text-base font-semibold text-slate-900">Sin compras / gastos en este estado</p>
-                        <p class="text-sm text-slate-500">Crea una nueva solicitud o ajusta el filtro para ver Compras / Gastos en otras etapas.</p>
+                        {% if purchases_search %}
+                          <p class="text-base font-semibold text-slate-900">No encontramos coincidencias para “{{ purchases_search }}”</p>
+                          <p class="text-sm text-slate-500">Intenta con otro término o limpia la búsqueda para ver todas las compras en este estado.</p>
+                        {% elif purchases_start_date or purchases_end_date %}
+                          <p class="text-base font-semibold text-slate-900">No hay compras en el rango seleccionado</p>
+                          <p class="text-sm text-slate-500">Ajusta las fechas o limpia los filtros para ver más resultados.</p>
+                        {% else %}
+                          <p class="text-base font-semibold text-slate-900">Sin compras / gastos en este estado</p>
+                          <p class="text-sm text-slate-500">Crea una nueva solicitud o ajusta el filtro para ver Compras / Gastos en otras etapas.</p>
+                        {% endif %}
                       </div>
                     </td>
                   </tr>
@@ -183,6 +265,35 @@
               </tbody>
             </table>
           </div>
+          {% if purchases_page and purchases_page.num_pages > 1 %}
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 bg-white/60 px-6 py-4 text-sm text-slate-500">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Página {{ purchases_page.page_number }} · {{ purchases_page.num_pages }}
+              </p>
+              <div class="flex flex-wrap items-center gap-2">
+                {% if purchases_page.has_previous %}
+                  <a
+                    href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}&page={{ purchases_page.previous_page_number }}"
+                    class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                  >
+                    ← Anterior
+                  </a>
+                {% else %}
+                  <span class="rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-slate-300">← Anterior</span>
+                {% endif %}
+                {% if purchases_page.has_next %}
+                  <a
+                    href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}&page={{ purchases_page.next_page_number }}"
+                    class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                  >
+                    Siguiente →
+                  </a>
+                {% else %}
+                  <span class="rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-slate-300">Siguiente →</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -203,13 +314,24 @@
             <p class="text-xs uppercase tracking-wide text-slate-500">{{ purchases_panel.purchase.timeline_code }} · {{ purchases_panel.purchase.supplier }}</p>
           {% endif %}
         </div>
-        <a href="?scope={{ purchases_scope.code }}" class="text-sm font-medium text-slate-500 hover:text-slate-900">Cerrar</a>
+        <a
+          href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}{% if purchases_page %}&page={{ purchases_page.page_number }}{% endif %}"
+          class="text-sm font-medium text-slate-500 hover:text-slate-900"
+        >
+          Cerrar
+        </a>
       </div>
       <div class="p-6">
         <form method="post" action="{% url 'administration:purchases' %}" enctype="multipart/form-data">
           {% csrf_token %}
           <input type="hidden" name="scope" value="{{ purchases_scope.code }}">
           <input type="hidden" name="panel" value="{{ purchases_panel.panel.code }}">
+          <input type="hidden" name="search" value="{{ purchases_search }}">
+          <input type="hidden" name="start_date" value="{{ purchases_start_date }}">
+          <input type="hidden" name="end_date" value="{{ purchases_end_date }}">
+          {% if purchases_page %}
+            <input type="hidden" name="page" value="{{ purchases_page.page_number }}">
+          {% endif %}
           {% if purchases_panel.purchase %}
             <input type="hidden" name="purchase" value="{{ purchases_panel.purchase.pk }}">
           {% endif %}

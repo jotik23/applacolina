@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
-from typing import Iterable, Literal, Sequence
+from typing import Literal, Sequence
 
+from django.core.paginator import EmptyPage, Paginator
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from administration.models import PurchaseApproval, PurchaseRequest
@@ -88,9 +91,24 @@ class PurchasePanelState:
 class PurchaseDashboardState:
     scope: PurchaseScope
     scopes: Sequence[PurchaseScope]
-    purchases: Sequence[PurchaseRecord]
+    pagination: 'PurchasePagination'
     panel: PurchasePanelState | None
     recent_activity: Sequence[dict[str, str]]
+
+
+@dataclass(frozen=True)
+class PurchasePagination:
+    records: Sequence[PurchaseRecord]
+    page_number: int
+    per_page: int
+    num_pages: int
+    count: int
+    has_previous: bool
+    has_next: bool
+    previous_page_number: int | None
+    next_page_number: int | None
+    start_index: int
+    end_index: int
 
 
 PANEL_REGISTRY = {
@@ -208,16 +226,37 @@ ACTION_BY_STATUS = {
     PurchaseRequest.Status.ARCHIVED: None,
 }
 
-def get_dashboard_state(*, scope_code: str | None, panel_code: str | None, purchase_pk: int | None) -> PurchaseDashboardState:
+PAGE_SIZE = 30
+
+def get_dashboard_state(
+    *,
+    scope_code: str | None,
+    panel_code: str | None,
+    purchase_pk: int | None,
+    search_query: str | None,
+    start_date: date | None,
+    end_date: date | None,
+    page_number: int | None,
+) -> PurchaseDashboardState:
     scopes = _build_scopes()
     selected_scope = _find_scope(scopes, scope_code or scopes[0].code)
-    purchases = tuple(_build_purchase_record(p, scope_code=selected_scope.code) for p in _query_purchases(selected_scope.code))
+    queryset = _query_purchases(
+        scope_code=selected_scope.code,
+        search_query=search_query,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    pagination = _build_pagination(
+        queryset=queryset,
+        scope_code=selected_scope.code,
+        page_number=page_number or 1,
+    )
     panel_state = _resolve_panel(panel_code, purchase_pk)
     activity = _recent_activity()
     return PurchaseDashboardState(
         scope=selected_scope,
         scopes=scopes,
-        purchases=purchases,
+        pagination=pagination,
         panel=panel_state,
         recent_activity=activity,
     )
@@ -261,25 +300,14 @@ def _find_scope(scopes: Sequence[PurchaseScope], code: str) -> PurchaseScope:
     return scopes[0]
 
 
-def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
-    if scope_code == WAITING_SCOPE_CODE:
-        return (
-            PurchaseRequest.objects.select_related(
-                'supplier',
-                'requester',
-                'expense_type',
-                'support_document_type',
-                'scope_farm',
-                'scope_chicken_house__farm',
-            )
-            .prefetch_related('approvals__approver')
-            .filter(
-                delivery_condition=PurchaseRequest.DeliveryCondition.SHIPPING,
-                status__in=WAITING_SCOPE_STATUSES,
-            )
-            .order_by('-created_at')[:50]
-        )
-    return (
+def _query_purchases(
+    scope_code: str,
+    *,
+    search_query: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> models.QuerySet[PurchaseRequest]:
+    queryset = (
         PurchaseRequest.objects.select_related(
             'supplier',
             'requester',
@@ -289,8 +317,73 @@ def _query_purchases(scope_code: str) -> Iterable[PurchaseRequest]:
             'scope_chicken_house__farm',
         )
         .prefetch_related('approvals__approver')
-        .filter(status=scope_code)
-        .order_by('-created_at')[:50]
+    )
+    if scope_code == WAITING_SCOPE_CODE:
+        queryset = queryset.filter(
+            delivery_condition=PurchaseRequest.DeliveryCondition.SHIPPING,
+            status__in=WAITING_SCOPE_STATUSES,
+        )
+    else:
+        queryset = queryset.filter(status=scope_code)
+    search_value = (search_query or '').strip()
+    if search_value:
+        queryset = queryset.filter(
+            Q(timeline_code__icontains=search_value)
+            | Q(name__icontains=search_value)
+            | Q(description__icontains=search_value)
+            | Q(order_number__icontains=search_value)
+            | Q(invoice_number__icontains=search_value)
+            | Q(supplier__name__icontains=search_value)
+            | Q(expense_type__name__icontains=search_value)
+            | Q(scope_farm__name__icontains=search_value)
+            | Q(scope_chicken_house__name__icontains=search_value)
+            | Q(scope_batch_code__icontains=search_value)
+        )
+    if start_date:
+        queryset = queryset.filter(created_at__date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(created_at__date__lte=end_date)
+    return queryset.order_by('-created_at')
+
+
+def _build_pagination(
+    *,
+    queryset: models.QuerySet[PurchaseRequest],
+    scope_code: str,
+    page_number: int,
+) -> PurchasePagination:
+    paginator = Paginator(queryset, PAGE_SIZE)
+    if paginator.count == 0:
+        return PurchasePagination(
+            records=(),
+            page_number=1,
+            per_page=PAGE_SIZE,
+            num_pages=1,
+            count=0,
+            has_previous=False,
+            has_next=False,
+            previous_page_number=None,
+            next_page_number=None,
+            start_index=0,
+            end_index=0,
+        )
+    try:
+        page = paginator.page(page_number)
+    except EmptyPage:
+        page = paginator.page(paginator.num_pages)
+    records = tuple(_build_purchase_record(p, scope_code=scope_code) for p in page.object_list)
+    return PurchasePagination(
+        records=records,
+        page_number=page.number,
+        per_page=PAGE_SIZE,
+        num_pages=paginator.num_pages or 1,
+        count=paginator.count,
+        has_previous=page.has_previous(),
+        has_next=page.has_next(),
+        previous_page_number=page.previous_page_number() if page.has_previous() else None,
+        next_page_number=page.next_page_number() if page.has_next() else None,
+        start_index=page.start_index(),
+        end_index=page.end_index(),
     )
 
 
