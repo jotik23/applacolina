@@ -487,7 +487,7 @@ def _resolve_stage_label(status: str) -> str:
     stage_map: dict[str, str] = {
         PurchaseRequest.Status.DRAFT: _("Borrador"),
         PurchaseRequest.Status.SUBMITTED: _("En aprobación"),
-        PurchaseRequest.Status.APPROVED: _("Gestionando compra"),
+        PurchaseRequest.Status.APPROVED: _("En Gestión"),
         PurchaseRequest.Status.ORDERED: _("Orden emitida"),
         PurchaseRequest.Status.RECEPTION: _("Esperando llegada"),
         PurchaseRequest.Status.INVOICE: _("Soportes"),

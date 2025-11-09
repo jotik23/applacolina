@@ -127,7 +127,7 @@ PANEL_REGISTRY = {
 
 PURCHASE_STAGE_META = {
     'draft': {
-        'label': 'Solicitud (en borrador)',
+        'label': 'Solicitud',
         'description': 'Solicitudes en preparación antes de enviarse.',
         'tooltip': 'Solicitud creada y aún editable.',
         'palette': 'slate',
@@ -139,7 +139,7 @@ PURCHASE_STAGE_META = {
         'palette': 'amber',
     },
     'purchasing': {
-        'label': 'En Gestión de compra',
+        'label': 'En Gestión',
         'description': 'Equipo de compras gestionando la orden.',
         'tooltip': 'Aprobada y en proceso de compra.',
         'palette': 'indigo',
