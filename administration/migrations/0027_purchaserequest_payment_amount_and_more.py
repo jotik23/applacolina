@@ -24,6 +24,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='purchaserequest',
             name='status',
-            field=models.CharField(choices=[('borrador', 'Borrador'), ('aprobacion', 'En aprobación'), ('aprobada', 'Aprobada'), ('ordenado', 'Orden emitida'), ('recepcion', 'Revisar pago'), ('factura', 'Factura'), ('pago', 'Pago'), ('archivada', 'Archivada')], default='borrador', max_length=20, verbose_name='Estado'),
+            field=models.CharField(choices=[('borrador', 'Borrador'), ('aprobacion', 'En aprobación'), ('aprobada', 'Aprobada'), ('ordenado', 'Orden emitida'), ('recepcion', 'Gestionar pago'), ('factura', 'Factura'), ('pago', 'Pago'), ('archivada', 'Archivada')], default='borrador', max_length=20, verbose_name='Estado'),
         ),
     ]

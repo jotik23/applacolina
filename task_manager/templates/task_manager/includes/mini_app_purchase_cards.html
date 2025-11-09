@@ -671,38 +671,47 @@
           <p class="text-[11px] text-slate-500">Código <span data-management-code>{{ purchase.code }}</span></p>
         </div>
       </div>
-      <dl class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
-        <div>
-          <dt class="font-semibold uppercase tracking-wide text-slate-500">Fecha de compra</dt>
-          <dd class="mt-0.5 text-slate-900" data-management-purchase-date>{{ purchase.purchase_date_label|default:"Pendiente" }}</dd>
-        </div>
-        <div>
-          <dt class="font-semibold uppercase tracking-wide text-slate-500">Condición de pago</dt>
-          <dd class="mt-0.5 text-slate-900" data-management-payment-condition>{{ purchase.payment_condition_label|default:"Por definir" }}</dd>
-        </div>
-        <div>
-          <dt class="font-semibold uppercase tracking-wide text-slate-500">Medio de pago</dt>
-          <dd class="mt-0.5 text-slate-900" data-management-payment-method>{{ purchase.payment_method_label|default:"Por definir" }}</dd>
-        </div>
-        <div>
-          <dt class="font-semibold uppercase tracking-wide text-slate-500">Condiciones de entrega</dt>
-          <dd class="mt-0.5 text-slate-900" data-management-delivery>{{ purchase.delivery_condition_label|default:"Por confirmar" }}</dd>
-        </div>
-        <div>
-          <dt class="font-semibold uppercase tracking-wide text-slate-500">Datos bancarios</dt>
-          <dd class="mt-0.5 text-slate-900" data-management-bank>
-            {% if purchase.bank_label %}
-            {{ purchase.bank_label }} · {{ purchase.bank_account_label|default:"" }}
-            {% else %}
-            Sin datos registrados
-            {% endif %}
-          </dd>
-        </div>
-        <div>
-          <dt class="font-semibold uppercase tracking-wide text-slate-500">Cuenta destino</dt>
-          <dd class="mt-0.5 text-slate-900" data-management-payment-account>{{ purchase.payment_account_label|default:"Por definir" }}</dd>
-        </div>
-      </dl>
+      <div class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha de compra</p>
+          <p class="mt-1 text-base font-semibold text-slate-900" data-management-purchase-date>{{ purchase.purchase_date_label|default:"Pendiente" }}</p>
+        </article>
+        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Condición de pago</p>
+          <p class="mt-1 text-base font-semibold text-slate-900" data-management-payment-condition>{{ purchase.payment_condition_label|default:"Por definir" }}</p>
+        </article>
+        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Medio de pago</p>
+          <p class="mt-1 text-base font-semibold text-slate-900" data-management-payment-method>{{ purchase.payment_method_label|default:"Por definir" }}</p>
+        </article>
+        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Condiciones de entrega</p>
+          <p class="mt-1 text-base font-semibold text-slate-900" data-management-delivery>{{ purchase.delivery_condition_label|default:"Por confirmar" }}</p>
+        </article>
+      </div>
+
+      <details class="mt-4 rounded-2xl border border-indigo-100 bg-white/80 px-4 py-3 text-xs text-slate-600" data-management-additional>
+        <summary class="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
+          <span>Datos bancarios y cuenta destino</span>
+          <span aria-hidden="true">▼</span>
+        </summary>
+        <dl class="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-slate-500">Banco / cuenta</dt>
+            <dd class="mt-0.5 text-slate-900" data-management-bank>
+              {% if purchase.bank_label %}
+              {{ purchase.bank_label }} · {{ purchase.bank_account_label|default:"" }}
+              {% else %}
+              Sin datos registrados
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold uppercase tracking-wide text-slate-500">Cuenta destino</dt>
+            <dd class="mt-0.5 text-slate-900" data-management-payment-account>{{ purchase.payment_account_label|default:"Por definir" }}</dd>
+          </div>
+        </dl>
+      </details>
 
       {% if purchase.notes %}
       <div class="mt-4 space-y-2">

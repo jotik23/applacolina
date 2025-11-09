@@ -145,7 +145,7 @@ PURCHASE_STAGE_META = {
         'palette': 'indigo',
     },
     'payable': {
-        'label': 'Revisar pago',
+        'label': 'Gestionar pago',
         'description': 'Verifica los datos bancarios y programa la transferencia.',
         'tooltip': 'Aún falta registrar o confirmar el pago.',
         'palette': 'orange',

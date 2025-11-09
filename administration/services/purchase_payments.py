@@ -69,7 +69,7 @@ class PurchasePaymentService:
             PurchaseRequest.Status.RECEPTION,
         }
         if purchase.status not in allowed_statuses:
-            errors.setdefault("non_field", []).append("Solo puedes registrar pagos para compras en Revisar pago.")
+            errors.setdefault("non_field", []).append("Solo puedes registrar pagos para compras en Gestionar pago.")
         if intent == "confirm_payment" and payload.payment_amount > purchase.estimated_total:
             errors.setdefault("payment_amount", []).append(
                 "El monto a pagar supera el total estimado. Reabre la solicitud para ajustar y aprobar nuevamente."

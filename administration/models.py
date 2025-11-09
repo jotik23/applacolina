@@ -216,7 +216,7 @@ class PurchaseRequest(TimeStampedModel):
         SUBMITTED = "aprobacion", "En aprobación"
         APPROVED = "aprobada", "Aprobada"
         ORDERED = "ordenado", "Orden emitida"
-        RECEPTION = "recepcion", "Revisar pago"
+        RECEPTION = "recepcion", "Gestionar pago"
         INVOICE = "factura", "Factura"
         PAYMENT = "pago", "Pago"
         ARCHIVED = "archivada", "Archivada"
