@@ -15,12 +15,21 @@
     maximumFractionDigits: 2,
   });
 
-  function formatCurrency(amount, currency) {
-    if (typeof amount !== 'number' || Number.isNaN(amount)) {
-      return `${currency || 'COP'} 0`;
+  function resolveCurrencySymbol(value) {
+    if (!value) {
+      return '$';
     }
-    if (currency && currency !== 'COP') {
-      return `${currency} ${amount.toFixed(2)}`;
+    const upperValue = String(value).toUpperCase();
+    return upperValue === 'COP' ? '$' : value;
+  }
+
+  function formatCurrency(amount, currencySymbol) {
+    const symbol = resolveCurrencySymbol(currencySymbol);
+    if (typeof amount !== 'number' || Number.isNaN(amount)) {
+      return symbol === '$' ? '$ 0' : `${symbol} 0`;
+    }
+    if (symbol !== '$') {
+      return `${symbol} ${amount.toFixed(2)}`;
     }
     return amount >= 100000
       ? currencyFormatter.format(amount)
@@ -53,7 +62,7 @@
       this.batchInput = card.querySelector('[data-purchase-field="scope_batch_code"]');
       this.notesInput = card.querySelector('[data-purchase-field="notes"]');
       this.scope = (config.defaults && config.defaults.scope) || 'company';
-      this.currency = config.currency || 'COP';
+      this.currencySymbol = config.currency_symbol || '$';
       this.maxItems = Number(card.getAttribute('data-max-items')) || config.max_items || 4;
       this.csrfToken = (helpers && helpers.csrfToken) || null;
       this.inFlight = false;
@@ -210,11 +219,11 @@
         const subtotal = Number.isFinite(quantity) && Number.isFinite(unitValue) ? quantity * unitValue : 0;
         total += subtotal;
         if (subtotalNode) {
-          subtotalNode.textContent = formatCurrency(subtotal, this.currency);
+          subtotalNode.textContent = formatCurrency(subtotal, this.currencySymbol);
         }
       });
       if (this.totalNode) {
-        this.totalNode.textContent = formatCurrency(total, this.currency);
+        this.totalNode.textContent = formatCurrency(total, this.currencySymbol);
       }
     }
 
@@ -460,7 +469,7 @@ class PurchaseRequestsListController {
     const supplierNode = node.querySelector('[data-entry-supplier]');
     const categoryNode = node.querySelector('[data-entry-category]');
     const amountNode = node.querySelector('[data-entry-amount]');
-    const stageNode = node.querySelector('[data-entry-stage]');
+    const stageChip = node.querySelector('[data-entry-stage-chip]');
     const updatedNode = node.querySelector('[data-entry-updated]');
     const statusChip = node.querySelector('[data-entry-status-chip]');
     if (codeNode) codeNode.textContent = entry.code || '';
@@ -469,7 +478,7 @@ class PurchaseRequestsListController {
     if (supplierNode) supplierNode.textContent = entry.supplier_label || '—';
     if (categoryNode) categoryNode.textContent = entry.category_label || '—';
     if (amountNode) amountNode.textContent = entry.amount_label || '—';
-    if (stageNode) stageNode.textContent = entry.stage_label || entry.status_label || '';
+    if (stageChip) stageChip.textContent = entry.stage_label || entry.status_label || '';
     if (updatedNode) updatedNode.textContent = entry.updated_label || '';
     if (statusChip) statusChip.textContent = entry.status_label || '';
     this.populateItems(node, entry);
@@ -494,16 +503,16 @@ class PurchaseRequestsListController {
     entry.items.forEach((item) => {
       const row = document.createElement('article');
       row.className =
-        'space-y-2 rounded-2xl border border-slate-100 bg-white/80 px-3 py-2 text-xs text-slate-600 shadow-sm shadow-slate-100';
+        'space-y-3 rounded-3xl border border-slate-100/80 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm shadow-slate-100';
       const titleWrapper = document.createElement('div');
       titleWrapper.className = 'flex items-start justify-between gap-3';
       const title = document.createElement('p');
-      title.className = 'font-semibold text-slate-900';
+      title.className = 'text-sm font-semibold leading-tight text-slate-900';
       title.textContent = item.description || 'Ítem solicitado';
       titleWrapper.appendChild(title);
       if (item.product_label) {
         const meta = document.createElement('p');
-        meta.className = 'text-[11px] text-slate-500';
+        meta.className = 'text-[11px] font-semibold uppercase tracking-wide text-slate-500';
         meta.textContent = item.product_label;
         titleWrapper.appendChild(meta);
       }
@@ -511,19 +520,19 @@ class PurchaseRequestsListController {
 
       const stats = document.createElement('dl');
       stats.className =
-        'grid gap-2 text-[11px] uppercase tracking-wide text-slate-500 sm:grid-cols-4';
+        'grid grid-cols-2 gap-x-4 gap-y-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-3';
       const statConfigs = [
         { label: 'Solicitado', value: item.requested_label || item.quantity_label || '—' },
         { label: 'Recibido', value: item.received_label || '—' },
         { label: 'Valor unitario', value: item.unit_value_label || '—' },
-        { label: 'Subtotal', value: item.subtotal_label || item.amount_label || '—' },
       ];
       statConfigs.forEach((stat) => {
         const wrapper = document.createElement('div');
         const term = document.createElement('dt');
+        term.className = 'text-[11px] font-semibold uppercase tracking-wide text-slate-500';
         term.textContent = stat.label;
         const definition = document.createElement('dd');
-        definition.className = 'mt-0.5 text-base font-semibold normal-case text-slate-900';
+        definition.className = 'mt-1 text-sm font-semibold text-slate-900';
         definition.textContent = stat.value;
         wrapper.appendChild(term);
         wrapper.appendChild(definition);
@@ -544,7 +553,6 @@ class PurchaseRequestsListController {
     const mapping = {
       payment_method: details.payment_method_label || 'Pendiente',
       payment_condition: details.payment_condition_label || 'Pendiente',
-      payment_amount: details.payment_amount_label || '—',
       payment_account: details.payment_account_label || 'Sin cuenta asignada',
       payment_date: details.payment_date_label || 'Pendiente',
     };
@@ -791,6 +799,38 @@ class PurchaseRequestsListController {
         },
       });
       controllers.requestForm.init();
+      const createRequestButtons = Array.prototype.slice.call(
+        document.querySelectorAll('[data-purchase-create-trigger]')
+      );
+      if (createRequestButtons.length) {
+        const highlightClasses = ['ring-2', 'ring-emerald-200', 'ring-offset-2'];
+        let highlightTimer = null;
+        const highlightCard = () => {
+          highlightClasses.forEach((cls) => requestCard.classList.add(cls));
+          if (highlightTimer) {
+            clearTimeout(highlightTimer);
+          }
+          highlightTimer = setTimeout(() => {
+            highlightClasses.forEach((cls) => requestCard.classList.remove(cls));
+          }, 1200);
+        };
+        createRequestButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            requestCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            highlightCard();
+            const focusTarget =
+              requestCard.querySelector('[data-purchase-field="name"]') ||
+              requestCard.querySelector('input, select, textarea');
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+              try {
+                focusTarget.focus({ preventScroll: true });
+              } catch (error) {
+                focusTarget.focus();
+              }
+            }
+          });
+        });
+      }
     }
   }
 

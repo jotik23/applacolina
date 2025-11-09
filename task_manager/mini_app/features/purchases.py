@@ -38,8 +38,6 @@ PURCHASE_STATUS_THEME: dict[str, str] = {
 
 MANAGEMENT_STATUSES: Tuple[str, ...] = (
     PurchaseRequest.Status.APPROVED,
-    PurchaseRequest.Status.ORDERED,
-    PurchaseRequest.Status.RECEPTION,
 )
 
 OVERVIEW_ALLOWED_STATUSES: Tuple[str, ...] = (
@@ -384,6 +382,7 @@ def serialize_purchase_request_form_card(card: PurchaseRequestFormCard) -> dict[
     return {
         "submit_url": card.submit_url,
         "currency": card.currency,
+        "currency_symbol": _currency_symbol(card.currency),
         "max_items": card.max_items,
         "expense_types": list(card.expense_types),
         "suppliers": list(card.suppliers),
@@ -398,7 +397,7 @@ def serialize_purchase_request_form_card(card: PurchaseRequestFormCard) -> dict[
 
 def serialize_purchase_requests_overview(card: PurchaseRequestsOverview) -> dict[str, object]:
     return {
-        "title": _("Mis solicitudes"),
+        "title": _("Mis compras"),
         "subtitle": _("Revisa rápidamente el estado de las compras que has creado."),
         "summary": {
             "total_amount": card.total_amount_label,
@@ -480,7 +479,8 @@ def serialize_purchase_management_empty_state() -> dict[str, object]:
 def _format_currency(amount: Decimal, currency: str) -> str:
     amount = amount or Decimal("0.00")
     quantized = amount.quantize(Decimal("0.01"))
-    return f"{currency} {quantized:,.2f}"
+    symbol = _currency_symbol(currency)
+    return f"{symbol} {quantized:,.2f}"
 
 
 def _resolve_stage_label(status: str) -> str:
@@ -500,8 +500,10 @@ def _resolve_stage_label(status: str) -> str:
 def _serialize_purchase_item(*, item: PurchaseItem, currency: str) -> dict[str, object]:
     requested_label = _format_quantity(item.quantity)
     received_label = _format_quantity(item.received_quantity)
-    unit_value_label = _format_currency(_resolve_unit_value(item), currency)
-    subtotal_label = _format_currency(item.estimated_amount or Decimal("0.00"), currency)
+    unit_value = _resolve_unit_value(item)
+    subtotal_value = (item.quantity or Decimal("0.00")) * unit_value
+    unit_value_label = _format_currency(unit_value, currency)
+    subtotal_label = _format_currency(subtotal_value, currency)
     return {
         "id": item.pk,
         "description": item.description,
@@ -526,10 +528,7 @@ def _format_quantity(value: Decimal | None) -> str:
 
 
 def _resolve_unit_value(item: PurchaseItem) -> Decimal:
-    if not item.quantity or item.quantity == 0:
-        return Decimal("0")
-    amount = item.estimated_amount or Decimal("0")
-    return (amount / item.quantity).quantize(Decimal("0.01"))
+    return (item.estimated_amount or Decimal("0")).quantize(Decimal("0.01"))
 
 
 def _format_date(value) -> str:
@@ -561,3 +560,12 @@ def _build_reception_details(*, purchase: PurchaseRequest) -> dict[str, object]:
         "shipping_notes": (purchase.shipping_notes or "").strip(),
         "reception_notes": (purchase.reception_notes or "").strip(),
     }
+
+
+def _currency_symbol(currency: Optional[str]) -> str:
+    if not currency:
+        return "$"
+    code = currency.upper()
+    if code == "COP":
+        return "$"
+    return code

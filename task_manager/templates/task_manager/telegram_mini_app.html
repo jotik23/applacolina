@@ -4514,6 +4514,7 @@
         const csrfToken = csrfTokenInput ? csrfTokenInput.value : null;
         tmMiniApp.csrfToken = csrfToken;
         tmMiniApp.telegram = telegram;
+        tmMiniApp.purchases = (payload && payload.purchases) || {};
 
         const dialogRoot = document.querySelector('[data-mini-app-flow-dialog-root]');
         const confirmDialog = dialogRoot ? dialogRoot.querySelector('[data-mini-app-dialog="confirm"]') : null;

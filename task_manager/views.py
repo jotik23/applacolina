@@ -811,9 +811,18 @@ def _ensure_supplier_id(payload: Mapping[str, object]) -> int:
 
 
 def _format_currency_label(amount: Decimal, currency: str) -> str:
-    currency = currency or "COP"
+    symbol = _resolve_currency_symbol(currency)
     amount = (amount or Decimal("0.00")).quantize(Decimal("0.01"))
-    return f"{currency} {amount:,.2f}"
+    return f"{symbol} {amount:,.2f}"
+
+
+def _resolve_currency_symbol(currency: Optional[str]) -> str:
+    if not currency:
+        return "$"
+    code = currency.upper()
+    if code == "COP":
+        return "$"
+    return code
 
 
 def _build_purchase_overview_payload(user: UserProfile) -> Optional[dict[str, object]]:
