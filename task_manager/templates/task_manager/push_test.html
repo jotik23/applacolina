@@ -1,0 +1,340 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prueba de notificaciones · Granjas La Colina</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color-scheme: only light;
+        --gray-50: #f8fafc;
+        --gray-100: #f1f5f9;
+        --gray-200: #e2e8f0;
+        --gray-600: #475569;
+        --emerald-600: #059669;
+        --emerald-700: #047857;
+        --rose-600: #e11d48;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #ecfdf5, #fff);
+        color: #0f172a;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+      form {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 1.5rem;
+        border: 1px solid var(--gray-200);
+        box-shadow: 0 25px 45px rgba(15, 23, 42, 0.08);
+        padding: 2rem;
+        display: grid;
+        gap: 1.25rem;
+      }
+      .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+      label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--gray-600);
+      }
+      input[type='text'],
+      input[type='url'],
+      input[type='number'],
+      textarea,
+      select {
+        border: 1px solid var(--gray-200);
+        border-radius: 0.9rem;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+        color: #0f172a;
+        background: var(--gray-50);
+      }
+      textarea {
+        min-height: 96px;
+        resize: vertical;
+      }
+      .checkbox-field {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .checkbox-field input {
+        width: 1.1rem;
+        height: 1.1rem;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      button[type='submit'] {
+        border: none;
+        border-radius: 9999px;
+        padding: 0.85rem 1.8rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: white;
+        background: linear-gradient(135deg, var(--emerald-600), var(--emerald-700));
+        cursor: pointer;
+        box-shadow: 0 10px 18px rgba(5, 150, 105, 0.25);
+      }
+      .messages {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .alert {
+        border-radius: 0.9rem;
+        padding: 0.85rem 1rem;
+        font-size: 0.9rem;
+      }
+      .alert-success {
+        background: #dcfce7;
+        border: 1px solid #bbf7d0;
+        color: #14532d;
+      }
+      .alert-error {
+        background: #ffe4e6;
+        border: 1px solid #fecdd3;
+        color: var(--rose-600);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 1rem;
+        overflow: hidden;
+        border: 1px solid var(--gray-200);
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.9rem 1rem;
+        font-size: 0.85rem;
+      }
+      th {
+        background: var(--gray-100);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+        color: var(--gray-600);
+      }
+      tr + tr td {
+        border-top: 1px solid var(--gray-200);
+      }
+      code {
+        font-size: 0.8rem;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">
+          Herramientas internas
+        </p>
+        <h1 style="margin: 0.4rem 0; font-size: 2rem; font-weight: 600;">
+          Enviar push de prueba
+        </h1>
+        <p style="color: var(--gray-600); max-width: 720px;">
+          Esta vista permite disparar notificaciones Web Push manuales contra cualquier dispositivo
+          registrado. No aparece en el menú principal y está limitada a personal con acceso staff.
+        </p>
+        {% if not has_public_key or not has_private_key %}
+        <div class="alert alert-error" style="margin-top: 1rem;">
+          Configura <code>WEB_PUSH_PUBLIC_KEY</code> y <code>WEB_PUSH_PRIVATE_KEY</code> antes de
+          enviar notificaciones. Actualmente:
+          <strong>KEY PÚBLICA {{ has_public_key|yesno:"OK,NO" }} · KEY PRIVADA {{ has_private_key|yesno:"OK,NO" }}</strong>
+        </div>
+        {% endif %}
+      </header>
+
+      {% if messages %}
+      <section class="messages">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'success' %}alert-success{% else %}alert-error{% endif %}">
+          {{ message }}
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}{{ error }}{% if not forloop.last %}<br />{% endif %}{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="field-group">
+          {{ form.user.label_tag }}
+          {{ form.user }}
+          {% if form.user.errors %}
+          <div class="alert alert-error">
+            {% for error in form.user.errors %}{{ error }}{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="field-group">
+          {{ form.subscription.label_tag }}
+          {{ form.subscription }}
+          {% if form.subscription.errors %}
+          <div class="alert alert-error">
+            {% for error in form.subscription.errors %}{{ error }}{% endfor %}
+          </div>
+          {% elif not form.subscription.field.queryset %}
+          <p style="color: var(--gray-600); font-size: 0.85rem;">
+            Selecciona un usuario con suscripciones activas para mostrar los dispositivos disponibles.
+          </p>
+          {% endif %}
+        </div>
+
+        <div class="field-group">
+          {{ form.title.label_tag }}
+          {{ form.title }}
+          {% for error in form.title.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.body.label_tag }}
+          {{ form.body }}
+          {% for error in form.body.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.action_url.label_tag }}
+          {{ form.action_url }}
+          {% for error in form.action_url.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.icon_url.label_tag }}
+          {{ form.icon_url }}
+          {% for error in form.icon_url.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.badge_url.label_tag }}
+          {{ form.badge_url }}
+          {% for error in form.badge_url.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.tag.label_tag }}
+          {{ form.tag }}
+          {% for error in form.tag.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group checkbox-field">
+          {{ form.require_interaction }}
+          {{ form.require_interaction.label_tag }}
+          {% for error in form.require_interaction.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.ttl.label_tag }}
+          {{ form.ttl }}
+          {% for error in form.ttl.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="field-group">
+          {{ form.data_payload.label_tag }}
+          {{ form.data_payload }}
+          {% for error in form.data_payload.errors %}
+          <div class="alert alert-error">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="actions">
+          <button type="submit">Enviar notificación</button>
+        </div>
+      </form>
+
+      <section>
+        <h2 style="margin-bottom: 0.5rem;">Suscripciones registradas</h2>
+        {% if selected_user_subscriptions %}
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Endpoint</th>
+              <th>Actualizado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sub in selected_user_subscriptions %}
+            <tr>
+              <td>{{ sub.get_client_display }}</td>
+              <td>
+                <code>{{ sub.endpoint }}</code>
+              </td>
+              <td>{{ sub.updated_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p style="color: var(--gray-600);">No hay suscripciones para el usuario seleccionado.</p>
+        {% endif %}
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        const userSelect = document.querySelector('[data-user-select]');
+        if (!userSelect) {
+          return;
+        }
+        userSelect.addEventListener('change', function () {
+          const url = new URL(window.location.href);
+          if (this.value) {
+            url.searchParams.set('user', this.value);
+          } else {
+            url.searchParams.delete('user');
+          }
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+  </body>
+</html>

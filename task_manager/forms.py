@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Iterable
 
 from django import forms
@@ -9,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
 from production.models import Room
 
-from .models import TaskCategory, TaskDefinition, TaskStatus
+from .models import MiniAppPushSubscription, TaskCategory, TaskDefinition, TaskStatus
 
 
 FIELD_INPUT_CLASSES = (
@@ -293,3 +294,125 @@ class MiniAppAuthenticationForm(AuthenticationForm):
                 self.error_messages["no_mini_app_access"],
                 code="no_mini_app_access",
             )
+
+
+class MiniAppPushTestForm(forms.Form):
+    user = forms.ModelChoiceField(
+        label=_("Usuario"),
+        queryset=UserProfile.objects.filter(is_active=True).order_by("apellidos", "nombres"),
+        widget=forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    subscription = forms.ModelChoiceField(
+        label=_("Dispositivo"),
+        queryset=MiniAppPushSubscription.objects.none(),
+        widget=forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    title = forms.CharField(
+        label=_("Título"),
+        max_length=120,
+        initial="Granjas La Colina",
+        widget=forms.TextInput(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    body = forms.CharField(
+        label=_("Mensaje"),
+        max_length=250,
+        widget=forms.Textarea(
+            attrs={
+                "class": TEXTAREA_CLASSES,
+                "rows": 3,
+                "placeholder": _("Ej. Nueva tarea prioritaria en tu turno."),
+            }
+        ),
+    )
+    action_url = forms.CharField(
+        label=_("URL de destino"),
+        required=False,
+        initial="/task-manager/telegram/mini-app/?utm_source=push-test",
+        widget=forms.TextInput(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    icon_url = forms.CharField(
+        label=_("Icono (opcional)"),
+        required=False,
+        widget=forms.TextInput(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    badge_url = forms.CharField(
+        label=_("Badge (opcional)"),
+        required=False,
+        widget=forms.TextInput(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    tag = forms.CharField(
+        label=_("Tag (opcional)"),
+        required=False,
+        max_length=64,
+        widget=forms.TextInput(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    require_interaction = forms.BooleanField(
+        label=_("Mantener visible hasta interacción"),
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
+    )
+    ttl = forms.IntegerField(
+        label=_("TTL (segundos)"),
+        min_value=0,
+        max_value=86400,
+        initial=300,
+        widget=forms.NumberInput(attrs={"class": FIELD_INPUT_CLASSES}),
+    )
+    data_payload = forms.CharField(
+        label=_("Payload adicional (JSON)"),
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": TEXTAREA_CLASSES,
+                "rows": 4,
+                "placeholder": _('{"extra":"valor"}'),
+            }
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        user_queryset = kwargs.pop("user_queryset", None)
+        subscription_queryset = kwargs.pop("subscription_queryset", None)
+        super().__init__(*args, **kwargs)
+
+        if user_queryset is not None:
+            self.fields["user"].queryset = user_queryset
+
+        self.fields["user"].widget.attrs.setdefault("data-user-select", "true")
+        self.fields["subscription"].queryset = MiniAppPushSubscription.objects.none()
+        selected_user = self._resolve_selected_user()
+        if selected_user:
+            base_query = MiniAppPushSubscription.objects.filter(user=selected_user, is_active=True).order_by(
+                "-updated_at"
+            )
+            if subscription_queryset is not None:
+                base_query = subscription_queryset
+            self.fields["subscription"].queryset = base_query
+
+    def _resolve_selected_user(self) -> UserProfile | None:
+        user_id = self.data.get("user") or self.initial.get("user")
+        if not user_id:
+            return None
+        try:
+            return UserProfile.objects.get(pk=user_id)
+        except UserProfile.DoesNotExist:
+            return None
+
+    def clean_subscription(self) -> MiniAppPushSubscription:
+        subscription = self.cleaned_data["subscription"]
+        user = self.cleaned_data.get("user")
+        if user and subscription.user_id != user.pk:
+            raise forms.ValidationError(_("El dispositivo seleccionado no pertenece a este usuario."))
+        return subscription
+
+    def clean_data_payload(self) -> dict[str, object]:
+        raw = self.cleaned_data.get("data_payload")
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise forms.ValidationError(_("JSON inválido: %(error)s"), params={"error": exc}) from exc
+        if not isinstance(data, dict):
+            raise forms.ValidationError(_("El payload debe ser un objeto JSON."))
+        return data

@@ -20,7 +20,7 @@ from django.db.models import Q, QuerySet
 from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.formats import date_format
@@ -28,6 +28,7 @@ from django.utils.text import capfirst, slugify
 from django.utils.translation import gettext as _, ngettext
 from django.views import View, generic
 from django.views.decorators.http import require_POST
+from pywebpush import WebPushException, webpush
 
 from notifications.models import TelegramBotConfig, TelegramChatLink
 from administration.models import PurchaseRequest, Supplier
@@ -84,7 +85,7 @@ from task_manager.mini_app.features.purchases import (
     MAX_PURCHASE_ENTRIES as MINI_APP_PURCHASE_MAX_ITEMS,
 )
 
-from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
+from .forms import MiniAppAuthenticationForm, MiniAppPushTestForm, TaskDefinitionQuickCreateForm
 from .models import (
     MiniAppPushSubscription,
     TaskAssignment,
@@ -3156,6 +3157,122 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
         return context
 
 
+class MiniAppPushTestView(StaffRequiredMixin, generic.FormView):
+    template_name = "task_manager/push_test.html"
+    form_class = MiniAppPushTestForm
+    success_url = reverse_lazy("task_manager:mini-app-push-test")
+
+    def get_initial(self):
+        initial = super().get_initial()
+        if user_id := self.request.GET.get("user"):
+            initial["user"] = user_id
+        if subscription_id := self.request.GET.get("subscription"):
+            initial["subscription"] = subscription_id
+        return initial
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        selected_user_id = self.request.POST.get("user") or self.request.GET.get("user")
+        if selected_user_id:
+            kwargs.setdefault("initial", {}).setdefault("user", selected_user_id)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        selected_user_id = self.request.POST.get("user") or self.request.GET.get("user")
+        if selected_user_id:
+            context["selected_user_subscriptions"] = MiniAppPushSubscription.objects.filter(
+                user_id=selected_user_id
+            ).order_by("-updated_at")
+        else:
+            context["selected_user_subscriptions"] = MiniAppPushSubscription.objects.none()
+        context["has_public_key"] = bool(settings.WEB_PUSH_PUBLIC_KEY)
+        context["has_private_key"] = bool(settings.WEB_PUSH_PRIVATE_KEY)
+        return context
+
+    def form_valid(self, form):
+        if not settings.WEB_PUSH_PUBLIC_KEY or not settings.WEB_PUSH_PRIVATE_KEY:
+            form.add_error(
+                None,
+                _(
+                    "Configura WEB_PUSH_PUBLIC_KEY y WEB_PUSH_PRIVATE_KEY en el entorno antes de enviar notificaciones."
+                ),
+            )
+            return self.form_invalid(form)
+
+        subscription = form.cleaned_data["subscription"]
+        payload = self._build_payload(form.cleaned_data)
+        subscription_info = {
+            "endpoint": subscription.endpoint,
+            "keys": {
+                "p256dh": subscription.p256dh_key,
+                "auth": subscription.auth_key,
+            },
+        }
+
+        try:
+            webpush(
+                subscription_info=subscription_info,
+                data=json.dumps(payload),
+                vapid_private_key=settings.WEB_PUSH_PRIVATE_KEY,
+                vapid_claims={
+                    "sub": settings.WEB_PUSH_CONTACT or "mailto:soporte@lacolina.com",
+                },
+                ttl=form.cleaned_data.get("ttl") or 300,
+            )
+        except WebPushException as exc:
+            error_payload = getattr(exc, "response", None)
+            error_text = ""
+            if error_payload is not None:
+                try:
+                    error_text = error_payload.text
+                except Exception:  # noqa: BLE001
+                    error_text = str(error_payload)
+            form.add_error(
+                None,
+                _("No se pudo enviar la notificación: %(error)s %(details)s")
+                % {"error": exc, "details": error_text},
+            )
+            return self.form_invalid(form)
+
+        messages.success(
+            self.request,
+            _("Notificación enviada correctamente al dispositivo seleccionado."),
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        url = super().get_success_url()
+        user_id = self.request.POST.get("user")
+        if user_id:
+            return f"{url}?user={user_id}"
+        return url
+
+    def _build_payload(self, cleaned_data: dict[str, object]) -> dict[str, object]:
+        data_payload = cleaned_data.get("data_payload") or {}
+        if not isinstance(data_payload, dict):
+            data_payload = {}
+        action_url_raw = cleaned_data.get("action_url") or "/task-manager/telegram/mini-app/"
+        action_url = str(action_url_raw).strip() or "/task-manager/telegram/mini-app/"
+        data_payload = {**data_payload}
+        if action_url:
+            data_payload.setdefault("url", action_url)
+
+        payload: dict[str, object] = {
+            "title": cleaned_data.get("title") or "Granjas La Colina",
+            "body": cleaned_data.get("body") or "",
+            "data": data_payload,
+        }
+        if icon := cleaned_data.get("icon_url"):
+            payload["icon"] = icon
+        if badge := cleaned_data.get("badge_url"):
+            payload["badge"] = badge
+        if tag := cleaned_data.get("tag"):
+            payload["tag"] = tag
+        payload["requireInteraction"] = bool(cleaned_data.get("require_interaction"))
+        return payload
+
+
 @require_POST
 def mini_app_task_complete_view(request, pk: int):
     guard = _mini_app_json_guard(request)
@@ -3913,6 +4030,7 @@ def mini_app_logout_view(request):
 
 telegram_mini_app_view = TaskManagerMiniAppView.as_view()
 telegram_mini_app_demo_view = TaskManagerTelegramMiniAppDemoView.as_view()
+mini_app_push_test_view = MiniAppPushTestView.as_view()
 
 
 def _task_definition_redirect_url(task_id: int) -> str:

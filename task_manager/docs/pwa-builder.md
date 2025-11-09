@@ -50,6 +50,8 @@ El service worker ya maneja `push`, `notificationclick` y `pushsubscriptionchang
 ### 3.2 Variables en Railway
 1. En el panel del servicio (Project › Variables) agrega:
    - `WEB_PUSH_PUBLIC_KEY`: pega la public key VAPID generada en Firebase.
+   - `WEB_PUSH_PRIVATE_KEY`: la clave privada asociada (para firmar envíos desde Django).
+   - `WEB_PUSH_CONTACT`: correo o URL de contacto (formato `mailto:`) que Firebase mostrará como owner del canal.
    - `WEB_PUSH_SUBSCRIPTION_ENDPOINT`: apunta a `https://applacolina-production.up.railway.app/task-manager/api/pwa/subscriptions/` (vista incluida en este repo).
 2. Redepliega para que Django propague esos valores. `task_manager/views.py` inyecta esta info en `window.PWAPushConfig`, y `pwa-init.js` la usa para registrar la suscripción.
 
@@ -57,6 +59,7 @@ El service worker ya maneja `push`, `notificationclick` y `pushsubscriptionchang
 1. La ruta `POST /task-manager/api/pwa/subscriptions/` ya valida sesión + permiso `access_mini_app` y persiste el JSON (`endpoint`, `keys.p256dh`, `keys.auth`, expiración, cliente, user-agent) en `MiniAppPushSubscription`.
 2. Con las variables anteriores, `pwa-init.js` envía automáticamente la suscripción a ese endpoint cada vez que el usuario concede permisos.
 3. La interfaz muestra un botón “Activar notificaciones” (atributo `[data-enable-push]`) en el header de la mini app que ejecuta `window.PWABridge.ensurePushSubscription()` y refleja los estados al usuario.
+4. Para pruebas internas existe la vista `GET/POST /task-manager/tools/push-test/` (solo staff) donde puedes seleccionar el usuario, elegir la suscripción almacenada y disparar un push ad hoc sin exponerlo en el menú.
 
 ### 3.4 Enviar notificaciones desde Firebase
 1. Usa la **Server key** o un service account para llamar a `https://fcm.googleapis.com/fcm/send` pasando el `endpoint` (o usando `topic`s si los agrupas).
