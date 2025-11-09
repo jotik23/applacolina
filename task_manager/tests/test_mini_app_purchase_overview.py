@@ -4,8 +4,9 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from administration.models import PurchaseRequest, PurchasingExpenseType, Supplier
+from administration.models import PurchaseItem, PurchaseRequest, PurchasingExpenseType, Supplier
 from personal.models import UserProfile
+from production.models import Farm
 from task_manager.mini_app.features import build_purchase_requests_overview
 
 
@@ -77,3 +78,52 @@ class MiniAppPurchaseOverviewTests(TestCase):
         entry_ids = {entry.pk for entry in overview.entries}
         self.assertSetEqual(entry_ids, {requester_purchase.pk, manager_purchase.pk})
         self.assertEqual(overview.total_count, 2)
+
+    def test_draft_entry_includes_edit_payload(self):
+        farm = Farm.objects.create(name="Granja Central")
+        purchase = self._create_purchase(
+            requester=self.requester,
+            assigned_manager=self.manager,
+            status=PurchaseRequest.Status.DRAFT,
+            estimated_total=Decimal("0.00"),
+        )
+        purchase.scope_area = PurchaseRequest.AreaScope.FARM
+        purchase.scope_farm = farm
+        purchase.description = "Prioridad mensual"
+        purchase.shipping_notes = "Nota 1\n\nNota 2"
+        purchase.save(update_fields=["scope_area", "scope_farm", "description", "shipping_notes"])
+        PurchaseItem.objects.create(
+            purchase=purchase,
+            description="Malla",
+            quantity=Decimal("2.0"),
+            estimated_amount=Decimal("15000.00"),
+        )
+
+        overview = build_purchase_requests_overview(user=self.requester)
+        self.assertIsNotNone(overview)
+        entry = next(entry for entry in overview.entries if entry.pk == purchase.pk)
+        self.assertTrue(entry.can_edit)
+        self.assertIsInstance(entry.edit_payload, dict)
+        payload = entry.edit_payload or {}
+        self.assertEqual(payload.get("purchase_id"), purchase.pk)
+        self.assertEqual(payload.get("area", {}).get("farm_id"), farm.pk)
+        self.assertEqual(payload.get("assigned_manager_id"), self.manager.pk)
+        self.assertEqual(payload.get("assigned_manager_label"), self.manager.get_full_name())
+        items = payload.get("items") or []
+        self.assertGreater(len(items), 0)
+        self.assertEqual(items[0].get("description"), "Malla")
+        self.assertEqual(payload.get("revision_notes"), ["Nota 1", "Nota 2"])
+
+    def test_non_draft_entry_has_no_edit_payload(self):
+        purchase = self._create_purchase(
+            requester=self.requester,
+            assigned_manager=self.other_user,
+            status=PurchaseRequest.Status.SUBMITTED,
+            estimated_total=Decimal("45000.00"),
+        )
+
+        overview = build_purchase_requests_overview(user=self.requester)
+        self.assertIsNotNone(overview)
+        entry = next(entry for entry in overview.entries if entry.pk == purchase.pk)
+        self.assertFalse(entry.can_edit)
+        self.assertIsNone(entry.edit_payload)

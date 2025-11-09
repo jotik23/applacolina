@@ -50,6 +50,7 @@
       this.addItemButton = card.querySelector('[data-add-purchase-item]');
       this.toggleSupplierButton = card.querySelector('[data-toggle-new-supplier]');
       this.newSupplierPanel = card.querySelector('[data-new-supplier-panel]');
+      this.layer = card.closest('[data-purchase-request-layer]');
       this.areaButtons = Array.prototype.slice.call(card.querySelectorAll('[data-area-scope-picker] [data-area-scope]'));
       this.areaHelper = card.querySelector('[data-area-helper]');
       this.farmField = card.querySelector('[data-area-field="farm"]');
@@ -61,23 +62,38 @@
       this.categorySelect = card.querySelector('[data-purchase-field="expense_type"]');
       this.batchInput = card.querySelector('[data-purchase-field="scope_batch_code"]');
       this.notesInput = card.querySelector('[data-purchase-field="notes"]');
+      this.managerSelect = card.querySelector('[data-purchase-field="assigned_manager_id"]');
+      this.modeLabel = card.querySelector('[data-purchase-mode-label]');
+      this.editBanner = card.querySelector('[data-purchase-edit-banner]');
+      this.editCodeNode = card.querySelector('[data-purchase-edit-code]');
+      this.revisionNotesPanel = card.querySelector('[data-purchase-revision-notes]');
+      this.revisionNotesList = card.querySelector('[data-purchase-revision-notes-list]');
       this.scope = (config.defaults && config.defaults.scope) || 'company';
       this.currencySymbol = config.currency_symbol || '$';
       this.maxItems = Number(card.getAttribute('data-max-items')) || config.max_items || 4;
       this.csrfToken = (helpers && helpers.csrfToken) || null;
       this.inFlight = false;
+      this.activePurchaseId = null;
+      this.activePurchaseCode = '';
+      this.dismissTriggers = Array.prototype.slice.call(
+        (this.layer || card).querySelectorAll('[data-purchase-request-dismiss], [data-purchase-request-close]')
+      );
 
       this.handleAddItem = this.handleAddItem.bind(this);
       this.handleSubmit = this.handleSubmit.bind(this);
       this.handleAreaSelection = this.handleAreaSelection.bind(this);
       this.handleFarmChange = this.handleFarmChange.bind(this);
       this.refreshTotals = this.refreshTotals.bind(this);
+      this.close = this.close.bind(this);
     }
 
     init() {
       if (!this.form || !this.itemsContainer || !this.itemTemplate) {
         return;
       }
+      this.dismissTriggers.forEach((trigger) => {
+        trigger.addEventListener('click', () => this.close());
+      });
       this.form.addEventListener('input', (event) => {
         if (event.target && event.target.matches('[data-item-field="quantity"], [data-item-field="unit_value"]')) {
           this.refreshTotals();
@@ -117,8 +133,7 @@
       if (this.farmSelect) {
         this.farmSelect.addEventListener('change', this.handleFarmChange);
       }
-      this.refreshTotals();
-      this.applyAreaState();
+      this.resetForm();
     }
 
     handleAddItem() {
@@ -127,9 +142,43 @@
         this.showFeedback(`Puedes registrar máximo ${this.maxItems} ítems.`, 'warning');
         return;
       }
-      const clone = document.importNode(this.itemTemplate.content, true);
-      this.itemsContainer.appendChild(clone);
+      this.appendItemRow();
       this.refreshTotals();
+    }
+
+    appendItemRow(itemData) {
+      if (!this.itemTemplate || !this.itemsContainer) {
+        return;
+      }
+      const fragment = document.importNode(this.itemTemplate.content, true);
+      const node = fragment.querySelector('[data-purchase-item]');
+      if (!node) {
+        return;
+      }
+      if (itemData && itemData.id) {
+        node.setAttribute('data-item-id', itemData.id);
+      }
+      const descriptionInput = node.querySelector('[data-item-field="description"]');
+      if (descriptionInput && itemData && itemData.description) {
+        descriptionInput.value = itemData.description;
+      }
+      const productSelect = node.querySelector('[data-item-field="product_id"]');
+      if (productSelect && itemData && itemData.product_id) {
+        this.setSelectValue(productSelect, itemData.product_id, itemData.product_label);
+      }
+      const quantityInput = node.querySelector('[data-item-field="quantity"]');
+      if (quantityInput && itemData && typeof itemData.quantity !== 'undefined') {
+        quantityInput.value = itemData.quantity;
+      }
+      const valueInput = node.querySelector('[data-item-field="unit_value"]');
+      if (valueInput && itemData && typeof itemData.unit_value !== 'undefined') {
+        valueInput.value = itemData.unit_value;
+      }
+      const subtotalNode = node.querySelector('[data-item-subtotal]');
+      if (subtotalNode && itemData && itemData.subtotal) {
+        subtotalNode.textContent = `${this.currencySymbol} ${itemData.subtotal}`;
+      }
+      this.itemsContainer.appendChild(node);
     }
 
     removeItem(itemNode) {
@@ -141,11 +190,167 @@
         itemNode.querySelectorAll('textarea, input').forEach((input) => {
           input.value = '';
         });
+        itemNode.removeAttribute('data-item-id');
         this.refreshTotals();
         return;
       }
       itemNode.remove();
       this.refreshTotals();
+    }
+
+    openForCreate() {
+      this.resetForm();
+      this.showLayer();
+      this.focusInitialField();
+    }
+
+    openForEdit(payload) {
+      const data = payload || {};
+      this.resetForm();
+      this.populateForm(data);
+      this.showLayer();
+      this.focusInitialField();
+    }
+
+    showLayer() {
+      const target = this.layer || this.card;
+      target.classList.remove('hidden');
+    }
+
+    close(options) {
+      const target = this.layer || this.card;
+      target.classList.add('hidden');
+      if (!options || options.reset !== false) {
+        this.resetForm();
+      }
+    }
+
+    focusInitialField() {
+      const focusTarget =
+        this.nameInput || this.card.querySelector('[data-purchase-field="name"]') || this.card.querySelector('input, select, textarea');
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        setTimeout(() => {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (error) {
+            focusTarget.focus();
+          }
+        }, 50);
+      }
+    }
+
+    populateForm(payload) {
+      const data = payload || {};
+      this.activePurchaseId = data.purchase_id || null;
+      this.activePurchaseCode = data.code || '';
+      const scope = (data.area && data.area.scope) || (this.config.defaults && this.config.defaults.scope) || 'company';
+      this.scope = scope;
+      this.setMode(this.activePurchaseId ? 'edit' : 'create');
+      if (this.form) {
+        this.form.reset();
+      }
+      if (this.nameInput) {
+        this.nameInput.value = data.name || '';
+      }
+      this.setSelectValue(this.categorySelect, data.expense_type_id);
+      this.setSelectValue(this.managerSelect, data.assigned_manager_id, data.assigned_manager_label);
+      const area = data.area || {};
+      this.areaButtons.forEach((button) => {
+        if (button.getAttribute('data-area-scope') === this.scope) {
+          button.setAttribute('data-active', 'true');
+        } else {
+          button.removeAttribute('data-active');
+        }
+      });
+      this.setSelectValue(this.farmSelect, area.farm_id);
+      this.setSelectValue(this.houseSelect, area.chicken_house_id);
+      if (this.batchInput) {
+        this.batchInput.value = area.batch_code || '';
+      }
+      if (this.supplierSelect) {
+        if (data.supplier && data.supplier.id) {
+          const supplierLabelBits = [];
+          if (data.supplier.name) {
+            supplierLabelBits.push(data.supplier.name);
+          }
+          if (data.supplier.tax_id) {
+            supplierLabelBits.push(data.supplier.tax_id);
+          }
+          if (data.supplier.city) {
+            supplierLabelBits.push(data.supplier.city);
+          }
+          this.setSelectValue(this.supplierSelect, data.supplier.id, supplierLabelBits.join(' · '));
+        } else {
+          this.supplierSelect.value = '';
+        }
+      }
+      if (this.notesInput) {
+        this.notesInput.value = data.notes || '';
+      }
+      if (this.newSupplierPanel) {
+        this.newSupplierPanel.classList.add('hidden');
+      }
+      if (this.itemsContainer) {
+        this.itemsContainer.innerHTML = '';
+      }
+      if (data.items && data.items.length) {
+        data.items.forEach((item) => this.appendItemRow(item));
+      } else {
+        this.appendItemRow();
+      }
+      this.toggleRevisionNotes(Array.isArray(data.revision_notes) ? data.revision_notes : []);
+      this.applyAreaState();
+      this.handleFarmChange();
+      this.refreshTotals();
+    }
+
+    setMode(mode) {
+      const isEdit = mode === 'edit';
+      if (this.modeLabel) {
+        this.modeLabel.textContent = isEdit ? 'Editar solicitud' : 'Nueva solicitud';
+      }
+      if (this.editBanner) {
+        this.editBanner.classList.toggle('hidden', !isEdit);
+      }
+      if (this.editCodeNode) {
+        this.editCodeNode.textContent = isEdit && this.activePurchaseCode ? this.activePurchaseCode : '';
+      }
+    }
+
+    toggleRevisionNotes(notes) {
+      if (!this.revisionNotesPanel || !this.revisionNotesList) {
+        return;
+      }
+      this.revisionNotesList.innerHTML = '';
+      if (!notes || !notes.length) {
+        this.revisionNotesPanel.classList.add('hidden');
+        return;
+      }
+      notes.forEach((note) => {
+        const li = document.createElement('li');
+        li.textContent = note;
+        this.revisionNotesList.appendChild(li);
+      });
+      this.revisionNotesPanel.classList.remove('hidden');
+    }
+
+    setSelectValue(select, value, label) {
+      if (!select) {
+        return;
+      }
+      const stringValue = value !== null && value !== undefined ? String(value) : '';
+      if (!stringValue) {
+        select.value = '';
+        return;
+      }
+      const hasOption = Array.prototype.some.call(select.options || [], (option) => option.value === stringValue);
+      if (!hasOption && label) {
+        const option = document.createElement('option');
+        option.value = stringValue;
+        option.textContent = label;
+        select.appendChild(option);
+      }
+      select.value = stringValue;
     }
 
     handleAreaSelection(button) {
@@ -271,7 +476,7 @@
             this.helpers.onApprovalsUpdated(data.approvals || null);
           }
           if (data.intent === 'send_workflow') {
-            this.resetForm();
+            this.close();
           }
         })
         .catch(() => {
@@ -286,8 +491,10 @@
     collectPayload(action) {
       const payload = {
         action,
+        purchase_id: this.activePurchaseId,
         name: this.nameInput ? this.nameInput.value.trim() : '',
         expense_type_id: this.categorySelect ? this.categorySelect.value : '',
+        assigned_manager_id: this.managerSelect ? this.managerSelect.value : '',
         notes: this.notesInput ? this.notesInput.value.trim() : '',
         area: {
           scope: this.scope,
@@ -305,6 +512,10 @@
       }
       if (!payload.expense_type_id) {
         this.showFeedback('Selecciona la categoría de gasto.', 'error');
+        return null;
+      }
+      if (!payload.assigned_manager_id) {
+        this.showFeedback('Selecciona el gestor asignado.', 'error');
         return null;
       }
       if (!payload.supplier) {
@@ -339,6 +550,7 @@
       const items = [];
       const nodes = Array.prototype.slice.call(this.itemsContainer.querySelectorAll('[data-purchase-item]'));
       nodes.forEach((node) => {
+        const itemId = node.getAttribute('data-item-id') || '';
         const description = (node.querySelector('[data-item-field="description"]') || {}).value || '';
         const quantityRaw = (node.querySelector('[data-item-field="quantity"]') || {}).value || '';
         const unitValueRaw = (node.querySelector('[data-item-field="unit_value"]') || {}).value || '';
@@ -346,6 +558,7 @@
           return;
         }
         items.push({
+          id: itemId,
           description: description.trim(),
           product_id: (node.querySelector('[data-item-field="product_id"]') || {}).value || '',
           quantity: quantityRaw,
@@ -359,10 +572,12 @@
       if (this.form) {
         this.form.reset();
       }
+      this.activePurchaseId = null;
+      this.activePurchaseCode = '';
+      this.setMode('create');
       if (this.itemsContainer) {
         this.itemsContainer.innerHTML = '';
-        const clone = document.importNode(this.itemTemplate.content, true);
-        this.itemsContainer.appendChild(clone);
+        this.appendItemRow();
       }
       if (this.newSupplierPanel) {
         this.newSupplierPanel.classList.add('hidden');
@@ -370,14 +585,28 @@
       if (this.supplierSelect) {
         this.supplierSelect.selectedIndex = 0;
       }
+      if (this.managerSelect) {
+        this.managerSelect.selectedIndex = 0;
+      }
+      const defaultScope = (this.config.defaults && this.config.defaults.scope) || 'company';
       if (this.areaButtons.length) {
         this.areaButtons.forEach((btn) => btn.removeAttribute('data-active'));
-        const defaultButton = this.areaButtons.find((btn) => btn.getAttribute('data-area-scope') === this.config.defaults.scope);
+        const defaultButton = this.areaButtons.find((btn) => btn.getAttribute('data-area-scope') === defaultScope);
         if (defaultButton) {
           defaultButton.setAttribute('data-active', 'true');
-          this.scope = this.config.defaults.scope;
+          this.scope = defaultScope;
         }
       }
+      if (this.farmSelect) {
+        this.farmSelect.value = '';
+      }
+      if (this.houseSelect) {
+        this.houseSelect.value = '';
+      }
+      if (this.batchInput) {
+        this.batchInput.value = '';
+      }
+      this.toggleRevisionNotes([]);
       this.applyAreaState();
       this.refreshTotals();
     }
@@ -408,16 +637,21 @@
     }
   }
 
-class PurchaseRequestsListController {
-  constructor(card) {
-    this.card = card;
-    this.listNode = card.querySelector('[data-purchase-requests-list]');
-    this.totalNode = card.querySelector('[data-purchase-requests-total]');
-    this.countNode = card.querySelector('[data-purchase-requests-count]');
-    this.emptyStateNode = card.querySelector('[data-purchase-requests-empty]');
-    this.template = card.querySelector('template[data-purchase-request-entry-template]');
-    this.summaryChips = Array.prototype.slice.call(card.querySelectorAll('[data-purchase-status-chip]'));
-  }
+  class PurchaseRequestsListController {
+    constructor(card) {
+      this.card = card;
+      this.listNode = card.querySelector('[data-purchase-requests-list]');
+      this.totalNode = card.querySelector('[data-purchase-requests-total]');
+      this.countNode = card.querySelector('[data-purchase-requests-count]');
+      this.emptyStateNode = card.querySelector('[data-purchase-requests-empty]');
+      this.template = card.querySelector('template[data-purchase-request-entry-template]');
+      this.summaryChips = Array.prototype.slice.call(card.querySelectorAll('[data-purchase-status-chip]'));
+      this.onEdit = null;
+      this.handleListClick = this.handleListClick.bind(this);
+      if (this.listNode) {
+        this.listNode.addEventListener('click', this.handleListClick);
+      }
+    }
 
   render(payload) {
     if (!payload || !this.listNode) {
@@ -455,6 +689,53 @@ class PurchaseRequestsListController {
     }
   }
 
+  setEditHandler(handler) {
+    this.onEdit = typeof handler === 'function' ? handler : null;
+  }
+
+  handleListClick(event) {
+    if (!this.onEdit) {
+      return;
+    }
+    const editButton = event.target.closest('[data-purchase-edit-trigger]');
+    if (!editButton) {
+      return;
+    }
+    event.preventDefault();
+    const entryNode = editButton.closest('[data-purchase-request-entry]');
+    const payload = this.extractEditPayload(entryNode);
+    if (payload) {
+      this.onEdit(payload);
+    }
+  }
+
+  extractEditPayload(entryNode) {
+    if (!entryNode) {
+      return null;
+    }
+    const datasetValue = entryNode.dataset ? entryNode.dataset.editPayload : '';
+    if (datasetValue) {
+      try {
+        const parsed = JSON.parse(datasetValue);
+        if (parsed) {
+          return parsed;
+        }
+      } catch (error) {
+        console.warn('No se pudo leer la solicitud para editar.', error);
+      }
+    }
+    const entryId = entryNode.getAttribute('data-entry-id');
+    const tmMiniApp = window.tmMiniApp || {};
+    const overview = tmMiniApp.purchases ? tmMiniApp.purchases.overview : null;
+    if (entryId && overview && Array.isArray(overview.entries)) {
+      const match = overview.entries.find((item) => String(item.id) === String(entryId));
+      if (match && match.edit_payload) {
+        return match.edit_payload;
+      }
+    }
+    return null;
+  }
+
   buildEntryNode(entry) {
     let node = null;
     if (this.template) {
@@ -466,6 +747,12 @@ class PurchaseRequestsListController {
         'rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-slate-50';
     }
     node.setAttribute('data-entry-id', entry.id);
+    if (entry.edit_payload) {
+      node.dataset.editPayload = JSON.stringify(entry.edit_payload);
+    } else if (node.dataset) {
+      delete node.dataset.editPayload;
+    }
+    node.dataset.canEdit = entry.can_edit ? 'true' : 'false';
     const codeNode = node.querySelector('[data-entry-code]');
     const nameNode = node.querySelector('[data-entry-name]');
     const areaNode = node.querySelector('[data-entry-area]');
@@ -490,6 +777,24 @@ class PurchaseRequestsListController {
     this.populateItems(node, entry);
     this.populatePaymentDetails(node, entry);
     this.populateReceptionDetails(node, entry);
+    const actionsNode = node.querySelector('[data-entry-actions]');
+    if (actionsNode) {
+      let editButton = actionsNode.querySelector('[data-purchase-edit-trigger]');
+      if (entry.can_edit) {
+        if (!editButton) {
+          editButton = document.createElement('button');
+          editButton.type = 'button';
+          editButton.className =
+            'inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100 transition hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200';
+          editButton.setAttribute('data-purchase-edit-trigger', 'true');
+          editButton.textContent = 'Editar';
+          actionsNode.appendChild(editButton);
+        }
+        editButton.classList.remove('hidden');
+      } else if (editButton) {
+        editButton.classList.add('hidden');
+      }
+    }
     return node;
   }
 
@@ -1400,34 +1705,17 @@ class PurchaseManagementCardController {
         document.querySelectorAll('[data-purchase-create-trigger]')
       );
       if (createRequestButtons.length) {
-        const highlightClasses = ['ring-2', 'ring-emerald-200', 'ring-offset-2'];
-        let highlightTimer = null;
-        const highlightCard = () => {
-          highlightClasses.forEach((cls) => requestCard.classList.add(cls));
-          if (highlightTimer) {
-            clearTimeout(highlightTimer);
-          }
-          highlightTimer = setTimeout(() => {
-            highlightClasses.forEach((cls) => requestCard.classList.remove(cls));
-          }, 1200);
-        };
         createRequestButtons.forEach((button) => {
-          button.addEventListener('click', () => {
-            requestCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            highlightCard();
-            const focusTarget =
-              requestCard.querySelector('[data-purchase-field="name"]') ||
-              requestCard.querySelector('input, select, textarea');
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-              try {
-                focusTarget.focus({ preventScroll: true });
-              } catch (error) {
-                focusTarget.focus();
-              }
-            }
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            controllers.requestForm.openForCreate();
           });
         });
       }
+    }
+
+    if (controllers.requestsList && controllers.requestForm) {
+      controllers.requestsList.setEditHandler((payload) => controllers.requestForm.openForEdit(payload));
     }
   }
 

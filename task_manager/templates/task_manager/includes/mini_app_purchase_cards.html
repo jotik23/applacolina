@@ -17,373 +17,319 @@
   <div class="space-y-4">
     {% if mini_app_card_permissions.purchase_request and purchases.request_form %}
     {% with form=purchases.request_form %}
-    <article
-      class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50/50 to-slate-50 p-5 shadow-xl shadow-emerald-100/70"
-      data-purchase-request-card
-      data-submit-url="{{ form.submit_url }}"
-      data-currency="{{ form.currency }}"
-      data-max-items="{{ form.max_items|default:4 }}"
+    <div
+      class="fixed inset-0 z-40 hidden"
+      data-purchase-request-layer
     >
-      <header class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
-            <span aria-hidden="true">🛒</span>
-            Solicitud rápida
-          </p>
-          <h3 class="text-lg font-semibold text-slate-900">Crear solicitud de compra</h3>
-          <p class="text-xs text-slate-600">
-            Registra el borrador, agrega los ítems y envíalo a aprobación cuando esté listo.
-          </p>
-        </div>
-        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100/70">
-          <span aria-hidden="true">⚡</span>
-          Guardado seguro
-        </span>
-      </header>
-
-      <form class="mt-4 space-y-5" data-purchase-request-form novalidate>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Nombre de la solicitud
-            <input
-              type="text"
-              class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              placeholder="Ej: Insumos bioseguridad noviembre"
-              data-purchase-field="name"
-              maxlength="200"
-            />
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Categoría de gasto
-            <select
-              class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              data-purchase-field="expense_type"
-            >
-              <option value="">Selecciona una categoría</option>
-              {% for option in form.expense_types %}
-              <option value="{{ option.id }}">{{ option.name }}</option>
-              {% endfor %}
-            </select>
-          </label>
-        </div>
-
-        <div class="space-y-3">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Área a impactar</p>
-          <div class="flex flex-wrap gap-2" data-area-scope-picker>
-            {% for option in form.area_scopes %}
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-100 transition hover:border-emerald-200 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              data-area-scope="{{ option.id }}"
-              {% if option.id == form.defaults.scope %}data-active="true"{% endif %}
-            >
-              {{ option.label }}
-            </button>
-            {% endfor %}
+      <div class="absolute inset-0 bg-emerald-900/30 backdrop-blur-sm" data-purchase-request-dismiss></div>
+      <article
+        class="relative ml-auto flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-emerald-100 bg-gradient-to-b from-emerald-50 via-white to-white shadow-2xl shadow-emerald-200/70"
+        data-purchase-request-card
+        data-submit-url="{{ form.submit_url }}"
+        data-currency="{{ form.currency }}"
+        data-max-items="{{ form.max_items|default:4 }}"
+      >
+        <header class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-emerald-100 bg-gradient-to-r from-white/95 to-emerald-50/90 px-5 py-4">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600" data-purchase-mode-label>Nueva solicitud</p>
+            <h3 class="text-xl font-semibold text-slate-900">Solicitud de compra</h3>
+            <p class="text-xs text-emerald-700" data-purchase-status>Listo para editar</p>
           </div>
-          <p class="text-[11px] text-slate-500" data-area-helper>
-            {{ form.messages.items_helper }}
-          </p>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label
-              class="hidden flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
-              data-area-field="farm"
-            >
-              Granja
-              <select
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                data-purchase-field="scope_farm"
-              >
-                <option value="">Selecciona una granja</option>
-                {% for farm in form.farms %}
-                <option value="{{ farm.id }}">{{ farm.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label
-              class="hidden flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
-              data-area-field="chicken_house"
-            >
-              Galpón
-              <select
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                data-purchase-field="scope_chicken_house"
-              >
-                <option value="">Selecciona un galpón</option>
-                {% for house in form.chicken_houses %}
-                <option value="{{ house.id }}" data-farm="{{ house.farm_id }}">{{ house.farm_name }} · {{ house.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Lote / referencia
-              <input
-                type="text"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                placeholder="Ej: Lote 42A"
-                data-purchase-field="scope_batch_code"
-                maxlength="40"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <div class="flex items-center justify-between text-xs">
-            <p class="font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold text-emerald-600 shadow-sm shadow-emerald-100/70 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              data-toggle-new-supplier
-            >
-              <span aria-hidden="true">➕</span>
-              Registrar proveedor
-            </button>
-          </div>
-          <select
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-            data-purchase-field="supplier_id"
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-100/80 text-emerald-700 transition hover:bg-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+            data-purchase-request-close
           >
-            <option value="">Selecciona un proveedor existente</option>
-            {% for supplier in form.suppliers %}
-            <option value="{{ supplier.id }}">
-              {{ supplier.name }} · {{ supplier.tax_id }}{% if supplier.city %} · {{ supplier.city }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-          <p class="text-[11px] text-slate-500">{{ form.messages.suppliers_helper }}</p>
-
-          <div class="hidden rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-inner shadow-emerald-50/70" data-new-supplier-panel>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Nombre / Razón social
+            <span class="sr-only">Cerrar formulario</span>
+            ✕
+          </button>
+        </header>
+        <div class="px-5 pb-6 pt-4">
+          <form class="space-y-4" data-purchase-request-form novalidate>
+            <div class="space-y-3">
+              <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Nombre del requerimiento
                 <input
                   type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="name"
+                  class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Ej: Insumos bioseguridad noviembre"
+                  data-purchase-field="name"
+                  maxlength="200"
                 />
               </label>
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                CC / NIT
-                <input
-                  type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="tax_id"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Contacto
-                <input
-                  type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="contact_name"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Teléfono
-                <input
-                  type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="contact_phone"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Correo
-                <input
-                  type="email"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="contact_email"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Ciudad
-                <input
-                  type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="city"
-                />
-              </label>
-            </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Banco
-                <input
-                  type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="bank_name"
-                />
-              </label>
-              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Nº de cuenta
-                <input
-                  type="text"
-                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  data-new-supplier-field="account_number"
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="space-y-4">
-          <div class="flex items-center justify-between text-xs">
-            <p class="font-semibold uppercase tracking-wide text-slate-500">Ítems</p>
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-emerald-200 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              data-add-purchase-item
-            >
-              <span aria-hidden="true">＋</span>
-              Agregar ítem
-            </button>
-          </div>
-          <div class="space-y-3" data-purchase-items>
-            <div
-              class="rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-inner shadow-slate-50"
-              data-purchase-item
-            >
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
-                <label class="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Descripción
-                  <textarea
-                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                    rows="2"
-                    data-item-field="description"
-                    placeholder="Ej: Jabón desinfectante 20 litros"
-                  ></textarea>
-                </label>
-                <label class="w-full text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:w-48">
-                  Producto sugerido
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Categoría
                   <select
-                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                    data-item-field="product_id"
+                    class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-purchase-field="expense_type"
                   >
                     <option value="">Selecciona</option>
-                    {% for product in form.products %}
-                    <option value="{{ product.id }}">{{ product.name }} · {{ product.unit }}</option>
+                    {% for option in form.expense_types %}
+                    <option value="{{ option.id }}">{{ option.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Gestor asignado
+                  <select
+                    class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-purchase-field="assigned_manager_id"
+                  >
+                    <option value="">Selecciona</option>
+                    {% for option in form.manager_options %}
+                    <option value="{{ option.id }}">{{ option.label }}</option>
                     {% endfor %}
                   </select>
                 </label>
               </div>
-              <div class="mt-3 grid gap-3 sm:grid-cols-3">
-                <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Cantidad
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                    data-item-field="quantity"
-                  />
-                </label>
-                <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Valor unitario ({{ form.currency_symbol }})
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                    data-item-field="unit_value"
-                  />
-                </label>
-                <div class="flex flex-col justify-end text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Subtotal
-              <span class="text-lg font-semibold text-slate-900" data-item-subtotal>{{ form.currency_symbol }} 0.00</span>
-                </div>
+            </div>
+
+            <div class="hidden rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs text-amber-900" data-purchase-edit-banner>
+              <p class="font-semibold">Editando <span data-purchase-edit-code></span></p>
+              <p class="mt-1 text-amber-800">Los cambios se guardarán como borrador hasta que envíes a aprobación.</p>
+            </div>
+
+            <div class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3" data-purchase-revision-notes>
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Notas del reingreso</p>
+              <ul class="mt-2 space-y-1 text-xs text-amber-900" data-purchase-revision-notes-list></ul>
+            </div>
+
+            <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-emerald-50">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Área a impactar</p>
+                <span class="text-[11px] text-slate-500" data-area-helper>
+                  {% for option in form.area_scopes %}
+                    {% if option.id == form.defaults.scope %}
+                      {{ option.helper }}
+                    {% endif %}
+                  {% endfor %}
+                </span>
               </div>
-              <div class="mt-2 flex justify-end">
+              <div class="flex flex-wrap gap-2" data-area-scope-picker>
+                {% for option in form.area_scopes %}
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-rose-600 transition hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-100"
-                  data-remove-purchase-item
+                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-100 transition hover:border-emerald-200 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-area-scope="{{ option.id }}"
+                  {% if option.id == form.defaults.scope %}data-active="true"{% endif %}
                 >
-                  <span aria-hidden="true">✕</span>
-                  Quitar ítem
+                  {{ option.label }}
                 </button>
+                {% endfor %}
+              </div>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <label class="hidden flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-area-field="farm">
+                  Granja
+                  <select
+                    class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-purchase-field="scope_farm"
+                  >
+                    <option value="">Selecciona</option>
+                    {% for farm in form.farms %}
+                    <option value="{{ farm.id }}">{{ farm.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="hidden flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-area-field="chicken_house">
+                  Galpón
+                  <select
+                    class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-purchase-field="scope_chicken_house"
+                  >
+                    <option value="">Selecciona</option>
+                    {% for house in form.chicken_houses %}
+                    <option value="{{ house.id }}" data-farm="{{ house.farm_id }}">{{ house.name }}{% if house.farm_name %} · {{ house.farm_name }}{% endif %}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Lote / Cultivo
+                  <input
+                    type="text"
+                    class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    placeholder="Opcional"
+                    data-purchase-field="scope_batch_code"
+                  />
+                </label>
               </div>
             </div>
-          </div>
-          <div class="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
-            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Total estimado</p>
-            <span class="text-lg font-semibold text-emerald-700" data-purchase-total>{{ form.currency_symbol }} 0.00</span>
-          </div>
-        </div>
 
-        <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Notas para el equipo de compras
-          <textarea
-            rows="2"
-            class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-            placeholder="Agrega condiciones especiales, entregas parciales u otra información clave."
-            data-purchase-field="notes"
-          ></textarea>
-        </label>
-
-        <p class="text-xs font-semibold text-emerald-600 hidden" data-purchase-feedback></p>
-
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
-              data-purchase-action="draft"
-            >
-              Guardar borrador
-            </button>
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow shadow-emerald-200/70 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
-              data-purchase-action="submit"
-            >
-              Enviar a aprobación
-            </button>
-          </div>
-          <span class="text-[11px] uppercase tracking-wide text-slate-400" data-purchase-status>Listo para editar</span>
-        </div>
-      </form>
-
-      <template data-purchase-item-template>
-        <div class="rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-inner shadow-slate-50" data-purchase-item>
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <label class="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Descripción
-              <textarea class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" rows="2" data-item-field="description"></textarea>
-            </label>
-            <label class="w-full text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:w-48">
-              Producto sugerido
-              <select class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="product_id">
-                <option value="">Selecciona</option>
-                {% for product in form.products %}
-                <option value="{{ product.id }}">{{ product.name }} · {{ product.unit }}</option>
+            <div class="space-y-2 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-emerald-50">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold text-emerald-600 shadow-sm shadow-emerald-100/70 transition hover:border-emerald-300 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-toggle-new-supplier
+                >
+                  <span aria-hidden="true">＋</span>
+                  Registrar nuevo
+                </button>
+              </div>
+              <select
+                class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                data-purchase-field="supplier_id"
+              >
+                <option value="">Selecciona un proveedor</option>
+                {% for supplier in form.suppliers %}
+                <option value="{{ supplier.id }}">
+                  {{ supplier.name }} · {{ supplier.tax_id }}{% if supplier.city %} · {{ supplier.city }}{% endif %}
+                </option>
                 {% endfor %}
               </select>
+              <div class="hidden space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4" data-new-supplier-panel>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Nombre / Razón social
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="name" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    CC / NIT
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="tax_id" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Contacto
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="contact_name" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Teléfono
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="contact_phone" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Correo
+                    <input type="email" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="contact_email" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Ciudad
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="city" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Dirección
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="address" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Titular cuenta
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="account_holder_name" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Identificación titular
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="account_holder_id" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Tipo de cuenta
+                    <select class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="account_type">
+                      <option value="">Selecciona</option>
+                      <option value="ahorros">Ahorros</option>
+                      <option value="corriente">Corriente</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Banco
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="bank_name" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Nº de cuenta
+                    <input type="text" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-new-supplier-field="account_number" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-inner shadow-emerald-50">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Ítems solicitados</p>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-emerald-200 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-add-purchase-item
+                >
+                  <span aria-hidden="true">＋</span>
+                  Agregar ítem
+                </button>
+              </div>
+              <div class="mt-3 space-y-3" data-purchase-items></div>
+            </div>
+
+            <div class="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Total estimado</p>
+              <span class="text-lg font-semibold text-emerald-800" data-purchase-total>{{ form.currency_symbol }} 0.00</span>
+            </div>
+
+            <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Notas para compras
+              <textarea
+                rows="2"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Condiciones, entregas o información adicional"
+                data-purchase-field="notes"
+              ></textarea>
             </label>
-          </div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-3">
-            <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Cantidad
-              <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="quantity" />
-            </label>
-            <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Valor unitario ({{ form.currency_symbol }})
-              <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="unit_value" />
-            </label>
-              <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="unit_value" />
-            </label>
-            <div class="flex flex-col justify-end text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Subtotal
-              <span class="text-lg font-semibold text-slate-900" data-item-subtotal>{{ form.currency_symbol }} 0.00</span>
+
+            <p class="hidden text-xs font-semibold text-emerald-600" data-purchase-feedback></p>
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                data-purchase-action="draft"
+              >
+                Guardar borrador
+              </button>
+              <button
+                type="button"
+                class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow shadow-emerald-200/70 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                data-purchase-action="submit"
+              >
+                Enviar a aprobación
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <template data-purchase-item-template>
+          <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/95 p-3 text-xs text-slate-600 shadow-sm shadow-slate-100" data-purchase-item>
+            <div class="flex items-start gap-2">
+              <label class="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Descripción
+                <textarea class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" rows="2" data-item-field="description"></textarea>
+              </label>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-rose-500 transition hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-100"
+                data-remove-purchase-item
+              >
+                <span aria-hidden="true">✕</span>
+                <span class="sr-only">Quitar ítem</span>
+              </button>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-4">
+              <label class="col-span-2 flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Producto sugerido
+                <select class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="product_id">
+                  <option value="">Selecciona</option>
+                  {% for product in form.products %}
+                  <option value="{{ product.id }}">{{ product.name }} · {{ product.unit }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Cantidad
+                <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="quantity" />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Valor ({{ form.currency_symbol }})
+                <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="unit_value" />
+              </label>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span>Subtotal</span>
+              <span class="text-base text-slate-900" data-item-subtotal>{{ form.currency_symbol }} 0.00</span>
             </div>
           </div>
-          <div class="mt-2 flex justify-end">
-            <button type="button" class="inline-flex items-center gap-1 rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-rose-600 transition hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-100" data-remove-purchase-item>
-              <span aria-hidden="true">✕</span>
-              Quitar ítem
-            </button>
-          </div>
-        </div>
-      </template>
-    </article>
+        </template>
+      </article>
+    </div>
     {% endwith %}
     {% endif %}
 
@@ -427,7 +373,7 @@
                 <h4 class="text-sm font-semibold text-slate-900" data-entry-name>{{ entry.name }}</h4>
                 <p class="text-xs text-slate-500" data-entry-area>{{ entry.area_label }}</p>
               </div>
-              <div class="flex flex-col items-end gap-2">
+              <div class="flex flex-col items-end gap-2" data-entry-actions>
                 <span
                   class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if entry.stage_is_alert %}border-rose-200 bg-rose-50 text-rose-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
                   data-entry-stage-chip
@@ -441,6 +387,15 @@
                 >
                   {{ entry.status_label }}
                 </span>
+                {% if entry.status == 'borrador' %}
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100 transition hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+                  data-purchase-edit-trigger
+                >
+                  Editar
+                </button>
+                {% endif %}
               </div>
             </div>
             <dl class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">
@@ -546,12 +501,19 @@
               <h4 class="text-sm font-semibold text-slate-900" data-entry-name></h4>
               <p class="text-xs text-slate-500" data-entry-area></p>
             </div>
-            <div class="flex flex-col items-end gap-2">
+            <div class="flex flex-col items-end gap-2" data-entry-actions>
               <span
                 class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide border-slate-200 bg-slate-50 text-slate-600"
                 data-entry-stage-chip
               ></span>
               <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide border-slate-200 bg-slate-50 text-slate-600" data-entry-status-chip></span>
+              <button
+                type="button"
+                class="hidden inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100 transition hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+                data-purchase-edit-trigger
+              >
+                Editar
+              </button>
             </div>
           </div>
           <dl class="mt-3 grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-3">

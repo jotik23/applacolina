@@ -59,6 +59,7 @@ class PurchaseRequestFormCard:
     area_scopes: Tuple[dict[str, object], ...]
     defaults: dict[str, object]
     messages: dict[str, str]
+    manager_options: Tuple[dict[str, object], ...]
     max_items: int = MAX_PURCHASE_ENTRIES
 
 
@@ -88,6 +89,8 @@ class PurchaseRequestListEntry:
     items: Tuple[dict[str, object], ...]
     payment_details: dict[str, object]
     reception_details: dict[str, object]
+    can_edit: bool
+    edit_payload: Optional[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -200,6 +203,8 @@ def build_purchase_request_form_card(
         .order_by("name")[:MAX_SUPPLIERS]
     )
 
+    manager_options = _build_manager_options()
+
     products = tuple(
         {
             "id": product.pk,
@@ -261,6 +266,7 @@ def build_purchase_request_form_card(
         area_scopes=area_scopes,
         defaults=defaults,
         messages=messages,
+        manager_options=manager_options,
     )
 
 
@@ -277,7 +283,7 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
             Q(requester_id=user_id) | Q(assigned_manager_id=user_id),
             status__in=OVERVIEW_ALLOWED_STATUSES,
         )
-        .select_related("expense_type", "supplier")
+        .select_related("expense_type", "supplier", "assigned_manager")
         .prefetch_related(
             Prefetch(
                 "items",
@@ -302,6 +308,7 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
         item_payloads = tuple(_serialize_purchase_item(item=item, currency=purchase.currency or currency) for item in purchase.items.all())
 
         stage_label, stage_is_alert = _resolve_stage_label(purchase)
+        can_edit = purchase.status == PurchaseRequest.Status.DRAFT
         entries.append(
             PurchaseRequestListEntry(
                 pk=purchase.pk,
@@ -320,6 +327,8 @@ def build_purchase_requests_overview(*, user: Optional[UserProfile]) -> Optional
                 items=item_payloads,
                 payment_details=payment_details,
                 reception_details=reception_details,
+                can_edit=can_edit,
+                edit_payload=_build_purchase_edit_payload(purchase) if can_edit else None,
             )
         )
 
@@ -538,14 +547,7 @@ def build_purchase_approval_card(*, user: Optional[UserProfile]) -> Optional[Pur
     if not entries:
         return None
 
-    manager_options = tuple(
-        {
-            "id": profile.pk,
-            "label": profile.get_full_name() or profile.get_username() or _("Sin nombre"),
-        }
-        for profile in UserProfile.objects.only("id", "nombres", "apellidos", "cedula")
-        .order_by("apellidos", "nombres", "id")
-    )
+    manager_options = _build_manager_options()
 
     return PurchaseApprovalCard(entries=tuple(entries), manager_options=manager_options)
 
@@ -564,6 +566,7 @@ def serialize_purchase_request_form_card(card: PurchaseRequestFormCard) -> dict[
         "area_scopes": list(card.area_scopes),
         "defaults": card.defaults,
         "messages": card.messages,
+        "manager_options": list(card.manager_options),
     }
 
 
@@ -602,6 +605,8 @@ def serialize_purchase_requests_overview(card: PurchaseRequestsOverview) -> dict
                 "items": list(entry.items),
                 "payment_details": entry.payment_details,
                 "reception_details": entry.reception_details,
+                "can_edit": entry.can_edit,
+                "edit_payload": entry.edit_payload,
             }
             for entry in card.entries
         ],
@@ -692,6 +697,17 @@ def serialize_purchase_approval_card(card: PurchaseApprovalCard) -> dict[str, ob
     }
 
 
+def _build_manager_options() -> Tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "id": profile.pk,
+            "label": profile.get_full_name() or profile.get_username() or _("Sin nombre"),
+        }
+        for profile in UserProfile.objects.only("id", "nombres", "apellidos", "cedula")
+        .order_by("apellidos", "nombres", "id")
+    )
+
+
 def _resolve_default_manager_id(*, purchase: PurchaseRequest, fallback_user: Optional[UserProfile]) -> Optional[int]:
     if purchase.assigned_manager_id:
         return purchase.assigned_manager_id
@@ -745,6 +761,84 @@ def _serialize_purchase_item(*, item: PurchaseItem, currency: str) -> dict[str, 
         "quantity_label": requested_label,
         "amount_label": subtotal_label,
     }
+
+
+def _build_purchase_edit_payload(purchase: PurchaseRequest) -> dict[str, object]:
+    supplier_payload: Optional[dict[str, object]] = None
+    if purchase.supplier_id:
+        supplier_payload = {
+            "id": purchase.supplier_id,
+            "name": purchase.supplier.name if purchase.supplier else "",
+            "tax_id": purchase.supplier.tax_id if purchase.supplier else "",
+            "city": purchase.supplier.city if purchase.supplier else "",
+        }
+
+    manager_label = ""
+    if purchase.assigned_manager_id and purchase.assigned_manager:
+        manager_label = (
+            purchase.assigned_manager.get_full_name()
+            or purchase.assigned_manager.get_username()
+            or _("Sin nombre")
+        )
+
+    items_payload: list[dict[str, object]] = []
+    total = Decimal("0.00")
+    for item in purchase.items.all():
+        quantity = item.quantity or Decimal("0.00")
+        unit_value = _resolve_unit_value(item)
+        subtotal = (quantity or Decimal("0.00")) * unit_value
+        total += subtotal
+        items_payload.append(
+            {
+                "id": item.pk,
+                "description": item.description,
+                "product_id": item.product_id,
+                "quantity": _format_quantity(quantity),
+                "unit_value": _format_decimal_input(unit_value),
+                "subtotal": _format_decimal_input(subtotal),
+            }
+        )
+
+    return {
+        "purchase_id": purchase.pk,
+        "code": purchase.timeline_code,
+        "name": purchase.name,
+        "expense_type_id": purchase.expense_type_id,
+        "assigned_manager_id": purchase.assigned_manager_id,
+        "assigned_manager_label": manager_label,
+        "notes": purchase.description or "",
+        "area": {
+            "scope": purchase.scope_area,
+            "farm_id": purchase.scope_farm_id,
+            "chicken_house_id": purchase.scope_chicken_house_id,
+            "batch_code": purchase.scope_batch_code or "",
+        },
+        "supplier": supplier_payload,
+        "items": items_payload,
+        "total_value": _format_decimal_input(total),
+        "revision_notes": _extract_revision_notes(purchase.shipping_notes),
+    }
+
+
+def _format_decimal_input(value: Decimal | None) -> str:
+    if value is None:
+        return ""
+    normalized = value.quantize(Decimal("0.01"))
+    text = format(normalized, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".") or "0"
+    return text
+
+
+def _extract_revision_notes(raw_notes: Optional[str]) -> list[str]:
+    if not raw_notes:
+        return []
+    entries: list[str] = []
+    for chunk in raw_notes.splitlines():
+        line = chunk.strip()
+        if line:
+            entries.append(line)
+    return entries
 
 
 def _format_quantity(value: Decimal | None) -> str:

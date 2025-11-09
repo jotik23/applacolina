@@ -3327,7 +3327,7 @@ def mini_app_purchase_request_view(request):
         product_id = _coerce_int(item.get("product_id"))
         items.append(
             PurchaseItemPayload(
-                id=None,
+                id=_coerce_int(item.get("id")),
                 description=description,
                 quantity=quantity,
                 estimated_amount=estimated_amount,
@@ -3349,6 +3349,10 @@ def mini_app_purchase_request_view(request):
     )
     scope_batch_code = (area_payload.get("batch_code") or payload.get("scope_batch_code") or payload.get("batch_code") or "").strip()
 
+    assigned_manager_id = _coerce_int(payload.get("assigned_manager_id"))
+    if not assigned_manager_id and user and getattr(user, "pk", None):
+        assigned_manager_id = user.pk
+
     request_payload = PurchaseRequestPayload(
         purchase_id=_coerce_int(payload.get("purchase_id")),
         summary=summary,
@@ -3361,7 +3365,7 @@ def mini_app_purchase_request_view(request):
         scope_chicken_house_id=scope_house_id,
         scope_batch_code=scope_batch_code,
         scope_area=scope_area,
-        assigned_manager_id=user.pk if user and getattr(user, "pk", None) else None,
+        assigned_manager_id=assigned_manager_id,
     )
 
     action = (payload.get("action") or "").strip().lower()
