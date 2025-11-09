@@ -22,6 +22,18 @@ COLUMN_DEFINITIONS = (
 FIXTURE_FILENAME = "task_manager_data.json"
 
 
+def _reset_pk_sequence(connection, table_name: str) -> None:
+    sequence_sql = f"""
+        SELECT setval(
+            pg_get_serial_sequence(%s, 'id'),
+            COALESCE((SELECT MAX(id) FROM {table_name}), 1),
+            true
+        )
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sequence_sql, [f"public.{table_name}"])
+
+
 def load_task_manager_fixture(apps, schema_editor):
     connection = schema_editor.connection
     quoted_table = schema_editor.quote_name("task_manager_taskdefinition")
@@ -170,6 +182,15 @@ def load_task_manager_fixture(apps, schema_editor):
         )
         if room_queryset.exists():
             position.rooms.set(room_queryset)
+
+    for table_name in (
+        "users_userprofile",
+        "production_farm",
+        "production_chickenhouse",
+        "production_room",
+        "calendario_positiondefinition",
+    ):
+        _reset_pk_sequence(connection, table_name)
 
     with suppress_task_assignment_sync():
         call_command("loaddata", str(fixture_path))

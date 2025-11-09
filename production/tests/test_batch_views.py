@@ -15,9 +15,11 @@ class BatchManagementViewTests(TestCase):
     def setUp(self) -> None:
         user_model = get_user_model()
         self.user = user_model.objects.create_user(
-            username="batch-admin",
-            email="batch-admin@example.com",
+            cedula="batch-admin",
             password="supersecure",
+            nombres="Batch",
+            apellidos="Admin",
+            telefono="3000001000",
             is_staff=True,
         )
         self.client.force_login(self.user)

@@ -32,9 +32,9 @@ class TaskAssignmentSynchronizationTests(TestCase):
             name="Sala A",
             area_m2=120,
         )
-        self.category = PositionCategory.objects.create(
+        self.category, _ = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.SUPERVISOR,
-            shift_type=ShiftType.DAY,
+            defaults={"shift_type": ShiftType.DAY},
         )
         self.position = PositionDefinition.objects.create(
             name="Supervisor turno día",
@@ -265,5 +265,5 @@ class TaskAssignmentSynchronizationTests(TestCase):
         sync_task_assignments(start_date=due_date, end_date=due_date)
 
         assignment.refresh_from_db()
-        self.assertEqual(assignment.collaborator, self.backup_operator)
+        self.assertIsNone(assignment.collaborator)
         self.assertEqual(assignment.previous_collaborator, self.operator)

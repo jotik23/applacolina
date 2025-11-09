@@ -30,6 +30,7 @@ from production.models import (
 
 class MiniAppProductionViewTests(TestCase):
     def setUp(self):
+        self._user_sequence = 0
         self.farm = Farm.objects.create(name="Granja Principal")
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
@@ -40,9 +41,9 @@ class MiniAppProductionViewTests(TestCase):
             name="Sala 1",
             area_m2=120.0,
         )
-        self.category = PositionCategory.objects.create(
-            code=PositionCategoryCode.AUXILIAR_OPERATIVO,
-            shift_type=ShiftType.DAY,
+        self.category, _ = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.OFICIOS_VARIOS,
+            defaults={"shift_type": ShiftType.DAY},
         )
         today = timezone.localdate()
         self.position = PositionDefinition.objects.create(
@@ -69,13 +70,18 @@ class MiniAppProductionViewTests(TestCase):
             quantity=960,
         )
 
+    def _next_identifier(self) -> str:
+        self._user_sequence += 1
+        return f"{self._user_sequence:04d}"
+
     def _create_user(self, *, grant_permission: bool) -> UserProfile:
+        identifier = self._next_identifier()
         user = UserProfile.objects.create_user(
-            "100200300",
+            f"1002{identifier}00",
             password=None,
             nombres="Ana",
             apellidos="García",
-            telefono="3015556677",
+            telefono=f"301{identifier}00",
         )
         access_perm = Permission.objects.get(codename="access_mini_app")
         user.user_permissions.add(access_perm)

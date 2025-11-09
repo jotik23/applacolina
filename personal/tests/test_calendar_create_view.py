@@ -17,6 +17,7 @@ class CalendarCreateViewTests(TestCase):
             nombres="Claudia",
             apellidos="Ramírez",
             telefono="3000000010",
+            is_staff=True,
         )
         self.client.force_login(self.user)
         self.url = reverse("personal:calendar-create")

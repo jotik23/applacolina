@@ -17,6 +17,7 @@ class CalendarGenerateViewTests(TestCase):
             nombres="Test",
             apellidos="User",
             telefono="3000000001",
+            is_staff=True,
         )
         self.client.force_login(self.user)
         self.url = reverse("personal-api:calendar-generate")

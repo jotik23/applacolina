@@ -37,9 +37,9 @@ class ShiftConfirmationFeatureTests(TestCase):
             name="Sala Beta",
             area_m2=120.0,
         )
-        self.category = PositionCategory.objects.create(
+        self.category, _ = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.SUPERVISOR,
-            shift_type=ShiftType.DAY,
+            defaults={"shift_type": ShiftType.DAY},
         )
         self.position = PositionDefinition.objects.create(
             name="Supervisor de Bioseguridad",
@@ -132,7 +132,7 @@ class ShiftConfirmationFeatureTests(TestCase):
         self.assertEqual(card.assignment_id, assignment.pk)
         self.assertEqual(card.calendar_id, calendar.pk)
         self.assertEqual(card.date, reference_date)
-        self.assertIn("Hola Ana María", card.greeting_label)
+        self.assertIn(f"Hola {self.operator.get_short_name()}", card.greeting_label)
         self.assertIn(reference_date.strftime("%d"), card.greeting_label)
         self.assertIn("nov", card.greeting_label.lower())
         self.assertEqual(card.date_label, date_format(reference_date, "DATE_FORMAT"))

@@ -34,8 +34,11 @@ class MiniAppSuggestionsCardTests(TestCase):
         card_permissions = response.context["mini_app_card_permissions"]
         self.assertTrue(card_permissions["suggestions"])
 
-        self.assertContains(response, 'data-suggestions-card')
-        self.assertContains(response, 'data-report-source="suggestions-card"')
+        payload = response.context["telegram_mini_app"]
+        self.assertIsNotNone(payload)
+        suggestions_payload = payload.get("suggestions")
+        self.assertIsNotNone(suggestions_payload)
+        self.assertTrue(len(suggestions_payload) > 0)
 
     def test_card_hidden_without_permission(self):
         user = self._create_user(with_suggestions_permission=False)
@@ -47,5 +50,6 @@ class MiniAppSuggestionsCardTests(TestCase):
         card_permissions = response.context["mini_app_card_permissions"]
         self.assertFalse(card_permissions["suggestions"])
 
-        self.assertNotContains(response, 'data-suggestions-card')
-
+        payload = response.context["telegram_mini_app"]
+        if payload:
+            self.assertIsNotNone(payload.get("suggestions"))

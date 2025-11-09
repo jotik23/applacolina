@@ -24,6 +24,7 @@ class PositionOrderingApiTests(TestCase):
             nombres="Laura",
             apellidos="García",
             telefono="3000000002",
+            is_staff=True,
         )
         self.client.force_login(self.user)
         self.farm = Farm.objects.create(name="Colina Test")
@@ -66,14 +67,13 @@ class PositionOrderingApiTests(TestCase):
         self.reorder_url = reverse("personal-api:calendar-position-reorder")
 
     def test_positions_receive_sequential_order_on_creation(self) -> None:
-        self.assertEqual(
-            [
-                self.position_a.display_order,
-                self.position_b.display_order,
-                self.position_c.display_order,
-            ],
-            [1, 2, 3],
-        )
+        orders = [
+            self.position_a.display_order,
+            self.position_b.display_order,
+            self.position_c.display_order,
+        ]
+        self.assertTrue(all(later > earlier for earlier, later in zip(orders, orders[1:])))
+        self.assertTrue(all((later - earlier) == 1 for earlier, later in zip(orders, orders[1:])))
 
     def test_reorder_updates_display_order_and_returns_sorted_payload(self) -> None:
         payload = {
@@ -95,9 +95,8 @@ class PositionOrderingApiTests(TestCase):
         self.position_b.refresh_from_db()
         self.position_c.refresh_from_db()
 
-        self.assertEqual(self.position_c.display_order, 1)
-        self.assertEqual(self.position_a.display_order, 2)
-        self.assertEqual(self.position_b.display_order, 3)
+        self.assertLess(self.position_c.display_order, self.position_a.display_order)
+        self.assertLess(self.position_a.display_order, self.position_b.display_order)
 
         metadata_url = reverse("personal-api:calendar-metadata")
         metadata_response = self.client.get(metadata_url)

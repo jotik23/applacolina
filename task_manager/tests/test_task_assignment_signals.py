@@ -33,9 +33,9 @@ class TaskAssignmentSignalTests(TestCase):
             name="Sala 1",
             area_m2=50,
         )
-        self.position_category = PositionCategory.objects.create(
+        self.position_category, _ = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.SUPERVISOR,
-            shift_type=ShiftType.DAY,
+            defaults={"shift_type": ShiftType.DAY},
         )
         self.position = PositionDefinition.objects.create(
             name="Supervisor general",

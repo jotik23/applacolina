@@ -34,6 +34,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             nombres="Coordinador",
             apellidos="Calendario",
             telefono="3100000000",
+            is_staff=True,
         )
         self.client.force_login(self.user)
 
@@ -200,13 +201,18 @@ class CalendarDetailViewManualOverrideTests(TestCase):
             None,
         )
         self.assertIsNotNone(primary_row)
+        assert primary_row is not None
         primary_cell = next(
             (cell for cell in primary_row["cells"] if cell["date"] == self.calendar.start_date),
             None,
         )
         self.assertIsNotNone(primary_cell)
+        assert primary_cell is not None
+        assignment = primary_cell.get("assignment")
+        self.assertIsNotNone(assignment)
+        assert assignment is not None
         self.assertIsNone(primary_cell["overtime_message"])
-        self.assertEqual(primary_cell["operator"]["id"], self.operator_conflict.pk)
+        self.assertEqual(assignment.operator_id, self.operator_conflict.pk)
 
     def test_update_assignment_removes_overlapping_rest_period(self) -> None:
         rest_period = OperatorRestPeriod.objects.create(
@@ -351,6 +357,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
                 "position_id": self.position_secondary.pk,
                 "date": target_date.isoformat(),
                 "operator_id": self.operator_manual.pk,
+                "force_override": "1",
             },
         )
 
@@ -539,6 +546,7 @@ class CalendarDetailViewModifyCalendarTests(TestCase):
             nombres="Planificador",
             apellidos="Operaciones",
             telefono="3100000004",
+            is_staff=True,
         )
         self.client.force_login(self.user)
 
@@ -599,6 +607,7 @@ class CalendarActivePositionVisibilityTests(TestCase):
             nombres="Analista",
             apellidos="Coberturas",
             telefono="3100000005",
+            is_staff=True,
         )
         self.client.force_login(self.user)
 

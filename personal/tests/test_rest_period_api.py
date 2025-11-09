@@ -31,6 +31,7 @@ class RestPeriodApiTests(TestCase):
             nombres="Coordinador",
             apellidos="Principal",
             telefono="3000000000",
+            is_staff=True,
         )
         self.operator = UserProfile.objects.create_user(
             cedula="8002",

@@ -105,7 +105,7 @@ class ProductionRegistry:
 
 
 def resolve_assignment_for_date(*, user: UserProfile, target_date: date) -> Optional[ShiftAssignment]:
-    if not user.is_active or not user.has_perm("task_manager.view_mini_app_production_card"):
+    if not user.is_active:
         return None
 
     return (
@@ -140,6 +140,8 @@ def build_production_registry(
     reference_date: Optional[date] = None,
 ) -> Optional[ProductionRegistry]:
     if not user or not getattr(user, "is_authenticated", False):
+        return None
+    if not user.has_perm("task_manager.view_mini_app_production_card"):
         return None
 
     target_date = reference_date or UserProfile.colombia_today()

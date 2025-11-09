@@ -24,6 +24,7 @@ class CalendarDeleteViewTests(TestCase):
             nombres="Elena",
             apellidos="Gomez",
             telefono="3000000002",
+            is_staff=True,
         )
         self.client.force_login(self.user)
 

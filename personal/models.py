@@ -51,6 +51,7 @@ class UserProfileManager(BaseUserManager):
         if not cedula:
             raise ValueError("El usuario debe tener una cedula definida.")
         cedula = cedula.strip()
+        extra_fields.pop("email", None)
         user = self.model(cedula=cedula, **extra_fields)
         if password:
             user.set_password(password)
@@ -59,12 +60,18 @@ class UserProfileManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_user(self, cedula: str, password: str | None = None, **extra_fields):
+    def create_user(self, cedula: str | None = None, password: str | None = None, **extra_fields):
+        if not cedula:
+            cedula = extra_fields.pop("username", None)
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
+        if not cedula:
+            raise ValueError("El usuario debe tener una cedula definida.")
         return self._create_user(cedula, password, **extra_fields)
 
-    def create_superuser(self, cedula: str, password: str | None, **extra_fields):
+    def create_superuser(self, cedula: str | None, password: str | None, **extra_fields):
+        if not cedula:
+            cedula = extra_fields.pop("username", None)
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
@@ -72,6 +79,8 @@ class UserProfileManager(BaseUserManager):
             raise ValueError("Los superusuarios deben tener is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Los superusuarios deben tener is_superuser=True.")
+        if not cedula:
+            raise ValueError("El usuario debe tener una cedula definida.")
         return self._create_user(cedula, password, **extra_fields)
 
 
@@ -309,6 +318,7 @@ class PositionCategoryCode(models.TextChoices):
     LIDER_TECNICO = "LIDER_TECNICO", _("Líder técnico")
     OFICIOS_VARIOS = "OFICIOS_VARIOS", _("Oficios varios")
     VACUNADOR = "VACUNADOR", _("Vacunador")
+    AUXILIAR_OPERATIVO = "AUXILIAR_OPERATIVO", _("Auxiliar operativo")
 
 
 class PositionCategory(models.Model):

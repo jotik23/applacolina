@@ -25,6 +25,7 @@ from task_manager.models import TaskAssignment, TaskCategory, TaskDefinition, Ta
 
 class MiniAppWeightRegistryViewTests(TestCase):
     def setUp(self):
+        self._user_sequence = 0
         self.farm = Farm.objects.create(name="Granja Principal")
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
@@ -35,9 +36,9 @@ class MiniAppWeightRegistryViewTests(TestCase):
             name="Sala 1",
             area_m2=120.0,
         )
-        self.category = PositionCategory.objects.create(
+        self.category, _ = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.AUXILIAR_OPERATIVO,
-            shift_type=ShiftType.DAY,
+            defaults={"shift_type": ShiftType.DAY},
         )
         today = timezone.localdate()
         self.position = PositionDefinition.objects.create(
@@ -53,13 +54,18 @@ class MiniAppWeightRegistryViewTests(TestCase):
         self.task_status = TaskStatus.objects.create(name="Activa", is_active=True)
         self.task_category = TaskCategory.objects.create(name="Operaciones", is_active=True)
 
+    def _next_identifier(self) -> str:
+        self._user_sequence += 1
+        return f"{self._user_sequence:04d}"
+
     def _create_user(self, *, grant_permission: bool) -> UserProfile:
+        identifier = self._next_identifier()
         user = UserProfile.objects.create_user(
-            "200300400",
+            f"2003{identifier}00",
             password=None,
             nombres="Luis",
             apellidos="Martínez",
-            telefono="3018884455",
+            telefono=f"301{identifier}88",
         )
         access_perm = Permission.objects.get(codename="access_mini_app")
         user.user_permissions.add(access_perm)

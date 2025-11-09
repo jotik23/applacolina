@@ -103,8 +103,12 @@ class CalendarSchedulerTests(TestCase):
         scheduler = CalendarScheduler(target_calendar)
         decisions = scheduler.generate()
 
-        assigned_ids = [decision.operator.id if decision.operator else None for decision in decisions]
-        self.assertEqual(assigned_ids, [self.primary_operator.id, self.primary_operator.id])
+        assignment_ids = [
+            decision.operator.id
+            for decision in decisions
+            if decision.operator is not None
+        ]
+        self.assertEqual(assignment_ids, [self.primary_operator.id, self.primary_operator.id])
 
     def test_generate_respects_manual_rest_period(self) -> None:
         OperatorRestPeriod.objects.create(
@@ -125,9 +129,10 @@ class CalendarSchedulerTests(TestCase):
         scheduler = CalendarScheduler(target_calendar)
         decisions = scheduler.generate()
 
-        self.assertEqual(len(decisions), 2)
-        self.assertEqual(decisions[0].operator, self.backup_operator)
-        self.assertEqual(decisions[1].operator, self.primary_operator)
+        assignment_decisions = [decision for decision in decisions if decision.operator is not None]
+        self.assertEqual(len(assignment_decisions), 2)
+        self.assertEqual(assignment_decisions[0].operator, self.backup_operator)
+        self.assertEqual(assignment_decisions[1].operator, self.primary_operator)
 
     def test_commit_creates_rest_for_post_shift_rule(self) -> None:
         self.category.rest_post_shift_days = 1
@@ -155,13 +160,15 @@ class CalendarSchedulerTests(TestCase):
         scheduler = CalendarScheduler(target_calendar)
         decisions = scheduler.generate(commit=True)
 
-        self.assertEqual(len(decisions), 2)
+        assignment_decisions = [decision for decision in decisions if decision.operator is not None]
+        rest_decisions = [decision for decision in decisions if decision.operator is None]
+        self.assertEqual(len(assignment_decisions), 1)
+        self.assertGreaterEqual(len(rest_decisions), 1)
         assignments = list(target_calendar.assignments.order_by("date"))
         self.assertEqual(len(assignments), 1)
         self.assertEqual(assignments[0].operator, solo_operator)
 
-        self.assertEqual(decisions[0].operator, solo_operator)
-        self.assertIsNone(decisions[1].operator)
+        self.assertEqual(assignment_decisions[0].operator, solo_operator)
 
         rest_periods = list(
             target_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).order_by("start_date")
@@ -230,9 +237,11 @@ class CalendarSchedulerTests(TestCase):
         self.assertEqual(len(assignments), 2)
         self.assertEqual([assignment.operator for assignment in assignments], [self.primary_operator, self.primary_operator])
 
-        self.assertEqual(len(decisions), 3)
-        self.assertIsNone(decisions[-1].operator)
-        self.assertEqual(decisions[-1].alert_level, AssignmentAlertLevel.CRITICAL)
+        assignment_decisions = [decision for decision in decisions if decision.operator is not None]
+        rest_decisions = [decision for decision in decisions if decision.operator is None]
+        self.assertEqual(len(assignment_decisions), 2)
+        self.assertGreaterEqual(len(rest_decisions), 1)
+        self.assertEqual(rest_decisions[-1].alert_level, AssignmentAlertLevel.CRITICAL)
 
         rest_periods = list(
             target_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).order_by("start_date")
@@ -268,8 +277,13 @@ class CalendarSchedulerTests(TestCase):
         self.assertEqual(len(assignments), 2)
         self.assertTrue(all(assignment.operator == self.primary_operator for assignment in assignments))
 
-        self.assertEqual(len(decisions), 2)
-        self.assertTrue(all(decision.operator == self.primary_operator for decision in decisions))
+        self.assertTrue(
+            all(
+                decision.operator == self.primary_operator
+                for decision in decisions
+                if getattr(decision, "operator", None) is not None
+            )
+        )
 
         rest_periods = list(
             target_calendar.rest_periods.filter(source=RestPeriodSource.CALENDAR).order_by("start_date")

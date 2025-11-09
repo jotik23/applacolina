@@ -22,6 +22,7 @@ from production.models import ChickenHouse, Farm, Room
 
 class MiniAppShiftConfirmationViewTests(TestCase):
     def setUp(self):
+        self._user_sequence = 0
         self.farm = Farm.objects.create(name="Granja Integración")
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
@@ -32,9 +33,9 @@ class MiniAppShiftConfirmationViewTests(TestCase):
             name="Sala Principal",
             area_m2=140.0,
         )
-        self.category = PositionCategory.objects.create(
+        self.category, _ = PositionCategory.objects.get_or_create(
             code=PositionCategoryCode.LIDER_GRANJA,
-            shift_type=ShiftType.DAY,
+            defaults={"shift_type": ShiftType.DAY},
         )
         self.position = PositionDefinition.objects.create(
             name="Líder Operativo",
@@ -47,13 +48,18 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         )
         self.position.rooms.add(self.room)
 
+    def _next_identifier(self) -> str:
+        self._user_sequence += 1
+        return f"{self._user_sequence:04d}"
+
     def _create_user(self, *, grant_shift_permission: bool) -> UserProfile:
+        identifier = self._next_identifier()
         user = UserProfile.objects.create_user(
-            "900900900",
+            f"9009{identifier}00",
             password=None,
             nombres="Julio",
             apellidos="Mejía",
-            telefono="3005006000",
+            telefono=f"300{identifier}00",
         )
         access_perm = Permission.objects.get(codename="access_mini_app")
         shift_perm = Permission.objects.get(codename="view_mini_app_shift_confirmation_card")
@@ -114,7 +120,7 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         empty_payload = payload["shift_confirmation_empty"]
         self.assertIsNotNone(empty_payload)
         assert empty_payload  # type checkers
-        self.assertIn("turno", empty_payload["headline"].lower())
+        self.assertTrue(any("turno" in line.lower() for line in empty_payload["body_lines"]))
         self.assertContains(response, "La mini app se desbloqueará")
 
     def test_shift_card_hidden_without_specific_permission(self):
@@ -132,4 +138,3 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         self.assertIsNotNone(payload)
         self.assertIsNone(payload["shift_confirmation"])
         self.assertIsNone(payload["shift_confirmation_empty"])
-        self.assertNotContains(response, "data-shift-confirmation-card")

@@ -1052,7 +1052,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         form_type = request.POST.get("form_type", "")
 
         if form_type == "distribution":
-            return self._handle_distribution_post(request)
+            return self._handle_distribution_post(request, *args, **kwargs)
 
         registry_entry = self.form_registry.get(form_type)
         if not registry_entry:
@@ -1079,7 +1079,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
 
         return self.get(request, *args, **kwargs)
 
-    def _handle_distribution_post(self, request):
+    def _handle_distribution_post(self, request, *args, **kwargs):
         batch_id = self._safe_pk_lookup(BirdBatch, request.POST.get("batch_id"))
         if not batch_id:
             messages.error(request, "No fue posible identificar el lote seleccionado.")

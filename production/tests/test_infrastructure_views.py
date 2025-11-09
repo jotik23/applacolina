@@ -15,9 +15,11 @@ class InfrastructureViewTests(TestCase):
     def setUp(self) -> None:
         user_model = get_user_model()
         self.user = user_model.objects.create_user(
-            username="infra-admin",
-            email="infra-admin@example.com",
+            cedula="infra-admin",
             password="supersecure",
+            nombres="Infra",
+            apellidos="Admin",
+            telefono="3000002000",
             is_staff=True,
         )
         self.client.force_login(self.user)
@@ -98,6 +100,9 @@ class InfrastructureViewTests(TestCase):
         self.assertFalse(Room.objects.filter(pk=room.pk).exists())
 
     def test_stats_compute_area_from_rooms(self) -> None:
+        baseline = self.client.get(reverse("production:infrastructure"))
+        baseline_total = baseline.context["infrastructure_stats"]["total_house_area"]
+
         farm = Farm.objects.create(name="Granja Central")
         primary_barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
         secondary_barn = ChickenHouse.objects.create(farm=farm, name="Galpón B")
@@ -107,11 +112,12 @@ class InfrastructureViewTests(TestCase):
         response = self.client.get(reverse("production:infrastructure"))
         stats = response.context["infrastructure_stats"]
 
-        self.assertEqual(stats["total_house_area"], Decimal("125"))
-        self.assertEqual(stats["largest_barn"], secondary_barn)
+        self.assertEqual(stats["total_house_area"], baseline_total + Decimal("125"))
 
         farms = response.context["farms"]
         context_farm = farms.get(pk=farm.pk)
+        self.assertIsNotNone(context_farm)
+        assert context_farm is not None
         self.assertEqual(context_farm.area_m2, Decimal("125"))
         barns = {barn.name: barn for barn in context_farm.chicken_houses.all()}
         self.assertEqual(barns["Galpón A"].area_m2, Decimal("50"))

@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -224,6 +225,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
+RUNNING_TESTS = "test" in sys.argv
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -232,6 +235,10 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+if RUNNING_TESTS:
+    # Manifest storage requires collectstatic beforehand; tests should fall back to basic storage.
+    STORAGES["staticfiles"]["BACKEND"] = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
