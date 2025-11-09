@@ -994,7 +994,32 @@ class PurchaseRequestsListController {
     }
   }
 
+  function reorderPurchaseCards() {
+    const container = document.querySelector('#tm-purchases .space-y-4');
+    if (!container) {
+      return;
+    }
+    const cardOrder = [
+      '[data-purchase-management-card]',
+      '[data-purchase-requests-card]',
+      '[data-purchase-request-card]',
+    ];
+    const fragment = document.createDocumentFragment();
+    let moved = false;
+    cardOrder.forEach((selector) => {
+      const card = container.querySelector(selector);
+      if (card) {
+        fragment.appendChild(card);
+        moved = true;
+      }
+    });
+    if (moved) {
+      container.appendChild(fragment);
+    }
+  }
+
   function initPurchaseControllers() {
+    reorderPurchaseCards();
     const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
     const purchasesPayload = tmMiniApp.purchases || {};
     const controllers = (tmMiniApp.purchasesControllers = tmMiniApp.purchasesControllers || {});
