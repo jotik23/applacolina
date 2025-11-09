@@ -1,0 +1,802 @@
+(() => {
+  'use strict';
+
+  const currencyFormatter = new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
+  const twoDecimalsFormatter = new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  function formatCurrency(amount, currency) {
+    if (typeof amount !== 'number' || Number.isNaN(amount)) {
+      return `${currency || 'COP'} 0`;
+    }
+    if (currency && currency !== 'COP') {
+      return `${currency} ${amount.toFixed(2)}`;
+    }
+    return amount >= 100000
+      ? currencyFormatter.format(amount)
+      : twoDecimalsFormatter.format(amount);
+  }
+
+  class PurchaseRequestCardController {
+    constructor(card, config, helpers) {
+      this.card = card;
+      this.config = config || {};
+      this.helpers = helpers || {};
+      this.form = card.querySelector('[data-purchase-request-form]');
+      this.itemsContainer = card.querySelector('[data-purchase-items]');
+      this.itemTemplate = card.querySelector('template[data-purchase-item-template]');
+      this.feedbackNode = card.querySelector('[data-purchase-feedback]');
+      this.statusNode = card.querySelector('[data-purchase-status]');
+      this.totalNode = card.querySelector('[data-purchase-total]');
+      this.addItemButton = card.querySelector('[data-add-purchase-item]');
+      this.toggleSupplierButton = card.querySelector('[data-toggle-new-supplier]');
+      this.newSupplierPanel = card.querySelector('[data-new-supplier-panel]');
+      this.areaButtons = Array.prototype.slice.call(card.querySelectorAll('[data-area-scope-picker] [data-area-scope]'));
+      this.areaHelper = card.querySelector('[data-area-helper]');
+      this.farmField = card.querySelector('[data-area-field="farm"]');
+      this.houseField = card.querySelector('[data-area-field="chicken_house"]');
+      this.farmSelect = this.farmField ? this.farmField.querySelector('[data-purchase-field="scope_farm"]') : null;
+      this.houseSelect = this.houseField ? this.houseField.querySelector('[data-purchase-field="scope_chicken_house"]') : null;
+      this.supplierSelect = card.querySelector('[data-purchase-field="supplier_id"]');
+      this.nameInput = card.querySelector('[data-purchase-field="name"]');
+      this.categorySelect = card.querySelector('[data-purchase-field="expense_type"]');
+      this.batchInput = card.querySelector('[data-purchase-field="scope_batch_code"]');
+      this.notesInput = card.querySelector('[data-purchase-field="notes"]');
+      this.scope = (config.defaults && config.defaults.scope) || 'company';
+      this.currency = config.currency || 'COP';
+      this.maxItems = Number(card.getAttribute('data-max-items')) || config.max_items || 4;
+      this.csrfToken = (helpers && helpers.csrfToken) || null;
+      this.inFlight = false;
+
+      this.handleAddItem = this.handleAddItem.bind(this);
+      this.handleSubmit = this.handleSubmit.bind(this);
+      this.handleAreaSelection = this.handleAreaSelection.bind(this);
+      this.handleFarmChange = this.handleFarmChange.bind(this);
+      this.refreshTotals = this.refreshTotals.bind(this);
+    }
+
+    init() {
+      if (!this.form || !this.itemsContainer || !this.itemTemplate) {
+        return;
+      }
+      this.form.addEventListener('input', (event) => {
+        if (event.target && event.target.matches('[data-item-field="quantity"], [data-item-field="unit_value"]')) {
+          this.refreshTotals();
+        }
+      });
+      this.form.addEventListener('click', (event) => {
+        const removeButton = event.target.closest('[data-remove-purchase-item]');
+        if (removeButton) {
+          event.preventDefault();
+          this.removeItem(removeButton.closest('[data-purchase-item]'));
+        }
+      });
+      (this.form.querySelectorAll('[data-purchase-action]') || []).forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const action = button.getAttribute('data-purchase-action') || 'draft';
+          this.handleSubmit(action, button);
+        });
+      });
+      if (this.addItemButton) {
+        this.addItemButton.addEventListener('click', this.handleAddItem);
+      }
+      if (this.toggleSupplierButton && this.newSupplierPanel) {
+        this.toggleSupplierButton.addEventListener('click', () => {
+          const isVisible = !this.newSupplierPanel.classList.contains('hidden');
+          this.newSupplierPanel.classList.toggle('hidden', isVisible);
+          if (isVisible) {
+            this.toggleSupplierButton.innerText = 'Registrar proveedor';
+          } else {
+            this.toggleSupplierButton.innerText = 'Usar proveedor existente';
+          }
+        });
+      }
+      this.areaButtons.forEach((button) => {
+        button.addEventListener('click', () => this.handleAreaSelection(button));
+      });
+      if (this.farmSelect) {
+        this.farmSelect.addEventListener('change', this.handleFarmChange);
+      }
+      this.refreshTotals();
+      this.applyAreaState();
+    }
+
+    handleAddItem() {
+      const currentItems = this.itemsContainer.querySelectorAll('[data-purchase-item]').length;
+      if (currentItems >= this.maxItems) {
+        this.showFeedback(`Puedes registrar máximo ${this.maxItems} ítems.`, 'warning');
+        return;
+      }
+      const clone = document.importNode(this.itemTemplate.content, true);
+      this.itemsContainer.appendChild(clone);
+      this.refreshTotals();
+    }
+
+    removeItem(itemNode) {
+      if (!itemNode) {
+        return;
+      }
+      const items = this.itemsContainer.querySelectorAll('[data-purchase-item]');
+      if (items.length <= 1) {
+        itemNode.querySelectorAll('textarea, input').forEach((input) => {
+          input.value = '';
+        });
+        this.refreshTotals();
+        return;
+      }
+      itemNode.remove();
+      this.refreshTotals();
+    }
+
+    handleAreaSelection(button) {
+      this.areaButtons.forEach((btn) => btn.removeAttribute('data-active'));
+      button.setAttribute('data-active', 'true');
+      this.scope = button.getAttribute('data-area-scope') || 'company';
+      this.applyAreaState();
+    }
+
+    handleFarmChange() {
+      if (!this.houseSelect) {
+        return;
+      }
+      const selectedFarm = this.farmSelect ? this.farmSelect.value : '';
+      Array.prototype.slice.call(this.houseSelect.options).forEach((option, index) => {
+        if (index === 0) {
+          option.hidden = false;
+          return;
+        }
+        const optionFarm = option.getAttribute('data-farm');
+        option.hidden = Boolean(selectedFarm) && optionFarm !== selectedFarm;
+      });
+      if (selectedFarm) {
+        const matchingOption = Array.prototype.find.call(
+          this.houseSelect.options,
+          (option) => !option.hidden && option.selected
+        );
+        if (!matchingOption) {
+          this.houseSelect.selectedIndex = 0;
+        }
+      }
+    }
+
+    applyAreaState() {
+      if (this.scope === 'farm' || this.scope === 'chicken_house') {
+        if (this.farmField) {
+          this.farmField.classList.remove('hidden');
+        }
+      } else if (this.farmField) {
+        this.farmField.classList.add('hidden');
+        if (this.farmSelect) {
+          this.farmSelect.value = '';
+        }
+      }
+      if (this.scope === 'chicken_house') {
+        if (this.houseField) {
+          this.houseField.classList.remove('hidden');
+        }
+      } else if (this.houseField) {
+        this.houseField.classList.add('hidden');
+        if (this.houseSelect) {
+          this.houseSelect.value = '';
+        }
+      }
+      if (this.areaHelper && this.config.area_scopes) {
+        const selected = this.config.area_scopes.find((option) => option.id === this.scope);
+        this.areaHelper.textContent = selected && selected.helper ? selected.helper : '';
+      }
+      this.handleFarmChange();
+    }
+
+    refreshTotals() {
+      const items = Array.prototype.slice.call(this.itemsContainer.querySelectorAll('[data-purchase-item]'));
+      let total = 0;
+      items.forEach((item) => {
+        const quantityInput = item.querySelector('[data-item-field="quantity"]');
+        const valueInput = item.querySelector('[data-item-field="unit_value"]');
+        const subtotalNode = item.querySelector('[data-item-subtotal]');
+        const quantity = parseFloat(quantityInput && quantityInput.value ? quantityInput.value : '0');
+        const unitValue = parseFloat(valueInput && valueInput.value ? valueInput.value : '0');
+        const subtotal = Number.isFinite(quantity) && Number.isFinite(unitValue) ? quantity * unitValue : 0;
+        total += subtotal;
+        if (subtotalNode) {
+          subtotalNode.textContent = formatCurrency(subtotal, this.currency);
+        }
+      });
+      if (this.totalNode) {
+        this.totalNode.textContent = formatCurrency(total, this.currency);
+      }
+    }
+
+    handleSubmit(action, button) {
+      if (this.inFlight) {
+        return;
+      }
+      const payload = this.collectPayload(action);
+      if (!payload) {
+        return;
+      }
+      this.inFlight = true;
+      this.setBusyState(true, button);
+      fetch(this.card.getAttribute('data-submit-url') || '', {
+        method: 'POST',
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : {}
+        ),
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      })
+        .then((response) => response.json().catch(() => ({})).then((data) => ({ ok: response.ok, data, status: response.status })))
+        .then((result) => {
+          if (!result.ok || (result.data && result.data.error)) {
+            const errorMessage =
+              (result.data && result.data.error) ||
+              'No pudimos guardar la solicitud. Inténtalo de nuevo.';
+            this.showFeedback(errorMessage, 'error');
+            return;
+          }
+          const data = result.data || {};
+          if (data.message) {
+            this.showFeedback(data.message, 'success');
+          } else {
+            this.showFeedback('Solicitud guardada correctamente.', 'success');
+          }
+          if (typeof this.helpers.onRequestsUpdated === 'function' && data.requests) {
+            this.helpers.onRequestsUpdated(data.requests);
+          }
+          if (typeof this.helpers.onManagementUpdated === 'function' && data.management) {
+            this.helpers.onManagementUpdated(data.management);
+          }
+          if (data.intent === 'send_workflow') {
+            this.resetForm();
+          }
+        })
+        .catch(() => {
+          this.showFeedback('No pudimos contactar al servidor. Revisa tu conexión.', 'error');
+        })
+        .finally(() => {
+          this.inFlight = false;
+          this.setBusyState(false, button);
+        });
+    }
+
+    collectPayload(action) {
+      const payload = {
+        action,
+        name: this.nameInput ? this.nameInput.value.trim() : '',
+        expense_type_id: this.categorySelect ? this.categorySelect.value : '',
+        notes: this.notesInput ? this.notesInput.value.trim() : '',
+        area: {
+          scope: this.scope,
+          farm_id: this.farmSelect ? this.farmSelect.value : '',
+          chicken_house_id: this.houseSelect ? this.houseSelect.value : '',
+          batch_code: this.batchInput ? this.batchInput.value.trim() : '',
+        },
+        supplier: this.buildSupplierPayload(),
+        items: this.collectItems(),
+      };
+
+      if (!payload.name) {
+        this.showFeedback('Ingresa el nombre de la solicitud.', 'error');
+        return null;
+      }
+      if (!payload.expense_type_id) {
+        this.showFeedback('Selecciona la categoría de gasto.', 'error');
+        return null;
+      }
+      if (!payload.supplier) {
+        this.showFeedback('Selecciona un proveedor o registra uno nuevo.', 'error');
+        return null;
+      }
+      if (!payload.items.length) {
+        this.showFeedback('Agrega al menos un ítem a la solicitud.', 'error');
+        return null;
+      }
+      return payload;
+    }
+
+    buildSupplierPayload() {
+      if (this.newSupplierPanel && !this.newSupplierPanel.classList.contains('hidden')) {
+        const fields = {};
+        this.newSupplierPanel.querySelectorAll('[data-new-supplier-field]').forEach((input) => {
+          fields[input.getAttribute('data-new-supplier-field')] = input.value.trim();
+        });
+        if (!fields.name || !fields.tax_id) {
+          return null;
+        }
+        return fields;
+      }
+      if (this.supplierSelect && this.supplierSelect.value) {
+        return { id: this.supplierSelect.value };
+      }
+      return null;
+    }
+
+    collectItems() {
+      const items = [];
+      const nodes = Array.prototype.slice.call(this.itemsContainer.querySelectorAll('[data-purchase-item]'));
+      nodes.forEach((node) => {
+        const description = (node.querySelector('[data-item-field="description"]') || {}).value || '';
+        const quantityRaw = (node.querySelector('[data-item-field="quantity"]') || {}).value || '';
+        const unitValueRaw = (node.querySelector('[data-item-field="unit_value"]') || {}).value || '';
+        if (!description.trim()) {
+          return;
+        }
+        items.push({
+          description: description.trim(),
+          product_id: (node.querySelector('[data-item-field="product_id"]') || {}).value || '',
+          quantity: quantityRaw,
+          unit_value: unitValueRaw,
+        });
+      });
+      return items;
+    }
+
+    resetForm() {
+      if (this.form) {
+        this.form.reset();
+      }
+      if (this.itemsContainer) {
+        this.itemsContainer.innerHTML = '';
+        const clone = document.importNode(this.itemTemplate.content, true);
+        this.itemsContainer.appendChild(clone);
+      }
+      if (this.newSupplierPanel) {
+        this.newSupplierPanel.classList.add('hidden');
+      }
+      if (this.supplierSelect) {
+        this.supplierSelect.selectedIndex = 0;
+      }
+      if (this.areaButtons.length) {
+        this.areaButtons.forEach((btn) => btn.removeAttribute('data-active'));
+        const defaultButton = this.areaButtons.find((btn) => btn.getAttribute('data-area-scope') === this.config.defaults.scope);
+        if (defaultButton) {
+          defaultButton.setAttribute('data-active', 'true');
+          this.scope = this.config.defaults.scope;
+        }
+      }
+      this.applyAreaState();
+      this.refreshTotals();
+    }
+
+    showFeedback(message, tone) {
+      if (!this.feedbackNode) {
+        return;
+      }
+      this.feedbackNode.textContent = message;
+      this.feedbackNode.classList.remove('hidden');
+      this.feedbackNode.classList.remove('text-emerald-600', 'text-rose-600', 'text-amber-600');
+      if (tone === 'success') {
+        this.feedbackNode.classList.add('text-emerald-600');
+      } else if (tone === 'warning') {
+        this.feedbackNode.classList.add('text-amber-600');
+      } else {
+        this.feedbackNode.classList.add('text-rose-600');
+      }
+    }
+
+    setBusyState(isBusy, button) {
+      if (button) {
+        button.disabled = isBusy;
+      }
+      if (this.statusNode) {
+        this.statusNode.textContent = isBusy ? 'Enviando...' : 'Listo para editar';
+      }
+    }
+  }
+
+class PurchaseRequestsListController {
+  constructor(card) {
+    this.card = card;
+    this.listNode = card.querySelector('[data-purchase-requests-list]');
+    this.totalNode = card.querySelector('[data-purchase-requests-total]');
+    this.countNode = card.querySelector('[data-purchase-requests-count]');
+    this.emptyStateNode = card.querySelector('[data-purchase-requests-empty]');
+    this.template = card.querySelector('template[data-purchase-request-entry-template]');
+    this.summaryChips = Array.prototype.slice.call(card.querySelectorAll('[data-purchase-status-chip]'));
+  }
+
+  render(payload) {
+    if (!payload || !this.listNode) {
+      return;
+    }
+    const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
+    tmMiniApp.purchases = tmMiniApp.purchases || {};
+    tmMiniApp.purchases.overview = payload;
+    if (this.totalNode) {
+      this.totalNode.textContent = payload.summary ? payload.summary.total_amount : '—';
+    }
+    if (this.countNode) {
+      this.countNode.textContent = payload.summary
+        ? `${payload.summary.total_count} solicitudes activas`
+        : '0 solicitudes';
+    }
+    if (this.summaryChips.length && payload.summary && Array.isArray(payload.summary.status_breakdown)) {
+      this.summaryChips.forEach((chip) => {
+        const statusId = chip.getAttribute('data-purchase-status-chip');
+        const definition = payload.summary.status_breakdown.find((entry) => entry.id === statusId);
+        if (definition) {
+          chip.textContent = `${definition.label} · ${definition.count}`;
+        }
+      });
+    }
+    this.listNode.innerHTML = '';
+    if (payload.entries && payload.entries.length) {
+      payload.entries.forEach((entry) => {
+        this.listNode.appendChild(this.buildEntryNode(entry));
+      });
+    } else if (this.emptyStateNode) {
+      const clone = this.emptyStateNode.cloneNode(true);
+      clone.classList.remove('hidden');
+      this.listNode.appendChild(clone);
+    }
+  }
+
+  buildEntryNode(entry) {
+    let node = null;
+    if (this.template) {
+      node = document.importNode(this.template.content, true).firstElementChild;
+    }
+    if (!node) {
+      node = document.createElement('article');
+      node.className =
+        'rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-slate-50';
+    }
+    node.setAttribute('data-entry-id', entry.id);
+    const codeNode = node.querySelector('[data-entry-code]');
+    const nameNode = node.querySelector('[data-entry-name]');
+    const areaNode = node.querySelector('[data-entry-area]');
+    const supplierNode = node.querySelector('[data-entry-supplier]');
+    const categoryNode = node.querySelector('[data-entry-category]');
+    const amountNode = node.querySelector('[data-entry-amount]');
+    const stageNode = node.querySelector('[data-entry-stage]');
+    const updatedNode = node.querySelector('[data-entry-updated]');
+    const statusChip = node.querySelector('[data-entry-status-chip]');
+    if (codeNode) codeNode.textContent = entry.code || '';
+    if (nameNode) nameNode.textContent = entry.name || '';
+    if (areaNode) areaNode.textContent = entry.area_label || '';
+    if (supplierNode) supplierNode.textContent = entry.supplier_label || '—';
+    if (categoryNode) categoryNode.textContent = entry.category_label || '—';
+    if (amountNode) amountNode.textContent = entry.amount_label || '—';
+    if (stageNode) stageNode.textContent = entry.stage_label || entry.status_label || '';
+    if (updatedNode) updatedNode.textContent = entry.updated_label || '';
+    if (statusChip) statusChip.textContent = entry.status_label || '';
+    this.populateItems(node, entry);
+    this.populatePaymentDetails(node, entry);
+    this.populateReceptionDetails(node, entry);
+    return node;
+  }
+
+  populateItems(node, entry) {
+    const itemsContainer = node.querySelector('[data-entry-items]');
+    if (!itemsContainer) {
+      return;
+    }
+    itemsContainer.innerHTML = '';
+    if (!entry.items || !entry.items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-xs text-slate-500';
+      empty.textContent = 'Sin ítems registrados.';
+      itemsContainer.appendChild(empty);
+      return;
+    }
+    entry.items.forEach((item) => {
+      const row = document.createElement('article');
+      row.className =
+        'space-y-2 rounded-2xl border border-slate-100 bg-white/80 px-3 py-2 text-xs text-slate-600 shadow-sm shadow-slate-100';
+      const titleWrapper = document.createElement('div');
+      titleWrapper.className = 'flex items-start justify-between gap-3';
+      const title = document.createElement('p');
+      title.className = 'font-semibold text-slate-900';
+      title.textContent = item.description || 'Ítem solicitado';
+      titleWrapper.appendChild(title);
+      if (item.product_label) {
+        const meta = document.createElement('p');
+        meta.className = 'text-[11px] text-slate-500';
+        meta.textContent = item.product_label;
+        titleWrapper.appendChild(meta);
+      }
+      row.appendChild(titleWrapper);
+
+      const stats = document.createElement('dl');
+      stats.className =
+        'grid gap-2 text-[11px] uppercase tracking-wide text-slate-500 sm:grid-cols-4';
+      const statConfigs = [
+        { label: 'Solicitado', value: item.requested_label || item.quantity_label || '—' },
+        { label: 'Recibido', value: item.received_label || '—' },
+        { label: 'Valor unitario', value: item.unit_value_label || '—' },
+        { label: 'Subtotal', value: item.subtotal_label || item.amount_label || '—' },
+      ];
+      statConfigs.forEach((stat) => {
+        const wrapper = document.createElement('div');
+        const term = document.createElement('dt');
+        term.textContent = stat.label;
+        const definition = document.createElement('dd');
+        definition.className = 'mt-0.5 text-base font-semibold normal-case text-slate-900';
+        definition.textContent = stat.value;
+        wrapper.appendChild(term);
+        wrapper.appendChild(definition);
+        stats.appendChild(wrapper);
+      });
+      row.appendChild(stats);
+
+      itemsContainer.appendChild(row);
+    });
+  }
+
+  populatePaymentDetails(node, entry) {
+    const container = node.querySelector('[data-entry-payment-details]');
+    if (!container) {
+      return;
+    }
+    const details = entry.payment_details || {};
+    const mapping = {
+      payment_method: details.payment_method_label || 'Pendiente',
+      payment_condition: details.payment_condition_label || 'Pendiente',
+      payment_amount: details.payment_amount_label || '—',
+      payment_account: details.payment_account_label || 'Sin cuenta asignada',
+      payment_date: details.payment_date_label || 'Pendiente',
+    };
+    Object.keys(mapping).forEach((key) => {
+      const target = container.querySelector(`[data-entry-payment-${key}]`);
+      if (target) {
+        target.textContent = mapping[key];
+      }
+    });
+  }
+
+  populateReceptionDetails(node, entry) {
+    const container = node.querySelector('[data-entry-reception-details]');
+    if (!container) {
+      return;
+    }
+    const details = entry.reception_details || {};
+    const mapping = {
+      delivery_condition: details.delivery_condition_label || 'Pendiente',
+      eta: details.shipping_eta_label || 'Sin fecha',
+      delivery_notes: details.shipping_notes || 'Sin notas registradas.',
+      reception_notes: details.reception_notes || 'Sin novedades de recepción.',
+    };
+    Object.keys(mapping).forEach((key) => {
+      const target = container.querySelector(`[data-entry-reception-${key}]`);
+      if (target) {
+        target.textContent = mapping[key];
+      }
+    });
+  }
+}
+
+  class PurchaseManagementCardController {
+    constructor(card, csrfToken) {
+      this.card = card;
+      this.csrfToken = csrfToken || null;
+      this.modifyButton = card.querySelector('[data-purchase-management-action="modify"]');
+      this.finalizeButton = card.querySelector('[data-purchase-management-action="finalize"]');
+      this.noteInput = card.querySelector('[data-purchase-modification-note]');
+      this.feedbackNode = card.querySelector('[data-purchase-management-feedback]');
+
+      this.handleModify = this.handleModify.bind(this);
+      this.handleFinalize = this.handleFinalize.bind(this);
+    }
+
+    init() {
+      if (this.modifyButton) {
+        this.modifyButton.addEventListener('click', this.handleModify);
+      }
+      if (this.finalizeButton) {
+        this.finalizeButton.addEventListener('click', this.handleFinalize);
+      }
+    }
+
+    refresh(payload) {
+      const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
+      tmMiniApp.purchases = tmMiniApp.purchases || {};
+      tmMiniApp.purchases.management = payload;
+      const detailView = this.card.querySelector('[data-management-view="detail"]');
+      const emptyView = this.card.querySelector('[data-management-view="empty"]');
+      if (!payload || !payload.purchase || !payload.has_purchase) {
+        if (detailView) {
+          detailView.classList.add('hidden');
+        }
+        if (emptyView) {
+          emptyView.classList.remove('hidden');
+          const emptyMessage = emptyView.querySelector('[data-management-empty-message]');
+          if (emptyMessage && payload && payload.message) {
+            emptyMessage.textContent = payload.message;
+          }
+        }
+        this.card.setAttribute('data-allows-finalize', 'false');
+        this.card.setAttribute('data-allows-modification', 'false');
+        return;
+      }
+      if (detailView) {
+        detailView.classList.remove('hidden');
+      }
+      if (emptyView) {
+        emptyView.classList.add('hidden');
+      }
+      const purchase = payload.purchase;
+      this.card.setAttribute('data-request-modify-url', payload.request_modification_url || '');
+      this.card.setAttribute('data-finalize-url', payload.finalize_url || '');
+      this.card.setAttribute('data-allows-finalize', payload.allow_finalize ? 'true' : 'false');
+      this.card.setAttribute('data-allows-modification', payload.allow_modification ? 'true' : 'false');
+      const mapping = {
+        '[data-management-name]': purchase.name,
+        '[data-management-location]': purchase.area_label,
+        '[data-management-supplier]': purchase.supplier_label,
+        '[data-management-amount]': purchase.amount_label,
+        '[data-management-updated]': purchase.updated_label,
+        '[data-management-code]': purchase.code,
+        '[data-management-purchase-date]': purchase.purchase_date_label || 'Pendiente',
+        '[data-management-payment-condition]': purchase.payment_condition_label || 'Por definir',
+        '[data-management-payment-method]': purchase.payment_method_label || 'Por definir',
+        '[data-management-delivery]': purchase.delivery_condition_label || 'Por confirmar',
+        '[data-management-bank]':
+          purchase.bank_label && purchase.bank_account_label
+            ? `${purchase.bank_label} · ${purchase.bank_account_label}`
+            : 'Sin datos registrados',
+        '[data-management-payment-account]': purchase.payment_account_label || 'Por definir',
+      };
+      Object.keys(mapping).forEach((selector) => {
+        const node = this.card.querySelector(selector);
+        if (node) {
+          node.textContent = mapping[selector] || '';
+        }
+      });
+      const notesList = this.card.querySelector('[data-management-notes]');
+      if (notesList) {
+        notesList.innerHTML = '';
+        if (purchase.notes && purchase.notes.length) {
+          purchase.notes.forEach((note) => {
+            const li = document.createElement('li');
+            li.className = 'rounded-2xl border border-slate-100 bg-white/80 px-3 py-2 shadow-inner shadow-slate-50';
+            li.textContent = note;
+            notesList.appendChild(li);
+          });
+        }
+      }
+      if (this.modifyButton) {
+        this.modifyButton.disabled = !payload.allow_modification;
+      }
+      if (this.finalizeButton) {
+        this.finalizeButton.disabled = !payload.allow_finalize;
+      }
+    }
+
+    handleModify() {
+      if (!this.noteInput || !this.card.getAttribute('data-request-modify-url')) {
+        return;
+      }
+      const reason = this.noteInput.value.trim();
+      this.sendAction(this.card.getAttribute('data-request-modify-url'), { reason }, 'modify');
+    }
+
+    handleFinalize() {
+      if (!this.card.getAttribute('data-finalize-url')) {
+        return;
+      }
+      this.sendAction(this.card.getAttribute('data-finalize-url'), {}, 'finalize');
+    }
+
+    sendAction(url, payload, action) {
+      if (!url) {
+        this.showFeedback('No encontramos la ruta para esta acción.', 'error');
+        return;
+      }
+      const targetButton = action === 'modify' ? this.modifyButton : this.finalizeButton;
+      if (targetButton) {
+        targetButton.disabled = true;
+      }
+      fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : {}
+        ),
+        body: JSON.stringify(payload),
+      })
+        .then((response) => response.json().catch(() => ({})).then((data) => ({ ok: response.ok, data })))
+        .then((result) => {
+          if (!result.ok || (result.data && result.data.error)) {
+            const message =
+              (result.data && result.data.error) ||
+              'No pudimos ejecutar la acción. Intenta de nuevo.';
+            this.showFeedback(message, 'error');
+            return;
+          }
+          const data = result.data || {};
+          if (data.message) {
+            this.showFeedback(data.message, 'success');
+          }
+          if (action === 'modify' && this.noteInput) {
+            this.noteInput.value = '';
+          }
+          const tmMiniApp = window.tmMiniApp || {};
+          if (
+            data.requests &&
+            tmMiniApp.purchasesControllers &&
+            tmMiniApp.purchasesControllers.requestsList &&
+            typeof tmMiniApp.purchasesControllers.requestsList.render === 'function'
+          ) {
+            tmMiniApp.purchasesControllers.requestsList.render(data.requests);
+          }
+          if (data.management) {
+            this.refresh(data.management);
+          }
+        })
+        .catch(() => {
+          this.showFeedback('No pudimos contactar al servidor. Intenta más tarde.', 'error');
+        })
+        .finally(() => {
+          if (targetButton) {
+            targetButton.disabled = false;
+          }
+        });
+    }
+
+    showFeedback(message, tone) {
+      if (!this.feedbackNode) {
+        return;
+      }
+      this.feedbackNode.textContent = message;
+      this.feedbackNode.classList.remove('hidden', 'text-emerald-600', 'text-rose-600');
+      this.feedbackNode.classList.add(tone === 'success' ? 'text-emerald-600' : 'text-rose-600');
+    }
+  }
+
+  function initPurchaseControllers() {
+    const tmMiniApp = window.tmMiniApp || (window.tmMiniApp = {});
+    const purchasesPayload = tmMiniApp.purchases || {};
+    const controllers = (tmMiniApp.purchasesControllers = tmMiniApp.purchasesControllers || {});
+    const csrfToken = tmMiniApp.csrfToken || null;
+
+    const requestsCard = document.querySelector('[data-purchase-requests-card]');
+    if (requestsCard) {
+      controllers.requestsList = new PurchaseRequestsListController(requestsCard);
+      controllers.requestsList.render(purchasesPayload.overview);
+    }
+
+    const managementCard = document.querySelector('[data-purchase-management-card]');
+    if (managementCard) {
+      controllers.management = new PurchaseManagementCardController(managementCard, csrfToken);
+      controllers.management.init();
+      controllers.management.refresh(purchasesPayload.management);
+    }
+
+    const requestCard = document.querySelector('[data-purchase-request-card]');
+    if (requestCard && purchasesPayload.request_form) {
+      controllers.requestForm = new PurchaseRequestCardController(requestCard, purchasesPayload.request_form, {
+        csrfToken,
+        onRequestsUpdated: (payload) => {
+          if (controllers.requestsList && payload) {
+            controllers.requestsList.render(payload);
+          }
+        },
+        onManagementUpdated: (payload) => {
+          if (controllers.management && payload) {
+            controllers.management.refresh(payload);
+          }
+        },
+      });
+      controllers.requestForm.init();
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPurchaseControllers);
+  } else {
+    initPurchaseControllers();
+  }
+})();

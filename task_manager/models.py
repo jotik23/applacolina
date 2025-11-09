@@ -270,6 +270,18 @@ class TaskDefinition(models.Model):
             ("view_mini_app_leader_review_card", _("Puede ver el card de revisión de tareas en la mini app")),
             ("view_mini_app_suggestions_card", _("Puede ver el card de sugerencias enviadas en la mini app")),
             ("view_mini_app_task_cards", _("Puede ver los cards de tareas en la mini app")),
+            (
+                "view_mini_app_purchase_request_card",
+                _("Puede ver el card de solicitud de compra en la mini app"),
+            ),
+            (
+                "view_mini_app_purchase_overview_card",
+                _("Puede ver el card de solicitudes de compra en la mini app"),
+            ),
+            (
+                "view_mini_app_purchase_management_card",
+                _("Puede ver el card de gestión de compras en la mini app"),
+            ),
         ]
 
     def __str__(self) -> str:

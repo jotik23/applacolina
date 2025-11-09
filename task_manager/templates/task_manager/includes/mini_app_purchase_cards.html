@@ -1,0 +1,759 @@
+{% load humanize %}
+
+{% with purchases=telegram_mini_app.purchases %}
+{% if purchases %}
+{% if mini_app_card_permissions.purchase_request or mini_app_card_permissions.purchase_overview or mini_app_card_permissions.purchase_management %}
+<section class="space-y-3" id="tm-purchases">
+  <div class="flex items-center justify-between gap-3 text-sm text-slate-600">
+    <div>
+      <h2 class="text-base font-semibold text-slate-900">Gestión de compras</h2>
+      <p class="text-xs text-slate-600">Crea solicitudes, sigue el estado y marca la gestión sin salir del mini app.</p>
+    </div>
+    <span class="hidden rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:inline-flex">
+      Flujo móvil
+    </span>
+  </div>
+
+  <div class="space-y-4">
+    {% if mini_app_card_permissions.purchase_request and purchases.request_form %}
+    {% with form=purchases.request_form %}
+    <article
+      class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50/50 to-slate-50 p-5 shadow-xl shadow-emerald-100/70"
+      data-purchase-request-card
+      data-submit-url="{{ form.submit_url }}"
+      data-currency="{{ form.currency }}"
+      data-max-items="{{ form.max_items|default:4 }}"
+    >
+      <header class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+            <span aria-hidden="true">🛒</span>
+            Solicitud rápida
+          </p>
+          <h3 class="text-lg font-semibold text-slate-900">Crear solicitud de compra</h3>
+          <p class="text-xs text-slate-600">
+            Registra el borrador, agrega los ítems y envíalo a aprobación cuando esté listo.
+          </p>
+        </div>
+        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100/70">
+          <span aria-hidden="true">⚡</span>
+          Guardado seguro
+        </span>
+      </header>
+
+      <form class="mt-4 space-y-5" data-purchase-request-form novalidate>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Nombre de la solicitud
+            <input
+              type="text"
+              class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              placeholder="Ej: Insumos bioseguridad noviembre"
+              data-purchase-field="name"
+              maxlength="200"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Categoría de gasto
+            <select
+              class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-100 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              data-purchase-field="expense_type"
+            >
+              <option value="">Selecciona una categoría</option>
+              {% for option in form.expense_types %}
+              <option value="{{ option.id }}">{{ option.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+
+        <div class="space-y-3">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Área a impactar</p>
+          <div class="flex flex-wrap gap-2" data-area-scope-picker>
+            {% for option in form.area_scopes %}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-100 transition hover:border-emerald-200 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              data-area-scope="{{ option.id }}"
+              {% if option.id == form.defaults.scope %}data-active="true"{% endif %}
+            >
+              {{ option.label }}
+            </button>
+            {% endfor %}
+          </div>
+          <p class="text-[11px] text-slate-500" data-area-helper>
+            {{ form.messages.items_helper }}
+          </p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label
+              class="hidden flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
+              data-area-field="farm"
+            >
+              Granja
+              <select
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                data-purchase-field="scope_farm"
+              >
+                <option value="">Selecciona una granja</option>
+                {% for farm in form.farms %}
+                <option value="{{ farm.id }}">{{ farm.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label
+              class="hidden flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
+              data-area-field="chicken_house"
+            >
+              Galpón
+              <select
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                data-purchase-field="scope_chicken_house"
+              >
+                <option value="">Selecciona un galpón</option>
+                {% for house in form.chicken_houses %}
+                <option value="{{ house.id }}" data-farm="{{ house.farm_id }}">{{ house.farm_name }} · {{ house.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Lote / referencia
+              <input
+                type="text"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Ej: Lote 42A"
+                data-purchase-field="scope_batch_code"
+                maxlength="40"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex items-center justify-between text-xs">
+            <p class="font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold text-emerald-600 shadow-sm shadow-emerald-100/70 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              data-toggle-new-supplier
+            >
+              <span aria-hidden="true">➕</span>
+              Registrar proveedor
+            </button>
+          </div>
+          <select
+            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            data-purchase-field="supplier_id"
+          >
+            <option value="">Selecciona un proveedor existente</option>
+            {% for supplier in form.suppliers %}
+            <option value="{{ supplier.id }}">
+              {{ supplier.name }} · {{ supplier.tax_id }}{% if supplier.city %} · {{ supplier.city }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <p class="text-[11px] text-slate-500">{{ form.messages.suppliers_helper }}</p>
+
+          <div class="hidden rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-inner shadow-emerald-50/70" data-new-supplier-panel>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Nombre / Razón social
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="name"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                CC / NIT
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="tax_id"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Contacto
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="contact_name"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Teléfono
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="contact_phone"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Correo
+                <input
+                  type="email"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="contact_email"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Ciudad
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="city"
+                />
+              </label>
+            </div>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Banco
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="bank_name"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Nº de cuenta
+                <input
+                  type="text"
+                  class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  data-new-supplier-field="account_number"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-center justify-between text-xs">
+            <p class="font-semibold uppercase tracking-wide text-slate-500">Ítems</p>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-emerald-200 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              data-add-purchase-item
+            >
+              <span aria-hidden="true">＋</span>
+              Agregar ítem
+            </button>
+          </div>
+          <div class="space-y-3" data-purchase-items>
+            <div
+              class="rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-inner shadow-slate-50"
+              data-purchase-item
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <label class="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Descripción
+                  <textarea
+                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    rows="2"
+                    data-item-field="description"
+                    placeholder="Ej: Jabón desinfectante 20 litros"
+                  ></textarea>
+                </label>
+                <label class="w-full text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:w-48">
+                  Producto sugerido
+                  <select
+                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-item-field="product_id"
+                  >
+                    <option value="">Selecciona</option>
+                    {% for product in form.products %}
+                    <option value="{{ product.id }}">{{ product.name }} · {{ product.unit }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Cantidad
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-item-field="quantity"
+                  />
+                </label>
+                <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Valor unitario ({{ form.currency }})
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    data-item-field="unit_value"
+                  />
+                </label>
+                <div class="flex flex-col justify-end text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Subtotal
+                  <span class="text-lg font-semibold text-slate-900" data-item-subtotal>{{ form.currency }} 0.00</span>
+                </div>
+              </div>
+              <div class="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-rose-600 transition hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-100"
+                  data-remove-purchase-item
+                >
+                  <span aria-hidden="true">✕</span>
+                  Quitar ítem
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Total estimado</p>
+            <span class="text-lg font-semibold text-emerald-700" data-purchase-total>{{ form.currency }} 0.00</span>
+          </div>
+        </div>
+
+        <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Notas para el equipo de compras
+          <textarea
+            rows="2"
+            class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            placeholder="Agrega condiciones especiales, entregas parciales u otra información clave."
+            data-purchase-field="notes"
+          ></textarea>
+        </label>
+
+        <p class="text-xs font-semibold text-emerald-600 hidden" data-purchase-feedback></p>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              data-purchase-action="draft"
+            >
+              Guardar borrador
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow shadow-emerald-200/70 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+              data-purchase-action="submit"
+            >
+              Enviar a aprobación
+            </button>
+          </div>
+          <span class="text-[11px] uppercase tracking-wide text-slate-400" data-purchase-status>Listo para editar</span>
+        </div>
+      </form>
+
+      <template data-purchase-item-template>
+        <div class="rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-inner shadow-slate-50" data-purchase-item>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <label class="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Descripción
+              <textarea class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" rows="2" data-item-field="description"></textarea>
+            </label>
+            <label class="w-full text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:w-48">
+              Producto sugerido
+              <select class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="product_id">
+                <option value="">Selecciona</option>
+                {% for product in form.products %}
+                <option value="{{ product.id }}">{{ product.name }} · {{ product.unit }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-3">
+            <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Cantidad
+              <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="quantity" />
+            </label>
+            <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Valor unitario ({{ form.currency }})
+              <input type="number" min="0" step="0.01" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100" data-item-field="unit_value" />
+            </label>
+            <div class="flex flex-col justify-end text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Subtotal
+              <span class="text-lg font-semibold text-slate-900" data-item-subtotal>{{ form.currency }} 0.00</span>
+            </div>
+          </div>
+          <div class="mt-2 flex justify-end">
+            <button type="button" class="inline-flex items-center gap-1 rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-rose-600 transition hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-100" data-remove-purchase-item>
+              <span aria-hidden="true">✕</span>
+              Quitar ítem
+            </button>
+          </div>
+        </div>
+      </template>
+    </article>
+    {% endwith %}
+    {% endif %}
+
+    {% if mini_app_card_permissions.purchase_overview and purchases.overview %}
+    {% with overview=purchases.overview %}
+    <article class="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-lg shadow-slate-200/60" data-purchase-requests-card>
+      <header class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span aria-hidden="true">📋</span>
+            Mis solicitudes
+          </p>
+          <h3 class="text-lg font-semibold text-slate-900">{{ overview.title }}</h3>
+          <p class="text-xs text-slate-600">{{ overview.subtitle }}</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[11px] uppercase tracking-wide text-slate-500">Monto total</p>
+          <p class="text-lg font-semibold text-slate-900" data-purchase-requests-total>{{ overview.summary.total_amount }}</p>
+          <p class="text-[11px] text-slate-500" data-purchase-requests-count>{{ overview.summary.total_count }} solicitudes activas</p>
+        </div>
+      </header>
+
+      {% if overview.summary.status_breakdown %}
+      <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+        {% for status in overview.summary.status_breakdown %}
+        <span
+          class="inline-flex items-center gap-2 rounded-full border px-3 py-1 {% if status.theme == 'amber' %}border-amber-200 bg-amber-50 text-amber-700{% elif status.theme == 'brand' %}border-brand/40 bg-brand/10 text-brand{% elif status.theme == 'indigo' %}border-indigo-200 bg-indigo-50 text-indigo-700{% elif status.theme == 'emerald' %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+          data-purchase-status-chip="{{ status.id }}"
+        >
+          {{ status.label }} · {{ status.count }}
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="mt-4 space-y-3" data-purchase-requests-list>
+        {% if overview.entries %}
+          {% for entry in overview.entries %}
+          <article
+            class="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-slate-50"
+            data-purchase-request-entry
+            data-entry-id="{{ entry.id }}"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-entry-code>{{ entry.code }}</p>
+                <h4 class="text-sm font-semibold text-slate-900" data-entry-name>{{ entry.name }}</h4>
+                <p class="text-xs text-slate-500" data-entry-area>{{ entry.area_label }}</p>
+              </div>
+              <span
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if entry.status_theme == 'amber' %}border-amber-200 bg-amber-50 text-amber-700{% elif entry.status_theme == 'brand' %}border-brand/40 bg-brand/10 text-brand{% elif entry.status_theme == 'indigo' %}border-indigo-200 bg-indigo-50 text-indigo-700{% elif entry.status_theme == 'emerald' %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+                data-entry-status-chip
+              >
+                {{ entry.status_label }}
+              </span>
+            </div>
+            <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+              <div>
+                <dt class="font-semibold uppercase tracking-wide text-slate-500">Proveedor</dt>
+                <dd class="mt-0.5 text-slate-900" data-entry-supplier>{{ entry.supplier_label }}</dd>
+              </div>
+              <div>
+                <dt class="font-semibold uppercase tracking-wide text-slate-500">Categoría</dt>
+                <dd class="mt-0.5 text-slate-900" data-entry-category>{{ entry.category_label }}</dd>
+              </div>
+              <div>
+                <dt class="font-semibold uppercase tracking-wide text-slate-500">Monto estimado</dt>
+                <dd class="mt-0.5 text-slate-900" data-entry-amount>{{ entry.amount_label }}</dd>
+              </div>
+              <div>
+                <dt class="font-semibold uppercase tracking-wide text-slate-500">Estado</dt>
+                <dd class="mt-0.5 text-slate-900" data-entry-stage>{{ entry.stage_label }}</dd>
+              </div>
+            </dl>
+            <p class="mt-2 text-[11px] text-slate-500" data-entry-updated>{{ entry.updated_label }}</p>
+            <details class="mt-3 rounded-2xl border border-slate-100 bg-white/80 p-3" data-purchase-entry-details>
+              <summary
+                class="flex cursor-pointer list-none items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm shadow-slate-100 transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+              >
+                <span aria-hidden="true">▼</span>
+                <span>Ver detalle</span>
+              </summary>
+              <div class="mt-3 space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <section>
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ítems solicitados</p>
+                  <div class="mt-2 space-y-2" data-entry-items></div>
+                </section>
+                <section data-entry-payment-details>
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Datos de pago</p>
+                  <dl class="mt-2 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">Condición</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_condition></dd>
+                    </div>
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">Medio</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_method></dd>
+                    </div>
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">Monto estimado</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_amount></dd>
+                    </div>
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">Cuenta destino</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_account></dd>
+                    </div>
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">Fecha de pago</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_date></dd>
+                    </div>
+                  </dl>
+                </section>
+                <section data-entry-reception-details>
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recepción y entrega</p>
+                  <dl class="mt-2 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">Condición de entrega</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-reception-delivery_condition></dd>
+                    </div>
+                    <div>
+                      <dt class="uppercase tracking-wide text-slate-500">ETA</dt>
+                      <dd class="mt-0.5 font-semibold text-slate-900" data-entry-reception-eta></dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="uppercase tracking-wide text-slate-500">Notas de entrega</dt>
+                      <dd class="mt-0.5 text-slate-700" data-entry-reception-delivery_notes></dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <dt class="uppercase tracking-wide text-slate-500">Notas de recepción</dt>
+                      <dd class="mt-0.5 text-slate-700" data-entry-reception-reception_notes></dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            </details>
+          </article>
+          {% endfor %}
+        {% else %}
+          <div
+            class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-center text-sm text-slate-500"
+            data-purchase-requests-empty
+          >
+            <p class="font-semibold">{{ overview.empty_state.title }}</p>
+            <p class="text-xs text-slate-500">{{ overview.empty_state.description }}</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <template data-purchase-request-entry-template>
+        <article class="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-slate-50" data-purchase-request-entry>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400" data-entry-code></p>
+              <h4 class="text-sm font-semibold text-slate-900" data-entry-name></h4>
+              <p class="text-xs text-slate-500" data-entry-area></p>
+            </div>
+            <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide border-slate-200 bg-slate-50 text-slate-600" data-entry-status-chip></span>
+          </div>
+          <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+            <div>
+              <dt class="font-semibold uppercase tracking-wide text-slate-500">Proveedor</dt>
+              <dd class="mt-0.5 text-slate-900" data-entry-supplier></dd>
+            </div>
+            <div>
+              <dt class="font-semibold uppercase tracking-wide text-slate-500">Categoría</dt>
+              <dd class="mt-0.5 text-slate-900" data-entry-category></dd>
+            </div>
+            <div>
+              <dt class="font-semibold uppercase tracking-wide text-slate-500">Monto estimado</dt>
+              <dd class="mt-0.5 text-slate-900" data-entry-amount></dd>
+            </div>
+            <div>
+              <dt class="font-semibold uppercase tracking-wide text-slate-500">Estado</dt>
+              <dd class="mt-0.5 text-slate-900" data-entry-stage></dd>
+            </div>
+          </dl>
+          <p class="mt-2 text-[11px] text-slate-500" data-entry-updated></p>
+          <details class="mt-3 rounded-2xl border border-slate-100 bg-white/80 p-3" data-purchase-entry-details>
+            <summary
+              class="flex cursor-pointer list-none items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm shadow-slate-100 transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+            >
+              <span aria-hidden="true">▼</span>
+              <span>Ver detalle</span>
+            </summary>
+            <div class="mt-3 space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+              <section>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ítems solicitados</p>
+                <div class="mt-2 space-y-2" data-entry-items></div>
+              </section>
+              <section data-entry-payment-details>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Datos de pago</p>
+                <dl class="mt-2 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">Condición</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_condition></dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">Medio</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_method></dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">Monto estimado</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_amount></dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">Cuenta destino</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_account></dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">Fecha de pago</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-payment-payment_date></dd>
+                  </div>
+                </dl>
+              </section>
+              <section data-entry-reception-details>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recepción y entrega</p>
+                <dl class="mt-2 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">Condición de entrega</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-reception-delivery_condition></dd>
+                  </div>
+                  <div>
+                    <dt class="uppercase tracking-wide text-slate-500">ETA</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900" data-entry-reception-eta></dd>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <dt class="uppercase tracking-wide text-slate-500">Notas de entrega</dt>
+                    <dd class="mt-0.5 text-slate-700" data-entry-reception-delivery_notes></dd>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <dt class="uppercase tracking-wide text-slate-500">Notas de recepción</dt>
+                    <dd class="mt-0.5 text-slate-700" data-entry-reception-reception_notes></dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </details>
+        </article>
+      </template>
+    </article>
+    {% endwith %}
+    {% endif %}
+
+    {% if mini_app_card_permissions.purchase_management and purchases.management %}
+    {% with management=purchases.management %}
+    <article
+      class="rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/40 to-slate-50 p-5 shadow-xl shadow-indigo-100/70"
+      data-purchase-management-card
+      data-request-modify-url="{{ management.request_modification_url|default:'' }}"
+      data-finalize-url="{{ management.finalize_url|default:'' }}"
+      data-allows-finalize="{{ management.allow_finalize|yesno:'true,false' }}"
+      data-allows-modification="{{ management.allow_modification|yesno:'true,false' }}"
+    >
+      {% with purchase=management.purchase %}
+      <div data-management-view="detail" class="{% if not management.has_purchase or not purchase %}hidden{% endif %}">
+      <header class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
+            <span aria-hidden="true">🧾</span>
+            Gestión actual
+          </p>
+          <h3 class="text-lg font-semibold text-slate-900" data-management-name>{{ purchase.name }}</h3>
+          <p class="text-xs text-slate-600" data-management-location>{{ purchase.area_label }}</p>
+        </div>
+        <span
+          class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {% if purchase.status_theme == 'indigo' %}border-indigo-200 bg-indigo-50 text-indigo-700{% elif purchase.status_theme == 'emerald' %}border-emerald-200 bg-emerald-50 text-emerald-700{% elif purchase.status_theme == 'brand' %}border-brand/40 bg-brand/10 text-brand{% else %}border-slate-200 bg-slate-50 text-slate-600{% endif %}"
+          data-management-status
+        >
+          {{ purchase.status_label }}
+        </span>
+      </header>
+      <div class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+        <div class="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner shadow-slate-100">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
+          <p class="text-sm font-semibold text-slate-900" data-management-supplier>{{ purchase.supplier_label }}</p>
+          <p class="text-[11px] text-slate-500" data-management-updated>{{ purchase.updated_label }}</p>
+        </div>
+        <div class="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 text-right shadow-inner shadow-slate-100">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monto estimado</p>
+          <p class="text-lg font-semibold text-slate-900" data-management-amount>{{ purchase.amount_label }}</p>
+          <p class="text-[11px] text-slate-500">Código <span data-management-code>{{ purchase.code }}</span></p>
+        </div>
+      </div>
+      <dl class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-slate-500">Fecha de compra</dt>
+          <dd class="mt-0.5 text-slate-900" data-management-purchase-date>{{ purchase.purchase_date_label|default:"Pendiente" }}</dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-slate-500">Condición de pago</dt>
+          <dd class="mt-0.5 text-slate-900" data-management-payment-condition>{{ purchase.payment_condition_label|default:"Por definir" }}</dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-slate-500">Medio de pago</dt>
+          <dd class="mt-0.5 text-slate-900" data-management-payment-method>{{ purchase.payment_method_label|default:"Por definir" }}</dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-slate-500">Condiciones de entrega</dt>
+          <dd class="mt-0.5 text-slate-900" data-management-delivery>{{ purchase.delivery_condition_label|default:"Por confirmar" }}</dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-slate-500">Datos bancarios</dt>
+          <dd class="mt-0.5 text-slate-900" data-management-bank>
+            {% if purchase.bank_label %}
+            {{ purchase.bank_label }} · {{ purchase.bank_account_label|default:"" }}
+            {% else %}
+            Sin datos registrados
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-slate-500">Cuenta destino</dt>
+          <dd class="mt-0.5 text-slate-900" data-management-payment-account>{{ purchase.payment_account_label|default:"Por definir" }}</dd>
+        </div>
+      </dl>
+
+      {% if purchase.notes %}
+      <div class="mt-4 space-y-2">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notas recientes</p>
+        <ul class="space-y-2 text-xs text-slate-600" data-management-notes>
+          {% for note in purchase.notes %}
+          <li class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2 shadow-inner shadow-slate-50">{{ note }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="mt-4 space-y-3 rounded-2xl border border-indigo-100 bg-white/70 px-4 py-3">
+        <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Solicitar modificación
+          <textarea
+            rows="2"
+            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="Explica qué debe ajustarse (cantidad, proveedor, entrega, etc.)."
+            data-purchase-modification-note
+          ></textarea>
+        </label>
+        <p class="text-xs font-semibold text-indigo-600 hidden" data-purchase-management-feedback></p>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-40"
+          data-purchase-management-action="modify"
+          {% if not management.allow_modification %}disabled{% endif %}
+        >
+          Solicitar modificar
+        </button>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow shadow-indigo-200/70 transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300/60 disabled:opacity-40"
+          data-purchase-management-action="finalize"
+          {% if not management.allow_finalize %}disabled{% endif %}
+        >
+          Finalizar gestión
+        </button>
+      </div>
+      </div>
+      {% endwith %}
+      <div
+        class="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-5 text-center text-sm text-slate-500 {% if management.has_purchase and management.purchase %}hidden{% endif %}"
+        data-management-view="empty"
+      >
+        <p class="font-semibold" data-management-empty-message>{{ management.message }}</p>
+        <p class="text-xs text-slate-500">Cuando tengas una solicitud aprobada aparecerá aquí para continuar con la gestión.</p>
+      </div>
+    </article>
+    {% endwith %}
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endwith %}

@@ -3,6 +3,7 @@ import hmac
 import json
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple, cast
@@ -14,7 +15,7 @@ from django.contrib.humanize.templatetags.humanize import intcomma
 from django.contrib.auth import login, logout
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
@@ -28,6 +29,13 @@ from django.views import View, generic
 from django.views.decorators.http import require_POST
 
 from notifications.models import TelegramBotConfig, TelegramChatLink
+from administration.models import PurchaseRequest, Supplier
+from administration.services.purchase_requests import (
+    PurchaseItemPayload,
+    PurchaseRequestPayload,
+    PurchaseRequestSubmissionService,
+    PurchaseRequestValidationError,
+)
 from applacolina.mixins import StaffRequiredMixin
 
 from personal.models import (
@@ -45,12 +53,23 @@ from task_manager.mini_app.features import (
     build_shift_confirmation_empty_card,
     build_production_registry,
     build_weight_registry,
+    build_purchase_request_form_card,
+    build_purchase_requests_overview,
+    build_purchase_management_card,
     persist_production_records,
     persist_weight_registry,
     serialize_shift_confirmation_card,
     serialize_shift_confirmation_empty_card,
     serialize_production_registry,
     serialize_weight_registry,
+    serialize_purchase_request_form_card,
+    serialize_purchase_requests_overview,
+    serialize_purchase_management_card,
+    serialize_purchase_management_empty_state,
+)
+from task_manager.mini_app.features.purchases import (
+    PURCHASE_STATUS_THEME as MINI_APP_PURCHASE_STATUS_THEME,
+    MAX_PURCHASE_ENTRIES as MINI_APP_PURCHASE_MAX_ITEMS,
 )
 
 from .forms import MiniAppAuthenticationForm, TaskDefinitionQuickCreateForm
@@ -71,6 +90,9 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "production": "task_manager.view_mini_app_production_card",
     "production_summary": "task_manager.view_mini_app_production_summary_card",
     "weight_registry": "task_manager.view_mini_app_weight_registry_card",
+    "purchase_request": "task_manager.view_mini_app_purchase_request_card",
+    "purchase_overview": "task_manager.view_mini_app_purchase_overview_card",
+    "purchase_management": "task_manager.view_mini_app_purchase_management_card",
     "pending_classification": "task_manager.view_mini_app_pending_classification_card",
     "transport_queue": "task_manager.view_mini_app_transport_queue_card",
     "egg_stage": "task_manager.view_mini_app_egg_stage_cards",
@@ -729,6 +751,110 @@ def _extract_validation_message(exc: ValidationError) -> str:
     return str(exc)
 
 
+def _coerce_int(value: object) -> Optional[int]:
+    if value in (None, "", False):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_decimal_value(value: object, *, allow_zero: bool = False) -> Decimal:
+    if value in (None, ""):
+        raise ValueError("empty")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("invalid") from exc
+    if number < 0 or (not allow_zero and number <= 0):
+        raise ValueError("range")
+    return number.quantize(Decimal("0.01"))
+
+
+def _ensure_supplier_id(payload: Mapping[str, object]) -> int:
+    supplier_id = _coerce_int(payload.get("id"))
+    if supplier_id:
+        exists = Supplier.objects.filter(pk=supplier_id).only("id").exists()
+        if not exists:
+            raise ValueError(_("El proveedor seleccionado ya no está disponible."))
+        return supplier_id
+
+    name = (payload.get("name") or "").strip()
+    tax_id = (payload.get("tax_id") or "").strip()
+    if not name or not tax_id:
+        raise ValueError(_("Debes ingresar el nombre y el NIT/CC del proveedor."))
+
+    supplier = Supplier(
+        name=name,
+        tax_id=tax_id,
+        contact_name=(payload.get("contact_name") or "").strip(),
+        contact_email=(payload.get("contact_email") or "").strip(),
+        contact_phone=(payload.get("contact_phone") or "").strip(),
+        address=(payload.get("address") or "").strip(),
+        city=(payload.get("city") or "").strip(),
+        account_holder_name=(payload.get("account_holder_name") or "").strip(),
+        account_holder_id=(payload.get("account_holder_id") or "").strip(),
+        bank_name=(payload.get("bank_name") or "").strip(),
+        account_number=(payload.get("account_number") or "").strip(),
+    )
+    account_type = (payload.get("account_type") or "").strip().lower()
+    valid_account_types = {choice[0] for choice in Supplier.ACCOUNT_TYPE_CHOICES}
+    if account_type in valid_account_types:
+        supplier.account_type = account_type
+
+    try:
+        supplier.save()
+    except IntegrityError as exc:
+        raise ValueError(_("Ya existe un proveedor con ese NIT/CC.")) from exc
+    return supplier.pk
+
+
+def _format_currency_label(amount: Decimal, currency: str) -> str:
+    currency = currency or "COP"
+    amount = (amount or Decimal("0.00")).quantize(Decimal("0.01"))
+    return f"{currency} {amount:,.2f}"
+
+
+def _build_purchase_overview_payload(user: UserProfile) -> Optional[dict[str, object]]:
+    if not user.has_perm("task_manager.view_mini_app_purchase_overview_card"):
+        return None
+    overview_card = build_purchase_requests_overview(user=user)
+    if not overview_card:
+        return None
+    return serialize_purchase_requests_overview(overview_card)
+
+
+def _build_purchase_management_payload(user: UserProfile, request) -> Optional[dict[str, object]]:
+    if not user.has_perm("task_manager.view_mini_app_purchase_management_card"):
+        return None
+    management_card = build_purchase_management_card(user=user)
+    if management_card:
+        payload = serialize_purchase_management_card(management_card)
+        payload["request_modification_url"] = reverse(
+            "task_manager:mini-app-purchase-request-modify",
+            kwargs={"pk": management_card.purchase_id},
+        )
+        payload["finalize_url"] = reverse(
+            "task_manager:mini-app-purchase-finalize",
+            kwargs={"pk": management_card.purchase_id},
+        )
+        return payload
+    return serialize_purchase_management_empty_state()
+
+
+def _serialize_purchase_summary(purchase: PurchaseRequest) -> dict[str, object]:
+    return {
+        "id": purchase.pk,
+        "code": purchase.timeline_code,
+        "name": purchase.name,
+        "status": purchase.status,
+        "status_label": purchase.get_status_display(),
+        "status_theme": MINI_APP_PURCHASE_STATUS_THEME.get(purchase.status, "slate"),
+        "amount_label": _format_currency_label(purchase.estimated_total or Decimal("0.00"), purchase.currency or "COP"),
+    }
+
+
 def _get_user_assignment_for_mini_app(pk: int, *, user: UserProfile) -> TaskAssignment:
     queryset = (
         TaskAssignment.objects.select_related(
@@ -1106,6 +1232,7 @@ def _build_telegram_mini_app_payload(
     production: Optional[dict[str, object]] = None,
     weight_registry: Optional[dict[str, object]] = None,
     include_weight_registry: bool = True,
+    purchases: Optional[dict[str, object]] = None,
 ) -> dict[str, object]:
     today = timezone.localdate()
     weekday_label = date_format(today, "l").capitalize()
@@ -2482,6 +2609,7 @@ def _build_telegram_mini_app_payload(
         "production_reference": production_reference,
         "production": production,
         "weight_registry": weight_registry_payload,
+        "purchases": purchases or {},
         "pending_classification": pending_classification_summary,
         "egg_workflow": egg_workflow,
         "transport_queue": transport_queue,
@@ -2734,6 +2862,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             production_payload: Optional[dict[str, object]] = None
             weight_registry_payload: Optional[dict[str, object]] = None
+            purchases_payload: Optional[dict[str, object]] = None
             session_token = _resolve_mini_app_session_token(self.request)
             if card_permissions.get("production"):
                 registry = build_production_registry(user=user, reference_date=today)
@@ -2764,6 +2893,24 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if registry:
                     weight_registry_payload = serialize_weight_registry(registry)
                     weight_registry_payload["submit_url"] = weight_submit_url
+            if card_permissions.get("purchase_request"):
+                purchase_form_card = build_purchase_request_form_card(
+                    user=user,
+                    submit_url=reverse("task_manager:mini-app-purchase-requests"),
+                )
+                if purchase_form_card:
+                    purchases_payload = purchases_payload or {}
+                    purchases_payload["request_form"] = serialize_purchase_request_form_card(purchase_form_card)
+            if card_permissions.get("purchase_overview"):
+                overview_payload = _build_purchase_overview_payload(user)
+                if overview_payload:
+                    purchases_payload = purchases_payload or {}
+                    purchases_payload["overview"] = overview_payload
+            if card_permissions.get("purchase_management"):
+                management_payload = _build_purchase_management_payload(user, self.request)
+                if management_payload:
+                    purchases_payload = purchases_payload or {}
+                    purchases_payload["management"] = management_payload
             context["telegram_mini_app"] = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
@@ -2777,6 +2924,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 production=production_payload,
                 weight_registry=weight_registry_payload,
                 include_weight_registry=bool(card_permissions.get("weight_registry")),
+                purchases=purchases_payload,
             )
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
@@ -2961,6 +3109,240 @@ def mini_app_task_reset_view(request, pk: int):
             "status": "reset",
             "assignment_id": assignment.pk,
             "completed_on": None,
+        }
+    )
+
+
+@require_POST
+def mini_app_purchase_request_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_request_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para crear solicitudes de compra.")},
+            status=403,
+        )
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    supplier_payload = payload.get("supplier")
+    if not isinstance(supplier_payload, Mapping):
+        return JsonResponse({"error": _("Selecciona o registra un proveedor válido.")}, status=400)
+
+    try:
+        supplier_id = _ensure_supplier_id(supplier_payload)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    items_payload = payload.get("items")
+    if not isinstance(items_payload, list) or not items_payload:
+        return JsonResponse({"error": _("Agrega al menos un ítem a la solicitud.")}, status=400)
+    if len(items_payload) > MINI_APP_PURCHASE_MAX_ITEMS:
+        return JsonResponse(
+            {
+                "error": _(
+                    "Puedes registrar máximo %(count)s ítems por solicitud en la mini app."
+                )
+                % {"count": MINI_APP_PURCHASE_MAX_ITEMS}
+            },
+            status=400,
+        )
+
+    items: list[PurchaseItemPayload] = []
+    for index, item in enumerate(items_payload):
+        if not isinstance(item, Mapping):
+            return JsonResponse({"error": _("El listado de ítems no es válido.")}, status=400)
+        description = (item.get("description") or "").strip()
+        if not description:
+            return JsonResponse(
+                {"error": _("El ítem %(index)s requiere una descripción.") % {"index": index + 1}},
+                status=400,
+            )
+        try:
+            quantity = _parse_decimal_value(item.get("quantity"))
+            unit_value = _parse_decimal_value(item.get("unit_value"), allow_zero=True)
+        except ValueError:
+            return JsonResponse(
+                {
+                    "error": _(
+                        "Revisa la cantidad y el valor del ítem %(index)s. Deben ser números mayores a cero."
+                    )
+                    % {"index": index + 1}
+                },
+                status=400,
+            )
+        estimated_amount = (quantity * unit_value).quantize(Decimal("0.01"))
+        product_id = _coerce_int(item.get("product_id"))
+        items.append(
+            PurchaseItemPayload(
+                id=None,
+                description=description,
+                quantity=quantity,
+                estimated_amount=estimated_amount,
+                product_id=product_id,
+            )
+        )
+
+    area_payload = payload.get("area") if isinstance(payload.get("area"), Mapping) else {}
+    summary = (payload.get("name") or payload.get("summary") or "").strip()
+    expense_type_id = _coerce_int(payload.get("expense_type_id") or payload.get("expense_type"))
+    support_document_type_id = _coerce_int(payload.get("support_document_type_id"))
+    scope_area = (
+        (area_payload.get("scope") or payload.get("scope") or PurchaseRequest.AreaScope.COMPANY)
+        or PurchaseRequest.AreaScope.COMPANY
+    )
+    scope_farm_id = _coerce_int(area_payload.get("farm_id") or payload.get("scope_farm_id") or payload.get("farm_id"))
+    scope_house_id = _coerce_int(
+        area_payload.get("chicken_house_id") or payload.get("scope_chicken_house_id") or payload.get("chicken_house_id")
+    )
+    scope_batch_code = (area_payload.get("batch_code") or payload.get("scope_batch_code") or payload.get("batch_code") or "").strip()
+
+    request_payload = PurchaseRequestPayload(
+        purchase_id=_coerce_int(payload.get("purchase_id")),
+        summary=summary,
+        notes=(payload.get("notes") or "").strip(),
+        expense_type_id=expense_type_id,
+        support_document_type_id=support_document_type_id,
+        supplier_id=supplier_id,
+        items=tuple(items),
+        scope_farm_id=scope_farm_id,
+        scope_chicken_house_id=scope_house_id,
+        scope_batch_code=scope_batch_code,
+        scope_area=scope_area,
+    )
+
+    action = (payload.get("action") or "").strip().lower()
+    intent = "send_workflow" if action in {"send", "submit", "approval"} else "save_draft"
+
+    service = PurchaseRequestSubmissionService(actor=user)
+    try:
+        purchase = service.submit(payload=request_payload, intent=intent)
+    except PurchaseRequestValidationError as exc:
+        return JsonResponse(
+            {
+                "error": _("Revisa los datos ingresados antes de continuar."),
+                "field_errors": exc.field_errors,
+                "item_errors": exc.item_errors,
+            },
+            status=400,
+        )
+
+    overview_payload = _build_purchase_overview_payload(user)
+    management_payload = _build_purchase_management_payload(user, request)
+    message = (
+        _("Solicitud enviada a aprobación.")
+        if intent == "send_workflow"
+        else _("Borrador guardado correctamente.")
+    )
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": message,
+            "intent": intent,
+            "purchase": _serialize_purchase_summary(purchase),
+            "requests": overview_payload,
+            "management": management_payload,
+        }
+    )
+
+
+@require_POST
+def mini_app_purchase_request_modify_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_management_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para solicitar modificaciones.")},
+            status=403,
+        )
+
+    purchase = PurchaseRequest.objects.filter(pk=pk, requester=user).first()
+    if not purchase:
+        return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
+
+    if purchase.status == PurchaseRequest.Status.DRAFT:
+        return JsonResponse({"error": _("La solicitud ya está en borrador.")}, status=400)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+
+    reason = (payload.get("reason") or payload.get("message") or "").strip()
+    purchase.status = PurchaseRequest.Status.DRAFT
+    update_fields = ["status", "updated_at"]
+    if reason:
+        timestamp = date_format(timezone.localtime(), "SHORT_DATETIME_FORMAT")
+        note = f"[Mini app] {timestamp} · {reason}"
+        existing = (purchase.shipping_notes or "").strip()
+        purchase.shipping_notes = f"{note}\n\n{existing}".strip() if existing else note
+        update_fields.append("shipping_notes")
+
+    purchase.save(update_fields=update_fields)
+
+    overview_payload = _build_purchase_overview_payload(user)
+    management_payload = _build_purchase_management_payload(user, request)
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": _("La solicitud volvió a borrador para ser ajustada."),
+            "purchase": _serialize_purchase_summary(purchase),
+            "requests": overview_payload,
+            "management": management_payload,
+        }
+    )
+
+
+@require_POST
+def mini_app_purchase_finalize_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_management_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para finalizar la gestión de compras.")},
+            status=403,
+        )
+
+    purchase = PurchaseRequest.objects.filter(pk=pk, requester=user).first()
+    if not purchase:
+        return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
+
+    if purchase.status not in {PurchaseRequest.Status.APPROVED, PurchaseRequest.Status.ORDERED}:
+        return JsonResponse(
+            {"error": _("Esta solicitud ya no puede marcarse como gestionada.")},
+            status=400,
+        )
+
+    if purchase.status == PurchaseRequest.Status.APPROVED:
+        purchase.status = PurchaseRequest.Status.ORDERED
+    if not purchase.order_date:
+        purchase.order_date = timezone.localdate()
+    purchase.save(update_fields=["status", "order_date", "updated_at"])
+
+    overview_payload = _build_purchase_overview_payload(user)
+    management_payload = _build_purchase_management_payload(user, request)
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": _("Marcaste la solicitud como gestionada. Ahora puedes coordinar la recepción."),
+            "purchase": _serialize_purchase_summary(purchase),
+            "requests": overview_payload,
+            "management": management_payload,
         }
     )
 

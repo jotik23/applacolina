@@ -572,6 +572,8 @@
       {% endwith %}
       {% endwith %}
 
+{% include "task_manager/includes/mini_app_purchase_cards.html" %}
+
       <section class="space-y-3" data-daily-tasks-section>
         <div class="flex items-center justify-between text-sm text-slate-600">
           <div>
@@ -8499,6 +8501,7 @@
       })();
     </script>
     <script src="{% static 'task_manager/js/production_card.js' %}" defer></script>
+    <script src="{% static 'task_manager/js/purchase_cards.js' %}" defer></script>
     {% endif %}
   </body>
 </html>

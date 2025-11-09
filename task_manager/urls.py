@@ -3,6 +3,9 @@ from django.urls import path
 from .views import (
     mini_app_logout_view,
     mini_app_production_record_view,
+    mini_app_purchase_finalize_view,
+    mini_app_purchase_request_modify_view,
+    mini_app_purchase_request_view,
     mini_app_task_complete_view,
     mini_app_task_evidence_upload_view,
     mini_app_task_reset_view,
@@ -44,6 +47,21 @@ urlpatterns = [
         "telegram/mini-app/production-records/",
         mini_app_production_record_view,
         name="mini-app-production-records",
+    ),
+    path(
+        "telegram/mini-app/purchases/requests/",
+        mini_app_purchase_request_view,
+        name="mini-app-purchase-requests",
+    ),
+    path(
+        "telegram/mini-app/purchases/<int:pk>/request-modification/",
+        mini_app_purchase_request_modify_view,
+        name="mini-app-purchase-request-modify",
+    ),
+    path(
+        "telegram/mini-app/purchases/<int:pk>/finalize/",
+        mini_app_purchase_finalize_view,
+        name="mini-app-purchase-finalize",
     ),
     path(
         "telegram/mini-app/weight-registry/",
