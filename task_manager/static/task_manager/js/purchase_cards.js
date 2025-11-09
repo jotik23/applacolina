@@ -589,22 +589,50 @@ class PurchaseRequestsListController {
     constructor(card, csrfToken) {
       this.card = card;
       this.csrfToken = csrfToken || null;
+      this.form = card.querySelector('[data-management-form]');
+      this.saveButtons = Array.prototype.slice.call(
+        card.querySelectorAll('[data-purchase-management-action="save"]')
+      );
+      this.deliveryField = this.form ? this.form.querySelector('[data-management-field="delivery_condition"]') : null;
+      this.paymentMethodField = this.form ? this.form.querySelector('[data-management-field="payment_method"]') : null;
+      this.shippingFields = card.querySelector('[data-management-shipping-fields]');
+      this.bankPanel = card.querySelector('[data-management-bank-panel]');
       this.modifyButton = card.querySelector('[data-purchase-management-action="modify"]');
       this.finalizeButton = card.querySelector('[data-purchase-management-action="finalize"]');
       this.noteInput = card.querySelector('[data-purchase-modification-note]');
       this.feedbackNode = card.querySelector('[data-purchase-management-feedback]');
+      this.orderUrl = card.getAttribute('data-order-url') || '';
 
       this.handleModify = this.handleModify.bind(this);
       this.handleFinalize = this.handleFinalize.bind(this);
+      this.handleSave = this.handleSave.bind(this);
+      this.handleDeliveryChange = this.handleDeliveryChange.bind(this);
+      this.handlePaymentMethodChange = this.handlePaymentMethodChange.bind(this);
     }
 
     init() {
+      if (this.saveButtons.length) {
+        this.saveButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const intent = button.getAttribute('data-management-intent') || 'save_order';
+            this.handleSave(intent, button);
+          });
+        });
+      }
+      if (this.deliveryField) {
+        this.deliveryField.addEventListener('change', this.handleDeliveryChange);
+      }
+      if (this.paymentMethodField) {
+        this.paymentMethodField.addEventListener('change', this.handlePaymentMethodChange);
+      }
       if (this.modifyButton) {
         this.modifyButton.addEventListener('click', this.handleModify);
       }
       if (this.finalizeButton) {
         this.finalizeButton.addEventListener('click', this.handleFinalize);
       }
+      this.toggleShippingFields();
+      this.toggleBankPanel();
     }
 
     refresh(payload) {
@@ -637,6 +665,8 @@ class PurchaseRequestsListController {
       const purchase = payload.purchase;
       this.card.setAttribute('data-request-modify-url', payload.request_modification_url || '');
       this.card.setAttribute('data-finalize-url', payload.finalize_url || '');
+      this.card.setAttribute('data-order-url', payload.order_url || '');
+      this.orderUrl = payload.order_url || '';
       this.card.setAttribute('data-allows-finalize', payload.allow_finalize ? 'true' : 'false');
       this.card.setAttribute('data-allows-modification', payload.allow_modification ? 'true' : 'false');
       const mapping = {
@@ -646,15 +676,6 @@ class PurchaseRequestsListController {
         '[data-management-amount]': purchase.amount_label,
         '[data-management-updated]': purchase.updated_label,
         '[data-management-code]': purchase.code,
-        '[data-management-purchase-date]': purchase.purchase_date_label || 'Pendiente',
-        '[data-management-payment-condition]': purchase.payment_condition_label || 'Por definir',
-        '[data-management-payment-method]': purchase.payment_method_label || 'Por definir',
-        '[data-management-delivery]': purchase.delivery_condition_label || 'Por confirmar',
-        '[data-management-bank]':
-          purchase.bank_label && purchase.bank_account_label
-            ? `${purchase.bank_label} · ${purchase.bank_account_label}`
-            : 'Sin datos registrados',
-        '[data-management-payment-account]': purchase.payment_account_label || 'Por definir',
       };
       Object.keys(mapping).forEach((selector) => {
         const node = this.card.querySelector(selector);
@@ -662,6 +683,7 @@ class PurchaseRequestsListController {
           node.textContent = mapping[selector] || '';
         }
       });
+      this.populateForm(purchase.form || {});
       const notesList = this.card.querySelector('[data-management-notes]');
       if (notesList) {
         notesList.innerHTML = '';
@@ -680,6 +702,8 @@ class PurchaseRequestsListController {
       if (this.finalizeButton) {
         this.finalizeButton.disabled = !payload.allow_finalize;
       }
+      this.toggleShippingFields();
+      this.toggleBankPanel();
     }
 
     handleModify() {
@@ -695,6 +719,105 @@ class PurchaseRequestsListController {
         return;
       }
       this.sendAction(this.card.getAttribute('data-finalize-url'), {}, 'finalize');
+    }
+
+    handleSave(intent, button) {
+      if (!this.form || !this.orderUrl) {
+        this.showFeedback('No encontramos la ruta para guardar la gestión.', 'error');
+        return;
+      }
+      this.displayFieldErrors({});
+      const payload = this.collectOrderPayload(intent || 'save_order');
+      this.sendOrderUpdate(payload, button || null);
+    }
+
+    handleDeliveryChange() {
+      this.toggleShippingFields();
+    }
+
+    handlePaymentMethodChange() {
+      this.toggleBankPanel();
+    }
+
+    collectOrderPayload(intent) {
+      const getValue = (name) => {
+        const field = this.form ? this.form.querySelector(`[data-management-field="${name}"]`) : null;
+        if (!field) {
+          return '';
+        }
+        return field.value ? field.value.trim() : '';
+      };
+      return {
+        intent: intent || 'save_order',
+        purchase_date: getValue('purchase_date'),
+        payment_condition: getValue('payment_condition'),
+        payment_method: getValue('payment_method'),
+        delivery_condition: getValue('delivery_condition'),
+        shipping_eta: getValue('shipping_eta'),
+        shipping_notes: getValue('shipping_notes'),
+        supplier_account_holder_name: getValue('supplier_account_holder_name'),
+        supplier_account_holder_id: getValue('supplier_account_holder_id'),
+        supplier_account_type: getValue('supplier_account_type'),
+        supplier_account_number: getValue('supplier_account_number'),
+        supplier_bank_name: getValue('supplier_bank_name'),
+      };
+    }
+
+    sendOrderUpdate(payload, button) {
+      if (!this.orderUrl) {
+        this.showFeedback('No encontramos la ruta para guardar la gestión.', 'error');
+        return;
+      }
+      if (button) {
+        button.disabled = true;
+      }
+      fetch(this.orderUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          this.csrfToken ? { 'X-CSRFToken': this.csrfToken } : {}
+        ),
+        body: JSON.stringify(payload),
+      })
+        .then((response) => response.json().catch(() => ({})).then((data) => ({ ok: response.ok, data })))
+        .then((result) => {
+          if (!result.ok || (result.data && result.data.error)) {
+            const message =
+              (result.data && result.data.error) ||
+              'No pudimos guardar la información. Intenta nuevamente.';
+            this.showFeedback(message, 'error');
+            if (result.data && result.data.field_errors) {
+              this.displayFieldErrors(result.data.field_errors);
+            }
+            return;
+          }
+          const data = result.data || {};
+          if (data.message) {
+            this.showFeedback(data.message, 'success');
+          }
+          this.displayFieldErrors({});
+          const tmMiniApp = window.tmMiniApp || {};
+          if (
+            data.requests &&
+            tmMiniApp.purchasesControllers &&
+            tmMiniApp.purchasesControllers.requestsList &&
+            typeof tmMiniApp.purchasesControllers.requestsList.render === 'function'
+          ) {
+            tmMiniApp.purchasesControllers.requestsList.render(data.requests);
+          }
+          if (data.management) {
+            this.refresh(data.management);
+          }
+        })
+        .catch(() => {
+          this.showFeedback('No pudimos contactar al servidor. Intenta más tarde.', 'error');
+        })
+        .finally(() => {
+          if (button) {
+            button.disabled = false;
+          }
+        });
     }
 
     sendAction(url, payload, action) {
@@ -761,6 +884,73 @@ class PurchaseRequestsListController {
       this.feedbackNode.textContent = message;
       this.feedbackNode.classList.remove('hidden', 'text-emerald-600', 'text-rose-600');
       this.feedbackNode.classList.add(tone === 'success' ? 'text-emerald-600' : 'text-rose-600');
+    }
+
+    populateForm(formPayload) {
+      if (!this.form || !formPayload) {
+        return;
+      }
+      const setValue = (name, value) => {
+        const field = this.form.querySelector(`[data-management-field="${name}"]`);
+        if (field) {
+          field.value = value || '';
+        }
+      };
+      setValue('purchase_date', formPayload.purchase_date || '');
+      setValue('payment_condition', formPayload.payment_condition || '');
+      setValue('payment_method', formPayload.payment_method || '');
+      setValue('delivery_condition', formPayload.delivery_condition || '');
+      setValue('shipping_eta', formPayload.shipping_eta || '');
+      setValue('shipping_notes', formPayload.shipping_notes || '');
+      setValue('supplier_account_holder_name', formPayload.supplier_account_holder_name || '');
+      setValue('supplier_account_holder_id', formPayload.supplier_account_holder_id || '');
+      setValue('supplier_account_type', formPayload.supplier_account_type || '');
+      setValue('supplier_account_number', formPayload.supplier_account_number || '');
+      setValue('supplier_bank_name', formPayload.supplier_bank_name || '');
+    }
+
+    displayFieldErrors(errors) {
+      if (!this.form) {
+        return;
+      }
+      const nodes = this.form.querySelectorAll('[data-management-error]');
+      nodes.forEach((node) => {
+        node.classList.add('hidden');
+        node.textContent = '';
+      });
+      if (!errors) {
+        return;
+      }
+      Object.keys(errors).forEach((key) => {
+        const node = this.form.querySelector(`[data-management-error="${key}"]`);
+        if (node) {
+          node.textContent = errors[key][0] || '';
+          node.classList.remove('hidden');
+        }
+      });
+    }
+
+    toggleShippingFields() {
+      if (!this.shippingFields) {
+        return;
+      }
+      const shouldShow =
+        this.deliveryField && this.deliveryField.value === 'shipping';
+      this.shippingFields.toggleAttribute('hidden', !shouldShow);
+    }
+
+    toggleBankPanel() {
+      if (!this.bankPanel) {
+        return;
+      }
+      const requiresBank =
+        this.paymentMethodField && this.paymentMethodField.value === 'transferencia';
+      this.bankPanel.toggleAttribute('hidden', !requiresBank);
+      if (requiresBank) {
+        this.bankPanel.open = true;
+      } else {
+        this.bankPanel.removeAttribute('open');
+      }
     }
   }
 

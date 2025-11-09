@@ -30,6 +30,11 @@ from django.views.decorators.http import require_POST
 
 from notifications.models import TelegramBotConfig, TelegramChatLink
 from administration.models import PurchaseRequest, Supplier
+from administration.services.purchase_orders import (
+    PurchaseOrderPayload,
+    PurchaseOrderService,
+    PurchaseOrderValidationError,
+)
 from administration.services.purchase_requests import (
     PurchaseItemPayload,
     PurchaseRequestPayload,
@@ -772,6 +777,107 @@ def _parse_decimal_value(value: object, *, allow_zero: bool = False) -> Decimal:
     return number.quantize(Decimal("0.01"))
 
 
+def _parse_iso_date(value: object) -> Optional[date]:
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_string(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _build_mini_app_order_payload(
+    data: Mapping[str, object],
+    *,
+    purchase_id: int,
+) -> tuple[Optional[PurchaseOrderPayload], dict[str, list[str]]]:
+    purchase_date_raw = _normalize_string(data.get("purchase_date"))
+    delivery_condition = _normalize_string(data.get("delivery_condition"))
+    shipping_eta_raw = _normalize_string(data.get("shipping_eta"))
+    shipping_notes = _normalize_string(data.get("shipping_notes"))
+    payment_condition = _normalize_string(data.get("payment_condition"))
+    payment_method = _normalize_string(data.get("payment_method"))
+    supplier_account_holder_id = _normalize_string(data.get("supplier_account_holder_id"))
+    supplier_account_holder_name = _normalize_string(data.get("supplier_account_holder_name"))
+    supplier_account_type = _normalize_string(data.get("supplier_account_type"))
+    supplier_account_number = _normalize_string(data.get("supplier_account_number"))
+    supplier_bank_name = _normalize_string(data.get("supplier_bank_name"))
+
+    purchase_date = _parse_iso_date(purchase_date_raw)
+    shipping_eta = _parse_iso_date(shipping_eta_raw)
+    field_errors: dict[str, list[str]] = {}
+    if not purchase_id:
+        field_errors.setdefault("non_field", []).append(_("Selecciona una solicitud válida para gestionar."))
+    if not purchase_date_raw:
+        field_errors.setdefault("purchase_date", []).append(_("Selecciona la fecha de compra."))
+    elif purchase_date is None:
+        field_errors.setdefault("purchase_date", []).append(_("Ingresa una fecha válida (AAAA-MM-DD)."))
+
+    delivery_values = set(PurchaseRequest.DeliveryCondition.values)
+    if delivery_condition and delivery_condition not in delivery_values:
+        field_errors.setdefault("delivery_condition", []).append(_("Selecciona una condición de entrega válida."))
+    if not delivery_condition:
+        delivery_condition = PurchaseRequest.DeliveryCondition.IMMEDIATE
+    if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING:
+        if not shipping_eta_raw:
+            field_errors.setdefault("shipping_eta", []).append(_("Ingresa la fecha estimada de llegada."))
+        elif shipping_eta is None:
+            field_errors.setdefault("shipping_eta", []).append(_("Fecha estimada inválida."))
+
+    payment_condition_values = set(PurchaseRequest.PaymentCondition.values)
+    if payment_condition and payment_condition not in payment_condition_values:
+        field_errors.setdefault("payment_condition", []).append(_("Selecciona una condición de pago válida."))
+    if not payment_condition:
+        field_errors.setdefault("payment_condition", []).append(_("Selecciona una condición de pago."))
+
+    payment_method_values = set(PurchaseRequest.PaymentMethod.values)
+    if payment_method and payment_method not in payment_method_values:
+        field_errors.setdefault("payment_method", []).append(_("Selecciona un medio de pago válido."))
+    if not payment_method:
+        field_errors.setdefault("payment_method", []).append(_("Selecciona un medio de pago."))
+
+    require_bank_data = payment_method == PurchaseRequest.PaymentMethod.TRANSFER
+    account_types = {choice for choice, _ in Supplier.ACCOUNT_TYPE_CHOICES}
+    if require_bank_data:
+        if not supplier_account_holder_name:
+            field_errors.setdefault("supplier_account_holder_name", []).append(_("Ingresa el titular de la cuenta."))
+        if not supplier_account_holder_id:
+            field_errors.setdefault("supplier_account_holder_id", []).append(_("Ingresa la identificación del titular."))
+        if not supplier_account_number:
+            field_errors.setdefault("supplier_account_number", []).append(_("Ingresa el número de cuenta."))
+        if not supplier_bank_name:
+            field_errors.setdefault("supplier_bank_name", []).append(_("Ingresa el banco."))
+        if supplier_account_type not in account_types:
+            field_errors.setdefault("supplier_account_type", []).append(_("Selecciona un tipo de cuenta válido."))
+    elif supplier_account_type and supplier_account_type not in account_types:
+        field_errors.setdefault("supplier_account_type", []).append(_("Selecciona un tipo de cuenta válido."))
+
+    if field_errors or not purchase_id:
+        return None, field_errors
+
+    payload = PurchaseOrderPayload(
+        purchase_id=purchase_id,
+        purchase_date=purchase_date or timezone.localdate(),
+        delivery_condition=delivery_condition,
+        shipping_eta=shipping_eta if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else None,
+        shipping_notes=shipping_notes if delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else "",
+        payment_condition=payment_condition,
+        payment_method=payment_method,
+        supplier_account_holder_id=supplier_account_holder_id,
+        supplier_account_holder_name=supplier_account_holder_name,
+        supplier_account_type=supplier_account_type,
+        supplier_account_number=supplier_account_number,
+        supplier_bank_name=supplier_bank_name,
+    )
+    return payload, field_errors
+
+
 def _ensure_supplier_id(payload: Mapping[str, object]) -> int:
     supplier_id = _coerce_int(payload.get("id"))
     if supplier_id:
@@ -846,6 +952,10 @@ def _build_purchase_management_payload(user: UserProfile, request) -> Optional[d
         )
         payload["finalize_url"] = reverse(
             "task_manager:mini-app-purchase-finalize",
+            kwargs={"pk": management_card.purchase_id},
+        )
+        payload["order_url"] = reverse(
+            "task_manager:mini-app-purchase-order",
             kwargs={"pk": management_card.purchase_id},
         )
         return payload
@@ -3306,6 +3416,71 @@ def mini_app_purchase_request_modify_view(request, pk: int):
         {
             "status": "ok",
             "message": _("La solicitud volvió a borrador para ser ajustada."),
+            "purchase": _serialize_purchase_summary(purchase),
+            "requests": overview_payload,
+            "management": management_payload,
+        }
+    )
+
+
+@require_POST
+def mini_app_purchase_order_view(request, pk: int):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_purchase_management_card"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para gestionar compras desde la mini app.")},
+            status=403,
+        )
+
+    purchase = PurchaseRequest.objects.filter(pk=pk, requester=user).first()
+    if not purchase:
+        return JsonResponse({"error": _("No encontramos la solicitud seleccionada.")}, status=404)
+
+    try:
+        payload_data = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        payload_data = {}
+
+    intent = (_normalize_string(payload_data.get("intent")) or "save_order").lower()
+    if intent not in {"save_order", "confirm_order"}:
+        intent = "save_order"
+
+    payload, field_errors = _build_mini_app_order_payload(payload_data, purchase_id=purchase.pk)
+    if field_errors or payload is None:
+        return JsonResponse(
+            {
+                "error": _("Revisa la información ingresada antes de continuar."),
+                "field_errors": field_errors,
+            },
+            status=400,
+        )
+
+    service = PurchaseOrderService(actor=user)
+    try:
+        purchase = service.save(payload=payload, intent=intent)
+    except PurchaseOrderValidationError as exc:
+        return JsonResponse(
+            {
+                "error": _("No pudimos guardar la gestión de compra."),
+                "field_errors": exc.field_errors,
+            },
+            status=400,
+        )
+
+    overview_payload = _build_purchase_overview_payload(user)
+    management_payload = _build_purchase_management_payload(user, request)
+    message = _("Información de la compra guardada.")
+    if intent == "confirm_order":
+        message = _("Compra gestionada. Continúa con la recepción cuando corresponda.")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "message": message,
             "purchase": _serialize_purchase_summary(purchase),
             "requests": overview_payload,
             "management": management_payload,

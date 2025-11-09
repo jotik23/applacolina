@@ -638,6 +638,7 @@
       data-purchase-management-card
       data-request-modify-url="{{ management.request_modification_url|default:'' }}"
       data-finalize-url="{{ management.finalize_url|default:'' }}"
+      data-order-url="{{ management.order_url|default:'' }}"
       data-allows-finalize="{{ management.allow_finalize|yesno:'true,false' }}"
       data-allows-modification="{{ management.allow_modification|yesno:'true,false' }}"
     >
@@ -659,62 +660,201 @@
           {{ purchase.status_label }}
         </span>
       </header>
-      <div class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
-        <div class="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-inner shadow-slate-100">
+      <div class="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+        <div class="rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-inner shadow-slate-100">
           <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Proveedor</p>
           <p class="text-sm font-semibold text-slate-900" data-management-supplier>{{ purchase.supplier_label }}</p>
           <p class="text-[11px] text-slate-500" data-management-updated>{{ purchase.updated_label }}</p>
         </div>
-        <div class="rounded-2xl border border-white/60 bg-white/80 px-4 py-3 text-right shadow-inner shadow-slate-100">
+        <div class="rounded-2xl border border-white/70 bg-white/90 px-3 py-2 text-right shadow-inner shadow-slate-100">
           <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monto estimado</p>
           <p class="text-lg font-semibold text-slate-900" data-management-amount>{{ purchase.amount_label }}</p>
           <p class="text-[11px] text-slate-500">Código <span data-management-code>{{ purchase.code }}</span></p>
         </div>
       </div>
-      <div class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
-        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha de compra</p>
-          <p class="mt-1 text-base font-semibold text-slate-900" data-management-purchase-date>{{ purchase.purchase_date_label|default:"Pendiente" }}</p>
-        </article>
-        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Condición de pago</p>
-          <p class="mt-1 text-base font-semibold text-slate-900" data-management-payment-condition>{{ purchase.payment_condition_label|default:"Por definir" }}</p>
-        </article>
-        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Medio de pago</p>
-          <p class="mt-1 text-base font-semibold text-slate-900" data-management-payment-method>{{ purchase.payment_method_label|default:"Por definir" }}</p>
-        </article>
-        <article class="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-inner shadow-slate-100">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Condiciones de entrega</p>
-          <p class="mt-1 text-base font-semibold text-slate-900" data-management-delivery>{{ purchase.delivery_condition_label|default:"Por confirmar" }}</p>
-        </article>
-      </div>
+      <section class="mt-3 rounded-2xl border border-slate-100 bg-white/85 p-3 shadow-inner shadow-slate-50">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ítems solicitados</p>
+        <div class="mt-2 space-y-2">
+          {% if purchase.items %}
+            {% for item in purchase.items %}
+            <article class="rounded-2xl border border-slate-100 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm shadow-slate-100">
+              <div class="flex items-start justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-900">{{ item.description|default:"Ítem solicitado" }}</p>
+                {% if item.product_label %}
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ item.product_label }}</p>
+                {% endif %}
+              </div>
+              <dl class="mt-2 grid gap-2 text-[11px] uppercase tracking-wide text-slate-500 sm:grid-cols-4">
+                <div>
+                  <dt>Solicitado</dt>
+                  <dd class="mt-0.5 text-base font-semibold normal-case text-slate-900">{{ item.requested_label }}</dd>
+                </div>
+                <div>
+                  <dt>Recibido</dt>
+                  <dd class="mt-0.5 text-base font-semibold normal-case text-slate-900">{{ item.received_label }}</dd>
+                </div>
+                <div>
+                  <dt>Valor unitario</dt>
+                  <dd class="mt-0.5 text-base font-semibold normal-case text-slate-900">{{ item.unit_value_label }}</dd>
+                </div>
+                <div>
+                  <dt>Subtotal</dt>
+                  <dd class="mt-0.5 text-base font-semibold normal-case text-slate-900">{{ item.subtotal_label }}</dd>
+                </div>
+              </dl>
+            </article>
+            {% endfor %}
+          {% else %}
+            <p class="text-xs text-slate-500">Sin ítems registrados.</p>
+          {% endif %}
+        </div>
+      </section>
 
-      <details class="mt-4 rounded-2xl border border-indigo-100 bg-white/80 px-4 py-3 text-xs text-slate-600" data-management-additional>
-        <summary class="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
-          <span>Datos bancarios y cuenta destino</span>
-          <span aria-hidden="true">▼</span>
-        </summary>
-        <dl class="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <dt class="font-semibold uppercase tracking-wide text-slate-500">Banco / cuenta</dt>
-            <dd class="mt-0.5 text-slate-900" data-management-bank>
-              {% if purchase.bank_label %}
-              {{ purchase.bank_label }} · {{ purchase.bank_account_label|default:"" }}
-              {% else %}
-              Sin datos registrados
-              {% endif %}
-            </dd>
+      <form class="mt-3 space-y-3 text-xs text-slate-700" data-management-form novalidate>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label class="flex flex-col gap-1 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-inner shadow-slate-100">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha de compra</span>
+            <input
+              type="date"
+              class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+              value="{{ purchase.form.purchase_date }}"
+              data-management-field="purchase_date"
+            />
+            <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="purchase_date"></p>
+          </label>
+          <label class="flex flex-col gap-1 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-inner shadow-slate-100">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Condición de pago</span>
+            <select
+              class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+              data-management-field="payment_condition"
+            >
+              <option value="">Selecciona</option>
+              {% for option in purchase.form.payment_conditions %}
+              <option value="{{ option.id }}" {% if option.id == purchase.form.payment_condition %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+            <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="payment_condition"></p>
+          </label>
+          <label class="flex flex-col gap-1 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-inner shadow-slate-100">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Medio de pago</span>
+            <select
+              class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+              data-management-field="payment_method"
+            >
+              <option value="">Selecciona</option>
+              {% for option in purchase.form.payment_methods %}
+              <option value="{{ option.id }}" {% if option.id == purchase.form.payment_method %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+            <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="payment_method"></p>
+          </label>
+          <label class="flex flex-col gap-1 rounded-2xl border border-white/70 bg-white/90 px-3 py-2 shadow-inner shadow-slate-100">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Condición de entrega</span>
+            <select
+              class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+              data-management-field="delivery_condition"
+            >
+              {% for option in purchase.form.delivery_conditions %}
+              <option value="{{ option.id }}" {% if option.id == purchase.form.delivery_condition %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+            <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="delivery_condition"></p>
+          </label>
+        </div>
+        <div
+          class="grid gap-2 sm:grid-cols-2"
+          data-management-shipping-fields
+          {% if purchase.form.delivery_condition != 'shipping' %}hidden{% endif %}
+        >
+          <label class="flex flex-col gap-1 rounded-2xl border border-dashed border-indigo-100 bg-white px-3 py-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha estimada de llegada</span>
+            <input
+              type="date"
+              class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+              value="{{ purchase.form.shipping_eta }}"
+              data-management-field="shipping_eta"
+            />
+            <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="shipping_eta"></p>
+          </label>
+          <label class="flex flex-col gap-1 rounded-2xl border border-dashed border-indigo-100 bg-white px-3 py-2 sm:col-span-1">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notas de envío</span>
+            <textarea
+              rows="2"
+              class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+              data-management-field="shipping_notes"
+            >{{ purchase.form.shipping_notes|default_if_none:'' }}</textarea>
+          </label>
+        </div>
+        <details
+          class="rounded-2xl border border-indigo-100 bg-white/90 px-3 py-2 text-slate-600 shadow-inner shadow-indigo-50"
+          data-management-bank-panel
+          {% if purchase.form.payment_method == 'transferencia' %}open{% else %}hidden{% endif %}
+        >
+          <summary class="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
+            <span>Datos bancarios del proveedor</span>
+            <span aria-hidden="true">▼</span>
+          </summary>
+          <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Titular</span>
+              <input
+                type="text"
+                class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                value="{{ purchase.form.supplier_account_holder_name }}"
+                data-management-field="supplier_account_holder_name"
+              />
+              <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="supplier_account_holder_name"></p>
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Identificación</span>
+              <input
+                type="text"
+                class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                value="{{ purchase.form.supplier_account_holder_id }}"
+                data-management-field="supplier_account_holder_id"
+              />
+              <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="supplier_account_holder_id"></p>
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tipo de cuenta</span>
+              <select
+                class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                data-management-field="supplier_account_type"
+              >
+                <option value="">Selecciona</option>
+                {% for option in purchase.form.account_types %}
+                <option value="{{ option.id }}" {% if option.id == purchase.form.supplier_account_type %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
+              <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="supplier_account_type"></p>
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Número de cuenta</span>
+              <input
+                type="text"
+                class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                value="{{ purchase.form.supplier_account_number }}"
+                data-management-field="supplier_account_number"
+              />
+              <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="supplier_account_number"></p>
+            </label>
+            <label class="flex flex-col gap-1 sm:col-span-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Banco</span>
+              <input
+                type="text"
+                class="rounded-xl border border-slate-200 px-2 py-1 text-sm text-slate-900"
+                value="{{ purchase.form.supplier_bank_name }}"
+                data-management-field="supplier_bank_name"
+              />
+              <p class="hidden text-[10px] font-semibold text-rose-600" data-management-error="supplier_bank_name"></p>
+            </label>
           </div>
-          <div>
-            <dt class="font-semibold uppercase tracking-wide text-slate-500">Cuenta destino</dt>
-            <dd class="mt-0.5 text-slate-900" data-management-payment-account>{{ purchase.payment_account_label|default:"Por definir" }}</dd>
-          </div>
-        </dl>
-      </details>
+          <p class="mt-2 text-[10px] text-slate-500">Se sincronizan con la ficha del proveedor cuando guardas.</p>
+        </details>
+      </form>
 
       {% if purchase.notes %}
-      <div class="mt-4 space-y-2">
+      <div class="mt-3 space-y-2">
         <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notas recientes</p>
         <ul class="space-y-2 text-xs text-slate-600" data-management-notes>
           {% for note in purchase.notes %}
@@ -724,28 +864,46 @@
       </div>
       {% endif %}
 
-      <div class="mt-4 space-y-3 rounded-2xl border border-indigo-100 bg-white/70 px-4 py-3">
-        <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Solicitar modificación
-          <textarea
-            rows="2"
-            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            placeholder="Explica qué debe ajustarse (cantidad, proveedor, entrega, etc.)."
-            data-purchase-modification-note
-          ></textarea>
-        </label>
-        <p class="text-xs font-semibold text-indigo-600 hidden" data-purchase-management-feedback></p>
-      </div>
+      <details class="mt-3 rounded-2xl border border-indigo-100 bg-white/85 px-3 py-2 text-xs text-slate-600 shadow-inner shadow-indigo-50">
+        <summary class="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
+          <span>Solicitar modificación</span>
+          <span aria-hidden="true">▼</span>
+        </summary>
+        <div class="mt-3 space-y-2">
+          <label class="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Motivo
+            <textarea
+              rows="2"
+              class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              placeholder="Explica qué debe ajustarse (cantidad, proveedor, entrega, etc.)."
+              data-purchase-modification-note
+            ></textarea>
+          </label>
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-40"
+              data-purchase-management-action="modify"
+              {% if not management.allow_modification %}disabled{% endif %}
+            >
+              Solicitar modificar
+            </button>
+          </div>
+        </div>
+      </details>
+      <p class="text-[11px] font-semibold text-indigo-600 hidden" data-purchase-management-feedback></p>
 
-      <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-40"
-          data-purchase-management-action="modify"
-          {% if not management.allow_modification %}disabled{% endif %}
-        >
-          Solicitar modificar
-        </button>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:opacity-50"
+            data-purchase-management-action="save"
+            data-management-intent="save_order"
+          >
+            Guardar cambios
+          </button>
+        </div>
         <button
           type="button"
           class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow shadow-indigo-200/70 transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300/60 disabled:opacity-40"

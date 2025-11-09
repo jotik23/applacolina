@@ -121,6 +121,23 @@ class PurchaseManagementCard:
     notes: Tuple[str, ...]
     allow_finalize: bool
     allow_modification: bool
+    purchase_date_value: Optional[str]
+    payment_condition_value: Optional[str]
+    payment_method_value: Optional[str]
+    delivery_condition_value: Optional[str]
+    shipping_eta_value: Optional[str]
+    shipping_notes: Optional[str]
+    supplier_account_holder_id: Optional[str]
+    supplier_account_holder_name: Optional[str]
+    supplier_account_type: Optional[str]
+    supplier_account_number: Optional[str]
+    supplier_bank_name: Optional[str]
+    payment_conditions: Tuple[dict[str, str], ...]
+    payment_methods: Tuple[dict[str, str], ...]
+    delivery_conditions: Tuple[dict[str, str], ...]
+    account_types: Tuple[dict[str, str], ...]
+    requires_bank_data: bool
+    items: Tuple[dict[str, object], ...]
 
 
 def build_purchase_request_form_card(
@@ -307,6 +324,12 @@ def build_purchase_management_card(*, user: Optional[UserProfile]) -> Optional[P
     purchase = (
         PurchaseRequest.objects.filter(requester=user, status__in=MANAGEMENT_STATUSES)
         .select_related("supplier")
+        .prefetch_related(
+            Prefetch(
+                "items",
+                queryset=PurchaseItem.objects.select_related("product").order_by("pk"),
+            )
+        )
         .order_by("status", "-updated_at")
         .first()
     )
@@ -353,6 +376,37 @@ def build_purchase_management_card(*, user: Optional[UserProfile]) -> Optional[P
         PurchaseRequest.Status.ORDERED,
     }
 
+    purchase_date_value = (
+        purchase.purchase_date.isoformat() if purchase.purchase_date else timezone.localdate().isoformat()
+    )
+    shipping_eta_value = purchase.shipping_eta.isoformat() if purchase.shipping_eta else ""
+    shipping_notes = purchase.shipping_notes or ""
+    supplier_account_holder_id = (
+        purchase.supplier_account_holder_id or (purchase.supplier.account_holder_id if purchase.supplier else "")
+    )
+    supplier_account_holder_name = (
+        purchase.supplier_account_holder_name or (purchase.supplier.account_holder_name if purchase.supplier else "")
+    )
+    supplier_account_type = (
+        purchase.supplier_account_type or (purchase.supplier.account_type if purchase.supplier else "")
+    )
+    supplier_account_number = (
+        purchase.supplier_account_number or (purchase.supplier.account_number if purchase.supplier else "")
+    )
+    supplier_bank_name = purchase.supplier_bank_name or (purchase.supplier.bank_name if purchase.supplier else "")
+    payment_conditions = tuple(
+        {"id": value, "label": label} for value, label in PurchaseRequest.PaymentCondition.choices
+    )
+    payment_methods = tuple({"id": value, "label": label} for value, label in PurchaseRequest.PaymentMethod.choices)
+    delivery_conditions = tuple(
+        {"id": value, "label": label} for value, label in PurchaseRequest.DeliveryCondition.choices
+    )
+    account_types = tuple({"id": value, "label": label} for value, label in Supplier.ACCOUNT_TYPE_CHOICES)
+    requires_bank_data = purchase.payment_method == PurchaseRequest.PaymentMethod.TRANSFER
+    item_payloads = tuple(
+        _serialize_purchase_item(item=item, currency=purchase.currency or currency) for item in purchase.items.all()
+    )
+
     return PurchaseManagementCard(
         purchase_id=purchase.pk,
         code=purchase.timeline_code,
@@ -375,6 +429,23 @@ def build_purchase_management_card(*, user: Optional[UserProfile]) -> Optional[P
         notes=tuple(note for note in notes if note),
         allow_finalize=allow_finalize,
         allow_modification=allow_modification,
+        purchase_date_value=purchase_date_value,
+        payment_condition_value=purchase.payment_condition or "",
+        payment_method_value=purchase.payment_method or "",
+        delivery_condition_value=purchase.delivery_condition or "",
+        shipping_eta_value=shipping_eta_value,
+        shipping_notes=shipping_notes,
+        supplier_account_holder_id=supplier_account_holder_id,
+        supplier_account_holder_name=supplier_account_holder_name,
+        supplier_account_type=supplier_account_type,
+        supplier_account_number=supplier_account_number,
+        supplier_bank_name=supplier_bank_name,
+        payment_conditions=payment_conditions,
+        payment_methods=payment_methods,
+        delivery_conditions=delivery_conditions,
+        account_types=account_types,
+        requires_bank_data=requires_bank_data,
+        items=item_payloads,
     )
 
 
@@ -463,6 +534,25 @@ def serialize_purchase_management_card(card: PurchaseManagementCard) -> dict[str
             "bank_account_label": card.bank_account_label,
             "payment_account_label": card.payment_account_label,
             "notes": list(card.notes),
+            "items": list(card.items),
+            "form": {
+                "purchase_date": card.purchase_date_value,
+                "payment_condition": card.payment_condition_value,
+                "payment_method": card.payment_method_value,
+                "delivery_condition": card.delivery_condition_value,
+                "shipping_eta": card.shipping_eta_value,
+                "shipping_notes": card.shipping_notes,
+                "supplier_account_holder_id": card.supplier_account_holder_id or "",
+                "supplier_account_holder_name": card.supplier_account_holder_name or "",
+                "supplier_account_type": card.supplier_account_type or "",
+                "supplier_account_number": card.supplier_account_number or "",
+                "supplier_bank_name": card.supplier_bank_name or "",
+                "payment_conditions": list(card.payment_conditions),
+                "payment_methods": list(card.payment_methods),
+                "delivery_conditions": list(card.delivery_conditions),
+                "account_types": list(card.account_types),
+                "requires_bank_data": card.requires_bank_data,
+            },
         },
         "allow_finalize": card.allow_finalize,
         "allow_modification": card.allow_modification,
@@ -569,3 +659,4 @@ def _currency_symbol(currency: Optional[str]) -> str:
     if code == "COP":
         return "$"
     return code
+    items: Tuple[dict[str, object], ...]
