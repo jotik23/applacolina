@@ -44,7 +44,6 @@ class CalendarGenerationForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 "class": FIELD_INPUT_CLASSES,
-                "placeholder": "Semana 42 - Colina",
             }
         ),
     )

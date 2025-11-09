@@ -5,6 +5,7 @@ from django.urls import reverse
 from task_manager.forms import TaskDefinitionQuickCreateForm
 
 from .forms import CalendarGenerationForm
+from .selectors import get_recent_calendars_payload
 
 
 def quick_create(request):
@@ -17,7 +18,7 @@ def quick_create(request):
 
     return {
         "calendar_generation_form": CalendarGenerationForm(),
-        "calendar_generation_recent_calendars": [],
+        "calendar_generation_recent_calendars": get_recent_calendars_payload(),
         "task_definition_form": TaskDefinitionQuickCreateForm(),
         "task_definition_create_url": reverse("task_manager:definition-create"),
         "task_definition_detail_url_template": reverse(

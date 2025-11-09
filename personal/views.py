@@ -48,6 +48,7 @@ from .models import (
     resolve_overload_policy,
 )
 from .services import CalendarScheduler, SchedulerOptions, sync_calendar_rest_periods
+from .selectors import get_recent_calendars_payload
 from production.models import ChickenHouse, Farm, Room
 
 
@@ -98,25 +99,6 @@ def _resolve_calendar_home_url(*, exclude_ids: Iterable[int] | None = None) -> s
         return reverse("personal:calendar-detail", args=[next_calendar.pk])
 
     return reverse("personal:configurator")
-
-
-def _recent_calendars_payload(*, limit: int = 3, exclude_ids: Iterable[int] | None = None) -> list[dict[str, Any]]:
-    queryset = ShiftCalendar.objects.order_by("-start_date", "-created_at")
-    if exclude_ids:
-        queryset = queryset.exclude(pk__in=list(exclude_ids))
-    recent_calendars = list(queryset[:limit])
-
-    return [
-        {
-            "id": calendar.id,
-            "display_name": calendar.name or f"Calendario {calendar.start_date:%d/%m/%Y}",
-            "start_date": calendar.start_date,
-            "end_date": calendar.end_date,
-            "status": calendar.status,
-            "status_label": calendar.get_status_display(),
-        }
-        for calendar in recent_calendars
-    ]
 
 
 REST_CELL_STATE_REST = "rest"
@@ -1807,7 +1789,7 @@ class CalendarConfiguratorView(StaffRequiredMixin, View):
                 "status_choices": _choice_payload(CalendarStatus.choices),
                 "calendar_generation_form": CalendarGenerationForm(),
                 "calendar_home_url": _resolve_calendar_home_url(),
-                "calendar_generation_recent_calendars": _recent_calendars_payload(),
+                "calendar_generation_recent_calendars": get_recent_calendars_payload(),
             },
         )
 
@@ -1908,7 +1890,7 @@ class CalendarDetailView(StaffRequiredMixin, View):
                 "position_groups": position_groups,
                 "calendar_generation_form": CalendarGenerationForm(),
                 "calendar_home_url": _resolve_calendar_home_url(exclude_ids=[calendar.id]),
-                "calendar_generation_recent_calendars": _recent_calendars_payload(exclude_ids=[calendar.id]),
+                "calendar_generation_recent_calendars": get_recent_calendars_payload(exclude_ids=[calendar.id]),
             },
         )
 

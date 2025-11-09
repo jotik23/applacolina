@@ -776,6 +776,32 @@
                         </div>
                       </div>
                     </div>
+                    {% if calendar_generation_recent_calendars %}
+                      <aside
+                        class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 text-sm shadow-lg ring-1 ring-slate-900/5 backdrop-blur-sm"
+                        aria-label="Últimos calendarios creados"
+                      >
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Últimos calendarios</p>
+                          <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Auto</span>
+                        </div>
+                        <ul class="mt-3 space-y-3 text-sm">
+                          {% for calendar in calendar_generation_recent_calendars %}
+                            <li class="rounded-xl border border-slate-100/80 bg-gradient-to-br from-white via-white to-slate-50 px-4 py-3 shadow-sm transition hover:border-brand/30 hover:shadow-md">
+                              <p class="font-semibold text-slate-900">
+                                {{ calendar.display_name }}
+                              </p>
+                              <p class="text-xs text-slate-500">
+                                {{ calendar.start_date|date:"d M Y" }} → {{ calendar.end_date|date:"d M Y" }}
+                              </p>
+                              <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide {% if calendar.status == 'approved' %}text-emerald-600{% elif calendar.status == 'modified' %}text-amber-600{% else %}text-slate-500{% endif %}">
+                                {{ calendar.status_label }}
+                              </p>
+                            </li>
+                          {% endfor %}
+                        </ul>
+                      </aside>
+                    {% endif %}
                     <div class="hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" data-field-error="__all__"></div>
                   </div>
                 </div>
@@ -802,26 +828,6 @@
                     </button>
                   </div>
                 </div>
-                {% if calendar_generation_recent_calendars %}
-                  <div class="border-t border-slate-100 bg-slate-50/80 px-7 py-5 backdrop-blur-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Últimos calendarios creados</p>
-                    <ul class="mt-4 max-h-52 space-y-3 overflow-y-auto pr-1">
-                      {% for calendar in calendar_generation_recent_calendars %}
-                        <li class="rounded-2xl border border-slate-200/70 bg-white/90 px-4 py-3 shadow-sm transition hover:border-brand/40 hover:shadow-md">
-                          <p class="text-sm font-semibold text-slate-900">
-                            {{ calendar.display_name }}
-                          </p>
-                          <p class="text-xs text-slate-500">
-                            {{ calendar.start_date|date:"d M Y" }} → {{ calendar.end_date|date:"d M Y" }}
-                          </p>
-                          <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide {% if calendar.status == 'approved' %}text-emerald-600{% elif calendar.status == 'modified' %}text-amber-600{% else %}text-slate-500{% endif %}">
-                            {{ calendar.status_label }}
-                          </p>
-                        </li>
-                      {% endfor %}
-                    </ul>
-                  </div>
-                {% endif %}
               </form>
             </div>
           </section>
