@@ -1,6 +1,6 @@
 {% load static %}
 const APP_CACHE_PREFIX = "applacolina-pwa";
-const APP_CACHE_VERSION = "v1";
+const APP_CACHE_VERSION = "v2";
 const STATIC_CACHE = `${APP_CACHE_PREFIX}-${APP_CACHE_VERSION}-static`;
 const PRECACHE_URLS = [
   "/task-manager/telegram/mini-app/",
@@ -43,6 +43,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(request.url);
+  const isStaticAsset = url.pathname.startsWith("/static/");
+  const isScriptRequest =
+    isStaticAsset && (request.destination === "script" || url.pathname.endsWith(".js"));
 
   // Allow cross-origin requests to fail fast without cache.
   if (url.origin !== location.origin) {
@@ -66,8 +69,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for static assets.
-  if (url.pathname.startsWith("/static/")) {
+  // Network-first for JS bundles to avoid stale code.
+  if (isScriptRequest) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL))
+        )
+    );
+    return;
+  }
+
+  // Cache-first for other static assets.
+  if (isStaticAsset) {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
         if (cachedResponse) {
