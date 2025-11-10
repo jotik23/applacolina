@@ -191,6 +191,64 @@
           opacity: 1;
         }
       }
+      .tm-purchase-card-grid {
+        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+        gap: min(0.85rem, 3vw);
+      }
+      .tm-purchase-card-panel {
+        border-radius: 1.25rem;
+        padding: min(1rem, 3.5vw);
+      }
+      .tm-purchase-card-panel--amount {
+        text-align: right;
+      }
+      .tm-purchase-card-label {
+        font-size: clamp(0.65rem, 2vw, 0.7rem);
+        letter-spacing: 0.18em;
+      }
+      .tm-purchase-card-value {
+        font-size: clamp(0.85rem, 2.6vw, 0.95rem);
+      }
+      .tm-purchase-card-amount {
+        font-size: clamp(1.05rem, 3.2vw, 1.25rem);
+      }
+      .tm-purchase-card-meta {
+        font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+      }
+      @media (max-width: 420px) {
+        .tm-purchase-card-grid {
+          grid-template-columns: repeat(2, minmax(8.5rem, 1fr));
+          gap: 0.5rem;
+        }
+        .tm-purchase-card-panel {
+          padding: 0.75rem;
+        }
+      }
+      .tm-card-title {
+        font-size: clamp(1.1rem, 3.6vw, 1.4rem);
+        line-height: 1.3;
+      }
+      .tm-card-subtitle {
+        font-size: clamp(0.78rem, 2.4vw, 0.9rem);
+      }
+      .tm-card-chip {
+        font-size: clamp(0.6rem, 1.8vw, 0.75rem);
+        letter-spacing: 0.18em;
+      }
+      .tm-card-chip--status {
+        padding-inline: clamp(0.65rem, 2vw, 0.85rem);
+        padding-block: clamp(0.2rem, 1vw, 0.35rem);
+      }
+      .tm-card-entry-title {
+        font-size: clamp(0.95rem, 3vw, 1.15rem);
+        line-height: 1.35;
+      }
+      .tm-card-entry-meta {
+        font-size: clamp(0.72rem, 2.2vw, 0.85rem);
+      }
+      .tm-card-entry-meta--muted {
+        font-size: clamp(0.68rem, 2vw, 0.78rem);
+      }
     </style>
   </head>
   <body

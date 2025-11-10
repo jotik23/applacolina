@@ -381,6 +381,7 @@ class PurchaseApprovalCardController {
     this.listNode = card.querySelector('[data-purchase-approval-list]');
     this.template = card.querySelector('template[data-purchase-approval-entry-template]');
     this.managerOptions = [];
+    this.entryCollapsibles = new WeakMap();
   }
 
   init(payload) {
@@ -415,6 +416,7 @@ class PurchaseApprovalCardController {
       return;
     }
     this.listNode.innerHTML = '';
+    this.entryCollapsibles = new WeakMap();
     entries.forEach((entry) => {
       const fragment = document.importNode(this.template.content, true);
       const node = fragment.querySelector('[data-purchase-approval-entry]');
@@ -444,6 +446,10 @@ class PurchaseApprovalCardController {
         feedback.textContent = '';
       }
       this.attachEntryEvents(node);
+      const collapsible = setupCollapsibleCard(node);
+      if (collapsible) {
+        this.entryCollapsibles.set(node, collapsible);
+      }
       this.listNode.appendChild(node);
     });
   }
@@ -573,10 +579,34 @@ class PurchaseApprovalCardController {
     });
   }
 
+  ensureEntryExpanded(node) {
+    if (!node) {
+      return;
+    }
+    const controller = this.entryCollapsibles && this.entryCollapsibles.get(node);
+    if (controller && typeof controller.open === 'function') {
+      controller.open();
+      return;
+    }
+    const content = node.querySelector('[data-collapsible-content]');
+    if (content) {
+      content.hidden = false;
+    }
+    const toggle = node.querySelector('[data-collapsible-toggle]');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'true');
+    }
+    const icon = node.querySelector('[data-collapsible-icon]');
+    if (icon) {
+      icon.dataset.state = 'open';
+    }
+  }
+
   handleDecision(node, action) {
     if (!node) {
       return;
     }
+    this.ensureEntryExpanded(node);
     const url = node.getAttribute('data-decision-url');
     if (!url) {
       this.showEntryFeedback(node, 'No encontramos la ruta para registrar tu decisión.', 'error');
