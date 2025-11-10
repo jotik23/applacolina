@@ -256,7 +256,7 @@
     data-app-timezone="{{ APP_TIME_ZONE }}"
     data-app-timezone-offset="{{ APP_TIME_ZONE_OFFSET_MINUTES }}"
   >
-    <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 py-6">
+    <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 pt-6 pb-32">
       {% if mini_app_access_granted and telegram_mini_app %}
       <header class="relative rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/95 via-sky-50/90 to-amber-50/90 p-4 shadow-xl shadow-slate-200/70 mini-app-blur sm:p-5">
         <div class="flex flex-nowrap items-center gap-4 sm:gap-6">
@@ -3078,17 +3078,23 @@
 
       </section>
 
-      <footer class="sticky bottom-4 mt-auto flex justify-center" data-mini-app-floating-action>
-        <button
-          type="button"
-          class="w-full rounded-full bg-brand px-5 py-3 text-sm font-semibold text-slate-900 shadow-xl shadow-amber-200/70 transition hover:bg-brand-dark"
-          data-telegram-main-action
-          data-login-url="{% url 'task_manager:telegram-mini-app' %}"
-          {% if mini_app_logout_url %}data-logout-url="{{ mini_app_logout_url }}"{% endif %}
-          data-mini-app-finish-trigger
-        >
-          Finalizar mi turno
-        </button>
+      <footer
+        class="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-5 sm:px-6"
+        data-mini-app-floating-action
+        style="padding-bottom: calc(env(safe-area-inset-bottom, 0px));"
+      >
+        <div class="pointer-events-auto w-full max-w-xl">
+          <button
+            type="button"
+            class="w-full rounded-full bg-brand px-5 py-3 text-sm font-semibold text-slate-900 shadow-xl shadow-amber-200/70 transition hover:bg-brand-dark"
+            data-telegram-main-action
+            data-login-url="{% url 'task_manager:telegram-mini-app' %}"
+            {% if mini_app_logout_url %}data-logout-url="{{ mini_app_logout_url }}"{% endif %}
+            data-mini-app-finish-trigger
+          >
+            Finalizar mi turno
+          </button>
+        </div>
       </footer>
 
       <div
