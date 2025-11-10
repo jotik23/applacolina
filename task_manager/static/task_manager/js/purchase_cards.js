@@ -79,6 +79,40 @@
     }
   }
 
+  function setupCollapsibleCard(card) {
+    if (!card) {
+      return null;
+    }
+    const toggle = card.querySelector('[data-collapsible-toggle]');
+    const content = card.querySelector('[data-collapsible-content]');
+    if (!toggle || !content) {
+      return null;
+    }
+    const icon = card.querySelector('[data-collapsible-icon]');
+    let isOpen = false;
+    const setState = (nextState) => {
+      isOpen = Boolean(nextState);
+      toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      content.hidden = !isOpen;
+      if (icon) {
+        icon.dataset.state = isOpen ? 'open' : 'closed';
+      }
+      card.dataset.collapsibleState = isOpen ? 'open' : 'closed';
+    };
+    setState(false);
+    toggle.addEventListener('click', (event) => {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      setState(!isOpen);
+    });
+    return {
+      setState,
+      open: () => setState(true),
+      close: () => setState(false),
+    };
+  }
+
 
   class PurchaseRequestsListController {
     constructor(card, helpers) {
@@ -1760,6 +1794,7 @@ class PurchaseApprovalCardController {
 
     const requestsCard = document.querySelector('[data-purchase-requests-card]');
     if (requestsCard) {
+      controllers.requestsCollapsible = setupCollapsibleCard(requestsCard);
       controllers.requestsList = new PurchaseRequestsListController(requestsCard, {
         onEditRequest: (payload) => {
           if (controllers.composer) {
@@ -1782,6 +1817,7 @@ class PurchaseApprovalCardController {
 
     const managementCard = document.querySelector('[data-purchase-management-card]');
     if (managementCard) {
+      controllers.managementCollapsible = setupCollapsibleCard(managementCard);
       controllers.management = new PurchaseManagementCardController(managementCard, csrfToken, {
         onRequestsUpdated: notifyRequestsUpdated,
         onManagementUpdated: notifyManagementUpdated,

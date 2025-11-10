@@ -8695,7 +8695,14 @@
             ensureSubscription();
             return;
           }
-          const permission = await Notification.requestPermission();
+          let permission;
+          try {
+            permission = await Notification.requestPermission();
+          } catch (error) {
+            console.error('No se pudo solicitar el permiso de notificaciones.', error);
+            applyVisualState('error', 'No pudimos solicitar permisos automáticamente.');
+            return;
+          }
           if (permission === 'granted') {
             ensureSubscription();
             return;
@@ -8703,21 +8710,32 @@
           if (permission === 'denied') {
             applyVisualState('error', 'Debes permitir notificaciones en el navegador.');
           } else {
-            applyVisualState('loading', 'Permiso pendiente. Vuelve a intentarlo.');
+            applyVisualState('idle', 'Permiso pendiente. Vuelve a intentarlo.');
           }
         }
 
-        if (!hasBrowserSupport) {
-          applyVisualState('error', 'Notificaciones no soportadas.');
-          return;
+        function bootstrapPushRegistration() {
+          if (!hasBrowserSupport) {
+            applyVisualState('error', 'Notificaciones no soportadas.');
+            return;
+          }
+
+          if (Notification.permission === 'granted') {
+            applyVisualState('loading', 'Verificando suscripción…');
+            ensureSubscription();
+            return;
+          }
+
+          if (Notification.permission === 'default') {
+            applyVisualState('loading', 'Solicitando permiso para notificaciones…');
+            requestPermission();
+            return;
+          }
+
+          applyVisualState('error', 'Debes permitir notificaciones en el navegador.');
         }
 
-        if (Notification.permission === 'granted') {
-          applyVisualState('loading', 'Verificando suscripción…');
-          ensureSubscription();
-        } else {
-          applyVisualState('idle');
-        }
+        bootstrapPushRegistration();
 
         pushButton.addEventListener('click', function () {
           requestPermission();
