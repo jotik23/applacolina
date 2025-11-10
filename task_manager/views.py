@@ -83,6 +83,11 @@ from task_manager.mini_app.features.purchases import (
     MAX_PURCHASE_REQUEST_ITEMS as MINI_APP_PURCHASE_FORM_MAX_ITEMS,
     RECENT_SUPPLIER_SUGGESTIONS as MINI_APP_PURCHASE_SUPPLIER_LIMIT,
 )
+from task_manager.services.purchase_notifications import (
+    notify_purchase_manager_assignment,
+    notify_purchase_returned_for_changes,
+    notify_purchase_workflow_result,
+)
 
 from .forms import MiniAppAuthenticationForm, MiniAppPushTestForm, TaskDefinitionQuickCreateForm
 from .models import (
@@ -3590,6 +3595,12 @@ def mini_app_purchase_request_modify_view(request, pk: int):
 
     purchase.save(update_fields=update_fields)
 
+    notify_purchase_returned_for_changes(
+        purchase=purchase,
+        manager=user,
+        reason=reason,
+    )
+
     overview_payload = _build_purchase_overview_payload(user)
     management_payload = _build_purchase_management_payload(user, request)
 
@@ -3753,8 +3764,8 @@ def mini_app_purchase_approval_view(request, pk: int):
             status=400,
         )
 
-    manager_exists = UserProfile.objects.filter(pk=assigned_manager_id).only("pk").exists()
-    if not manager_exists:
+    assigned_manager = UserProfile.objects.filter(pk=assigned_manager_id).first()
+    if not assigned_manager:
         return JsonResponse({"error": _("Selecciona un gestor válido.")}, status=400)
 
     decision = (_normalize_string(payload.get("decision")) or "approve").lower()
@@ -3762,9 +3773,11 @@ def mini_app_purchase_approval_view(request, pk: int):
         decision = "approve"
     note = (payload.get("note") or "").strip()
 
+    manager_notification_target: UserProfile | None = None
     if purchase.assigned_manager_id != assigned_manager_id:
         purchase.assigned_manager_id = assigned_manager_id
         purchase.save(update_fields=["assigned_manager", "updated_at"])
+        manager_notification_target = assigned_manager
 
     service = PurchaseApprovalDecisionService(
         purchase_request=purchase,
@@ -3790,6 +3803,21 @@ def mini_app_purchase_approval_view(request, pk: int):
         message = _("Solicitud aprobada completamente.")
     else:
         message = _("Tu aprobación fue registrada. El flujo continuará con el siguiente aprobador.")
+
+    if manager_notification_target:
+        notify_purchase_manager_assignment(
+            purchase=purchase,
+            manager=manager_notification_target,
+            source="approval-view",
+        )
+
+    if result.workflow_completed or result.decision == "rejected":
+        notify_purchase_workflow_result(
+            purchase=purchase,
+            decision=result.decision,
+            workflow_completed=result.workflow_completed,
+            approver=user,
+        )
 
     return JsonResponse(
         {

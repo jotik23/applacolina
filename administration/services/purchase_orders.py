@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from administration.models import PurchaseRequest, Supplier
+from task_manager.services.purchase_notifications import notify_purchase_manager_assignment
 
 
 @dataclass
@@ -104,13 +105,19 @@ class PurchaseOrderService:
         purchase.shipping_notes = (
             payload.shipping_notes if payload.delivery_condition == PurchaseRequest.DeliveryCondition.SHIPPING else ""
         )
+        previous_manager_id = purchase.assigned_manager_id
+        manager_changed = False
         purchase.payment_condition = payload.payment_condition
         purchase.payment_method = payload.payment_method
         self._sync_payment_date(purchase, payload.payment_condition)
         if payload.assigned_manager_id:
+            manager_changed = previous_manager_id != payload.assigned_manager_id
             purchase.assigned_manager_id = payload.assigned_manager_id
         elif not purchase.assigned_manager_id and purchase.requester_id:
+            manager_changed = previous_manager_id != purchase.requester_id
             purchase.assigned_manager_id = purchase.requester_id
+            if purchase.requester:
+                purchase.assigned_manager = purchase.requester
         if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
             purchase.supplier_account_holder_id = payload.supplier_account_holder_id
             purchase.supplier_account_holder_name = payload.supplier_account_holder_name
@@ -123,6 +130,12 @@ class PurchaseOrderService:
                 delivery_condition=payload.delivery_condition,
             )
         purchase.save()
+        if manager_changed and purchase.assigned_manager_id:
+            notify_purchase_manager_assignment(
+                purchase=purchase,
+                manager=purchase.assigned_manager,
+                source="order-management",
+            )
         if intent == "confirm_order" and payload.delivery_condition == PurchaseRequest.DeliveryCondition.IMMEDIATE:
             self._auto_receive_items(purchase)
         if payload.payment_method == PurchaseRequest.PaymentMethod.TRANSFER:
