@@ -200,36 +200,76 @@
   >
     <main class="mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-5 py-6">
       {% if mini_app_access_granted and telegram_mini_app %}
-      <header class="relative rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/90 via-sky-50/90 to-amber-50/90 p-5 shadow-xl shadow-slate-200/70 mini-app-blur overflow-hidden">
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-        <div class="flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
-          <div class="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
-            <span
-              class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-200/80"
-            >
-              Granjas la Colina
-              </span>
-              <h1 data-telegram-display-name class="text-base font-semibold text-slate-900">
-                {{ telegram_mini_app.user.display_name }}
-              </h1>
-              <p data-mini-app-contact class="text-xs text-slate-600">
-                {{ telegram_mini_app.user.contact_handle }}
-              </p>
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:mt-1">
+      <header class="relative rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white/95 via-sky-50/90 to-amber-50/90 p-4 shadow-xl shadow-slate-200/70 mini-app-blur sm:p-5">
+        <div class="flex flex-nowrap items-center gap-4 sm:gap-6">
+          <div class="flex flex-1 items-center gap-4 sm:gap-5 min-w-0">
+            <div class="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-white/90 p-2 shadow-inner shadow-white/40 sm:h-20 sm:w-20">
+              <img
+                src="{% static 'task_manager/img/mini_app_motivation_placeholder.png' %}"
+                alt="La Colina Granjas"
+                class="h-12 w-12 cursor-pointer object-contain drop-shadow-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:h-16 sm:w-16"
+                role="button"
+                tabindex="0"
+                title="Recargar la mini app"
+                aria-label="Recargar la mini app"
+                data-mini-app-reload-trigger
+              />
+            </div>
+            <div class="min-w-0 text-left">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
                 {{ telegram_mini_app.user.role }}
               </p>
+              <h1 data-telegram-display-name class="truncate text-xl font-semibold text-slate-900 sm:text-2xl">
+                {{ telegram_mini_app.user.display_name }}
+              </h1>
+            </div>
+          </div>
+          <div class="ml-auto flex items-center gap-4">
+            <div class="flex flex-col items-center gap-1 text-center">
+              <button
+                type="button"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-white/95 text-rose-600 shadow shadow-rose-100/70 transition hover:border-rose-300 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-200 disabled:cursor-not-allowed"
+                data-enable-push
+                data-label-default="Notificaciones desactivadas"
+                aria-live="polite"
+              >
+                <span class="sr-only" data-push-label>Notificaciones desactivadas</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="h-5 w-5"
+                  aria-hidden="true"
+                  data-push-icon
+                >
+                  <path d="M8 10V8a4 4 0 0 1 8 0v2" />
+                  <path d="M6 10.5C6 7 8 4 12 4s6 3 6 6.5v3.5l1.5 1.5a1 1 0 0 1-.7 1.7H5.2a1 1 0 0 1-.7-1.7L6 14v-3.5z" />
+                  <path d="M10 19a2 2 0 0 0 4 0" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition hover:text-rose-600 focus:outline-none"
+                data-disable-push
+              >
+                Suspender
+              </button>
             </div>
             {% if mini_app_logout_url %}
             <form
               method="post"
               action="{{ mini_app_logout_url }}"
-              class="flex justify-center sm:justify-start"
+              class="flex flex-col items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
               data-mini-app-logout-form
             >
               {% csrf_token %}
               <button
                 type="submit"
-                class="group flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-white/70 text-slate-400 shadow-sm shadow-amber-100 transition hover:bg-rose-50 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50"
+                class="group flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-500 shadow-sm shadow-amber-100 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200/70"
                 data-mini-app-finish-trigger
               >
                 <span class="sr-only">Cerrar sesión</span>
@@ -252,55 +292,7 @@
             </form>
             {% endif %}
           </div>
-          <div class="flex w-full items-center justify-center py-4 sm:flex-1">
-            <img
-              src="{% static 'task_manager/img/mini_app_motivation_placeholder.png' %}"
-              alt="La Colina Granjas"
-              class="h-24 w-24 object-contain drop-shadow-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white cursor-pointer sm:h-28 sm:w-28"
-              role="button"
-              tabindex="0"
-              title="Recargar la mini app"
-              aria-label="Recargar la mini app"
-              data-mini-app-reload-trigger
-            />
-          </div>
         </div>
-        {% if mini_app_pwa_config.vapid_public_key %}
-        <div class="absolute right-5 top-5 flex flex-col items-center gap-1 text-center text-slate-500">
-          <button
-            type="button"
-            class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 bg-white/95 text-rose-600 shadow shadow-rose-100/70 transition hover:border-rose-300 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-200 disabled:cursor-not-allowed"
-            data-enable-push
-            data-label-default="Notificaciones desactivadas"
-            aria-live="polite"
-          >
-            <span class="sr-only" data-push-label>Notificaciones desactivadas</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="h-5 w-5"
-              aria-hidden="true"
-              data-push-icon
-            >
-              <path d="M8 10V8a4 4 0 0 1 8 0v2" />
-              <path d="M6 10.5C6 7 8 4 12 4s6 3 6 6.5v3.5l1.5 1.5a1 1 0 0 1-.7 1.7H5.2a1 1 0 0 1-.7-1.7L6 14v-3.5z" />
-              <path d="M10 19a2 2 0 0 0 4 0" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 transition hover:text-rose-600 focus:outline-none"
-            data-disable-push
-          >
-            Suspender
-          </button>
-        </div>
-        {% endif %}
       </header>
 {% include "task_manager/includes/shift_confirmation_card.html" with shift=telegram_mini_app.shift_confirmation shift_empty=telegram_mini_app.shift_confirmation_empty %}
       <div
