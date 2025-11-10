@@ -256,7 +256,12 @@
             <img
               src="{% static 'task_manager/img/mini_app_motivation_placeholder.png' %}"
               alt="La Colina Granjas"
-              class="h-24 w-24 object-contain drop-shadow-md sm:h-28 sm:w-28"
+              class="h-24 w-24 object-contain drop-shadow-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white cursor-pointer sm:h-28 sm:w-28"
+              role="button"
+              tabindex="0"
+              title="Recargar la mini app"
+              aria-label="Recargar la mini app"
+              data-mini-app-reload-trigger
             />
           </div>
         </div>
@@ -3367,6 +3372,35 @@
             renderState();
           });
         }
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var reloadTrigger = document.querySelector('[data-mini-app-reload-trigger]');
+        if (!reloadTrigger) {
+          return;
+        }
+
+        function reloadMiniApp() {
+          try {
+            window.location.reload();
+          } catch (error) {
+            window.location.href = window.location.href;
+          }
+        }
+
+        reloadTrigger.addEventListener('click', function (event) {
+          event.preventDefault();
+          reloadMiniApp();
+        });
+
+        reloadTrigger.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            reloadMiniApp();
+          }
+        });
       })();
     </script>
 
