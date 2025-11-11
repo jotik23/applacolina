@@ -265,9 +265,14 @@
                       </section>
 
                       <section class="rounded-xl border border-slate-200/80 p-5 shadow-sm">
-                        <header class="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          <span>Distribución por galpón</span>
-                          <span class="text-[11px] text-slate-400">Detalle de ocupación y consumo</span>
+                        <header class="mb-4 flex flex-col gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                          <div class="flex items-center gap-3">
+                            <span>Distribución por galpón</span>
+                            <span class="text-[11px] text-slate-400">Detalle de ocupación y consumo</span>
+                          </div>
+                          <a href="{% url 'production:batch-production-board' lot.id %}" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50">
+                            Gestionar producción diaria →
+                          </a>
                         </header>
                         <div class="overflow-x-auto">
                           <table class="min-w-full divide-y divide-slate-200 text-left text-xs">

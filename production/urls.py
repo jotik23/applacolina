@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    batch_production_board_view,
     batch_allocation_delete_view,
     batch_management_view,
     chicken_house_delete_view,
@@ -22,6 +23,7 @@ urlpatterns = [
     path("indicadores-dia/", daily_indicators_view, name="daily-indicators"),
     path("", production_home_view, name="index"),
     path("lotes/", batch_management_view, name="batches"),
+    path("lotes/<int:pk>/produccion/", batch_production_board_view, name="batch-production-board"),
     path("lotes/<int:pk>/editar/", bird_batch_update_view, name="batch-update"),
     path("lotes/<int:pk>/eliminar/", bird_batch_delete_view, name="batch-delete"),
     path(

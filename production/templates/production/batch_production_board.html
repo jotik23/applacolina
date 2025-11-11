@@ -1,0 +1,365 @@
+{% extends "calendario/base.html" %}
+{% load humanize %}
+
+{% block title %}Gestión diaria · Lote {{ batch.id }}{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+  <section class="space-y-10">
+    <header class="rounded-2xl bg-white/80 p-8 shadow-sm ring-1 ring-slate-200/80">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div class="space-y-3">
+          <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">
+            <span class="size-2 rounded-full bg-emerald-400"></span>
+            Tablero de producción diaria
+          </span>
+          <div class="space-y-1">
+            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Lote</p>
+            <h1 class="text-3xl font-semibold text-slate-900">{{ batch }}</h1>
+          </div>
+          <p class="text-sm text-slate-500">
+            {{ batch.farm.name }} · {{ batch.breed }} · {{ batch.birth_date|date:"d M Y" }} ·
+            {{ batch_age_weeks }} semanas ({{ batch_age_days }} días)
+          </p>
+        </div>
+        <div class="flex flex-col items-start gap-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-8">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aves asignadas</p>
+            <p class="text-2xl font-semibold text-slate-900">{{ allocated_birds|intcomma }}</p>
+          </div>
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Salones activos</p>
+            <p class="text-2xl font-semibold text-slate-900">{{ room_rows|length }}</p>
+          </div>
+          <a href="{% url 'production:index' %}#lot-{{ batch.id }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900">
+            ← Volver al resumen
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+      <section class="rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/80">
+        <header class="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="space-y-1">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semana operativa</p>
+            <p class="text-xl font-semibold text-slate-900">{{ week_navigation.life_label }}</p>
+            <p class="text-sm text-slate-500">{{ week_navigation.range_label }}</p>
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div class="flex gap-2">
+              {% if week_navigation.previous_url %}
+                <a href="{{ week_navigation.previous_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">← Semana previa</a>
+              {% else %}
+                <span class="inline-flex items-center justify-center rounded-lg border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">← Semana previa</span>
+              {% endif %}
+              <a href="{{ week_navigation.next_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">Semana siguiente →</a>
+            </div>
+            <form method="get" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
+              <label for="quick-day" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ir a fecha</label>
+              <input id="quick-day" name="day" type="date" value="{{ selected_day|date:'Y-m-d' }}" class="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-100">
+              <button type="submit" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">Abrir</button>
+            </form>
+          </div>
+        </header>
+        <div class="mt-6 overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
+            <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-[11px] text-slate-500/90">
+              <tr>
+                <th class="px-4 py-3">Día</th>
+                <th class="px-4 py-3 text-right">Producción</th>
+                <th class="px-4 py-3 text-right">Consumo (kg)</th>
+                <th class="px-4 py-3 text-right">% Postura</th>
+                <th class="px-4 py-3 text-right">Consumo g/ave</th>
+                <th class="px-4 py-3 text-right">Peso huevo (g)</th>
+                <th class="px-4 py-3 text-right">Mortalidad / Descarte</th>
+                <th class="px-4 py-3 text-right">Editar</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              {% for day in week_rows %}
+                <tr class="transition {% if day.is_selected %}bg-emerald-50/70{% else %}hover:bg-emerald-50/40{% endif %}">
+                  <td class="px-4 py-3 text-sm font-semibold text-slate-900">
+                    {{ day.date|date:"l d M" }}
+                  </td>
+                  <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
+                    {% if day.production %}
+                      {{ day.production|intcomma }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
+                    {% if day.consumption %}
+                      {{ day.consumption|intcomma }} kg
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right text-[13px] font-semibold text-emerald-700">
+                    {% if day.hen_day %}
+                      {{ day.hen_day|floatformat:2 }}%
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
+                    {% if day.feed_per_bird %}
+                      {{ day.feed_per_bird|floatformat:1 }} g
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
+                    {% if day.average_egg_weight %}
+                      {{ day.average_egg_weight|floatformat:1 }} g
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right text-[13px] text-slate-900">
+                    {% if day.mortality %}
+                      <span class="font-semibold">{{ day.mortality|intcomma }}</span>
+                    {% else %}
+                      —
+                    {% endif %}
+                    /
+                    {% if day.discard %}
+                      <span class="font-semibold">{{ day.discard|intcomma }}</span>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <a href="{{ day.url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">
+                      Editar
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/80">
+        <header class="space-y-2 border-b border-slate-200 pb-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gestión diaria</p>
+          <h2 class="text-2xl font-semibold text-slate-900">{{ selected_day|date:"l d \\d\\e F Y" }}</h2>
+          <p class="text-sm text-slate-500">Revisa métricas y registra ajustes por salón o por galpón.</p>
+        </header>
+
+        <dl class="mt-6 grid gap-4 sm:grid-cols-2">
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">% postura</dt>
+            <dd class="mt-1 text-2xl font-semibold text-emerald-700">
+              {% if selected_summary.hen_day %}
+                {{ selected_summary.hen_day|floatformat:2 }}%
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo g/ave</dt>
+            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+              {% if selected_summary.feed_per_bird %}
+                {{ selected_summary.feed_per_bird|floatformat:1 }} g
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total</dt>
+            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+              {% if selected_summary.record %}
+                {{ selected_summary.record.production|intcomma }}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo total</dt>
+            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+              {% if selected_summary.record %}
+                {{ selected_summary.record.consumption|intcomma }} kg
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+
+        {% if room_form %}
+          <form method="post" class="mt-8 space-y-8">
+            {% csrf_token %}
+            {{ room_form.date }}
+            <input type="hidden" name="week" value="{{ week_start|date:'Y-m-d' }}">
+
+            {% if room_form.non_field_errors %}
+              <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {% for error in room_form.non_field_errors %}
+                  <p>{{ error }}</p>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <section class="space-y-4 rounded-xl border border-slate-200/80 p-4 shadow-sm">
+              <header class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Captura por salón</p>
+                  <p class="text-xs text-slate-500">Registra valores puntuales para cada salón asignado.</p>
+                </div>
+                <button type="submit" name="input_mode" value="rooms" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">
+                  Guardar por salón
+                </button>
+              </header>
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
+                  <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-slate-500/90">
+                    <tr>
+                      <th class="px-3 py-3">Salón</th>
+                      <th class="px-3 py-3">Galpón</th>
+                      <th class="px-3 py-3 text-right">Producción</th>
+                      <th class="px-3 py-3 text-right">Consumo</th>
+                      <th class="px-3 py-3 text-right">Mortalidad</th>
+                      <th class="px-3 py-3 text-right">Descarte</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    {% for row in room_rows %}
+                      <tr class="bg-white/90">
+                        <td class="px-3 py-3 text-sm font-semibold text-slate-900">{{ row.room_name }}</td>
+                        <td class="px-3 py-3 text-xs text-slate-500">{{ row.chicken_house_name }}</td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ row.fields.production }}
+                            {% for error in row.fields.production.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ row.fields.consumption }}
+                            {% for error in row.fields.consumption.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ row.fields.mortality }}
+                            {% for error in row.fields.mortality.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ row.fields.discard }}
+                            {% for error in row.fields.discard.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="6" class="px-3 py-4 text-center text-xs text-slate-500">No hay salones asignados.</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="space-y-4 rounded-xl border border-slate-200/80 p-4 shadow-sm">
+              <header class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registro agregado por galpón</p>
+                  <p class="text-xs text-slate-500">Ingresa los totales por galpón; se distribuirán automáticamente según las aves por salón.</p>
+                </div>
+                <button type="submit" name="input_mode" value="barns" class="inline-flex items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50">
+                  Distribuir y guardar
+                </button>
+              </header>
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
+                  <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-slate-500/90">
+                    <tr>
+                      <th class="px-3 py-3">Galpón</th>
+                      <th class="px-3 py-3 text-right">Aves</th>
+                      <th class="px-3 py-3 text-right">Producción</th>
+                      <th class="px-3 py-3 text-right">Consumo</th>
+                      <th class="px-3 py-3 text-right">Mortalidad</th>
+                      <th class="px-3 py-3 text-right">Descarte</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    {% for barn in barn_rows %}
+                      <tr class="bg-white/90">
+                        <td class="px-3 py-3 text-sm font-semibold text-slate-900">{{ barn.name }}</td>
+                        <td class="px-3 py-3 text-right text-sm text-slate-600">{{ barn.birds|intcomma }}</td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ barn.fields.production }}
+                            {% for error in barn.fields.production.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ barn.fields.consumption }}
+                            {% for error in barn.fields.consumption.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ barn.fields.mortality }}
+                            {% for error in barn.fields.mortality.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                        <td class="px-3 py-2">
+                          <div class="space-y-1 text-right">
+                            {{ barn.fields.discard }}
+                            {% for error in barn.fields.discard.errors %}
+                              <p class="text-[11px] text-rose-600">{{ error }}</p>
+                            {% endfor %}
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="space-y-2 rounded-xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ room_form.average_egg_weight.id_for_label }}">
+                {{ room_form.average_egg_weight.label }}
+              </label>
+              <div class="space-y-1">
+                {{ room_form.average_egg_weight }}
+                {% for error in room_form.average_egg_weight.errors %}
+                  <p class="text-[11px] text-rose-600">{{ error }}</p>
+                {% endfor %}
+              </div>
+            </div>
+          </form>
+        {% else %}
+          <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            Este lote aún no tiene salones asignados. Define la distribución para habilitar el registro de producción.
+          </div>
+        {% endif %}
+      </section>
+    </div>
+  </section>
+{% endblock %}

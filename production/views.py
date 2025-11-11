@@ -8,22 +8,33 @@ from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Avg, Count, Max, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncWeek
-from django.shortcuts import redirect
-from django.urls import reverse_lazy
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.generic import DeleteView, TemplateView, UpdateView
 
 from applacolina.mixins import StaffRequiredMixin
-from production.forms import BatchDistributionForm, BirdBatchForm, ChickenHouseForm, FarmForm, RoomForm
+from production.forms import (
+    BatchDailyProductionForm,
+    BatchDistributionForm,
+    BirdBatchForm,
+    ChickenHouseForm,
+    FarmForm,
+    RoomForm,
+    RoomProductionSnapshot,
+)
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
     ChickenHouse,
     Farm,
     ProductionRecord,
+    ProductionRoomRecord,
     Room,
     WeightSampleSession,
 )
+from production.services.daily_board import save_daily_room_entries
 from production.services.reference_tables import get_reference_targets
 
 
@@ -1665,6 +1676,358 @@ class BatchAllocationDeleteView(StaffRequiredMixin, DeleteView):
         return response
 
 
+class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
+    """Interactive board to review and edit daily production entries per lot."""
+
+    template_name = "production/batch_production_board.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.batch = get_object_or_404(
+            BirdBatch.objects.select_related("farm"),
+            pk=kwargs.get("pk"),
+        )
+        self.allocations = list(
+            BirdBatchRoomAllocation.objects.filter(bird_batch=self.batch)
+            .select_related("room__chicken_house")
+            .order_by("room__chicken_house__name", "room__name")
+        )
+        self.total_allocated_birds = sum(allocation.quantity or 0 for allocation in self.allocations)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        self._hydrate_state()
+        form: Optional[BatchDailyProductionForm] = kwargs.get("form")
+        if form is None and self.allocations:
+            form = BatchDailyProductionForm(
+                rooms=self.room_snapshots,
+                initial=self.form_initial,
+            )
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "batch": self.batch,
+                "active_submenu": "overview",
+                "week_rows": self.week_rows,
+                "week_navigation": self.week_navigation,
+                "selected_day": self.selected_day,
+                "selected_summary": self.selected_summary,
+                "room_form": form if self.allocations else None,
+                "room_rows": form.room_rows if form else [],
+                "barn_rows": form.barn_rows if form else [],
+                "has_rooms": bool(self.allocations),
+                "week_start": self.week_start,
+                "week_end": self.week_end,
+                "allocated_birds": self.total_allocated_birds,
+                "batch_age_weeks": self.batch_age_weeks,
+                "batch_age_days": self.batch_age_days,
+            }
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        self._hydrate_state()
+        if not self.allocations:
+            messages.error(
+                request,
+                "Configura la distribución del lote en salones antes de registrar producción.",
+            )
+            return redirect(self._build_week_url(self.selected_day, self.selected_week_index))
+
+        input_mode = request.POST.get("input_mode") or "rooms"
+        form = BatchDailyProductionForm(
+            rooms=self.room_snapshots,
+            input_mode=input_mode,
+            data=request.POST,
+            initial=self.form_initial,
+        )
+        if form.is_valid():
+            record = save_daily_room_entries(
+                batch=self.batch,
+                date=form.cleaned_data["date"],
+                entries=form.cleaned_entries,
+                average_egg_weight=form.cleaned_data.get("average_egg_weight"),
+                actor=request.user if request.user.is_authenticated else None,
+            )
+            messages.success(
+                request,
+                f"Se actualizaron los datos de producción del {record.date:%d/%m/%Y}.",
+            )
+            target_index = max((record.date - self.batch.birth_date).days // 7, 0)
+            return redirect(self._build_week_url(record.date, target_index))
+
+        return self.render_to_response(self.get_context_data(form=form))
+
+    def _hydrate_state(self) -> None:
+        self._init_timeline()
+        self.week_dates = [self.week_start + timedelta(days=index) for index in range(7)]
+        records_qs = ProductionRecord.objects.filter(
+            bird_batch=self.batch,
+            date__range=(self.week_start, self.week_end),
+        )
+        self.records_map = {record.date: record for record in records_qs}
+        self.selected_record = self.records_map.get(self.selected_day) or ProductionRecord.objects.filter(
+            bird_batch=self.batch,
+            date=self.selected_day,
+        ).first()
+
+        history_records = list(
+            ProductionRecord.objects.filter(
+                bird_batch=self.batch,
+                date__lte=self.week_end,
+            ).order_by("date")
+        )
+        self.current_birds_map = self._build_current_birds_map(history_records, self.week_dates)
+        self.week_rows = self._build_week_rows()
+        self.room_snapshots = self._build_room_snapshots()
+        self.form_initial = self._build_form_initial(self.room_snapshots, self.selected_record)
+        self.selected_summary = self._build_selected_summary()
+        self.week_navigation = self._build_week_navigation()
+        self.batch_age_days = max((self.selected_day - self.batch.birth_date).days, 0)
+        self.batch_age_weeks = self.batch_age_days // 7
+
+    def _init_timeline(self) -> None:
+        raw_day = self.request.POST.get("date") or self.request.GET.get("day")
+        has_explicit_day = bool(raw_day)
+        selected_day = self._parse_param_date(raw_day)
+        if selected_day is None:
+            selected_day = timezone.localdate()
+        if selected_day < self.batch.birth_date:
+            selected_day = self.batch.birth_date
+
+        requested_week_index = self._coerce_week_index(
+            self.request.POST.get("week_index") or self.request.GET.get("week_index")
+        )
+        week_param = self._parse_param_date(self.request.POST.get("week") or self.request.GET.get("week"))
+        has_explicit_week = requested_week_index is not None or week_param is not None
+
+        if requested_week_index is None and week_param is not None:
+            requested_week_index = max((week_param - self.batch.birth_date).days // 7, 0)
+
+        if requested_week_index is not None:
+            week_start = self.batch.birth_date + timedelta(days=requested_week_index * 7)
+        else:
+            reference_day = selected_day if has_explicit_day else timezone.localdate()
+            age_days = max((reference_day - self.batch.birth_date).days, 0)
+            requested_week_index = age_days // 7
+            week_start = self.batch.birth_date + timedelta(days=requested_week_index * 7)
+
+        if week_start < self.batch.birth_date:
+            week_start = self.batch.birth_date
+            requested_week_index = 0
+
+        week_end = week_start + timedelta(days=6)
+        if not has_explicit_week and not has_explicit_day:
+            # snap selected day to today within current week by default
+            selected_day = min(max(timezone.localdate(), week_start), week_end)
+        else:
+            if selected_day > week_end:
+                selected_day = week_end
+            if selected_day < week_start:
+                selected_day = week_start
+
+        self.selected_day = selected_day
+        self.week_start = week_start
+        self.week_end = week_end
+        self.selected_week_index = requested_week_index
+        self.selected_week_number = requested_week_index + 1
+
+    def _parse_param_date(self, raw_value: Optional[str]) -> Optional[date]:
+        if not raw_value:
+            return None
+        parsed = parse_date(raw_value)
+        return parsed
+
+    def _coerce_week_index(self, raw_value: Optional[str]) -> Optional[int]:
+        if raw_value in (None, ""):
+            return None
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return None
+        return max(value, 0)
+
+    def _build_room_snapshots(self) -> List[RoomProductionSnapshot]:
+        if not self.allocations:
+            return []
+
+        room_records = {
+            record.room_id: record
+            for record in ProductionRoomRecord.objects.select_related("room")
+            .filter(
+                production_record__bird_batch=self.batch,
+                production_record__date=self.selected_day,
+            )
+        }
+
+        snapshots: List[RoomProductionSnapshot] = []
+        for allocation in self.allocations:
+            room = allocation.room
+            room_record = room_records.get(room.pk)
+            snapshots.append(
+                RoomProductionSnapshot(
+                    room_id=room.pk,
+                    room_name=room.name,
+                    chicken_house_id=room.chicken_house_id,
+                    chicken_house_name=room.chicken_house.name,
+                    allocated_birds=allocation.quantity or 0,
+                    production=room_record.production if room_record else None,
+                    consumption=room_record.consumption if room_record else None,
+                    mortality=room_record.mortality if room_record else None,
+                    discard=room_record.discard if room_record else None,
+                )
+            )
+        return snapshots
+
+    def _build_form_initial(
+        self,
+        snapshots: List[RoomProductionSnapshot],
+        record: Optional[ProductionRecord],
+    ) -> Dict[str, Any]:
+        initial: Dict[str, Any] = {"date": self.selected_day}
+        if record and record.average_egg_weight is not None:
+            initial["average_egg_weight"] = record.average_egg_weight
+
+        barn_totals: Dict[int, Dict[str, Decimal | int]] = {}
+
+        for snapshot in snapshots:
+            prefix = f"room_{snapshot.room_id}"
+            if snapshot.production is not None:
+                initial[f"{prefix}_production"] = snapshot.production
+            if snapshot.consumption is not None:
+                initial[f"{prefix}_consumption"] = snapshot.consumption
+            if snapshot.mortality is not None:
+                initial[f"{prefix}_mortality"] = snapshot.mortality
+            if snapshot.discard is not None:
+                initial[f"{prefix}_discard"] = snapshot.discard
+
+            barn = barn_totals.setdefault(
+                snapshot.chicken_house_id,
+                {
+                    "production": Decimal("0"),
+                    "consumption": Decimal("0"),
+                    "mortality": 0,
+                    "discard": 0,
+                },
+            )
+            if snapshot.production is not None:
+                barn["production"] += Decimal(snapshot.production)
+            if snapshot.consumption is not None:
+                barn["consumption"] += Decimal(snapshot.consumption)
+            if snapshot.mortality is not None:
+                barn["mortality"] += snapshot.mortality
+            if snapshot.discard is not None:
+                barn["discard"] += snapshot.discard
+
+        for barn_id, totals in barn_totals.items():
+            prefix = f"barn_{barn_id}"
+            if totals["production"]:
+                initial[f"{prefix}_production"] = totals["production"]
+            if totals["consumption"]:
+                initial[f"{prefix}_consumption"] = totals["consumption"]
+            if totals["mortality"]:
+                initial[f"{prefix}_mortality"] = totals["mortality"]
+            if totals["discard"]:
+                initial[f"{prefix}_discard"] = totals["discard"]
+
+        return initial
+
+    def _build_week_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for day in self.week_dates:
+            record = self.records_map.get(day)
+            birds = self.current_birds_map.get(day, self.batch.initial_quantity)
+            rows.append(
+                {
+                    "date": day,
+                    "url": self._build_week_url(day, self.selected_week_index),
+                    "is_selected": day == self.selected_day,
+                    "production": record.production if record else None,
+                    "consumption": record.consumption if record else None,
+                    "hen_day": self._hen_day_pct(record, birds),
+                    "feed_per_bird": self._feed_per_bird(record, birds),
+                    "average_egg_weight": record.average_egg_weight if record else None,
+                    "mortality": record.mortality if record else None,
+                    "discard": record.discard if record else None,
+                }
+            )
+        return rows
+
+    def _build_current_birds_map(
+        self,
+        history_records: List[ProductionRecord],
+        days: List[date],
+    ) -> Dict[date, int]:
+        result: Dict[date, int] = {}
+        running_losses = 0
+        pointer = 0
+        total_records = len(history_records)
+        for day in days:
+            while pointer < total_records and history_records[pointer].date <= day:
+                record = history_records[pointer]
+                running_losses += int(record.mortality or 0) + int(record.discard or 0)
+                pointer += 1
+            result[day] = max(self.batch.initial_quantity - running_losses, 0)
+        return result
+
+    def _build_week_navigation(self) -> Dict[str, Any]:
+        prev_url = (
+            self._build_week_url(
+                self.week_start - timedelta(days=7),
+                self.selected_week_index - 1,
+            )
+            if self.selected_week_index > 0
+            else None
+        )
+        next_url = self._build_week_url(
+            self.week_start + timedelta(days=7),
+            self.selected_week_index + 1,
+        )
+        return {
+            "life_label": f"Semana de vida #{self.selected_week_number}",
+            "range_label": f"{self.week_start:%d %b} – {self.week_end:%d %b}",
+            "previous_url": prev_url,
+            "next_url": next_url,
+        }
+
+    def _build_week_url(self, day: date, week_index: Optional[int] = None) -> str:
+        if day < self.batch.birth_date:
+            day = self.batch.birth_date
+        target_index = week_index if week_index is not None else self.selected_week_index
+        base_url = reverse("production:batch-production-board", args=[self.batch.pk])
+        params = {
+            "week_index": str(max(target_index, 0)),
+            "day": day.isoformat(),
+        }
+        return f"{base_url}?{urlencode(params)}"
+
+    def _build_selected_summary(self) -> Dict[str, Any]:
+        record = self.records_map.get(self.selected_day) or self.selected_record
+        birds = self.current_birds_map.get(self.selected_day, self.batch.initial_quantity)
+        return {
+            "record": record,
+            "birds": birds,
+            "hen_day": self._hen_day_pct(record, birds),
+            "feed_per_bird": self._feed_per_bird(record, birds),
+        }
+
+    def _hen_day_pct(self, record: Optional[ProductionRecord], birds: int) -> Optional[float]:
+        if not record or not record.production or birds <= 0:
+            return None
+        try:
+            return float((record.production / Decimal(birds)) * Decimal("100"))
+        except (ArithmeticError, ValueError):
+            return None
+
+    def _feed_per_bird(self, record: Optional[ProductionRecord], birds: int) -> Optional[float]:
+        if not record or record.consumption is None or birds <= 0:
+            return None
+        try:
+            return float((record.consumption * Decimal("1000")) / Decimal(birds))
+        except (ArithmeticError, ValueError):
+            return None
+
+
+batch_production_board_view = BatchProductionBoardView.as_view()
 production_home_view = ProductionHomeView.as_view()
 daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
