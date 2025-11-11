@@ -30,7 +30,7 @@ _STATUS_PRIORITY = Case(
     output_field=IntegerField(),
 )
 
-PRODUCTION_STEP = Decimal("0.01")
+PRODUCTION_STEP = Decimal("1")
 
 
 @dataclass(frozen=True)

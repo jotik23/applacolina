@@ -4,7 +4,6 @@
   const ROOM_FIELDS = ['production', 'consumption', 'mortality', 'discard'];
   const REQUIRED_ROOM_FIELDS = new Set(['production', 'consumption']);
   const INTEGER_PATTERN = /^[0-9]+$/;
-  const DECIMAL_PATTERN = /^[0-9]+(?:\.[0-9]{1,2})?$/;
 
   const ROOM_FIELD_LABELS = {
     production: 'Producción',
@@ -48,7 +47,7 @@
       this.telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
       this.numberFormatter =
         typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
-          ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 })
+          ? new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 })
           : null;
 
       this.handleSubmit = this.handleSubmit.bind(this);
@@ -252,7 +251,7 @@
           }
           const value =
             roomPayload && Object.prototype.hasOwnProperty.call(roomPayload, field) ? roomPayload[field] : '';
-          input.value = this.formatValueForInput(value, field !== 'production');
+          input.value = this.formatValueForInput(value);
           input.classList.remove('border-rose-300');
         });
       });
@@ -263,7 +262,7 @@
         const weight = record && Object.prototype.hasOwnProperty.call(record, 'average_egg_weight')
           ? record.average_egg_weight
           : null;
-        averageInput.value = this.formatValueForInput(weight, true);
+        averageInput.value = this.formatValueForInput(weight);
         averageInput.classList.remove('border-rose-300');
       }
 
@@ -363,21 +362,16 @@
               roomEntry[field] = '0';
             }
           } else {
-            const expectsInteger = field !== 'production';
-            const pattern = expectsInteger ? INTEGER_PATTERN : DECIMAL_PATTERN;
-            if (!pattern.test(value)) {
+            if (!INTEGER_PATTERN.test(value)) {
               const label = ROOM_FIELD_LABELS[field] || 'este campo';
-              const requirement = expectsInteger ? 'números enteros' : 'números con máximo dos decimales';
               const message = roomLabel
-                ? 'Usa ' +
-                  requirement +
-                  ' para ' +
+                ? 'Usa números enteros para ' +
                   label +
                   ' de ' +
                   roomLabel +
                   (lotLabel ? ' (' + lotLabel + ')' : '') +
                   '.'
-                : 'Usa ' + requirement + ' antes de guardar.';
+                : 'Usa números enteros antes de guardar.';
               this.showFeedback(message, 'error');
               input.classList.add('border-rose-300');
               if (typeof input.focus === 'function') {
@@ -422,7 +416,7 @@
         return;
       }
       const totals = {
-        productionCents: 0,
+        production: 0,
         consumption: 0,
         mortality: 0,
         discard: 0,
@@ -439,17 +433,6 @@
           if (!value) {
             return;
           }
-          if (field === 'production') {
-            if (!DECIMAL_PATTERN.test(value)) {
-              return;
-            }
-            const parsedDecimal = Number(value);
-            if (!Number.isFinite(parsedDecimal) || parsedDecimal < 0) {
-              return;
-            }
-            totals.productionCents += Math.round(parsedDecimal * 100);
-            return;
-          }
           if (!INTEGER_PATTERN.test(value)) {
             return;
           }
@@ -457,12 +440,16 @@
           if (!Number.isFinite(parsed) || parsed < 0) {
             return;
           }
-          totals[field] += parsed;
+          if (field === 'production') {
+            totals.production += parsed;
+          } else {
+            totals[field] += parsed;
+          }
         });
       });
 
       const displayTotals = {
-        production: totals.productionCents / 100,
+        production: totals.production,
         consumption: totals.consumption,
         mortality: totals.mortality,
         discard: totals.discard,
@@ -535,8 +522,7 @@
             if (!value) {
               return false;
             }
-            const pattern = field === 'production' ? DECIMAL_PATTERN : INTEGER_PATTERN;
-            return pattern.test(value);
+            return INTEGER_PATTERN.test(value);
           });
         });
       });
@@ -640,31 +626,18 @@
       }
     }
 
-    formatValueForInput(rawValue, isInteger) {
+    formatValueForInput(rawValue) {
       if (rawValue === null || rawValue === undefined || rawValue === '') {
         return '';
       }
-      if (isInteger) {
-        if (typeof rawValue === 'string' && !INTEGER_PATTERN.test(rawValue)) {
-          return '';
-        }
-        const parsed = Number(rawValue);
-        if (!Number.isFinite(parsed)) {
-          return '';
-        }
-        return String(Math.trunc(parsed));
-      }
-      if (typeof rawValue === 'string') {
-        if (!DECIMAL_PATTERN.test(rawValue)) {
-          return '';
-        }
-        return rawValue;
-      }
-      const numeric = Number(rawValue);
-      if (!Number.isFinite(numeric)) {
+      if (typeof rawValue === 'string' && !INTEGER_PATTERN.test(rawValue)) {
         return '';
       }
-      return numeric.toString();
+      const parsed = Number(rawValue);
+      if (!Number.isFinite(parsed)) {
+        return '';
+      }
+      return String(Math.trunc(parsed));
     }
   }
 

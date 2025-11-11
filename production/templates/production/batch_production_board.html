@@ -67,7 +67,7 @@
             <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-[11px] text-slate-500/90">
               <tr>
                 <th class="px-4 py-3">Día</th>
-                <th class="px-4 py-3 text-right">Producción</th>
+                <th class="px-4 py-3 text-right">Producción (huevos)</th>
                 <th class="px-4 py-3 text-right">Consumo (kg)</th>
                 <th class="px-4 py-3 text-right">% Postura</th>
                 <th class="px-4 py-3 text-right">Consumo g/ave</th>
@@ -171,10 +171,10 @@
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total</dt>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (huevos)</dt>
             <dd class="mt-1 text-2xl font-semibold text-slate-900">
               {% if selected_summary.record %}
-                {{ selected_summary.record.production|intcomma }}
+                {{ selected_summary.record.production|intcomma }} huevos
               {% else %}
                 —
               {% endif %}
@@ -222,7 +222,7 @@
                     <tr>
                       <th class="px-3 py-3">Salón</th>
                       <th class="px-3 py-3">Galpón</th>
-                      <th class="px-3 py-3 text-right">Producción</th>
+                      <th class="px-3 py-3 text-right">Producción (huevos)</th>
                       <th class="px-3 py-3 text-right">Consumo</th>
                       <th class="px-3 py-3 text-right">Mortalidad</th>
                       <th class="px-3 py-3 text-right">Descarte</th>
@@ -292,7 +292,7 @@
                     <tr>
                       <th class="px-3 py-3">Galpón</th>
                       <th class="px-3 py-3 text-right">Aves</th>
-                      <th class="px-3 py-3 text-right">Producción</th>
+                      <th class="px-3 py-3 text-right">Producción (huevos)</th>
                       <th class="px-3 py-3 text-right">Consumo</th>
                       <th class="px-3 py-3 text-right">Mortalidad</th>
                       <th class="px-3 py-3 text-right">Descarte</th>
