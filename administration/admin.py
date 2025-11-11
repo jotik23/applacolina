@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from .models import Product, Supplier
+from .models import (
+    Product,
+    PurchaseApproval,
+    PurchaseItem,
+    PurchaseReceptionAttachment,
+    PurchaseRequest,
+    PurchaseSupportAttachment,
+    PurchasingExpenseType,
+    Supplier,
+    SupportDocumentType,
+)
 
 
 @admin.register(Supplier)
@@ -49,3 +59,236 @@ class SupplierAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     list_display = ("name", "unit", "created_at", "updated_at")
     search_fields = ("name", "unit")
+
+
+@admin.register(SupportDocumentType)
+class SupportDocumentTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "kind", "requires_template")
+    search_fields = ("name",)
+    list_filter = ("kind",)
+
+
+@admin.register(PurchasingExpenseType)
+class PurchasingExpenseTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "parent_category", "iva_rate", "withholding_rate")
+    search_fields = ("name", "parent_category__name")
+    list_filter = ("parent_category",)
+    autocomplete_fields = ("parent_category", "default_support_document_type")
+
+
+class PurchaseItemInline(admin.TabularInline):
+    model = PurchaseItem
+    extra = 0
+    fields = ("product", "description", "quantity", "estimated_amount", "received_quantity")
+    autocomplete_fields = ("product",)
+
+
+class PurchaseReceptionAttachmentInline(admin.TabularInline):
+    model = PurchaseReceptionAttachment
+    extra = 0
+    fields = ("file", "notes", "uploaded_by", "created_at")
+    readonly_fields = ("uploaded_by", "created_at")
+
+
+class PurchaseSupportAttachmentInline(admin.TabularInline):
+    model = PurchaseSupportAttachment
+    extra = 0
+    fields = ("file", "notes", "uploaded_by", "created_at")
+    readonly_fields = ("uploaded_by", "created_at")
+
+
+class PurchaseApprovalInline(admin.TabularInline):
+    model = PurchaseApproval
+    extra = 0
+    fields = ("sequence", "role", "approver", "status", "decided_at", "comments")
+    autocomplete_fields = ("approver",)
+    readonly_fields = ("decided_at",)
+    ordering = ("sequence",)
+
+
+@admin.register(PurchaseRequest)
+class PurchaseRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "timeline_code",
+        "name",
+        "expense_type",
+        "supplier",
+        "status",
+        "scope_summary",
+        "estimated_total",
+        "created_at",
+    )
+    list_filter = (
+        "status",
+        "scope_area",
+        "expense_type",
+        "supplier",
+        "scope_farm",
+        "scope_chicken_house",
+        "payment_method",
+        "payment_source",
+    )
+    search_fields = (
+        "timeline_code",
+        "name",
+        "description",
+        "supplier__name",
+        "scope_batch_code",
+        "scope_farm__name",
+        "scope_chicken_house__name",
+        "order_number",
+        "invoice_number",
+    )
+    autocomplete_fields = (
+        "supplier",
+        "expense_type",
+        "requester",
+        "assigned_manager",
+        "scope_farm",
+        "scope_chicken_house",
+        "support_document_type",
+    )
+    readonly_fields = (
+        "scope_preview",
+        "latest_approval_note_display",
+        "created_at",
+        "updated_at",
+        "approved_at",
+        "accounted_at",
+    )
+    fieldsets = (
+        (
+            "Detalles generales",
+            {
+                "fields": (
+                    "timeline_code",
+                    "name",
+                    "description",
+                    "status",
+                    "expense_type",
+                    "supplier",
+                    "requester",
+                    "assigned_manager",
+                    "latest_approval_note_display",
+                )
+            },
+        ),
+        (
+            "Alcance y logística",
+            {
+                "fields": (
+                    "scope_area",
+                    "scope_farm",
+                    "scope_chicken_house",
+                    "scope_batch_code",
+                    "scope_preview",
+                    "eta",
+                    "purchase_date",
+                    "order_number",
+                    "order_date",
+                    "delivery_condition",
+                    "delivery_terms",
+                    "shipping_eta",
+                    "shipping_notes",
+                    "reception_notes",
+                    "reception_mismatch",
+                )
+            },
+        ),
+        (
+            "Soporte y documentación",
+            {
+                "fields": (
+                    "support_document_type",
+                    "support_template_values",
+                    "supplier_account_holder_id",
+                    "supplier_account_holder_name",
+                    "supplier_account_type",
+                    "supplier_account_number",
+                    "supplier_bank_name",
+                )
+            },
+        ),
+        (
+            "Montos y pagos",
+            {
+                "fields": (
+                    "estimated_total",
+                    "currency",
+                    "payment_condition",
+                    "payment_method",
+                    "payment_source",
+                    "payment_amount",
+                    "payment_account",
+                    "payment_date",
+                    "payment_notes",
+                )
+            },
+        ),
+        (
+            "Factura y contabilización",
+            {
+                "fields": (
+                    "invoice_number",
+                    "invoice_date",
+                    "invoice_total",
+                    "accounted_in_system",
+                    "accounted_at",
+                    "approved_at",
+                )
+            },
+        ),
+        (
+            "Metadatos",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
+    )
+    inlines = (
+        PurchaseItemInline,
+        PurchaseApprovalInline,
+        PurchaseReceptionAttachmentInline,
+        PurchaseSupportAttachmentInline,
+    )
+    date_hierarchy = "created_at"
+    list_select_related = (
+        "expense_type",
+        "supplier",
+        "scope_farm",
+        "scope_chicken_house",
+        "requester",
+        "assigned_manager",
+    )
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for obj in instances:
+            if isinstance(obj, (PurchaseReceptionAttachment, PurchaseSupportAttachment)) and not obj.uploaded_by:
+                obj.uploaded_by = request.user
+            obj.save()
+        formset.save_m2m()
+        for obj in formset.deleted_objects:
+            obj.delete()
+
+    @admin.display(description="Ubicación")
+    def scope_summary(self, obj):
+        if not obj:
+            return ""
+        return obj.scope_label
+
+    @admin.display(description="Vista de alcance")
+    def scope_preview(self, obj):
+        if not obj:
+            return ""
+        return obj.scope_label or ""
+
+    @admin.display(description="Última nota de aprobación")
+    def latest_approval_note_display(self, obj):
+        if not obj:
+            return ""
+        return obj.latest_approval_note or "—"
