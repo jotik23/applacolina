@@ -101,6 +101,9 @@ class LotOverview(TypedDict):
     initial_birds: int
     current_birds: int
     bird_balance: int
+    production_avg_three_days: Optional[float]
+    egg_weight_avg_three_days: Optional[float]
+    feed_per_bird_avg_three_days: Optional[float]
     barn_count: int
     barn_names_display: str
     uniformity: Optional[float]
@@ -109,6 +112,7 @@ class LotOverview(TypedDict):
     feed_today_grams: Optional[float]
     weekly_feed_kg: float
     total_feed_to_date_kg: float
+    weekly_mortality_percentage: Optional[float]
     barns: List[BarnAllocation]
     mortality: List[MortalityRecord]
     weight_trend: List[WeightTrendPoint]
@@ -241,6 +245,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
         four_week_start = today - timedelta(days=27)
         year_start = date(today.year, 1, 1)
         history_start = today - timedelta(days=28)
+        three_day_start = today - timedelta(days=2)
 
         batches = list(
             BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE)
@@ -350,6 +355,15 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 ),
                 yearly_mortality=Coalesce(Sum("mortality", filter=Q(date__gte=year_start)), 0),
                 latest_record_date=Max("date"),
+                three_day_production_avg=Avg(
+                    "production", filter=Q(date__range=(three_day_start, today))
+                ),
+                three_day_consumption_avg=Avg(
+                    "consumption", filter=Q(date__range=(three_day_start, today))
+                ),
+                three_day_egg_weight_avg=Avg(
+                    "average_egg_weight", filter=Q(date__range=(three_day_start, today))
+                ),
             )
         )
         production_map = {entry["bird_batch_id"]: entry for entry in production_aggregates}
@@ -494,6 +508,28 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             four_week_mortality = int(stats.get("four_week_mortality", 0) or 0)
             yearly_mortality = int(stats.get("yearly_mortality", 0) or 0)
             latest_record_date = stats.get("latest_record_date")
+            three_day_production_avg_raw = stats.get("three_day_production_avg")
+            production_avg_three_days = (
+                float(three_day_production_avg_raw) if three_day_production_avg_raw is not None else None
+            )
+            three_day_consumption_avg_raw = stats.get("three_day_consumption_avg")
+            consumption_avg_three_days = (
+                float(three_day_consumption_avg_raw) if three_day_consumption_avg_raw is not None else None
+            )
+            three_day_egg_weight_avg_raw = stats.get("three_day_egg_weight_avg")
+            egg_weight_avg_three_days = (
+                float(three_day_egg_weight_avg_raw) if three_day_egg_weight_avg_raw is not None else None
+            )
+            feed_per_bird_avg_three_days = (
+                round(consumption_avg_three_days * 1000 / current_birds, 2)
+                if consumption_avg_three_days is not None and current_birds
+                else None
+            )
+            weekly_mortality_percentage = (
+                round((weekly_mortality / batch.initial_quantity) * 100, 2)
+                if batch.initial_quantity
+                else None
+            )
 
             uniformity_info = weight_data.get(batch.id)
             uniformity = None
@@ -872,6 +908,9 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 "initial_birds": batch.initial_quantity,
                 "current_birds": current_birds,
                 "bird_balance": batch.initial_quantity - current_birds,
+                "production_avg_three_days": production_avg_three_days,
+                "egg_weight_avg_three_days": egg_weight_avg_three_days,
+                "feed_per_bird_avg_three_days": feed_per_bird_avg_three_days,
                 "barn_count": len(barns_list),
                 "barn_names_display": barn_names_display,
                 "uniformity": round(uniformity, 2) if uniformity is not None else None,
@@ -880,6 +919,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 "feed_today_grams": feed_today_grams,
                 "weekly_feed_kg": round(weekly_consumption, 2),
                 "total_feed_to_date_kg": round(total_consumption, 2),
+                "weekly_mortality_percentage": weekly_mortality_percentage,
                 "barns": barns_list,
                 "mortality": mortality_records,
                 "weight_trend": weight_trend,

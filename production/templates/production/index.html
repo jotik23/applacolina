@@ -164,48 +164,50 @@
                         </div>
                         <p class="text-xs text-slate-500">{{ lot.notes }}</p>
                       </div>
-                      <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-6">
+                      <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-3 lg:grid-cols-5">
                         <div>
                           <dt class="font-semibold uppercase tracking-wide text-slate-500">Aves actuales</dt>
                           <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.current_birds|intcomma }}</dd>
                         </div>
                         <div>
-                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Saldo de aves</dt>
-                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.bird_balance|intcomma }}</dd>
-                        </div>
-                        <div>
-                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Uniformidad</dt>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">% producción (3d)</dt>
                           <dd class="mt-1 text-base font-semibold text-emerald-600">
-                            {% if lot.uniformity %}
-                              {{ lot.uniformity|floatformat:1 }}%
+                            {% if lot.production_avg_three_days is not None %}
+                              {{ lot.production_avg_three_days|floatformat:1 }}%
                             {% else %}
                               --
                             {% endif %}
                           </dd>
                         </div>
                         <div>
-                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Peso promedio</dt>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Peso huevo (3d)</dt>
                           <dd class="mt-1 text-base font-semibold text-slate-900">
-                            {% if lot.avg_weight %}
-                              {{ lot.avg_weight|floatformat:2 }} kg
+                            {% if lot.egg_weight_avg_three_days is not None %}
+                              {{ lot.egg_weight_avg_three_days|floatformat:1 }} g
                             {% else %}
                               --
                             {% endif %}
                           </dd>
                         </div>
                         <div>
-                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo diario</dt>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo gr/ave (3d)</dt>
                           <dd class="mt-1 text-base font-semibold text-slate-900">
-                            {% if lot.feed_today_grams %}
-                              {{ lot.feed_today_grams|floatformat:1 }} g/ave
+                            {% if lot.feed_per_bird_avg_three_days is not None %}
+                              {{ lot.feed_per_bird_avg_three_days|floatformat:1 }} g/ave
                             {% else %}
                               --
                             {% endif %}
                           </dd>
                         </div>
                         <div>
-                          <dt class="font-semibold uppercase tracking-wide text-slate-500">Consumo semanal</dt>
-                          <dd class="mt-1 text-base font-semibold text-slate-900">{{ lot.weekly_feed_kg|floatformat:1 }} kg</dd>
+                          <dt class="font-semibold uppercase tracking-wide text-slate-500">% mortalidad semanal</dt>
+                          <dd class="mt-1 text-base font-semibold text-rose-600">
+                            {% if lot.weekly_mortality_percentage is not None %}
+                              {{ lot.weekly_mortality_percentage|floatformat:2 }}%
+                            {% else %}
+                              --
+                            {% endif %}
+                          </dd>
                         </div>
                       </dl>
                     </summary>
