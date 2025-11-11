@@ -18,6 +18,9 @@ from production.models import (
 from production.services.daily_board import RoomEntry
 
 
+PRODUCTION_DECIMAL_PLACES = Decimal("0.01")
+
+
 @dataclass(frozen=True)
 class RoomProductionSnapshot:
     room_id: int
@@ -282,15 +285,17 @@ class BatchDailyProductionForm(forms.Form):
     average_egg_weight = forms.DecimalField(
         required=False,
         min_value=Decimal("0"),
-        max_value=Decimal("9999.99"),
-        decimal_places=2,
+        max_value=Decimal("999999"),
+        decimal_places=0,
         widget=forms.NumberInput(
             attrs={
                 "class": "block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm "
                 "font-semibold text-slate-700 shadow-inner transition focus:border-emerald-400 "
                 "focus:outline-none focus:ring-2 focus:ring-emerald-100",
-                "step": "0.01",
+                "step": "1",
                 "min": "0",
+                "inputmode": "numeric",
+                "pattern": "[0-9]*",
                 "placeholder": "Peso promedio huevo (g)",
             }
         ),
@@ -317,13 +322,26 @@ class BatchDailyProductionForm(forms.Form):
         self._build_barn_fields()
 
     def _build_room_fields(self) -> None:
-        input_attrs = {
+        base_attrs = {
             "class": "w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 "
             "shadow-inner transition focus:border-emerald-400 focus:outline-none focus:ring-2 "
             "focus:ring-emerald-100 text-right",
             "min": "0",
+        }
+        decimal_attrs = {
+            **base_attrs,
+            "step": "0.01",
+            "inputmode": "decimal",
+            "pattern": r"\d+(\.\d{1,2})?",
+        }
+        integer_attrs = {
+            **base_attrs,
             "step": "1",
             "inputmode": "numeric",
+        }
+        wide_integer_attrs = {
+            **integer_attrs,
+            "class": f"{integer_attrs['class']} min-w-[6rem]",
         }
 
         for snapshot in self.rooms:
@@ -339,7 +357,7 @@ class BatchDailyProductionForm(forms.Form):
                 min_value=Decimal("0"),
                 decimal_places=2,
                 max_digits=10,
-                widget=forms.NumberInput(attrs=input_attrs),
+                widget=forms.NumberInput(attrs=decimal_attrs),
                 label=f"{snapshot.room_name} · Producción",
             )
             self.fields[production_field].initial = self.initial.get(production_field)
@@ -350,7 +368,7 @@ class BatchDailyProductionForm(forms.Form):
                 min_value=Decimal("0"),
                 decimal_places=2,
                 max_digits=10,
-                widget=forms.NumberInput(attrs=input_attrs),
+                widget=forms.NumberInput(attrs=wide_integer_attrs),
                 label=f"{snapshot.room_name} · Consumo",
             )
             self.fields[consumption_field].initial = self.initial.get(consumption_field)
@@ -359,7 +377,7 @@ class BatchDailyProductionForm(forms.Form):
             self.fields[mortality_field] = forms.IntegerField(
                 required=False,
                 min_value=0,
-                widget=forms.NumberInput(attrs=input_attrs),
+                widget=forms.NumberInput(attrs=integer_attrs),
                 label=f"{snapshot.room_name} · Mortalidad",
             )
             self.fields[mortality_field].initial = self.initial.get(mortality_field)
@@ -368,7 +386,7 @@ class BatchDailyProductionForm(forms.Form):
             self.fields[discard_field] = forms.IntegerField(
                 required=False,
                 min_value=0,
-                widget=forms.NumberInput(attrs=input_attrs),
+                widget=forms.NumberInput(attrs=integer_attrs),
                 label=f"{snapshot.room_name} · Descarte",
             )
             self.fields[discard_field].initial = self.initial.get(discard_field)
@@ -403,13 +421,26 @@ class BatchDailyProductionForm(forms.Form):
         if not self.barn_groups:
             return
 
-        barn_input_attrs = {
+        base_attrs = {
             "class": "w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 "
             "shadow-inner transition focus:border-emerald-400 focus:outline-none focus:ring-2 "
             "focus:ring-emerald-100 text-right",
             "min": "0",
+        }
+        decimal_attrs = {
+            **base_attrs,
+            "step": "0.01",
+            "inputmode": "decimal",
+            "pattern": r"\d+(\.\d{1,2})?",
+        }
+        integer_attrs = {
+            **base_attrs,
             "step": "1",
             "inputmode": "numeric",
+        }
+        wide_integer_attrs = {
+            **integer_attrs,
+            "class": f"{integer_attrs['class']} min-w-[6rem]",
         }
 
         for barn_id, group in self.barn_groups.items():
@@ -426,7 +457,7 @@ class BatchDailyProductionForm(forms.Form):
                 min_value=Decimal("0"),
                 decimal_places=2,
                 max_digits=12,
-                widget=forms.NumberInput(attrs=barn_input_attrs),
+                widget=forms.NumberInput(attrs=decimal_attrs),
                 label=f"{group['name']} · Producción",
             )
             self.fields[prod_field].initial = self.initial.get(prod_field)
@@ -437,7 +468,7 @@ class BatchDailyProductionForm(forms.Form):
                 min_value=Decimal("0"),
                 decimal_places=2,
                 max_digits=12,
-                widget=forms.NumberInput(attrs=barn_input_attrs),
+                widget=forms.NumberInput(attrs=wide_integer_attrs),
                 label=f"{group['name']} · Consumo",
             )
             self.fields[cons_field].initial = self.initial.get(cons_field)
@@ -446,7 +477,7 @@ class BatchDailyProductionForm(forms.Form):
             self.fields[mort_field] = forms.IntegerField(
                 required=False,
                 min_value=0,
-                widget=forms.NumberInput(attrs=barn_input_attrs),
+                widget=forms.NumberInput(attrs=integer_attrs),
                 label=f"{group['name']} · Mortalidad",
             )
             self.fields[mort_field].initial = self.initial.get(mort_field)
@@ -455,7 +486,7 @@ class BatchDailyProductionForm(forms.Form):
             self.fields[disc_field] = forms.IntegerField(
                 required=False,
                 min_value=0,
-                widget=forms.NumberInput(attrs=barn_input_attrs),
+                widget=forms.NumberInput(attrs=integer_attrs),
                 label=f"{group['name']} · Descarte",
             )
             self.fields[disc_field].initial = self.initial.get(disc_field)
@@ -497,7 +528,7 @@ class BatchDailyProductionForm(forms.Form):
             mortality_value = cleaned_data.get(field_names["mortality"]) or 0
             discard_value = cleaned_data.get(field_names["discard"]) or 0
 
-            production = self._quantize_to_int(production_value)
+            production = self._normalize_production_value(production_value)
             consumption = self._quantize_to_int(consumption_value)
             entries[snapshot.room_id] = RoomEntry(
                 production=production,
@@ -508,8 +539,13 @@ class BatchDailyProductionForm(forms.Form):
         return entries
 
     def _build_entries_from_barns(self, cleaned_data: Dict[str, Any]) -> dict[int, RoomEntry]:
-        accumulator: dict[int, dict[str, int]] = {
-            snapshot.room_id: {"production": 0, "consumption": 0, "mortality": 0, "discard": 0}
+        accumulator: dict[int, dict[str, Any]] = {
+            snapshot.room_id: {
+                "production": Decimal("0"),
+                "consumption": 0,
+                "mortality": 0,
+                "discard": 0,
+            }
             for snapshot in self.rooms
         }
 
@@ -517,18 +553,18 @@ class BatchDailyProductionForm(forms.Form):
             field_names = self.barn_field_map.get(barn_id, {})
             weights = [(room.room_id, room.allocated_birds or 0) for room in group["rooms"]]
 
-            production_total = self._quantize_to_int(cleaned_data.get(field_names.get("production")))
+            production_total = self._normalize_production_value(cleaned_data.get(field_names.get("production")))
             consumption_total = self._quantize_to_int(cleaned_data.get(field_names.get("consumption")))
             mortality_total = int(cleaned_data.get(field_names.get("mortality")) or 0)
             discard_total = int(cleaned_data.get(field_names.get("discard")) or 0)
 
-            production_distribution = self._distribute_metric(production_total, weights)
+            production_distribution = self._distribute_decimal_metric(production_total, weights)
             consumption_distribution = self._distribute_metric(consumption_total, weights)
             mortality_distribution = self._distribute_metric(mortality_total, weights)
             discard_distribution = self._distribute_metric(discard_total, weights)
 
             for room_id, _ in weights:
-                accumulator[room_id]["production"] += production_distribution.get(room_id, 0)
+                accumulator[room_id]["production"] += production_distribution.get(room_id, Decimal("0"))
                 accumulator[room_id]["consumption"] += consumption_distribution.get(room_id, 0)
                 accumulator[room_id]["mortality"] += mortality_distribution.get(room_id, 0)
                 accumulator[room_id]["discard"] += discard_distribution.get(room_id, 0)
@@ -579,7 +615,27 @@ class BatchDailyProductionForm(forms.Form):
 
         return distribution
 
+    def _distribute_decimal_metric(
+        self,
+        total: Decimal,
+        weights: Sequence[tuple[int, int]],
+    ) -> dict[int, Decimal]:
+        normalized_total = self._normalize_production_value(total)
+        cents_total = int((normalized_total * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
+        cents_distribution = self._distribute_metric(cents_total, weights)
+        return {
+            room_id: (Decimal(value) / Decimal("100")) for room_id, value in cents_distribution.items()
+        }
+
     def _quantize_to_int(self, value: Optional[Decimal]) -> int:
         if value in (None, ""):
             return 0
         return int(Decimal(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    def _normalize_production_value(self, value: Optional[Decimal]) -> Decimal:
+        if value in (None, ""):
+            return Decimal("0")
+        quantized = Decimal(value).quantize(PRODUCTION_DECIMAL_PLACES, rounding=ROUND_HALF_UP)
+        if quantized < 0:
+            return Decimal("0")
+        return quantized

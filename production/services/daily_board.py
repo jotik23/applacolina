@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RoomEntry:
-    production: int
+    production: Decimal
     consumption: int
     mortality: int
     discard: int
@@ -100,7 +100,7 @@ def save_daily_room_entries(
             if room_record is None:
                 room_record = ProductionRoomRecord(production_record=record, room_id=room_id)
 
-            room_record.production = Decimal(entry.production)
+            room_record.production = entry.production
             room_record.consumption = Decimal(entry.consumption)
             room_record.mortality = entry.mortality
             room_record.discard = entry.discard

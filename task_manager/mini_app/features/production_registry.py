@@ -30,6 +30,8 @@ _STATUS_PRIORITY = Case(
     output_field=IntegerField(),
 )
 
+PRODUCTION_STEP = Decimal("0.01")
+
 
 @dataclass(frozen=True)
 class ProductionRecordSnapshot:
@@ -211,7 +213,7 @@ def build_production_registry(
             created_by_display = _display_user(record.created_by)
             updated_by_display = _display_user(record.updated_by)
             record_snapshot = ProductionRecordSnapshot(
-                production_total=_quantize_to_int(record.production) or Decimal(0),
+                production_total=_quantize_production(record.production) or Decimal("0"),
                 consumption_total=_quantize_to_int(record.consumption) or Decimal(0),
                 mortality_total=record.mortality,
                 discard_total=record.discard,
@@ -232,7 +234,7 @@ def build_production_registry(
                     room_id=allocation.room_id,
                     label=room.name,
                     allocated_birds=allocation.quantity or 0,
-                    production=_quantize_to_int(room_record.production) if room_record else None,
+                    production=_quantize_production(room_record.production) if room_record else None,
                     consumption=_quantize_to_int(room_record.consumption) if room_record else None,
                     mortality=room_record.mortality if room_record else None,
                     discard=room_record.discard if room_record else None,
@@ -387,8 +389,8 @@ def _persist_single_record(
         production = _coerce_decimal(
             room_payload.get("production"),
             field="production",
-            allow_decimals=False,
         )
+        production = _quantize_production(production)
         consumption = _coerce_decimal(
             room_payload.get("consumption"),
             field="consumption",
@@ -412,7 +414,7 @@ def _persist_single_record(
 
     average_weight = _parse_average_weight(entry.get("average_egg_weight"))
 
-    total_production = _quantize_to_int(sum(value["production"] for value in parsed_rooms.values()))
+    total_production = _quantize_production(sum(value["production"] for value in parsed_rooms.values()))
     total_consumption = _quantize_to_int(sum(value["consumption"] for value in parsed_rooms.values()))
     total_mortality = sum(value["mortality"] for value in parsed_rooms.values())
     total_discard = sum(value["discard"] for value in parsed_rooms.values())
@@ -478,6 +480,7 @@ def _parse_average_weight(raw_value: object) -> Optional[Decimal]:
         raw_value,
         field="average_egg_weight",
         max_value=Decimal("9999999999.99"),
+        allow_decimals=False,
     )
 
 
@@ -536,6 +539,15 @@ def _quantize_to_int(value: Optional[Decimal]) -> Optional[Decimal]:
     if value is None:
         return None
     return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+
+def _quantize_production(value: Optional[Decimal]) -> Optional[Decimal]:
+    if value is None:
+        return None
+    quantized = value.quantize(PRODUCTION_STEP, rounding=ROUND_HALF_UP)
+    if quantized < 0:
+        return Decimal("0")
+    return quantized
 
 
 def _display_user(user: Optional[UserProfile]) -> Optional[str]:

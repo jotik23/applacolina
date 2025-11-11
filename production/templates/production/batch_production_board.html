@@ -112,7 +112,7 @@
                   </td>
                   <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
                     {% if day.average_egg_weight %}
-                      {{ day.average_egg_weight|floatformat:1 }} g
+                      {{ day.average_egg_weight|floatformat:0 }} g
                     {% else %}
                       —
                     {% endif %}

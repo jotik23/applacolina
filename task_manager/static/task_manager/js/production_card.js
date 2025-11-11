@@ -4,6 +4,7 @@
   const ROOM_FIELDS = ['production', 'consumption', 'mortality', 'discard'];
   const REQUIRED_ROOM_FIELDS = new Set(['production', 'consumption']);
   const INTEGER_PATTERN = /^[0-9]+$/;
+  const DECIMAL_PATTERN = /^[0-9]+(?:\.[0-9]{1,2})?$/;
 
   const ROOM_FIELD_LABELS = {
     production: 'Producción',
@@ -14,7 +15,7 @@
 
   const BUTTON_LABELS = {
     save: 'Guardar',
-    complete: 'Marcar como completada',
+    complete: 'Guardar',
   };
 
   const BUTTON_ICONS = {
@@ -251,7 +252,7 @@
           }
           const value =
             roomPayload && Object.prototype.hasOwnProperty.call(roomPayload, field) ? roomPayload[field] : '';
-          input.value = this.formatValueForInput(value, true);
+          input.value = this.formatValueForInput(value, field !== 'production');
           input.classList.remove('border-rose-300');
         });
       });
@@ -262,7 +263,7 @@
         const weight = record && Object.prototype.hasOwnProperty.call(record, 'average_egg_weight')
           ? record.average_egg_weight
           : null;
-        averageInput.value = this.formatValueForInput(weight, false);
+        averageInput.value = this.formatValueForInput(weight, true);
         averageInput.classList.remove('border-rose-300');
       }
 
@@ -362,11 +363,21 @@
               roomEntry[field] = '0';
             }
           } else {
-            if (!INTEGER_PATTERN.test(value)) {
+            const expectsInteger = field !== 'production';
+            const pattern = expectsInteger ? INTEGER_PATTERN : DECIMAL_PATTERN;
+            if (!pattern.test(value)) {
               const label = ROOM_FIELD_LABELS[field] || 'este campo';
+              const requirement = expectsInteger ? 'números enteros' : 'números con máximo dos decimales';
               const message = roomLabel
-                ? 'Usa números enteros para ' + label + ' de ' + roomLabel + (lotLabel ? ' (' + lotLabel + ')' : '') + '.'
-                : 'Usa números enteros antes de guardar.';
+                ? 'Usa ' +
+                  requirement +
+                  ' para ' +
+                  label +
+                  ' de ' +
+                  roomLabel +
+                  (lotLabel ? ' (' + lotLabel + ')' : '') +
+                  '.'
+                : 'Usa ' + requirement + ' antes de guardar.';
               this.showFeedback(message, 'error');
               input.classList.add('border-rose-300');
               if (typeof input.focus === 'function') {
@@ -390,6 +401,14 @@
       if (averageInput) {
         const averageValue = averageInput.value && averageInput.value.trim();
         if (averageValue) {
+          if (!INTEGER_PATTERN.test(averageValue)) {
+            this.showFeedback('El peso promedio debe ser un número entero.', 'error');
+            averageInput.classList.add('border-rose-300');
+            if (typeof averageInput.focus === 'function') {
+              averageInput.focus();
+            }
+            return null;
+          }
           entry.average_egg_weight = averageValue;
         }
       }
@@ -403,7 +422,7 @@
         return;
       }
       const totals = {
-        production: 0,
+        productionCents: 0,
         consumption: 0,
         mortality: 0,
         discard: 0,
@@ -416,33 +435,57 @@
           if (!input) {
             return;
           }
-        const value = typeof input.value === 'string' ? input.value.trim() : '';
-        if (!value) {
-          return;
-        }
-        if (!INTEGER_PATTERN.test(value)) {
-          return;
-        }
-        const parsed = parseInt(value, 10);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-          return;
-        }
-        totals[field] += parsed;
+          const value = typeof input.value === 'string' ? input.value.trim() : '';
+          if (!value) {
+            return;
+          }
+          if (field === 'production') {
+            if (!DECIMAL_PATTERN.test(value)) {
+              return;
+            }
+            const parsedDecimal = Number(value);
+            if (!Number.isFinite(parsedDecimal) || parsedDecimal < 0) {
+              return;
+            }
+            totals.productionCents += Math.round(parsedDecimal * 100);
+            return;
+          }
+          if (!INTEGER_PATTERN.test(value)) {
+            return;
+          }
+          const parsed = parseInt(value, 10);
+          if (!Number.isFinite(parsed) || parsed < 0) {
+            return;
+          }
+          totals[field] += parsed;
+        });
       });
-    });
 
-    Object.keys(totals).forEach((field) => {
-      const target = lotNode.querySelector('[data-production-total-label="' + field + '"]');
-      if (!target) {
-        return;
-      }
-      if (this.numberFormatter) {
-        target.textContent = this.numberFormatter.format(totals[field]);
-      } else {
-        target.textContent = String(totals[field]);
-      }
-    });
-  }
+      const displayTotals = {
+        production: totals.productionCents / 100,
+        consumption: totals.consumption,
+        mortality: totals.mortality,
+        discard: totals.discard,
+      };
+
+      Object.keys(displayTotals).forEach((field) => {
+        const target = lotNode.querySelector('[data-production-total-label="' + field + '"]');
+        if (!target) {
+          return;
+        }
+        const value = displayTotals[field];
+        if (this.numberFormatter) {
+          target.textContent = this.numberFormatter.format(value);
+        } else if (field === 'production') {
+          const rounded = Math.round(value * 100) / 100;
+          target.textContent = Number.isInteger(rounded)
+            ? String(rounded)
+            : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+        } else {
+          target.textContent = String(value);
+        }
+      });
+    }
 
     refreshButtonState() {
       if (!this.submitButton) {
@@ -489,7 +532,11 @@
               return false;
             }
             const value = input.value && input.value.trim();
-            return !!value && INTEGER_PATTERN.test(value);
+            if (!value) {
+              return false;
+            }
+            const pattern = field === 'production' ? DECIMAL_PATTERN : INTEGER_PATTERN;
+            return pattern.test(value);
           });
         });
       });
@@ -607,12 +654,17 @@
         }
         return String(Math.trunc(parsed));
       }
+      if (typeof rawValue === 'string') {
+        if (!DECIMAL_PATTERN.test(rawValue)) {
+          return '';
+        }
+        return rawValue;
+      }
       const numeric = Number(rawValue);
       if (!Number.isFinite(numeric)) {
         return '';
       }
-      const trimmed = numeric.toString();
-      return trimmed;
+      return numeric.toString();
     }
   }
 

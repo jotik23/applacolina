@@ -1633,7 +1633,7 @@
                           data-egg-stage-complete
                           data-stage="{{ stage.id }}"
                         >
-                          Marcar como completada
+                          Guardar
                         </button>
                       </div>
                     </div>
@@ -5524,7 +5524,7 @@
               chip.textContent = status === 'saved' ? 'Guardada' : 'Pendiente';
             }
             if (completeButton) {
-              const defaultLabel = completeButton.dataset.defaultLabel || 'Marcar como completada';
+              const defaultLabel = completeButton.dataset.defaultLabel || 'Guardar';
               completeButton.disabled = false;
               completeButton.classList.remove('bg-emerald-500', 'text-white', 'hover:bg-emerald-600');
               completeButton.classList.add('bg-brand', 'text-slate-900', 'hover:bg-brand-dark');

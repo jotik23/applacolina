@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from datetime import timedelta
 
 from django.contrib.auth.models import Permission
@@ -181,11 +182,11 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "average_egg_weight": "10200",
+                    "average_egg_weight": "63",
                     "rooms": [
                         {
                             "room_id": self.room.pk,
-                            "production": "152",
+                            "production": "152.75",
                             "consumption": "480",
                             "mortality": 3,
                             "discard": 5,
@@ -202,17 +203,17 @@ class MiniAppProductionViewTests(TestCase):
         record = ProductionRecord.objects.get(bird_batch=self.bird_batch, date=today)
         self.assertEqual(record.created_by, user)
         self.assertEqual(record.updated_by, user)
-        self.assertEqual(record.production, 152)
+        self.assertEqual(record.production, Decimal("152.75"))
         self.assertEqual(record.consumption, 480)
         self.assertEqual(record.mortality, 3)
         self.assertEqual(record.discard, 5)
-        self.assertAlmostEqual(float(record.average_egg_weight), 10200.00)
+        self.assertEqual(record.average_egg_weight, Decimal("63"))
         room_records = ProductionRoomRecord.objects.filter(production_record=record)
         self.assertEqual(room_records.count(), 1)
         room_record = room_records.first()
         assert room_record is not None
         self.assertEqual(room_record.room, self.room)
-        self.assertEqual(room_record.production, 152)
+        self.assertEqual(room_record.production, Decimal("152.75"))
         self.assertEqual(room_record.consumption, 480)
         self.assertEqual(room_record.mortality, 3)
         self.assertEqual(room_record.discard, 5)
@@ -256,11 +257,11 @@ class MiniAppProductionViewTests(TestCase):
         record = ProductionRecord.objects.create(
             bird_batch=self.bird_batch,
             date=timezone.localdate(),
-            production=140,
+            production=Decimal("140.50"),
             consumption=470,
             mortality=2,
             discard=4,
-            average_egg_weight=61.0,
+            average_egg_weight=Decimal("61"),
             created_by=other_user,
             updated_by=other_user,
         )
@@ -272,11 +273,11 @@ class MiniAppProductionViewTests(TestCase):
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
-                    "average_egg_weight": "63.5",
+                    "average_egg_weight": "64",
                     "rooms": [
                         {
                             "room_id": self.room.pk,
-                            "production": "160",
+                            "production": "160.5",
                             "consumption": "500",
                             "mortality": 1,
                             "discard": 6,
@@ -290,11 +291,11 @@ class MiniAppProductionViewTests(TestCase):
         record.refresh_from_db()
         self.assertEqual(record.created_by, other_user)
         self.assertEqual(record.updated_by, user)
-        self.assertEqual(record.production, 160)
+        self.assertEqual(record.production, Decimal("160.5"))
         self.assertEqual(record.mortality, 1)
-        self.assertAlmostEqual(float(record.average_egg_weight), 63.5)
+        self.assertEqual(record.average_egg_weight, Decimal("64"))
         room_record = ProductionRoomRecord.objects.get(production_record=record, room=self.room)
-        self.assertEqual(room_record.production, 160)
+        self.assertEqual(room_record.production, Decimal("160.5"))
         self.assertEqual(room_record.consumption, 500)
         self.assertEqual(room_record.mortality, 1)
         self.assertEqual(room_record.discard, 6)
@@ -344,6 +345,36 @@ class MiniAppProductionViewTests(TestCase):
                         {
                             "room_id": self.room.pk,
                             "production": "120",
+                            "consumption": "450",
+                            "mortality": 0,
+                            "discard": 0,
+                        }
+                    ],
+                }
+            ],
+        }
+        response = self.client.post(url, payload, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn("error", data)
+        self.assertFalse(ProductionRecord.objects.exists())
+
+    def test_average_weight_rejects_decimal_values(self):
+        user = self._create_user(grant_permission=True)
+        self._create_assignment(operator=user)
+        self.client.force_login(user)
+
+        url = reverse("task_manager:mini-app-production-records")
+        payload = {
+            "date": timezone.localdate().isoformat(),
+            "lots": [
+                {
+                    "bird_batch": self.bird_batch.pk,
+                    "average_egg_weight": "63.5",
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "120.5",
                             "consumption": "450",
                             "mortality": 0,
                             "discard": 0,
