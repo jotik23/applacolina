@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.forms import BaseInlineFormSet, inlineformset_factory
 
+from .services.payroll import PayrollComputationError, PayrollPeriodInfo, resolve_payroll_period
 from .models import (
     ExpenseTypeApprovalRule,
     Product,
@@ -100,3 +101,27 @@ ExpenseTypeWorkflowFormSet = inlineformset_factory(
     extra=0,
     can_delete=True,
 )
+
+
+class PayrollPeriodForm(forms.Form):
+    start_date = forms.DateField(
+        label="Fecha inicial",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    end_date = forms.DateField(
+        label="Fecha final",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+
+    period_info: PayrollPeriodInfo | None = None
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get("start_date")
+        end = cleaned.get("end_date")
+        if start and end:
+            try:
+                self.period_info = resolve_payroll_period(start, end)
+            except PayrollComputationError as exc:
+                raise ValidationError(str(exc))
+        return cleaned

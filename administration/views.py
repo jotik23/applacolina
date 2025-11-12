@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 import re
+import calendar
+import csv
+from io import StringIO
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -10,12 +13,13 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.utils.functional import cached_property
+from django.utils.text import slugify
 from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
@@ -24,6 +28,7 @@ from personal.models import UserProfile
 
 from .forms import (
     ExpenseTypeWorkflowFormSet,
+    PayrollPeriodForm,
     ProductForm,
     PurchasingExpenseTypeForm,
     SupplierForm,
@@ -75,6 +80,12 @@ from .services.workflows import (
     ExpenseTypeWorkflowRefreshService,
     PurchaseApprovalDecisionError,
     PurchaseApprovalDecisionService,
+)
+from .services.payroll import (
+    ALLOWED_PAID_RESTS_PER_PERIOD,
+    PayrollComputationError,
+    PayrollOverrideData,
+    build_payroll_summary,
 )
 
 
@@ -1933,6 +1944,209 @@ class ProductManagementView(StaffRequiredMixin, generic.TemplateView):
             params['panel'] = self.request.GET.get('panel')
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
+
+
+class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
+    template_name = 'administration/purchases/payroll.html'
+
+    def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        form = self._build_period_form(request.GET)
+        summary = None
+        if form.is_valid() and form.period_info:
+            try:
+                summary = build_payroll_summary(period=form.period_info)
+            except PayrollComputationError as exc:
+                form.add_error(None, str(exc))
+        context = self.get_context_data(
+            period_form=form,
+            payroll_summary=summary,
+            selected_bonified_tokens=set(),
+        )
+        return self.render_to_response(context)
+
+    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        action = request.POST.get('form_action') or 'apply'
+        form = PayrollPeriodForm(request.POST)
+        bonified_tokens = set(request.POST.getlist('bonified_rest_ids'))
+        overrides, override_errors = self._parse_override_payload()
+        summary = None
+        export_response = None
+        if form.is_valid() and form.period_info:
+            try:
+                summary = build_payroll_summary(
+                    period=form.period_info,
+                    bonified_rest_tokens=bonified_tokens,
+                    overrides=overrides,
+                )
+                if summary and action.startswith('export-'):
+                    export_response = self._handle_export_action(summary, action)
+                    if export_response:
+                        return export_response
+                    messages.error(request, 'No encontramos datos para generar el archivo solicitado.')
+                elif summary and not override_errors and action == 'apply':
+                    messages.success(request, 'Montos actualizados. Puedes seguir editando antes de generar la nómina.')
+            except PayrollComputationError as exc:
+                form.add_error(None, str(exc))
+        for error in override_errors:
+            messages.error(request, error)
+
+        context = self.get_context_data(
+            period_form=form,
+            payroll_summary=summary,
+            selected_bonified_tokens=bonified_tokens,
+        )
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault('administration_active_submenu', 'payroll')
+        context.setdefault('period_form', kwargs.get('period_form') or PayrollPeriodForm())
+        context.setdefault('payroll_summary', kwargs.get('payroll_summary'))
+        context.setdefault('selected_bonified_tokens', kwargs.get('selected_bonified_tokens', set()))
+        context.setdefault('allowed_paid_rests', ALLOWED_PAID_RESTS_PER_PERIOD)
+        return context
+
+    def _build_period_form(self, query_data: QueryDict | dict[str, str]) -> PayrollPeriodForm:
+        start_value = query_data.get('start_date') if query_data else None
+        end_value = query_data.get('end_date') if query_data else None
+        if start_value and end_value:
+            return PayrollPeriodForm(query_data)
+        start_date, end_date = self._default_period_range()
+        return PayrollPeriodForm(
+            {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+            }
+        )
+
+    def _parse_override_payload(self) -> tuple[dict[int, PayrollOverrideData], list[str]]:
+        overrides: dict[int, PayrollOverrideData] = {}
+        errors: list[str] = []
+        pattern = re.compile(r'^override_amount__(?P<operator>\d+)$')
+        for name, raw_value in self.request.POST.items():
+            match = pattern.match(name)
+            if not match:
+                continue
+            operator_id = int(match.group('operator'))
+            raw_amount = raw_value.strip()
+            note_key = f'override_note__{operator_id}'
+            note_value = (self.request.POST.get(note_key) or '').strip()
+            if raw_amount == '':
+                continue
+            try:
+                amount = Decimal(raw_amount)
+            except (InvalidOperation, TypeError):
+                errors.append(f'El valor ingresado para el colaborador #{operator_id} es inválido.')
+                continue
+            if amount < 0:
+                errors.append(f'El valor del colaborador #{operator_id} no puede ser negativo.')
+                continue
+            if not note_value:
+                errors.append(f'Debes justificar el ajuste del colaborador #{operator_id}.')
+                continue
+            overrides[operator_id] = PayrollOverrideData(
+                operator_id=operator_id,
+                amount=amount.quantize(Decimal('0.01')),
+                note=note_value,
+            )
+        return overrides, errors
+
+    def _default_period_range(self) -> tuple[date, date]:
+        today = UserProfile.colombia_today()
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        if today.day <= 15:
+            return date(today.year, today.month, 1), date(today.year, today.month, 15)
+        return date(today.year, today.month, 16), date(today.year, today.month, last_day)
+
+    def _handle_export_action(self, summary, action: str) -> HttpResponse | None:
+        if action == 'export-overall':
+            filename = f"nomina_{summary.period.start_date:%Y%m%d}_{summary.period.end_date:%Y%m%d}.csv"
+            return self._export_entries_to_csv(summary=summary, entries=summary.entries, filename=filename, title='Liquidación total')
+
+        if action.startswith('export-role-'):
+            identifier = action.removeprefix('export-role-')
+            entries = [entry for entry in summary.entries if self._matches_role_identifier(entry, identifier)]
+            if not entries:
+                return None
+            label = entries[0].role_label
+            slug = slugify(label) or 'sin-rol'
+            filename = f"nomina_rol_{slug}_{summary.period.start_date:%Y%m%d}.csv"
+            return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Rol {label}")
+
+        if action.startswith('export-operator-'):
+            try:
+                operator_id = int(action.removeprefix('export-operator-'))
+            except ValueError:
+                return None
+            entries = [entry for entry in summary.entries if entry.operator.id == operator_id]
+            if not entries:
+                return None
+            collaborator = entries[0].operator.get_full_name()
+            filename = f"nomina_colaborador_{operator_id}_{summary.period.start_date:%Y%m%d}.csv"
+            return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Colaborador {collaborator}", include_total=False)
+
+        return None
+
+    def _matches_role_identifier(self, entry, identifier: str) -> bool:
+        if identifier == 'none':
+            return entry.role is None
+        try:
+            role_id = int(identifier)
+        except ValueError:
+            return False
+        return entry.role and entry.role.id == role_id
+
+    def _export_entries_to_csv(
+        self,
+        *,
+        summary,
+        entries,
+        filename: str,
+        title: str,
+        include_total: bool = True,
+    ) -> HttpResponse:
+        if not entries:
+            return None
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(['Periodo', summary.period.label])
+        writer.writerow(['Detalle', title])
+        writer.writerow([])
+        writer.writerow([
+            'Colaborador',
+            'Rol',
+            'Pago',
+            'Días trabajados',
+            'Descansos',
+            'Descansos extra',
+            'Bonificados',
+            'Base',
+            'Deducción',
+            'Monto final',
+            'Justificación',
+        ])
+        for entry in entries:
+            writer.writerow([
+                entry.operator.get_full_name(),
+                entry.role_label,
+                entry.payment_type_label,
+                entry.worked_days,
+                entry.rest_days,
+                entry.extra_rest_count,
+                entry.bonified_extra_count,
+                f"{entry.base_amount:.2f}",
+                f"{entry.deduction_amount:.2f}",
+                f"{entry.final_amount:.2f}",
+                entry.override_note,
+            ])
+        if include_total:
+            total_amount = sum((entry.final_amount for entry in entries), Decimal('0.00'))
+            writer.writerow([])
+            writer.writerow(['TOTAL', '', '', '', '', '', '', '', '', f"{total_amount:.2f}"])
+
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
     template_name = 'administration/purchases/suppliers.html'

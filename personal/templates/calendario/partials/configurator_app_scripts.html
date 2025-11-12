@@ -946,6 +946,15 @@
         return DEFAULT_SALARY_PAYMENT_TYPES;
       };
 
+      const getDefaultSalaryPaymentType = () => {
+        const options = getSalaryPaymentOptions();
+        const monthlyOption = options.find((option) => option.value === 'monthly');
+        if (monthlyOption) {
+          return monthlyOption.value;
+        }
+        return options[0]?.value || '';
+      };
+
       const clearSalaryRows = () => {
         if (refs.operatorSalaryList) {
           refs.operatorSalaryList.innerHTML = '';
@@ -967,9 +976,9 @@
           const today = new Date().toISOString().slice(0, 10);
           resolved.effective_from = refs.operatorEmploymentStart?.value || today;
         }
-        const fallbackPayment = getSalaryPaymentOptions()[0];
+        const fallbackPayment = getDefaultSalaryPaymentType();
         if (!resolved.payment_type && fallbackPayment) {
-          resolved.payment_type = fallbackPayment.value;
+          resolved.payment_type = fallbackPayment;
         }
 
         const wrapper = document.createElement('div');

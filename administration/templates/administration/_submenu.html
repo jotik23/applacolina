@@ -17,6 +17,14 @@
       Productos
     </a>
     <a
+      href="{% url 'administration:purchases_payroll' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'payroll' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'payroll' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'payroll' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Nómina
+    </a>
+    <a
       href="{% url 'administration:purchases_suppliers' %}"
       class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'suppliers' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'suppliers' %}aria-current="page"{% endif %}
