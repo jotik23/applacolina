@@ -1975,7 +1975,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         rows: List[Dict[str, Any]] = []
         for day in self.week_dates:
             record = self.records_map.get(day)
-            birds = self.current_birds_map.get(day, self.batch.initial_quantity)
+            birds = self.current_birds_map.get(day, self._allocated_population())
             rows.append(
                 {
                     "date": day,
@@ -1997,6 +1997,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         history_records: List[ProductionRecord],
         days: List[date],
     ) -> Dict[date, int]:
+        starting_population = self._allocated_population()
         result: Dict[date, int] = {}
         running_losses = 0
         pointer = 0
@@ -2006,7 +2007,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 record = history_records[pointer]
                 running_losses += int(record.mortality or 0) + int(record.discard or 0)
                 pointer += 1
-            result[day] = max(self.batch.initial_quantity - running_losses, 0)
+            result[day] = max(starting_population - running_losses, 0)
         return result
 
     def _build_week_navigation(self) -> Dict[str, Any]:
@@ -2042,13 +2043,16 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
     def _build_selected_summary(self) -> Dict[str, Any]:
         record = self.records_map.get(self.selected_day) or self.selected_record
-        birds = self.current_birds_map.get(self.selected_day, self.batch.initial_quantity)
+        birds = self.current_birds_map.get(self.selected_day, self._allocated_population())
         return {
             "record": record,
             "birds": birds,
             "hen_day": self._hen_day_pct(record, birds),
             "feed_per_bird": self._feed_per_bird(record, birds),
         }
+
+    def _allocated_population(self) -> int:
+        return self.total_allocated_birds or self.batch.initial_quantity or 0
 
     def _hen_day_pct(self, record: Optional[ProductionRecord], birds: int) -> Optional[float]:
         if not record or not record.production or birds <= 0:
