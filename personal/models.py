@@ -327,6 +327,11 @@ class OperatorSalary(models.Model):
     )
     effective_from = models.DateField("Vigente desde")
     effective_until = models.DateField("Vigente hasta", null=True, blank=True)
+    rest_days_per_week = models.PositiveSmallIntegerField(
+        "Descansos semanales",
+        default=1,
+        help_text="Número de días de descanso remunerado por semana para este esquema.",
+    )
 
     objects: OperatorSalaryQuerySet = OperatorSalaryQuerySet.as_manager()
 
@@ -391,6 +396,13 @@ class PositionCategoryCode(models.TextChoices):
     OFICIOS_VARIOS = "OFICIOS_VARIOS", _("Oficios varios")
     VACUNADOR = "VACUNADOR", _("Vacunador")
     AUXILIAR_OPERATIVO = "AUXILIAR_OPERATIVO", _("Auxiliar operativo")
+
+
+class PositionJobType(models.TextChoices):
+    PRODUCTION = "production", _("Producción")
+    CLASSIFICATION = "classification", _("Clasificación")
+    ADMINISTRATIVE = "administrative", _("Administrativo")
+    SALES = "sales", _("Ventas")
 
 
 class PositionCategory(models.Model):
@@ -470,6 +482,12 @@ class PositionDefinition(models.Model):
     name = models.CharField("Nombre", max_length=150)
     code = models.CharField("Código", max_length=64, unique=True)
     display_order = models.PositiveIntegerField("Orden de visualización", default=0, db_index=True)
+    job_type = models.CharField(
+        "Tipo de puesto",
+        max_length=32,
+        choices=PositionJobType.choices,
+        default=PositionJobType.PRODUCTION,
+    )
     category = models.ForeignKey(
         PositionCategory,
         on_delete=models.PROTECT,

@@ -40,6 +40,7 @@ from .models import (
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
+    PositionJobType,
     RestPeriodSource,
     RestPeriodStatus,
     Role,
@@ -1611,6 +1612,8 @@ def _position_payload(position: PositionDefinition, *, reference_date: date | No
             "shift_type": position.category.shift_type,
         },
         "category_id": str(position.category_id) if position.category_id else "",
+        "job_type": position.job_type,
+        "job_type_label": position.get_job_type_display(),
         "farm": {
             "id": position.farm_id,
             "name": position.farm.name if position.farm_id else None,
@@ -1653,6 +1656,7 @@ def _salary_payload(salary: OperatorSalary, *, reference_date: date | None = Non
         "effective_from": salary.effective_from.isoformat(),
         "effective_until": salary.effective_until.isoformat() if salary.effective_until else None,
         "is_active": salary.is_active_on(active_reference),
+        "rest_days_per_week": salary.rest_days_per_week,
     }
 
 
@@ -2670,6 +2674,7 @@ class CalendarMetadataView(StaffRequiredMixin, View):
                     }
                     for category in categories_payload
                 ],
+                "position_job_types": _choice_payload(PositionJobType.choices),
                 "shift_types": _choice_payload(ShiftType.choices),
                 "alert_levels": _choice_payload(AssignmentAlertLevel.choices),
                 "calendar_status": _choice_payload(CalendarStatus.choices),

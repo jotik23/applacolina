@@ -19,6 +19,7 @@ class ParsedSalaryInput:
     payment_type: str
     effective_from: date
     effective_until: date | None
+    rest_days_per_week: int
 
 
 def _coerce_decimal(value: object, index: int) -> Decimal:
@@ -56,6 +57,20 @@ def _coerce_id(raw_id: object, index: int) -> int | None:
     return value
 
 
+def _coerce_rest_days(value: object, index: int) -> int:
+    if value in (None, ""):
+        return 1
+    try:
+        rest_days = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError(f"Los descansos semanales del salario #{index} son inválidos.")
+    if rest_days < 0:
+        raise ValidationError(f"Los descansos semanales del salario #{index} no pueden ser negativos.")
+    if rest_days > 7:
+        raise ValidationError(f"Los descansos semanales del salario #{index} no pueden ser mayores a 7.")
+    return rest_days
+
+
 def parse_salary_entries(raw_entries: object) -> list[ParsedSalaryInput]:
     if not isinstance(raw_entries, list) or not raw_entries:
         raise ValidationError("Debes registrar al menos un salario para el colaborador.")
@@ -78,6 +93,8 @@ def parse_salary_entries(raw_entries: object) -> list[ParsedSalaryInput]:
                 raise ValidationError(
                     f"La fecha de fin debe ser posterior a la de inicio en el salario #{position}."
                 )
+        rest_days_value = entry.get("rest_days_per_week")
+        rest_days_per_week = _coerce_rest_days(rest_days_value, position)
         parsed.append(
             ParsedSalaryInput(
                 id=salary_id,
@@ -85,6 +102,7 @@ def parse_salary_entries(raw_entries: object) -> list[ParsedSalaryInput]:
                 payment_type=str(payment_type),
                 effective_from=effective_from,
                 effective_until=effective_until,
+                rest_days_per_week=rest_days_per_week,
             )
         )
 
@@ -128,6 +146,7 @@ def apply_salary_entries(operator: UserProfile, entries: ParsedSalarySequence) -
             salary.payment_type = entry.payment_type
             salary.effective_from = entry.effective_from
             salary.effective_until = entry.effective_until
+            salary.rest_days_per_week = entry.rest_days_per_week
             to_update.append(salary)
             desired_ids.add(entry.id)
         else:
@@ -138,6 +157,7 @@ def apply_salary_entries(operator: UserProfile, entries: ParsedSalarySequence) -
                     payment_type=entry.payment_type,
                     effective_from=entry.effective_from,
                     effective_until=entry.effective_until,
+                    rest_days_per_week=entry.rest_days_per_week,
                 )
             )
 
@@ -147,7 +167,7 @@ def apply_salary_entries(operator: UserProfile, entries: ParsedSalarySequence) -
     if to_update:
         OperatorSalary.objects.bulk_update(
             to_update,
-            ["amount", "payment_type", "effective_from", "effective_until"],
+            ["amount", "payment_type", "effective_from", "effective_until", "rest_days_per_week"],
         )
     if to_create:
         OperatorSalary.objects.bulk_create(to_create)

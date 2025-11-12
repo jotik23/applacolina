@@ -69,6 +69,7 @@
         restSourceLabels: new Map(),
         positionsById: new Map(),
         positionLabels: new Map(),
+        positionJobTypes: new Map(),
         salaryPaymentTypes: new Map(),
       },
     };
@@ -180,6 +181,7 @@
         positionCodeDisplay: app.querySelector('#position-code-display'),
         positionCodeValue: app.querySelector('#position-code-value'),
         positionCategory: app.querySelector('#position-category'),
+        positionJobType: app.querySelector('#position-job-type'),
         positionFarm: app.querySelector('#position-farm'),
         positionHouse: app.querySelector('#position-house'),
         positionRooms: app.querySelector('#position-rooms'),
@@ -980,9 +982,12 @@
         if (!resolved.payment_type && fallbackPayment) {
           resolved.payment_type = fallbackPayment;
         }
+        if (typeof resolved.rest_days_per_week === 'undefined' || resolved.rest_days_per_week === null) {
+          resolved.rest_days_per_week = 1;
+        }
 
         const wrapper = document.createElement('div');
-        wrapper.className = 'grid gap-3 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-5';
+        wrapper.className = 'grid gap-3 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-6 lg:grid-cols-7';
         wrapper.setAttribute('data-salary-row', 'true');
 
         const idInput = document.createElement('input');
@@ -1036,15 +1041,23 @@
         }
         wrapper.append(buildField('Esquema de pago', paymentSelect));
 
+        const restDaysInput = document.createElement('input');
+        restDaysInput.type = 'number';
+        restDaysInput.min = '0';
+        restDaysInput.max = '7';
+        restDaysInput.step = '1';
+        restDaysInput.value = resolved.rest_days_per_week ?? 1;
+        restDaysInput.setAttribute('data-salary-rest-days', 'true');
+        wrapper.append(buildField('Descansos por semana', restDaysInput));
+
         const actions = document.createElement('div');
-        actions.className = 'flex flex-col items-start gap-2';
+        actions.className = 'flex flex-wrap items-center justify-end gap-2';
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className =
           'inline-flex items-center rounded border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50';
         removeBtn.dataset.action = 'salary-remove';
         removeBtn.textContent = 'Quitar';
-        actions.append(removeBtn);
         if (resolved.is_active) {
           const badge = document.createElement('span');
           badge.className =
@@ -1052,6 +1065,7 @@
           badge.textContent = 'Vigente';
           actions.append(badge);
         }
+        actions.append(removeBtn);
         wrapper.append(actions);
 
         return wrapper;
@@ -1089,6 +1103,7 @@
           const startValue = row.querySelector('[data-salary-start]')?.value?.trim() || '';
           const endValue = row.querySelector('[data-salary-end]')?.value?.trim() || '';
           const typeValue = row.querySelector('[data-salary-type]')?.value || '';
+          const restDaysValue = row.querySelector('[data-salary-rest-days]')?.value || '';
           let identifier = null;
           if (idValue) {
             const parsed = Number.parseInt(idValue, 10);
@@ -1100,6 +1115,7 @@
             effective_from: startValue,
             effective_until: endValue,
             payment_type: typeValue,
+            rest_days_per_week: restDaysValue,
           };
         });
       };
@@ -1264,6 +1280,7 @@
           categoriesById,
           positionsById,
           positionLabels,
+          positionJobTypes: choiceMap(state.metadata.choice_sets.position_job_types || []),
           shiftLabels: choiceMap(state.metadata.choice_sets.shift_types),
           alertLabels: choiceMap(state.metadata.choice_sets.alert_levels),
           dayLabels: choiceMap(state.metadata.choice_sets.days_of_week),
@@ -1380,6 +1397,10 @@
         }
 
         populateSelect(refs.positionCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
+        populateSelect(refs.positionJobType, state.metadata.choice_sets.position_job_types, {
+          includeBlank: false,
+          keepValue: true,
+        });
         populateSelect(refs.positionFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
         const currentFarm = refs.positionFarm?.value || '';
         const selectedHandoff = refs.positionHandoff?.value || '';
@@ -1416,6 +1437,7 @@
 
       const getPositionPayload = () => ({
         name: refs.positionName?.value.trim() || '',
+        job_type: refs.positionJobType?.value || '',
         category: refs.positionCategory?.value || '',
         farm: refs.positionFarm?.value || '',
         chicken_house: refs.positionHouse?.value || '',
@@ -1430,12 +1452,16 @@
         toggleWrapper(refs.positionFormWrapper, true);
         setEditingPosition(position ? position.id : null);
         if (!position) {
-          refs.positionId.value = '';
-          if (refs.positionCodeDisplay) {
-            refs.positionCodeDisplay.classList.add('hidden');
-          }
+            refs.positionId.value = '';
+            if (refs.positionCodeDisplay) {
+              refs.positionCodeDisplay.classList.add('hidden');
+            }
           if (refs.positionCodeValue) {
             refs.positionCodeValue.textContent = '—';
+          }
+          if (refs.positionJobType) {
+            const firstOption = refs.positionJobType.options?.[0];
+            refs.positionJobType.value = firstOption ? firstOption.value : '';
           }
           const currentFarm = refs.positionFarm?.value || '';
           updateHouseOptions(currentFarm, { selectedHouse: '', selectedRooms: [], keepValue: false });
@@ -1458,6 +1484,9 @@
             refs.positionCodeValue.textContent = position.code || '—';
           }
           refs.positionCategory.value = position.category_id || '';
+          if (refs.positionJobType) {
+            refs.positionJobType.value = position.job_type || refs.positionJobType.value || '';
+          }
           refs.positionValidFrom.value = position.valid_from || '';
           refs.positionValidUntil.value = position.valid_until || '';
           const farmId = position.farm?.id ? String(position.farm.id) : '';

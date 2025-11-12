@@ -317,6 +317,7 @@ class PositionDefinitionForm(forms.ModelForm):
         model = PositionDefinition
         fields = [
             "name",
+            "job_type",
             "category",
             "farm",
             "chicken_house",

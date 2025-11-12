@@ -82,6 +82,7 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
         "code",
         "name",
         "category",
+        "job_type_label",
         "farm",
         "valid_from",
         "valid_until",
@@ -89,6 +90,7 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
     )
     list_filter = (
         "category",
+        "job_type",
         "farm",
         ActiveTodayFilter,
     )
@@ -107,6 +109,10 @@ class PositionDefinitionAdmin(admin.ModelAdmin):
     @admin.display(description="Activa hoy", boolean=True)
     def is_active_today(self, obj: models.PositionDefinition) -> bool:
         return obj.is_active_today()
+
+    @admin.display(description="Tipo de puesto")
+    def job_type_label(self, obj: models.PositionDefinition) -> str:
+        return obj.get_job_type_display()
 
 
 @admin.register(models.PositionCategory)

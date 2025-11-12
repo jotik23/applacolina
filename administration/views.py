@@ -82,7 +82,6 @@ from .services.workflows import (
     PurchaseApprovalDecisionService,
 )
 from .services.payroll import (
-    ALLOWED_PAID_RESTS_PER_PERIOD,
     PayrollComputationError,
     PayrollOverrideData,
     build_payroll_summary,
@@ -1952,15 +1951,20 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
     def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         form = self._build_period_form(request.GET)
         summary = None
+        selected_idle_tokens: set[str] = set()
         if form.is_valid() and form.period_info:
             try:
-                summary = build_payroll_summary(period=form.period_info)
+                summary = build_payroll_summary(
+                    period=form.period_info,
+                    bonified_idle_tokens=selected_idle_tokens,
+                )
             except PayrollComputationError as exc:
                 form.add_error(None, str(exc))
         context = self.get_context_data(
             period_form=form,
             payroll_summary=summary,
             selected_bonified_tokens=set(),
+            selected_bonified_idle_tokens=selected_idle_tokens,
         )
         return self.render_to_response(context)
 
@@ -1968,6 +1972,7 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         action = request.POST.get('form_action') or 'apply'
         form = PayrollPeriodForm(request.POST)
         bonified_tokens = set(request.POST.getlist('bonified_rest_ids'))
+        bonified_idle_tokens = set(request.POST.getlist('bonified_idle_ids'))
         overrides, override_errors = self._parse_override_payload()
         summary = None
         export_response = None
@@ -1976,6 +1981,7 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
                 summary = build_payroll_summary(
                     period=form.period_info,
                     bonified_rest_tokens=bonified_tokens,
+                    bonified_idle_tokens=bonified_idle_tokens,
                     overrides=overrides,
                 )
                 if summary and action.startswith('export-'):
@@ -1994,6 +2000,7 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
             period_form=form,
             payroll_summary=summary,
             selected_bonified_tokens=bonified_tokens,
+            selected_bonified_idle_tokens=bonified_idle_tokens,
         )
         return self.render_to_response(context)
 
@@ -2003,7 +2010,7 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         context.setdefault('period_form', kwargs.get('period_form') or PayrollPeriodForm())
         context.setdefault('payroll_summary', kwargs.get('payroll_summary'))
         context.setdefault('selected_bonified_tokens', kwargs.get('selected_bonified_tokens', set()))
-        context.setdefault('allowed_paid_rests', ALLOWED_PAID_RESTS_PER_PERIOD)
+        context.setdefault('selected_bonified_idle_tokens', kwargs.get('selected_bonified_idle_tokens', set()))
         return context
 
     def _build_period_form(self, query_data: QueryDict | dict[str, str]) -> PayrollPeriodForm:
@@ -2063,15 +2070,38 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
             filename = f"nomina_{summary.period.start_date:%Y%m%d}_{summary.period.end_date:%Y%m%d}.csv"
             return self._export_entries_to_csv(summary=summary, entries=summary.entries, filename=filename, title='Liquidación total')
 
-        if action.startswith('export-role-'):
-            identifier = action.removeprefix('export-role-')
-            entries = [entry for entry in summary.entries if self._matches_role_identifier(entry, identifier)]
+        if action.startswith('export-jobtype-'):
+            identifier = action.removeprefix('export-jobtype-')
+            job_type_value = None if identifier == 'none' else identifier
+            entries = [entry for entry in summary.entries if (entry.job_type or None) == job_type_value]
             if not entries:
                 return None
-            label = entries[0].role_label
-            slug = slugify(label) or 'sin-rol'
-            filename = f"nomina_rol_{slug}_{summary.period.start_date:%Y%m%d}.csv"
-            return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Rol {label}")
+            label = entries[0].job_type_label
+            slug = slugify(job_type_value or label or 'sin-tipo') or 'sin-tipo'
+            filename = f"nomina_puesto_{slug}_{summary.period.start_date:%Y%m%d}.csv"
+            return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Tipo {label}")
+
+        if action.startswith('export-farm-'):
+            identifier = action.removeprefix('export-farm-')
+            if identifier == 'none':
+                farm_id = None
+            else:
+                try:
+                    farm_id = int(identifier)
+                except ValueError:
+                    return None
+            entries = [entry for entry in summary.entries if entry.farm_id == farm_id]
+            if not entries:
+                return None
+            label = entries[0].farm_label or 'Otros'
+            slug = slugify(label) or 'otros'
+            filename = f"nomina_granja_{slug}_{summary.period.start_date:%Y%m%d}.csv"
+            return self._export_entries_to_csv(
+                summary=summary,
+                entries=entries,
+                filename=filename,
+                title=f"Granja {label}",
+            )
 
         if action.startswith('export-operator-'):
             try:
@@ -2086,15 +2116,6 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
             return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Colaborador {collaborator}", include_total=False)
 
         return None
-
-    def _matches_role_identifier(self, entry, identifier: str) -> bool:
-        if identifier == 'none':
-            return entry.role is None
-        try:
-            role_id = int(identifier)
-        except ValueError:
-            return False
-        return entry.role and entry.role.id == role_id
 
     def _export_entries_to_csv(
         self,
@@ -2114,12 +2135,15 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         writer.writerow([])
         writer.writerow([
             'Colaborador',
-            'Rol',
+            'Tipo de puesto',
+            'Granja',
             'Pago',
             'Días trabajados',
             'Descansos',
             'Descansos extra',
-            'Bonificados',
+            'Descansos extra bonificados',
+            'No laborados',
+            'No laborados bonificados',
             'Base',
             'Deducción',
             'Monto final',
@@ -2128,12 +2152,15 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         for entry in entries:
             writer.writerow([
                 entry.operator.get_full_name(),
-                entry.role_label,
+                entry.job_type_label,
+                entry.farm_label,
                 entry.payment_type_label,
                 entry.worked_days,
                 entry.rest_days,
                 entry.extra_rest_count,
                 entry.bonified_extra_count,
+                entry.non_worked_count,
+                entry.bonified_non_worked_count,
                 f"{entry.base_amount:.2f}",
                 f"{entry.deduction_amount:.2f}",
                 f"{entry.final_amount:.2f}",
@@ -2142,7 +2169,12 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         if include_total:
             total_amount = sum((entry.final_amount for entry in entries), Decimal('0.00'))
             writer.writerow([])
-            writer.writerow(['TOTAL', '', '', '', '', '', '', '', '', f"{total_amount:.2f}"])
+            writer.writerow([
+                'TOTAL',
+                '', '', '', '', '', '', '', '', '', '', '',
+                f"{total_amount:.2f}",
+                '',
+            ])
 
         response = HttpResponse(buffer.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'

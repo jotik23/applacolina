@@ -11,7 +11,7 @@
       <div>
         <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Administración</p>
         <h1 class="text-2xl font-semibold text-slate-900">Nómina</h1>
-        <p class="mt-1 text-sm text-slate-500">Genera la liquidación quincenal agrupada por roles y colaboradores.</p>
+        <p class="mt-1 text-sm text-slate-500">Genera la liquidación quincenal agrupada por tipos de puesto y granjas.</p>
       </div>
       <form method="get" class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm lg:flex-row lg:items-end">
         <label class="flex flex-col gap-1 text-xs font-semibold text-slate-500">
@@ -55,11 +55,11 @@
           <article class="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm">
             <p class="text-xs uppercase tracking-wide text-slate-500">Colaboradores</p>
             <p class="mt-2 text-3xl font-semibold text-slate-900">{{ payroll_summary.entries|length }}</p>
-            <p class="text-sm text-slate-500">Agrupados automáticamente por rol asignado.</p>
+            <p class="text-sm text-slate-500">Agrupados automáticamente por tipo de puesto base.</p>
           </article>
           <article class="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-sm">
             <p class="text-xs uppercase tracking-wide text-emerald-700">Total quincena</p>
-            <p class="mt-2 text-3xl font-semibold text-emerald-900">$ {{ payroll_summary.overall_total|floatformat:2 }}</p>
+            <p class="mt-2 text-3xl font-semibold text-emerald-900">$ {{ payroll_summary.overall_total|cop_currency }}</p>
             <p class="text-sm text-emerald-700">Incluye todos los ajustes manuales.</p>
           </article>
         </div>
@@ -70,43 +70,75 @@
           <input type="hidden" name="end_date" value="{{ period_form.end_date.value|default_if_none:'' }}">
 
           <div class="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-col gap-2 border-b border-slate-100 pb-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p class="text-xs uppercase tracking-wider text-slate-500">Resumen por rol</p>
-                <p class="text-sm text-slate-500">Verifica los totales antes de generar los soportes individuales.</p>
+                <p class="text-xs uppercase tracking-wider text-slate-500">Generación de soportes por:</p>
+                <p class="text-sm text-slate-500">Descarga los archivos agrupados por tipo de puesto o por granja.</p>
               </div>
-              <div class="flex flex-wrap gap-3">
-                {% for role_total in payroll_summary.totals_by_role %}
-                  <div class="rounded-xl border border-slate-200/80 px-4 py-2 text-sm">
-                    <p class="font-semibold text-slate-900">{{ role_total.role_label }}</p>
-                    <p class="text-xs text-slate-500">{{ role_total.collaborator_count }} colab. · $ {{ role_total.total_amount|floatformat:2 }}</p>
-                  </div>
-                {% empty %}
-                  <p class="text-sm text-slate-500">No hay roles con liquidación en este periodo.</p>
-                {% endfor %}
+            </div>
+            <div class="mt-4 grid gap-6 md:grid-cols-2">
+              <div class="space-y-3">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo de puesto</p>
+                <div class="flex flex-wrap gap-3">
+                  {% for job_total in payroll_summary.totals_by_job_type %}
+                    <div class="flex flex-col gap-2 rounded-xl border border-slate-200/80 px-4 py-3 text-sm">
+                      <div>
+                        <p class="font-semibold text-slate-900">{{ job_total.job_type_label }}</p>
+                      <p class="text-xs text-slate-500">{{ job_total.collaborator_count }} colab. · $ {{ job_total.total_amount|cop_currency }}</p>
+                      </div>
+                      {% with identifier=job_total.job_type|default_if_none:'none' %}
+                        <button type="submit" name="form_action" value="export-jobtype-{{ identifier }}" class="inline-flex items-center justify-center rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                          Descargar
+                        </button>
+                      {% endwith %}
+                    </div>
+                  {% empty %}
+                    <p class="text-sm text-slate-500">No hay tipos registrados en esta quincena.</p>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="space-y-3">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Granja</p>
+                <div class="flex flex-wrap gap-3">
+                  {% for farm_total in payroll_summary.totals_by_farm %}
+                    <div class="flex flex-col gap-2 rounded-xl border border-slate-200/80 px-4 py-3 text-sm">
+                      <div>
+                        <p class="font-semibold text-slate-900">{{ farm_total.farm_label }}</p>
+                        <p class="text-xs text-slate-500">{{ farm_total.collaborator_count }} colab. · $ {{ farm_total.total_amount|cop_currency }}</p>
+                      </div>
+                      {% with identifier=farm_total.farm_id|default_if_none:'none' %}
+                        <button type="submit" name="form_action" value="export-farm-{{ identifier }}" class="inline-flex items-center justify-center rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                          Descargar
+                        </button>
+                      {% endwith %}
+                    </div>
+                  {% empty %}
+                    <p class="text-sm text-slate-500">No hay granjas con pagos en este periodo.</p>
+                  {% endfor %}
+                </div>
               </div>
             </div>
           </div>
 
-          {% regroup payroll_summary.entries by role_label as payroll_by_role %}
-          {% for group in payroll_by_role %}
+          {% regroup payroll_summary.entries by job_type_label as payroll_by_job_type %}
+          {% for group in payroll_by_job_type %}
             <section class="space-y-4 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm">
               <header class="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p class="text-xs uppercase tracking-wide text-slate-500">Rol</p>
+                  <p class="text-xs uppercase tracking-wide text-slate-500">Tipo de puesto</p>
                   <h2 class="text-xl font-semibold text-slate-900">{{ group.grouper }}</h2>
-                  <p class="text-sm text-slate-500">{{ group.list|length }} colaboradores · marca descansos extra a bonificar (máx. {{ allowed_paid_rests }})</p>
+                  <p class="text-sm text-slate-500">{{ group.list|length }} colaboradores · marca los descansos extra detectados según su salario.</p>
                 </div>
                 {% with first_entry=group.list|first %}
-                  {% if first_entry and first_entry.role %}
-                    {% with identifier=first_entry.role.id %}
-                      <button type="submit" name="form_action" value="export-role-{{ identifier }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">
-                        Generar resumen del rol
+                  {% if first_entry %}
+                    {% with identifier=first_entry.job_type|default_if_none:'none' %}
+                      <button type="submit" name="form_action" value="export-jobtype-{{ identifier }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">
+                        Generar resumen del tipo
                       </button>
                     {% endwith %}
                   {% else %}
-                    <button type="submit" name="form_action" value="export-role-none" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">
-                      Generar resumen del rol
+                    <button type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-400" disabled>
+                      Sin datos disponibles
                     </button>
                   {% endif %}
                 {% endwith %}
@@ -118,7 +150,8 @@
                     <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p class="text-sm font-semibold text-slate-900">{{ entry.operator.get_full_name }}</p>
-                        <p class="text-xs text-slate-500">Pago {{ entry.payment_type_label }} · Salario base $ {{ entry.salary_amount|floatformat:2 }}</p>
+                        <p class="text-xs text-slate-500">Pago {{ entry.payment_type_label }} · Salario base $ {{ entry.salary_amount|cop_currency }}</p>
+                        <p class="text-xs text-slate-400">Puesto {{ entry.job_type_label }} · Granja {{ entry.farm_label }}</p>
                       </div>
                       <div class="flex flex-wrap gap-2 text-xs">
                         <span class="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">{{ entry.worked_days }} días trabajados</span>
@@ -127,6 +160,15 @@
                           <span class="rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-600">{{ entry.discounted_extra_count }} desc. descontados</span>
                           {% if entry.bonified_extra_count %}
                             <span class="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-600">{{ entry.bonified_extra_count }} desc. bonificados</span>
+                          {% endif %}
+                        {% endif %}
+                        {% if entry.non_worked_count %}
+                          <span class="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">{{ entry.non_worked_count }} días sin laborar</span>
+                          {% if entry.discounted_non_worked_count %}
+                            <span class="rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-600">{{ entry.discounted_non_worked_count }} NL descontados</span>
+                          {% endif %}
+                          {% if entry.bonified_non_worked_count %}
+                            <span class="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-600">{{ entry.bonified_non_worked_count }} NL bonificados</span>
                           {% endif %}
                         {% endif %}
                       </div>
@@ -158,7 +200,7 @@
                               {% if rest.is_extra %}
                                 <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
                                   <input type="checkbox" name="bonified_rest_ids" value="{{ rest.token }}" class="h-4 w-4 rounded border-slate-300" {% if rest.is_bonified %}checked{% endif %}>
-                                  Bonificar
+                                  Incluir en liquidación
                                 </label>
                               {% else %}
                                 <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">Incluido</span>
@@ -168,16 +210,35 @@
                             <li class="text-xs text-slate-400">Sin descansos registrados.</li>
                           {% endfor %}
                         </ol>
+                        <div class="mt-4 rounded-xl border border-slate-100 bg-white p-3 text-sm">
+                          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Días no laborados</p>
+                          <ol class="mt-2 space-y-2">
+                            {% for idle in entry.non_worked_details %}
+                              <li class="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-slate-600 {% if idle.is_bonified %}border-emerald-200 bg-emerald-50{% else %}border-slate-100 bg-white{% endif %}">
+                                <div>
+                                  <p class="text-xs font-semibold text-slate-500">{{ idle.date|date:"d M" }}</p>
+                                  <p class="text-[11px] text-slate-500">Sin actividad registrada</p>
+                                </div>
+                                <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                  <input type="checkbox" name="bonified_idle_ids" value="{{ idle.token }}" class="h-4 w-4 rounded border-slate-300" {% if idle.is_bonified %}checked{% endif %}>
+                                  Incluir en liquidación
+                                </label>
+                              </li>
+                            {% empty %}
+                              <li class="text-xs text-slate-400">Todos los días tienen actividad o descanso.</li>
+                            {% endfor %}
+                          </ol>
+                        </div>
                       </div>
                       <div class="space-y-3 rounded-2xl border border-slate-100/80 p-4">
                         <div>
                           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Monto sugerido</p>
-                          <p class="mt-1 text-2xl font-semibold text-slate-900">$ {{ entry.suggested_amount|floatformat:2 }}</p>
-                          <p class="text-xs text-slate-500">Base $ {{ entry.base_amount|floatformat:2 }} · Deducción $ {{ entry.deduction_amount|floatformat:2 }}</p>
+                          <p class="mt-1 text-2xl font-semibold text-slate-900">$ {{ entry.suggested_amount|cop_currency }}</p>
+                          <p class="text-xs text-slate-500">Base $ {{ entry.base_amount|cop_currency }} · Deducción $ {{ entry.deduction_amount|cop_currency }}</p>
                         </div>
                         <label class="text-xs font-semibold text-slate-500">
                           Valor final
-                          <input type="number" step="0.01" min="0" name="override_amount__{{ entry.operator.id }}" value="{{ entry.override_amount|default_if_none:'' }}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="{{ entry.suggested_amount|floatformat:2 }}">
+                          <input type="number" step="0.01" min="0" name="override_amount__{{ entry.operator.id }}" value="{{ entry.override_amount|default_if_none:'' }}" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="{{ entry.suggested_amount|cop_currency }}">
                         </label>
                         <label class="text-xs font-semibold text-slate-500">
                           Nota de justificación
@@ -185,7 +246,7 @@
                         </label>
                         <div class="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
                           <p>Pago final sugerido:</p>
-                          <p class="text-lg font-semibold text-slate-900">$ {{ entry.final_amount|floatformat:2 }}</p>
+                          <p class="text-lg font-semibold text-slate-900">$ {{ entry.final_amount|cop_currency }}</p>
                         </div>
                         <button type="submit" name="form_action" value="export-operator-{{ entry.operator.id }}" class="w-full rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">
                           Generar liquidación individual
@@ -197,7 +258,7 @@
               </div>
             </section>
           {% empty %}
-            <p class="rounded-2xl border border-slate-200 bg-white/90 p-6 text-sm text-slate-500">No hay información de roles para el rango seleccionado.</p>
+            <p class="rounded-2xl border border-slate-200 bg-white/90 p-6 text-sm text-slate-500">No hay información para los tipos de puesto en el rango seleccionado.</p>
           {% endfor %}
 
           <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm md:flex-row md:items-center md:justify-between">
@@ -206,7 +267,7 @@
               <p class="text-xs text-slate-500">Incluye ajustes y descansos bonificados.</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <span class="text-2xl font-semibold text-slate-900">$ {{ payroll_summary.overall_total|floatformat:2 }}</span>
+              <span class="text-2xl font-semibold text-slate-900">$ {{ payroll_summary.overall_total|cop_currency }}</span>
               <button type="submit" name="form_action" value="export-overall" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600">Descargar resumen</button>
               <button type="submit" name="form_action" value="apply" class="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90">Guardar ajustes</button>
             </div>
