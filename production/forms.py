@@ -361,13 +361,11 @@ class BatchDailyProductionForm(forms.Form):
             self.fields[production_field].initial = self.initial.get(production_field)
             field_names["production"] = production_field
 
-            self.fields[consumption_field] = forms.DecimalField(
+            self.fields[consumption_field] = forms.IntegerField(
                 required=False,
-                min_value=Decimal("0"),
-                decimal_places=2,
-                max_digits=10,
+                min_value=0,
                 widget=forms.NumberInput(attrs=wide_integer_attrs),
-                label=f"{snapshot.room_name} · Consumo",
+                label=f"{snapshot.room_name} · Consumo (kg)",
             )
             self.fields[consumption_field].initial = self.initial.get(consumption_field)
             field_names["consumption"] = consumption_field
@@ -459,13 +457,11 @@ class BatchDailyProductionForm(forms.Form):
             self.fields[prod_field].initial = self.initial.get(prod_field)
             field_names["production"] = prod_field
 
-            self.fields[cons_field] = forms.DecimalField(
+            self.fields[cons_field] = forms.IntegerField(
                 required=False,
-                min_value=Decimal("0"),
-                decimal_places=2,
-                max_digits=12,
+                min_value=0,
                 widget=forms.NumberInput(attrs=wide_integer_attrs),
-                label=f"{group['name']} · Consumo",
+                label=f"{group['name']} · Consumo (kg)",
             )
             self.fields[cons_field].initial = self.initial.get(cons_field)
             field_names["consumption"] = cons_field

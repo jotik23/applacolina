@@ -24,12 +24,38 @@
         </div>
         <div class="flex flex-col items-start gap-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-8">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aves asignadas</p>
-            <p class="text-2xl font-semibold text-slate-900">{{ allocated_birds|intcomma }}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aves vivas</p>
+            <p class="text-2xl font-semibold text-slate-900">
+              {% if live_birds is not None %}
+                {{ live_birds|intcomma }}
+              {% else %}
+                —
+              {% endif %}
+            </p>
           </div>
           <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Salones activos</p>
             <p class="text-2xl font-semibold text-slate-900">{{ room_rows|length }}</p>
+          </div>
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Peso promedio</p>
+            <p class="text-2xl font-semibold text-slate-900">
+              {% if selected_avg_weight is not None %}
+                {{ selected_avg_weight|floatformat:1 }} g
+              {% else %}
+                —
+              {% endif %}
+            </p>
+          </div>
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">% Uniformidad</p>
+            <p class="text-2xl font-semibold text-slate-900">
+              {% if selected_uniformity is not None %}
+                {{ selected_uniformity|floatformat:1 }}%
+              {% else %}
+                —
+              {% endif %}
+            </p>
           </div>
           <a href="{% url 'production:index' %}#lot-{{ batch.id }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900">
             ← Volver al resumen
@@ -84,14 +110,14 @@
                   </td>
                   <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
                     {% if day.production %}
-                      {{ day.production|intcomma }}
+                      {{ day.production|floatformat:0|intcomma }}
                     {% else %}
                       —
                     {% endif %}
                   </td>
                   <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
                     {% if day.consumption %}
-                      {{ day.consumption|intcomma }} kg
+                      {{ day.consumption|floatformat:0|intcomma }} kg
                     {% else %}
                       —
                     {% endif %}
@@ -174,7 +200,7 @@
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (huevos)</dt>
             <dd class="mt-1 text-2xl font-semibold text-slate-900">
               {% if selected_summary.record %}
-                {{ selected_summary.record.production|intcomma }} huevos
+                {{ selected_summary.record.production|floatformat:0|intcomma }} huevos
               {% else %}
                 —
               {% endif %}
@@ -184,7 +210,7 @@
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo total</dt>
             <dd class="mt-1 text-2xl font-semibold text-slate-900">
               {% if selected_summary.record %}
-                {{ selected_summary.record.consumption|intcomma }} kg
+                {{ selected_summary.record.consumption|floatformat:0|intcomma }} kg
               {% else %}
                 —
               {% endif %}

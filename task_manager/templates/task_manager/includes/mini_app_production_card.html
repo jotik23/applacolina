@@ -61,10 +61,10 @@
                                   </div>
                                   <div class="text-xs text-slate-500 sm:text-right" data-production-lot-summary>
                                     <p>
-                                      Producción: <span class="font-semibold text-slate-900" data-production-total-label="production">{{ lot.record.production|default:"0" }}</span> huevos
+                                      Producción: <span class="font-semibold text-slate-900" data-production-total-label="production">{{ lot.record.production|default_if_none:0|floatformat:0 }}</span> huevos
                                     </p>
                                     <p>
-                                      Consumo: <span class="font-semibold text-slate-900" data-production-total-label="consumption">{{ lot.record.consumption|default:"0" }}</span> kg
+                                      Consumo: <span class="font-semibold text-slate-900" data-production-total-label="consumption">{{ lot.record.consumption|default_if_none:0|floatformat:0 }}</span> kg
                                     </p>
                                     <p>
                                       Mortalidad: <span class="font-semibold text-slate-900" data-production-total-label="mortality">{{ lot.record.mortality|default:"0" }}</span> aves · Descarte: <span class="font-semibold text-slate-900" data-production-total-label="discard">{{ lot.record.discard|default:"0" }}</span>

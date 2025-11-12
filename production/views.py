@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
 from urllib.parse import urlencode
 
@@ -1758,6 +1758,9 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 "week_start": self.week_start,
                 "week_end": self.week_end,
                 "allocated_birds": self.total_allocated_birds,
+                "live_birds": self.selected_summary.get("birds"),
+                "selected_avg_weight": self.selected_avg_weight,
+                "selected_uniformity": self.selected_uniformity,
                 "batch_age_weeks": self.batch_age_weeks,
                 "batch_age_days": self.batch_age_days,
             }
@@ -1824,6 +1827,9 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         self.week_navigation = self._build_week_navigation()
         self.batch_age_days = max((self.selected_day - self.batch.birth_date).days, 0)
         self.batch_age_weeks = self.batch_age_days // 7
+        avg_weight, uniformity = self._resolve_weight_snapshot(self.selected_day)
+        self.selected_avg_weight = avg_weight
+        self.selected_uniformity = uniformity
 
     def _init_timeline(self) -> None:
         raw_day = self.request.POST.get("date") or self.request.GET.get("day")
@@ -1932,9 +1938,9 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         for snapshot in snapshots:
             prefix = f"room_{snapshot.room_id}"
             if snapshot.production is not None:
-                initial[f"{prefix}_production"] = snapshot.production
+                initial[f"{prefix}_production"] = self._round_to_int(snapshot.production)
             if snapshot.consumption is not None:
-                initial[f"{prefix}_consumption"] = snapshot.consumption
+                initial[f"{prefix}_consumption"] = self._round_to_int(snapshot.consumption)
             if snapshot.mortality is not None:
                 initial[f"{prefix}_mortality"] = snapshot.mortality
             if snapshot.discard is not None:
@@ -1961,9 +1967,9 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         for barn_id, totals in barn_totals.items():
             prefix = f"barn_{barn_id}"
             if totals["production"]:
-                initial[f"{prefix}_production"] = totals["production"]
+                initial[f"{prefix}_production"] = self._round_to_int(totals["production"])
             if totals["consumption"]:
-                initial[f"{prefix}_consumption"] = totals["consumption"]
+                initial[f"{prefix}_consumption"] = self._round_to_int(totals["consumption"])
             if totals["mortality"]:
                 initial[f"{prefix}_mortality"] = totals["mortality"]
             if totals["discard"]:
@@ -2053,6 +2059,50 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
     def _allocated_population(self) -> int:
         return self.total_allocated_birds or self.batch.initial_quantity or 0
+
+    @staticmethod
+    def _round_to_int(value: Decimal | int | None) -> int:
+        if value in (None, ""):
+            return 0
+        if isinstance(value, int):
+            return value
+        try:
+            decimal_value = Decimal(value)
+        except (ArithmeticError, ValueError, TypeError):
+            return 0
+        return int(decimal_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    def _resolve_weight_snapshot(self, target_day: date) -> tuple[Optional[float], Optional[float]]:
+        room_ids = [allocation.room_id for allocation in self.allocations]
+        filter_condition = Q(production_record__bird_batch=self.batch)
+        if room_ids:
+            filter_condition |= Q(room_id__in=room_ids)
+
+        sessions = (
+            WeightSampleSession.objects.filter(date=target_day)
+            .filter(filter_condition)
+            .only("uniformity_percent", "sample_size", "average_grams")
+        )
+
+        uniformity_weight = Decimal("0")
+        uniformity_samples = 0
+        weight_sum = Decimal("0")
+        weight_samples = 0
+
+        for session in sessions:
+            sample_size = session.sample_size or 0
+            if sample_size <= 0:
+                continue
+            if session.uniformity_percent is not None:
+                uniformity_weight += Decimal(session.uniformity_percent) * sample_size
+                uniformity_samples += sample_size
+            if session.average_grams is not None:
+                weight_sum += Decimal(session.average_grams) * sample_size
+                weight_samples += sample_size
+
+        avg_weight = float(weight_sum / weight_samples) if weight_samples else None
+        avg_uniformity = float(uniformity_weight / uniformity_samples) if uniformity_samples else None
+        return (avg_weight, avg_uniformity)
 
     def _hen_day_pct(self, record: Optional[ProductionRecord], birds: int) -> Optional[float]:
         if not record or not record.production or birds <= 0:
