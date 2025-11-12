@@ -193,23 +193,13 @@ class BatchMetrics(TypedDict):
 
 
 def build_active_batch_label_map(batches: Iterable[BirdBatch]) -> Dict[int, str]:
-    """Return positional labels for active batches ordered from oldest to newest."""
-    today = timezone.localdate()
-    active_batches: List[Tuple[BirdBatch, int]] = []
+    """Return stable labels for active batches based on their identifiers."""
+    label_map: Dict[int, str] = {}
     for batch in batches:
         if batch.status != BirdBatch.Status.ACTIVE:
             continue
-        age_days = max((today - batch.birth_date).days, 0)
-        active_batches.append((batch, age_days))
-
-    active_batches.sort(
-        key=lambda item: (
-            -item[1],
-            -item[0].initial_quantity,
-            item[0].pk,
-        )
-    )
-    return {batch.pk: f"Lote #{index + 1}" for index, (batch, _) in enumerate(active_batches)}
+        label_map[batch.pk] = f"Lote #{batch.pk}"
+    return label_map
 
 
 def resolve_batch_label(batch: BirdBatch, label_map: Mapping[int, str]) -> str:

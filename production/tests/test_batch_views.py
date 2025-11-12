@@ -239,7 +239,14 @@ class BatchManagementViewTests(TestCase):
         )
 
         active_labels = [card["label"] for card in batch_cards if card["status"] == BirdBatch.Status.ACTIVE]
-        self.assertEqual(active_labels[:3], ["Lote #1", "Lote #2", "Lote #3"])
+        self.assertEqual(
+            active_labels[:3],
+            [
+                f"Lote #{oldest_with_more_birds.pk}",
+                f"Lote #{oldest_with_less_birds.pk}",
+                f"Lote #{younger_batch.pk}",
+            ],
+        )
 
         inactive_card = next(card for card in batch_cards if card["id"] == inactive_batch.pk)
         self.assertEqual(inactive_card["label"], f"Lote #{inactive_batch.pk}")
@@ -247,7 +254,10 @@ class BatchManagementViewTests(TestCase):
         selected_batch = response.context["selected_batch"]
         self.assertIsNotNone(selected_batch)
         self.assertEqual(selected_batch.pk, oldest_with_more_birds.pk)
-        self.assertEqual(response.context["selected_batch_label"], "Lote #1")
+        self.assertEqual(
+            response.context["selected_batch_label"],
+            f"Lote #{oldest_with_more_birds.pk}",
+        )
 
     def test_selected_batch_keeps_natural_order(self) -> None:
         today = date.today()
