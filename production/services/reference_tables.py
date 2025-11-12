@@ -1,5 +1,8 @@
 from dataclasses import dataclass
-from typing import Dict
+from functools import lru_cache
+from typing import Dict, Optional, Union
+
+from production.models import BreedReference, BreedWeeklyGuide
 
 
 @dataclass
@@ -122,18 +125,13 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
 
 
-def get_reference_targets(breed: str, age_weeks: int, current_birds: int) -> Dict[str, float]:
-    """Return daily target values for a lot based on breed and age.
+def _resolve_profile(breed_name: str) -> ReferenceProfile:
+    return REFERENCE_PROFILES.get(breed_name) or REFERENCE_PROFILES["__default__"]
 
-    The values are in lot totals where aplica:
-        - consumption_kg (float)
-        - mortality_birds (float)
-        - discard_birds (float)
-        - egg_weight_g (float)
-        - production_percent (float)
-    """
 
-    profile = REFERENCE_PROFILES.get(breed) or REFERENCE_PROFILES["__default__"]
+def _compute_profile_targets(
+    profile: ReferenceProfile, age_weeks: int, current_birds: int
+) -> Dict[str, float]:
     age_factor = max(age_weeks, 0)
 
     consumption_g = _clamp(
@@ -170,6 +168,99 @@ def get_reference_targets(breed: str, age_weeks: int, current_birds: int) -> Dic
         "consumption_kg": consumption_kg,
         "mortality_birds": mortality_birds,
         "discard_birds": discard_birds,
+        "egg_weight_g": egg_weight_g,
+        "production_percent": production_percent,
+    }
+
+
+def _sanitize_week(age_weeks: int) -> int:
+    if age_weeks <= 0:
+        return 1
+    if age_weeks > BreedWeeklyGuide.WEEK_MAX:
+        return BreedWeeklyGuide.WEEK_MAX
+    return age_weeks
+
+
+def _to_float(value: Optional[object]) -> Optional[float]:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+@lru_cache(maxsize=512)
+def _fetch_weekly_metrics(breed_id: int, week: int) -> Optional[Dict[str, Optional[float]]]:
+    return (
+        BreedWeeklyGuide.objects.filter(breed_id=breed_id, week=week)
+        .values(
+            "posture_percentage",
+            "egg_weight_g",
+            "grams_per_bird",
+            "weekly_mortality_percentage",
+        )
+        .first()
+    )
+
+
+def reset_reference_targets_cache() -> None:
+    """Clear cached weekly lookups after updating the reference tables."""
+
+    _fetch_weekly_metrics.cache_clear()
+
+
+BreedInput = Union[str, BreedReference]
+
+
+def get_reference_targets(breed: BreedInput, age_weeks: int, current_birds: int) -> Dict[str, float]:
+    """Return daily target values for a lot based on breed and age.
+
+    The values are in lot totals where aplica:
+        - consumption_kg (float)
+        - mortality_birds (float)
+        - discard_birds (float)
+        - egg_weight_g (float)
+        - production_percent (float)
+    """
+
+    breed_obj = breed if isinstance(breed, BreedReference) else None
+    breed_name = breed_obj.name if breed_obj else str(breed)
+    profile = _resolve_profile(breed_name)
+    profile_targets = _compute_profile_targets(profile, age_weeks, current_birds)
+
+    weekly_entry: Optional[Dict[str, Optional[float]]] = None
+    if breed_obj:
+        target_week = _sanitize_week(age_weeks)
+        weekly_entry = _fetch_weekly_metrics(breed_obj.pk, target_week)
+
+    consumption_kg = profile_targets["consumption_kg"]
+    egg_weight_g = profile_targets["egg_weight_g"]
+    mortality_birds = profile_targets["mortality_birds"]
+    production_percent = profile_targets["production_percent"]
+
+    if weekly_entry:
+        grams_per_bird = _to_float(weekly_entry.get("grams_per_bird"))
+        if grams_per_bird is not None and current_birds:
+            consumption_kg = round((grams_per_bird * current_birds) / 1000, 2)
+
+        egg_weight_value = _to_float(weekly_entry.get("egg_weight_g"))
+        if egg_weight_value is not None:
+            egg_weight_g = egg_weight_value
+
+        mortality_pct_week = _to_float(weekly_entry.get("weekly_mortality_percentage"))
+        if mortality_pct_week is not None and current_birds:
+            daily_pct = mortality_pct_week / 7
+            mortality_birds = round((current_birds * daily_pct) / 100, 1)
+
+        production_value = _to_float(weekly_entry.get("posture_percentage"))
+        if production_value is not None:
+            production_percent = production_value
+
+    return {
+        "consumption_kg": consumption_kg,
+        "mortality_birds": mortality_birds,
+        "discard_birds": profile_targets["discard_birds"],
         "egg_weight_g": egg_weight_g,
         "production_percent": production_percent,
     }

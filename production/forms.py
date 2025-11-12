@@ -11,6 +11,8 @@ from django.db import transaction
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
+    BreedReference,
+    BreedWeeklyGuide,
     ChickenHouse,
     Farm,
     Room,
@@ -115,6 +117,7 @@ class BirdBatchForm(BaseInfrastructureForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["farm"].queryset = Farm.objects.order_by("name")
+        self.fields["breed"].queryset = BreedReference.objects.order_by("name")
         self.fields["status"].widget.attrs.update(
             {"class": f"{self.input_classes} uppercase tracking-wide"}
         )
@@ -629,3 +632,105 @@ class BatchDailyProductionForm(forms.Form):
         if quantized < 0:
             return Decimal("0")
         return quantized
+
+
+@dataclass(frozen=True)
+class WeeklyMetricColumn:
+    key: str
+    label: str
+    max_digits: int
+    decimal_places: int
+    step: str
+    unit: str = ""
+    placeholder: Optional[str] = None
+
+
+class BreedReferenceForm(BaseInfrastructureForm):
+    class Meta:
+        model = BreedReference
+        fields = ["name"]
+        labels = {"name": "Nombre de la raza"}
+
+
+class BreedWeeklyMetricsForm(forms.Form):
+    input_classes = BaseInfrastructureForm.input_classes
+    columns: Tuple[WeeklyMetricColumn, ...] = (
+        WeeklyMetricColumn("posture_percentage", "% postura", 5, 2, "0.01", "%"),
+        WeeklyMetricColumn("haa", "H.A.A", 6, 2, "0.01"),
+        WeeklyMetricColumn("egg_weight_g", "Peso huevo", 6, 2, "0.1", "g", "g"),
+        WeeklyMetricColumn("grams_per_bird", "Gr/ave/día", 6, 2, "0.1", "g", "g"),
+        WeeklyMetricColumn("cumulative_feed", "Consumo acumulado", 9, 2, "0.1", "kg", "kg"),
+        WeeklyMetricColumn("conversion_index", "Índice convers.", 6, 3, "0.001"),
+        WeeklyMetricColumn("cumulative_conversion", "Conversión acum.", 6, 3, "0.001"),
+        WeeklyMetricColumn("weekly_mortality_percentage", "% mortalidad", 5, 2, "0.01", "%"),
+        WeeklyMetricColumn("body_weight_g", "Peso corporal", 6, 2, "0.1", "g", "g"),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        weeks: int = BreedWeeklyGuide.WEEK_MAX,
+        initial_values: Optional[Dict[str, Decimal]] = None,
+        **kwargs: Any,
+    ) -> None:
+        self.weeks = weeks
+        self.initial_values = initial_values or {}
+        super().__init__(*args, **kwargs)
+        self._build_fields()
+
+    def _build_fields(self) -> None:
+        for week in range(1, self.weeks + 1):
+            for column in self.columns:
+                field_name = self.build_field_name(column.key, week)
+                self.fields[field_name] = forms.DecimalField(
+                    required=False,
+                    max_digits=column.max_digits,
+                    decimal_places=column.decimal_places,
+                    widget=forms.NumberInput(
+                        attrs={
+                            "class": f"{self.input_classes} text-right text-xs font-semibold",
+                            "step": column.step,
+                            "min": "0",
+                            "placeholder": column.placeholder or column.label,
+                            "inputmode": "decimal",
+                        }
+                    ),
+                    label=f"{column.label} semana {week}",
+                )
+                if field_name in self.initial_values:
+                    self.fields[field_name].initial = self.initial_values[field_name]
+
+    @classmethod
+    def build_field_name(cls, metric_key: str, week: int) -> str:
+        return f"{metric_key}_{week}"
+
+    def iter_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for week in range(1, self.weeks + 1):
+            cells = [
+                {
+                    "field": self[self.build_field_name(column.key, week)],
+                    "column": column,
+                }
+                for column in self.columns
+            ]
+            rows.append(
+                {
+                    "week": week,
+                    "cells": cells,
+                }
+            )
+        return rows
+
+    def cleaned_week_data(self) -> List[Tuple[int, Dict[str, Optional[Decimal]]]]:
+        if not self.is_valid():
+            raise ValueError("El formulario de métricas no es válido.")
+
+        week_rows: List[Tuple[int, Dict[str, Optional[Decimal]]]] = []
+        for week in range(1, self.weeks + 1):
+            row = {
+                column.key: self.cleaned_data.get(self.build_field_name(column.key, week))
+                for column in self.columns
+            }
+            week_rows.append((week, row))
+        return week_rows

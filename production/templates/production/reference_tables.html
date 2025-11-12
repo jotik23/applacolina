@@ -1,0 +1,184 @@
+{% extends "calendario/base.html" %}
+{% load humanize %}
+
+{% block title %}Tablas de referencia{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+
+  <section class="space-y-8">
+    <header class="rounded-2xl bg-white/90 p-8 shadow-sm ring-1 ring-slate-200/70">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="space-y-3">
+          <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">
+            <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+            Genética
+          </span>
+          <div>
+            <h1 class="text-3xl font-semibold text-slate-900">Tablas de referencia genética</h1>
+            <p class="mt-1 text-sm text-slate-600">
+              Define las metas semanales por raza basadas en la guía genética. Las semanas son filas, los indicadores columnas:
+              completa solo los datos disponibles hasta la semana {{ weeks_limit }}.
+            </p>
+          </div>
+        </div>
+        {% if selected_breed %}
+          <dl class="grid gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-5 text-center text-sm text-slate-600 shadow-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Raza seleccionada</dt>
+              <dd class="mt-1 text-lg font-semibold text-slate-900">{{ selected_breed.name }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Semanas con dato</dt>
+              <dd class="mt-1 text-lg font-semibold text-slate-900">
+                {{ selected_breed_week_count|intcomma }}
+              </dd>
+            </div>
+          </dl>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="grid gap-8 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
+      <aside class="space-y-6">
+        <div class="rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm">
+          <header class="border-b border-slate-100 px-5 py-4">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Razas registradas</h2>
+          </header>
+          <div class="max-h-[420px] space-y-2 overflow-y-auto px-5 py-4">
+            {% if breeds %}
+              <ul class="space-y-2">
+                {% for breed in breeds %}
+                  <li>
+                    <a
+                      href="{{ breed.url }}"
+                      class="flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold transition
+                        {% if breed.is_selected %}
+                          border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm
+                        {% else %}
+                          border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900
+                        {% endif %}"
+                    >
+                      <span>{{ breed.name }}</span>
+                      <span class="text-xs font-semibold text-slate-400">{{ breed.week_count|intcomma }} smn</span>
+                    </a>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                Aún no hay razas configuradas. Registra una para habilitar la tabla.
+              </p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Nueva raza</h2>
+          <form method="post" class="mt-4 space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create-breed" />
+            {% if breed_form.non_field_errors %}
+              <p class="text-xs font-semibold text-rose-600">{{ breed_form.non_field_errors|join:", " }}</p>
+            {% endif %}
+            <div class="space-y-1">
+              <label for="{{ breed_form.name.id_for_label }}" class="text-xs font-semibold text-slate-500">Nombre</label>
+              {{ breed_form.name }}
+              {% if breed_form.name.errors %}
+                <p class="text-[11px] font-semibold text-rose-600">{{ breed_form.name.errors|join:", " }}</p>
+              {% endif %}
+            </div>
+            <button
+              type="submit"
+              class="w-full rounded-xl bg-emerald-500 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+            >
+              Guardar raza
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="rounded-2xl border border-slate-200/80 bg-white/95 p-6 shadow-sm">
+        {% if selected_breed and metrics_form %}
+          <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update-metrics" />
+            <input type="hidden" name="breed_id" value="{{ selected_breed.pk }}" />
+            {% if metrics_form.non_field_errors %}
+              <p class="text-sm font-semibold text-rose-600">{{ metrics_form.non_field_errors|join:", " }}</p>
+            {% endif %}
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Tabla semanal</p>
+                <p class="text-sm text-slate-500">Todos los campos son opcionales. Usa valores objetivo por semana.</p>
+              </div>
+              <button
+                type="submit"
+                class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+              >
+                Guardar tabla
+              </button>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-slate-200">
+              <table class="min-w-full text-xs">
+                <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th class="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-left font-semibold">Semana</th>
+                    {% for column in metric_columns %}
+                      <th class="px-3 py-2 text-left font-semibold">{{ column.label }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  {% for row in metrics_rows %}
+                    <tr class="align-top">
+                      <th class="sticky left-0 z-10 bg-white px-3 py-2 text-left text-[11px] font-semibold text-slate-500">
+                        {{ row.week }}
+                      </th>
+                      {% for cell in row.cells %}
+                        <td class="px-2 py-1">
+                          <label for="{{ cell.field.id_for_label }}" class="sr-only">
+                            {{ cell.column.label }} semana {{ row.week }}
+                          </label>
+                          <div class="relative">
+                            {{ cell.field }}
+                            {% if cell.column.unit %}
+                              <span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400">
+                                {{ cell.column.unit }}
+                              </span>
+                            {% endif %}
+                          </div>
+                          {% if cell.field.errors %}
+                            <p class="mt-0.5 text-[11px] font-semibold text-rose-600">{{ cell.field.errors|join:", " }}</p>
+                          {% endif %}
+                        </td>
+                      {% endfor %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="flex justify-end">
+              <button
+                type="submit"
+                class="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+              >
+                Guardar cambios
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <div class="flex h-full flex-col items-center justify-center gap-4 text-center text-slate-500">
+            <span class="inline-flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-slate-300 text-2xl text-slate-400">ℹ️</span>
+            <div>
+              <p class="text-base font-semibold text-slate-700">Selecciona una raza para comenzar</p>
+              <p class="text-sm">Registra al menos una raza en el panel izquierdo y luego define sus semanas de referencia.</p>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

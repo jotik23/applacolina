@@ -6,7 +6,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from production.models import BirdBatch, BirdBatchRoomAllocation, ChickenHouse, Farm, Room
+from production.models import (
+    BirdBatch,
+    BirdBatchRoomAllocation,
+    BreedReference,
+    ChickenHouse,
+    Farm,
+    Room,
+)
 
 
 class BatchManagementViewTests(TestCase):
@@ -24,6 +31,7 @@ class BatchManagementViewTests(TestCase):
         )
         self.client.force_login(self.user)
         self.farm = Farm.objects.create(name="Granja Central")
+        self.breed = BreedReference.objects.create(name="Hy-Line Brown")
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
             name="Galpón A",
@@ -51,7 +59,7 @@ class BatchManagementViewTests(TestCase):
                 "status": BirdBatch.Status.ACTIVE,
                 "birth_date": date.today(),
                 "initial_quantity": 1500,
-                "breed": "Hy-Line Brown",
+                "breed": self.breed.pk,
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -65,7 +73,7 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=date.today(),
             initial_quantity=1800,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         field_name = f"room_{self.room.pk}"
         response = self.client.post(
@@ -87,7 +95,7 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=date.today(),
             initial_quantity=1800,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         allocation = BirdBatchRoomAllocation.objects.create(
             bird_batch=batch,
@@ -124,7 +132,7 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=date.today(),
             initial_quantity=1000,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         response = self.client.post(
             reverse("production:batches"),
@@ -144,7 +152,7 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=date.today(),
             initial_quantity=1800,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         response = self.client.get(reverse("production:batch-update", args=[batch.pk]))
         self.assertEqual(response.status_code, 200)
@@ -156,7 +164,7 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=date.today(),
             initial_quantity=1800,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         allocation = BirdBatchRoomAllocation.objects.create(
             bird_batch=batch,
@@ -173,7 +181,7 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=date.today(),
             initial_quantity=1800,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         response = self.client.post(reverse("production:batch-delete", args=[batch.pk]))
         self.assertRedirects(response, reverse("production:batches"))
@@ -190,28 +198,28 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=same_age_birth,
             initial_quantity=2400,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         oldest_with_less_birds = BirdBatch.objects.create(
             farm=self.farm,
             status=BirdBatch.Status.ACTIVE,
             birth_date=oldest_birth,
             initial_quantity=1800,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         younger_batch = BirdBatch.objects.create(
             farm=self.farm,
             status=BirdBatch.Status.ACTIVE,
             birth_date=newer_birth,
             initial_quantity=2600,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         inactive_batch = BirdBatch.objects.create(
             farm=self.farm,
             status=BirdBatch.Status.INACTIVE,
             birth_date=today - timedelta(days=90),
             initial_quantity=3000,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
 
         response = self.client.get(reverse("production:batches"))
@@ -252,21 +260,21 @@ class BatchManagementViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=oldest_birth,
             initial_quantity=2200,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         middle_batch = BirdBatch.objects.create(
             farm=self.farm,
             status=BirdBatch.Status.ACTIVE,
             birth_date=middle_birth,
             initial_quantity=2100,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         youngest_batch = BirdBatch.objects.create(
             farm=self.farm,
             status=BirdBatch.Status.ACTIVE,
             birth_date=youngest_birth,
             initial_quantity=2300,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
 
         baseline_response = self.client.get(reverse("production:batches"))

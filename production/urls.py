@@ -13,6 +13,7 @@ from .views import (
     production_home_view,
     bird_batch_delete_view,
     bird_batch_update_view,
+    reference_tables_view,
     room_delete_view,
     room_update_view,
 )
@@ -32,6 +33,7 @@ urlpatterns = [
         name="batch-allocation-delete",
     ),
     path("infraestructura/", infrastructure_home_view, name="infrastructure"),
+    path("tablas-referencia/", reference_tables_view, name="reference-tables"),
     path("infraestructura/granjas/<int:pk>/editar/", farm_update_view, name="farm-update"),
     path("infraestructura/granjas/<int:pk>/eliminar/", farm_delete_view, name="farm-delete"),
     path("infraestructura/galpones/<int:pk>/editar/", chicken_house_update_view, name="chicken-house-update"),

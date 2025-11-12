@@ -21,6 +21,7 @@ from personal.models import (
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
+    BreedReference,
     ChickenHouse,
     Farm,
     ProductionRecord,
@@ -33,6 +34,7 @@ class MiniAppProductionViewTests(TestCase):
     def setUp(self):
         self._user_sequence = 0
         self.farm = Farm.objects.create(name="Granja Principal")
+        self.breed = BreedReference.objects.create(name="Hy-Line Brown")
         self.chicken_house = ChickenHouse.objects.create(
             farm=self.farm,
             name="Galpón A",
@@ -63,7 +65,7 @@ class MiniAppProductionViewTests(TestCase):
             status=BirdBatch.Status.ACTIVE,
             birth_date=today - timedelta(weeks=40),
             initial_quantity=1000,
-            breed="Hy-Line Brown",
+            breed=self.breed,
         )
         BirdBatchRoomAllocation.objects.create(
             bird_batch=self.bird_batch,

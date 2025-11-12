@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db import transaction
 from django.db.models import Avg, Count, Max, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncWeek
 from django.shortcuts import get_object_or_404, redirect
@@ -19,6 +20,8 @@ from production.forms import (
     BatchDailyProductionForm,
     BatchDistributionForm,
     BirdBatchForm,
+    BreedReferenceForm,
+    BreedWeeklyMetricsForm,
     ChickenHouseForm,
     FarmForm,
     RoomForm,
@@ -27,6 +30,8 @@ from production.forms import (
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
+    BreedReference,
+    BreedWeeklyGuide,
     ChickenHouse,
     Farm,
     ProductionRecord,
@@ -35,7 +40,7 @@ from production.models import (
     WeightSampleSession,
 )
 from production.services.daily_board import save_daily_room_entries
-from production.services.reference_tables import get_reference_targets
+from production.services.reference_tables import get_reference_targets, reset_reference_targets_cache
 
 
 class ScorecardMetric(TypedDict):
@@ -249,7 +254,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
 
         batches = list(
             BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE)
-            .select_related("farm")
+            .select_related("farm", "breed")
             .prefetch_related(
                 Prefetch(
                     "allocations",
@@ -902,7 +907,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             lot_data: LotOverview = {
                 "id": batch.pk,
                 "label": resolve_batch_label(batch, label_map),
-                "breed": batch.breed,
+                "breed": batch.breed.name,
                 "birth_date": batch.birth_date,
                 "age_weeks": (today - batch.birth_date).days // 7 if batch.birth_date else 0,
                 "initial_birds": batch.initial_quantity,
@@ -1142,7 +1147,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         )
         try:
             batch = (
-                BirdBatch.objects.select_related("farm")
+                BirdBatch.objects.select_related("farm", "breed")
                 .prefetch_related(allocations_prefetch)
                 .get(pk=batch_id)
             )
@@ -1226,7 +1231,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
             ),
         )
         return list(
-            BirdBatch.objects.select_related("farm")
+            BirdBatch.objects.select_related("farm", "breed")
             .prefetch_related(allocations_prefetch)
             .order_by("-status", "-birth_date")
         )
@@ -1635,6 +1640,180 @@ class RoomDeleteView(InfrastructureDeleteView):
     success_message = 'Se eliminó el salón "%(object)s" correctamente.'
 
 
+class ReferenceTablesView(StaffRequiredMixin, TemplateView):
+    template_name = "production/reference_tables.html"
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        if action == "create-breed":
+            return self._handle_create_breed(request)
+        if action == "update-metrics":
+            return self._handle_update_metrics(request)
+        messages.error(request, "Acción no reconocida para las tablas de referencia.")
+        return redirect("production:reference-tables")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        breeds = kwargs.get("breeds")
+        if breeds is None:
+            breeds = self._fetch_breeds()
+
+        selected_breed: Optional[BreedReference] = kwargs.get("selected_breed")
+        if selected_breed is None:
+            selected_breed = self._resolve_selected_breed(breeds)
+
+        metrics_form: Optional[BreedWeeklyMetricsForm] = kwargs.get("metrics_form")
+        if selected_breed and metrics_form is None:
+            metrics_form = self._build_metrics_form(selected_breed)
+
+        breed_form = kwargs.get("breed_form") or BreedReferenceForm()
+        breed_list = [
+            {
+                "id": breed.pk,
+                "name": breed.name,
+                "week_count": getattr(breed, "week_count", 0),
+                "is_selected": selected_breed.pk == breed.pk if selected_breed else False,
+                "url": f"{reverse('production:reference-tables')}?breed={breed.pk}",
+            }
+            for breed in breeds
+        ]
+
+        selected_breed_week_count = (
+            len(selected_breed.weekly_guides.all()) if selected_breed else 0
+        )
+
+        context.update(
+            {
+                "active_submenu": "reference_tables",
+                "page_title": "Tablas de referencia",
+                "breadcrumbs": [
+                    {"label": "Tablas de referencia", "url": ""},
+                ],
+                "breeds": breed_list,
+                "selected_breed": selected_breed,
+                "selected_breed_week_count": selected_breed_week_count,
+                "breed_form": breed_form,
+                "metrics_form": metrics_form,
+                "metric_columns": metrics_form.columns if metrics_form else BreedWeeklyMetricsForm.columns,
+                "metrics_rows": metrics_form.iter_rows() if metrics_form else [],
+                "weeks_limit": BreedWeeklyGuide.WEEK_MAX,
+            }
+        )
+        return context
+
+    def _handle_create_breed(self, request):
+        form = BreedReferenceForm(request.POST)
+        if form.is_valid():
+            breed = form.save()
+            messages.success(request, f'Se registró la raza "{breed.name}".')
+            return redirect(self._build_redirect(breed.pk))
+
+        return self.render_to_response(self.get_context_data(breed_form=form))
+
+    def _handle_update_metrics(self, request):
+        breed_id = self._safe_int(request.POST.get("breed_id"))
+        if breed_id is None:
+            messages.error(request, "Selecciona una raza antes de guardar métricas.")
+            return redirect("production:reference-tables")
+
+        breed = self._fetch_breed_with_guides(breed_id)
+        if not breed:
+            messages.error(request, "La raza seleccionada no existe.")
+            return redirect("production:reference-tables")
+
+        form = BreedWeeklyMetricsForm(request.POST)
+        if form.is_valid():
+            self._persist_weekly_metrics(breed, form.cleaned_week_data())
+            messages.success(request, f"Se actualizaron las semanas de {breed.name}.")
+            return redirect(self._build_redirect(breed.pk))
+
+        return self.render_to_response(
+            self.get_context_data(
+                selected_breed=breed,
+                metrics_form=form,
+            )
+        )
+
+    def _fetch_breeds(self) -> List[BreedReference]:
+        return list(
+            BreedReference.objects.annotate(week_count=Count("weekly_guides")).order_by("name")
+        )
+
+    def _resolve_selected_breed(
+        self, breeds: List[BreedReference]
+    ) -> Optional[BreedReference]:
+        candidate_id = self._safe_int(self.request.GET.get("breed"))
+        if candidate_id:
+            breed = self._fetch_breed_with_guides(candidate_id)
+            if breed:
+                return breed
+        if breeds:
+            return self._fetch_breed_with_guides(breeds[0].pk)
+        return None
+
+    def _build_metrics_form(self, breed: BreedReference) -> BreedWeeklyMetricsForm:
+        initial_values = self._build_initial_values(breed)
+        return BreedWeeklyMetricsForm(initial_values=initial_values)
+
+    def _build_initial_values(self, breed: BreedReference) -> Dict[str, Decimal]:
+        initial: Dict[str, Decimal] = {}
+        for entry in breed.weekly_guides.all():
+            for column in BreedWeeklyMetricsForm.columns:
+                value = getattr(entry, column.key)
+                if value is not None:
+                    field_name = BreedWeeklyMetricsForm.build_field_name(column.key, entry.week)
+                    initial[field_name] = value
+        return initial
+
+    def _persist_weekly_metrics(
+        self,
+        breed: BreedReference,
+        week_rows: List[Tuple[int, Dict[str, Optional[Decimal]]]],
+    ) -> None:
+        existing_entries = {entry.week: entry for entry in breed.weekly_guides.all()}
+        with transaction.atomic():
+            for week, metrics in week_rows:
+                has_values = any(value is not None for value in metrics.values())
+                entry = existing_entries.get(week)
+                if not has_values:
+                    if entry:
+                        entry.delete()
+                    continue
+                if entry:
+                    updated = False
+                    for field, value in metrics.items():
+                        if getattr(entry, field) != value:
+                            setattr(entry, field, value)
+                            updated = True
+                    if updated:
+                        entry.save()
+                else:
+                    BreedWeeklyGuide.objects.create(breed=breed, week=week, **metrics)
+        reset_reference_targets_cache()
+
+    def _fetch_breed_with_guides(self, breed_id: int) -> Optional[BreedReference]:
+        return (
+            BreedReference.objects.prefetch_related(
+                Prefetch("weekly_guides", queryset=BreedWeeklyGuide.objects.order_by("week"))
+            )
+            .filter(pk=breed_id)
+            .first()
+        )
+
+    def _build_redirect(self, breed_id: int) -> str:
+        base_url = reverse("production:reference-tables")
+        return f"{base_url}?breed={breed_id}"
+
+    @staticmethod
+    def _safe_int(raw_value: Optional[str]) -> Optional[int]:
+        if not raw_value:
+            return None
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            return None
+
+
 class BatchFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
     template_name = "production/batch_form.html"
     success_url = reverse_lazy("production:batches")
@@ -1723,7 +1902,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.batch = get_object_or_404(
-            BirdBatch.objects.select_related("farm"),
+            BirdBatch.objects.select_related("farm", "breed"),
             pk=kwargs.get("pk"),
         )
         self.allocations = list(
@@ -2131,6 +2310,7 @@ room_update_view = RoomUpdateView.as_view()
 farm_delete_view = FarmDeleteView.as_view()
 chicken_house_delete_view = ChickenHouseDeleteView.as_view()
 room_delete_view = RoomDeleteView.as_view()
+reference_tables_view = ReferenceTablesView.as_view()
 batch_management_view = BatchManagementView.as_view()
 bird_batch_update_view = BirdBatchUpdateView.as_view()
 bird_batch_delete_view = BirdBatchDeleteView.as_view()

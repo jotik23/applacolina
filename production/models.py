@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q, Sum
 from django.utils import timezone
@@ -84,6 +85,109 @@ class Room(models.Model):
         return f"{farm_name} - {chicken_house_name} - {self.name}"
 
 
+class BreedReference(models.Model):
+    name = models.CharField("Nombre", max_length=150, unique=True)
+
+    class Meta:
+        verbose_name = "Raza"
+        verbose_name_plural = "Razas"
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class BreedWeeklyGuide(models.Model):
+    WEEK_MAX = 100
+
+    breed = models.ForeignKey(
+        BreedReference,
+        on_delete=models.CASCADE,
+        related_name="weekly_guides",
+        verbose_name="Raza",
+    )
+    week = models.PositiveSmallIntegerField(
+        "Semana (vida)",
+        validators=[MinValueValidator(1), MaxValueValidator(WEEK_MAX)],
+    )
+    posture_percentage = models.DecimalField(
+        "% postura",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    haa = models.DecimalField(
+        "H.A.A",
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    egg_weight_g = models.DecimalField(
+        "Peso huevo (g)",
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    grams_per_bird = models.DecimalField(
+        "Gr/ave/día",
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    cumulative_feed = models.DecimalField(
+        "Consumo alimento acumulado (kg)",
+        max_digits=9,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    conversion_index = models.DecimalField(
+        "Índice de conversión",
+        max_digits=6,
+        decimal_places=3,
+        null=True,
+        blank=True,
+    )
+    cumulative_conversion = models.DecimalField(
+        "Conversión acumulada",
+        max_digits=6,
+        decimal_places=3,
+        null=True,
+        blank=True,
+    )
+    weekly_mortality_percentage = models.DecimalField(
+        "% mortalidad semanal",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    body_weight_g = models.DecimalField(
+        "Peso corporal (g)",
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "Guía semanal de raza"
+        verbose_name_plural = "Guías semanales de raza"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["breed", "week"], name="unique_breed_week_reference"
+            )
+        ]
+        ordering = ("breed__name", "week")
+
+    def __str__(self) -> str:
+        return f"{self.breed.name} · Semana {self.week}"
+
+
 class BirdBatch(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Activo"
@@ -100,7 +204,12 @@ class BirdBatch(models.Model):
     )
     birth_date = models.DateField("Fecha de nacimiento")
     initial_quantity = models.PositiveIntegerField("Cantidad inicial")
-    breed = models.CharField("Raza", max_length=150)
+    breed = models.ForeignKey(
+        BreedReference,
+        on_delete=models.PROTECT,
+        related_name="batches",
+        verbose_name="Raza",
+    )
 
     class Meta:
         verbose_name = "Lote de aves"
