@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, Q
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
@@ -35,6 +36,7 @@ from .models import (
     DayOfWeek,
     CalendarStatus,
     OperatorRestPeriod,
+    OperatorSalary,
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
@@ -47,7 +49,14 @@ from .models import (
     UserProfile,
     resolve_overload_policy,
 )
-from .services import CalendarScheduler, SchedulerOptions, sync_calendar_rest_periods
+from .services import (
+    CalendarScheduler,
+    SchedulerOptions,
+    apply_salary_entries,
+    ensure_active_salary,
+    parse_salary_entries,
+    sync_calendar_rest_periods,
+)
 from .selectors import get_recent_calendars_payload
 from production.models import ChickenHouse, Farm, Room
 
@@ -303,7 +312,7 @@ def _build_assignment_matrix(
             "position__farm",
             "operator",
         )
-        .prefetch_related("operator__roles", "operator__suggested_positions")
+        .prefetch_related("operator__roles", "operator__suggested_positions", "operator__salary_records")
         .order_by("position__display_order", "position__code", "date")
     )
 
@@ -1634,6 +1643,19 @@ def _position_payload(position: PositionDefinition, *, reference_date: date | No
     }
 
 
+def _salary_payload(salary: OperatorSalary, *, reference_date: date | None = None) -> dict[str, Any]:
+    active_reference = reference_date or UserProfile.colombia_today()
+    return {
+        "id": salary.id,
+        "amount": f"{salary.amount:.2f}",
+        "payment_type": salary.payment_type,
+        "payment_type_label": OperatorSalary.PaymentType(salary.payment_type).label,
+        "effective_from": salary.effective_from.isoformat(),
+        "effective_until": salary.effective_until.isoformat() if salary.effective_until else None,
+        "is_active": salary.is_active_on(active_reference),
+    }
+
+
 def _operator_payload(
     operator: UserProfile,
     *,
@@ -1643,6 +1665,17 @@ def _operator_payload(
     role_items = roles if roles is not None else list(operator.roles.all())
     suggested_positions = list(operator.suggested_positions.all())
     active_reference = reference_date or UserProfile.colombia_today()
+    salary_records = list(operator.salary_records.all())  # type: ignore[attr-defined]
+    ordered_salaries = sorted(
+        salary_records,
+        key=lambda salary: (
+            salary.effective_from,
+            salary.effective_until or date.max,
+            salary.id or 0,
+        ),
+        reverse=True,
+    )
+    current_salary = next((salary for salary in ordered_salaries if salary.is_active_on(active_reference)), None)
     return {
         "id": operator.id,
         "name": operator.get_full_name() or operator.nombres,
@@ -1676,6 +1709,8 @@ def _operator_payload(
             for role in role_items
         ],
         "is_active": operator.is_active_on(active_reference),
+        "salaries": [_salary_payload(salary, reference_date=active_reference) for salary in ordered_salaries],
+        "current_salary": _salary_payload(current_salary, reference_date=active_reference) if current_salary else None,
     }
 
 
@@ -2184,10 +2219,23 @@ class OperatorCollectionView(StaffRequiredMixin, View):
         if not form.is_valid():
             return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
 
-        with transaction.atomic():
-            operator = form.save()
+        try:
+            salary_entries = parse_salary_entries(payload.get("salaries"))
+        except ValidationError as exc:
+            return _json_error("Datos inválidos para el colaborador.", errors={"salaries": exc.messages})
 
-        operator = UserProfile.objects.prefetch_related("roles", "suggested_positions").get(pk=operator.pk)
+        try:
+            with transaction.atomic():
+                operator = form.save()
+                apply_salary_entries(operator, salary_entries)
+                ensure_active_salary(operator)
+        except ValidationError as exc:
+            return _json_error("Datos inválidos para el colaborador.", errors={"salaries": exc.messages})
+
+        operator = (
+            UserProfile.objects.prefetch_related("roles", "suggested_positions", "salary_records")
+            .get(pk=operator.pk)
+        )
         reference_date = UserProfile.colombia_today()
         return JsonResponse({"operator": _operator_payload(operator, reference_date=reference_date)}, status=201)
 
@@ -2220,10 +2268,26 @@ class OperatorDetailView(StaffRequiredMixin, View):
         if not form.is_valid():
             return _json_error("Datos inválidos para el colaborador.", errors=_form_errors(form))
 
-        with transaction.atomic():
-            operator = form.save()
+        salary_entries = None
+        if "salaries" in payload:
+            try:
+                salary_entries = parse_salary_entries(payload.get("salaries"))
+            except ValidationError as exc:
+                return _json_error("Datos inválidos para el colaborador.", errors={"salaries": exc.messages})
 
-        operator = UserProfile.objects.prefetch_related("roles", "suggested_positions").get(pk=operator.pk)
+        try:
+            with transaction.atomic():
+                operator = form.save()
+                if salary_entries is not None:
+                    apply_salary_entries(operator, salary_entries)
+                ensure_active_salary(operator)
+        except ValidationError as exc:
+            return _json_error("Datos inválidos para el colaborador.", errors={"salaries": exc.messages})
+
+        operator = (
+            UserProfile.objects.prefetch_related("roles", "suggested_positions", "salary_records")
+            .get(pk=operator.pk)
+        )
         reference_date = UserProfile.colombia_today()
         return JsonResponse({"operator": _operator_payload(operator, reference_date=reference_date)})
 
@@ -2575,7 +2639,7 @@ class CalendarMetadataView(StaffRequiredMixin, View):
 
         reference_date = UserProfile.colombia_today()
 
-        operator_qs = UserProfile.objects.prefetch_related("roles", "suggested_positions").order_by(
+        operator_qs = UserProfile.objects.prefetch_related("roles", "suggested_positions", "salary_records").order_by(
             "apellidos",
             "nombres",
         )
@@ -2612,6 +2676,7 @@ class CalendarMetadataView(StaffRequiredMixin, View):
                 "days_of_week": _choice_payload(DayOfWeek.choices),
                 "rest_statuses": _choice_payload(RestPeriodStatus.choices),
                 "rest_sources": _choice_payload(RestPeriodSource.choices),
+                "salary_payment_types": _choice_payload(OperatorSalary.PaymentType.choices),
             },
         }
 
@@ -2700,7 +2765,7 @@ class CalendarAssignmentCollectionView(StaffRequiredMixin, View):
         )
         assignments = (
             calendar.assignments.select_related("position", "position__farm", "operator")
-            .prefetch_related("operator__roles", "operator__suggested_positions")
+            .prefetch_related("operator__roles", "operator__suggested_positions", "operator__salary_records")
             .order_by("date", "position__display_order", "position__code")
         )
 
@@ -2784,7 +2849,7 @@ class CalendarAssignmentCollectionView(StaffRequiredMixin, View):
 
         assignment = (
             ShiftAssignment.objects.select_related("position", "position__farm", "operator")
-            .prefetch_related("operator__roles", "operator__suggested_positions")
+            .prefetch_related("operator__roles", "operator__suggested_positions", "operator__salary_records")
             .get(pk=assignment.pk)
         )
 
@@ -2836,7 +2901,7 @@ class CalendarEligibleOperatorsView(StaffRequiredMixin, View):
 
         assignments = list(
             calendar.assignments.select_related("position", "operator")
-            .prefetch_related("operator__roles", "operator__suggested_positions")
+            .prefetch_related("operator__roles", "operator__suggested_positions", "operator__salary_records")
         )
 
         choices_map = _eligible_operator_map(calendar, [position], [target_date], assignments)

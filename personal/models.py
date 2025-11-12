@@ -148,6 +148,16 @@ class RestDayOfWeek(models.IntegerChoices):
     SUNDAY = 6, _("Domingo")
 
 
+class OperatorSalaryQuerySet(models.QuerySet):
+    def active_on(self, target_date: date) -> "OperatorSalaryQuerySet":
+        if not target_date:
+            return self.none()
+        return self.filter(
+            models.Q(effective_from__lte=target_date),
+            models.Q(effective_until__isnull=True) | models.Q(effective_until__gte=target_date),
+        )
+
+
 class UserProfile(AbstractBaseUser, PermissionsMixin):
     cedula = models.CharField(max_length=32, unique=True)
     nombres = models.CharField(max_length=150)
@@ -275,6 +285,17 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
                 labels.append(str(value))
         return labels
 
+    def active_salary(self, reference_date: date | None = None) -> Optional["OperatorSalary"]:
+        reference = reference_date or self.colombia_today()
+        return (
+            self.salary_records.active_on(reference)  # type: ignore[attr-defined]
+            .order_by("-effective_from", "-id")
+            .first()
+        )
+
+    def has_active_salary(self, reference_date: date | None = None) -> bool:
+        return self.active_salary(reference_date) is not None
+
 
 class UserGroup(Group):
     class Meta:
@@ -282,6 +303,57 @@ class UserGroup(Group):
         verbose_name = "Grupo"
         verbose_name_plural = "Grupos"
         app_label = "personal"
+
+
+class OperatorSalary(models.Model):
+    class PaymentType(models.TextChoices):
+        DAILY = "daily", _("Pago por día laboral")
+        MONTHLY = "monthly", _("Pago mensual (2 quincenas)")
+
+    operator = models.ForeignKey(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name="salary_records",
+    )
+    amount = models.DecimalField(
+        "Monto",
+        max_digits=12,
+        decimal_places=2,
+    )
+    payment_type = models.CharField(
+        "Esquema de pago",
+        max_length=16,
+        choices=PaymentType.choices,
+    )
+    effective_from = models.DateField("Vigente desde")
+    effective_until = models.DateField("Vigente hasta", null=True, blank=True)
+
+    objects: OperatorSalaryQuerySet = OperatorSalaryQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Salario de colaborador"
+        verbose_name_plural = "Salarios de colaboradores"
+        ordering = ["operator_id", "effective_from", "id"]
+        db_table = "users_operator_salary"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(effective_until__isnull=True) | models.Q(effective_until__gte=models.F("effective_from")),
+                name="operator_salary_valid_range",
+            )
+        ]
+
+    def __str__(self) -> str:
+        amount_display = f"{self.amount:,.2f}"
+        return f"{self.operator} · {amount_display} · {self.effective_from:%Y-%m-%d}"
+
+    def is_active_on(self, target_date: date) -> bool:
+        if not target_date:
+            return False
+        if self.effective_from and target_date < self.effective_from:
+            return False
+        if self.effective_until and target_date > self.effective_until:
+            return False
+        return True
 
 
 class ShiftType(models.TextChoices):

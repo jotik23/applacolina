@@ -23,6 +23,18 @@
         restPeriodDetailTemplate: app.dataset.restPeriodDetailUrlTemplate,
       };
 
+      const DEFAULT_SALARY_PAYMENT_TYPES = [
+        { value: 'daily', label: 'Pago por día laboral' },
+        { value: 'monthly', label: 'Pago mensual (2 quincenas)' },
+      ];
+
+      const currencyFormatter = new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
+
       const state = {
         metadata: null,
         calendarId: null,
@@ -53,12 +65,13 @@
           shiftLabels: new Map(),
           alertLabels: new Map(),
           dayLabels: new Map(),
-          restStatusLabels: new Map(),
-          restSourceLabels: new Map(),
-          positionsById: new Map(),
-          positionLabels: new Map(),
-        },
-      };
+        restStatusLabels: new Map(),
+        restSourceLabels: new Map(),
+        positionsById: new Map(),
+        positionLabels: new Map(),
+        salaryPaymentTypes: new Map(),
+      },
+    };
 
       let pendingPositionDeleteId = null;
       let lastFocusedBeforeDeleteDialog = null;
@@ -97,6 +110,25 @@
           parts.push(position.farm.name);
         }
         return parts.join(' · ');
+      };
+
+      const describeSalarySummary = (salary) => {
+        if (!salary) {
+          return 'Sin salario activo';
+        }
+        const paymentLabel =
+          state.lookups.salaryPaymentTypes.get(salary.payment_type) ||
+          salary.payment_type_label ||
+          '';
+        const rangeParts = [];
+        if (salary.effective_from) {
+          rangeParts.push(salary.effective_from);
+        }
+        if (salary.effective_until) {
+          rangeParts.push(salary.effective_until);
+        }
+        const rangeLabel = rangeParts.length ? rangeParts.join(' → ') : '';
+        return [formatCurrency(salary.amount), paymentLabel, rangeLabel].filter(Boolean).join(' · ');
       };
 
       const refreshPositionHighlight = () => {
@@ -176,6 +208,9 @@
         operatorRestDays: app.querySelector('#operator-rest-days'),
         operatorRoles: app.querySelector('#operator-roles'),
         operatorSuggestedPositions: app.querySelector('#operator-suggested-positions'),
+        operatorSalaryList: app.querySelector('#operator-salary-list'),
+        operatorSalaryAddBtn: app.querySelector('#operator-salary-add-btn'),
+        operatorSalaryEmpty: app.querySelector('#operator-salary-empty'),
         operatorCancelBtn: app.querySelector('#operator-cancel-btn'),
         operatorRestAddBtn: app.querySelector('#operator-rest-add-btn'),
         operatorRestFilters: app.querySelector('#operator-rest-filters'),
@@ -895,6 +930,171 @@
         }
       };
 
+      const formatCurrency = (value) => {
+        const amount = Number(value);
+        if (!Number.isFinite(amount)) {
+          return value || '';
+        }
+        return currencyFormatter.format(amount);
+      };
+
+      const getSalaryPaymentOptions = () => {
+        const options = state.metadata?.choice_sets?.salary_payment_types;
+        if (Array.isArray(options) && options.length) {
+          return options;
+        }
+        return DEFAULT_SALARY_PAYMENT_TYPES;
+      };
+
+      const clearSalaryRows = () => {
+        if (refs.operatorSalaryList) {
+          refs.operatorSalaryList.innerHTML = '';
+        }
+        updateSalaryEmptyHint();
+      };
+
+      const updateSalaryEmptyHint = () => {
+        if (!refs.operatorSalaryEmpty) {
+          return;
+        }
+        const hasRows = Boolean(refs.operatorSalaryList?.querySelector('[data-salary-row]'));
+        refs.operatorSalaryEmpty.classList.toggle('hidden', hasRows);
+      };
+
+      const createSalaryRow = (data = {}) => {
+        const resolved = { ...data };
+        if (!resolved.effective_from) {
+          const today = new Date().toISOString().slice(0, 10);
+          resolved.effective_from = refs.operatorEmploymentStart?.value || today;
+        }
+        const fallbackPayment = getSalaryPaymentOptions()[0];
+        if (!resolved.payment_type && fallbackPayment) {
+          resolved.payment_type = fallbackPayment.value;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'grid gap-3 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-5';
+        wrapper.setAttribute('data-salary-row', 'true');
+
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.value = resolved.id ? String(resolved.id) : '';
+        idInput.setAttribute('data-salary-id', 'true');
+        wrapper.append(idInput);
+
+        const buildField = (labelText, element) => {
+          const label = document.createElement('label');
+          label.className = 'flex flex-col text-xs font-medium text-slate-600';
+          label.textContent = labelText;
+          element.className =
+            'mt-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand';
+          label.append(element);
+          return label;
+        };
+
+        const startInput = document.createElement('input');
+        startInput.type = 'date';
+        startInput.value = resolved.effective_from || '';
+        startInput.setAttribute('data-salary-start', 'true');
+        wrapper.append(buildField('Fecha de inicio', startInput));
+
+        const endInput = document.createElement('input');
+        endInput.type = 'date';
+        endInput.value = resolved.effective_until || '';
+        endInput.setAttribute('data-salary-end', 'true');
+        wrapper.append(buildField('Fecha de fin (opcional)', endInput));
+
+        const amountInput = document.createElement('input');
+        amountInput.type = 'number';
+        amountInput.min = '0';
+        amountInput.step = '0.01';
+        amountInput.placeholder = '0';
+        amountInput.value = resolved.amount ? String(resolved.amount) : '';
+        amountInput.setAttribute('data-salary-amount', 'true');
+        wrapper.append(buildField('Monto (COP)', amountInput));
+
+        const paymentSelect = document.createElement('select');
+        paymentSelect.setAttribute('data-salary-type', 'true');
+        const paymentOptions = getSalaryPaymentOptions();
+        paymentOptions.forEach((option) => {
+          const opt = document.createElement('option');
+          opt.value = option.value;
+          opt.textContent = option.label;
+          paymentSelect.append(opt);
+        });
+        if (resolved.payment_type) {
+          paymentSelect.value = resolved.payment_type;
+        }
+        wrapper.append(buildField('Esquema de pago', paymentSelect));
+
+        const actions = document.createElement('div');
+        actions.className = 'flex flex-col items-start gap-2';
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className =
+          'inline-flex items-center rounded border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50';
+        removeBtn.dataset.action = 'salary-remove';
+        removeBtn.textContent = 'Quitar';
+        actions.append(removeBtn);
+        if (resolved.is_active) {
+          const badge = document.createElement('span');
+          badge.className =
+            'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700';
+          badge.textContent = 'Vigente';
+          actions.append(badge);
+        }
+        wrapper.append(actions);
+
+        return wrapper;
+      };
+
+      const addSalaryRow = (data = {}, { atStart = false } = {}) => {
+        if (!refs.operatorSalaryList) {
+          return;
+        }
+        const row = createSalaryRow(data);
+        if (atStart && refs.operatorSalaryList.firstChild) {
+          refs.operatorSalaryList.prepend(row);
+        } else {
+          refs.operatorSalaryList.append(row);
+        }
+        updateSalaryEmptyHint();
+      };
+
+      const setSalaryRows = (rows = []) => {
+        clearSalaryRows();
+        if (Array.isArray(rows) && rows.length) {
+          rows.forEach((entry) => addSalaryRow(entry));
+        } else {
+          addSalaryRow({}, { atStart: true });
+        }
+      };
+
+      const getSalaryEntriesFromDom = () => {
+        if (!refs.operatorSalaryList) {
+          return [];
+        }
+        return Array.from(refs.operatorSalaryList.querySelectorAll('[data-salary-row]')).map((row) => {
+          const idValue = row.querySelector('[data-salary-id]')?.value?.trim();
+          const amountValue = row.querySelector('[data-salary-amount]')?.value?.trim() || '';
+          const startValue = row.querySelector('[data-salary-start]')?.value?.trim() || '';
+          const endValue = row.querySelector('[data-salary-end]')?.value?.trim() || '';
+          const typeValue = row.querySelector('[data-salary-type]')?.value || '';
+          let identifier = null;
+          if (idValue) {
+            const parsed = Number.parseInt(idValue, 10);
+            identifier = Number.isNaN(parsed) ? null : parsed;
+          }
+          return {
+            id: identifier,
+            amount: amountValue,
+            effective_from: startValue,
+            effective_until: endValue,
+            payment_type: typeValue,
+          };
+        });
+      };
+
       const csrfSafeMethods = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
 
       const getCookie = (name) => {
@@ -1060,6 +1260,7 @@
           dayLabels: choiceMap(state.metadata.choice_sets.days_of_week),
           restStatusLabels: choiceMap(state.metadata.choice_sets.rest_statuses || []),
           restSourceLabels: choiceMap(state.metadata.choice_sets.rest_sources || []),
+          salaryPaymentTypes: choiceMap(state.metadata.choice_sets.salary_payment_types || []),
         };
       };
 
@@ -1293,6 +1494,40 @@
         const employmentStartValue = refs.operatorEmploymentStart?.value || '';
         const employmentEndValue = refs.operatorEmploymentEnd?.value || '';
         const accessKeyValue = refs.operatorAccessKey?.value || '';
+        const salaries = getSalaryEntriesFromDom();
+        if (!salaries.length) {
+          setFormMessage(refs.operatorMessage, 'Debes registrar al menos un salario para el colaborador.', 'error');
+          return null;
+        }
+        for (let index = 0; index < salaries.length; index += 1) {
+          const salary = salaries[index];
+          const amountValue = Number(salary.amount);
+          if (!salary.effective_from) {
+            setFormMessage(
+              refs.operatorMessage,
+              `Define la fecha de inicio para el salario #${index + 1}.`,
+              'error'
+            );
+            return null;
+          }
+          if (!salary.payment_type) {
+            setFormMessage(
+              refs.operatorMessage,
+              `Selecciona el esquema de pago para el salario #${index + 1}.`,
+              'error'
+            );
+            return null;
+          }
+          if (!salary.amount || !Number.isFinite(amountValue) || amountValue <= 0) {
+            setFormMessage(
+              refs.operatorMessage,
+              `Ingresa un monto válido para el salario #${index + 1}.`,
+              'error'
+            );
+            return null;
+          }
+        }
+
         return {
           cedula: refs.operatorDocument?.value.trim() || '',
           telefono: refs.operatorPhone?.value.trim() || '',
@@ -1306,6 +1541,7 @@
           suggested_positions: Array.from(refs.operatorSuggestedPositions?.selectedOptions || [])
             .map((option) => Number(option.value))
             .filter((value) => Number.isFinite(value)),
+          salaries,
         };
       };
 
@@ -1392,6 +1628,7 @@
           setSelectedRestDays(operator.automatic_rest_days || []);
           setOperatorRestContext(operator.id);
         }
+        setSalaryRows(operator?.salaries || []);
         focusWrapper(refs.operatorFormWrapper, refs.operatorDocument);
       };
 
@@ -1409,6 +1646,7 @@
         }
         setSelectedRestDays([]);
         setOperatorRestContext(null);
+        clearSalaryRows();
       };
 
       const submitEntity = async ({ url, method, payload, messageRef, successMessage, onSuccess }) => {
@@ -1822,6 +2060,8 @@
             const rolesLine = roles
               ? `<p class="text-xs text-slate-500">Roles: ${roles}</p>`
               : '';
+            const salarySummary = describeSalarySummary(operator.current_salary);
+            const salaryLine = `<p class="text-xs text-slate-500">Salario: ${escapeHtml(salarySummary)}</p>`;
             const statusBadge = operator.is_active
               ? '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Activo</span>'
               : '<span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">Inactivo</span>';
@@ -1858,6 +2098,7 @@
                   <p class="font-semibold text-slate-800">${escapeHtml(operator.name)}</p>
                   <p class="text-xs text-slate-500">${contactLine}</p>
                   ${rolesLine}
+                  ${salaryLine}
                 </td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${suggestionsLine}</td>
                 <td class="px-3 py-3 align-top text-sm text-slate-600">${statusBadge}</td>
@@ -2062,6 +2303,9 @@
       refs.operatorForm?.addEventListener('submit', (event) => {
         event.preventDefault();
         const payload = getOperatorPayload();
+        if (!payload) {
+          return;
+        }
         const id = refs.operatorId?.value;
         submitEntity({
           url: id ? replaceId(API.operatorDetailTemplate, id) : API.operators,
@@ -2097,6 +2341,19 @@
       refs.operatorRefreshBtn?.addEventListener('click', () => fetchMetadata());
       refs.positionAddBtn?.addEventListener('click', () => openPositionForm());
       refs.positionCancelBtn?.addEventListener('click', () => closePositionForm());
+      refs.operatorSalaryAddBtn?.addEventListener('click', () => addSalaryRow({}, { atStart: true }));
+      refs.operatorSalaryList?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action="salary-remove"]');
+        if (!button) {
+          return;
+        }
+        const row = button.closest('[data-salary-row]');
+        if (!row) {
+          return;
+        }
+        row.remove();
+        updateSalaryEmptyHint();
+      });
       refs.operatorCapabilityAddBtn?.addEventListener('click', () => addOperatorCapabilityRow());
       refs.operatorRestAddBtn?.addEventListener('click', () => openRestForm());
       refs.operatorRestCancelBtn?.addEventListener('click', () => closeRestForm());
@@ -2393,6 +2650,7 @@
       };
 
       initFilters();
+      updateSalaryEmptyHint();
       fetchMetadata();
       const { step: initialStep, source: initialSource } = resolveInitialStep();
       const syncInitialStep = initialSource !== null;

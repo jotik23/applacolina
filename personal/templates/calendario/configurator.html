@@ -245,6 +245,19 @@
                   <span class="mt-1 text-xs text-slate-500">Déjala en blanco para conservar la clave actual.</span>
                 </label>
 
+                <div class="md:col-span-2 space-y-3">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 class="text-sm font-semibold text-slate-800">Historial salarial</h3>
+                      <p class="text-xs text-slate-500">Registra la vigencia de cada salario. Solo puede existir un salario activo.</p>
+                    </div>
+                    <button type="button" id="operator-salary-add-btn" class="rounded border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50">Agregar registro</button>
+                  </div>
+                  <div id="operator-salary-empty" class="rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">Agrega al menos un salario para continuar.</div>
+                  <div id="operator-salary-list" class="space-y-3"></div>
+                  <p class="text-xs text-slate-500">Las fechas no pueden superponerse y siempre debe haber un salario vigente.</p>
+                </div>
+
                 <fieldset class="md:col-span-2 flex flex-col gap-2 text-sm text-slate-700">
                   <legend class="font-medium text-slate-800">Descansos Automáticos</legend>
                   <div id="operator-rest-days" class="flex flex-wrap gap-2"></div>
