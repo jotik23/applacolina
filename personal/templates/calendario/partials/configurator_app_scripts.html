@@ -178,13 +178,14 @@
         positionDeleteConfirm: app.querySelector('#position-delete-confirm'),
         positionDeleteName: app.querySelector('[data-position-delete-name]'),
         positionName: app.querySelector('#position-name'),
-        positionCodeDisplay: app.querySelector('#position-code-display'),
-        positionCodeValue: app.querySelector('#position-code-value'),
         positionCategory: app.querySelector('#position-category'),
         positionJobType: app.querySelector('#position-job-type'),
         positionFarm: app.querySelector('#position-farm'),
         positionHouse: app.querySelector('#position-house'),
         positionRooms: app.querySelector('#position-rooms'),
+        positionFarmField: app.querySelector('[data-location-field="farm"]'),
+        positionHouseField: app.querySelector('[data-location-field="house"]'),
+        positionRoomsField: app.querySelector('[data-location-field="rooms"]'),
         positionHandoff: app.querySelector('#position-handoff'),
         positionValidFrom: app.querySelector('#position-valid-from'),
         positionValidUntil: app.querySelector('#position-valid-until'),
@@ -1334,6 +1335,34 @@
         updateRoomOptions(effectiveHouse, { selectedRooms, keepValue: false });
       };
 
+      const syncLocationFields = (jobType, { keepExistingValues = false } = {}) => {
+        const rules = getJobTypeRules(jobType);
+        const requiresLocation = Boolean(rules?.requires_location);
+        const toggleWrapper = (wrapper) => {
+          if (!wrapper) {
+            return;
+          }
+          if (requiresLocation) {
+            wrapper.classList.remove('hidden');
+          } else {
+            wrapper.classList.add('hidden');
+          }
+        };
+        toggleWrapper(refs.positionFarmField);
+        toggleWrapper(refs.positionHouseField);
+        toggleWrapper(refs.positionRoomsField);
+        if (refs.positionFarm) {
+          refs.positionFarm.required = requiresLocation;
+        }
+        if (!requiresLocation && !keepExistingValues) {
+          if (refs.positionFarm) {
+            refs.positionFarm.value = '';
+          }
+          updateHouseOptions('', { keepValue: false, selectedHouse: '', selectedRooms: [] });
+          clearRoomsSelection();
+        }
+      };
+
       const updateHandoffOptions = (
         {
           excludeId = null,
@@ -1391,16 +1420,76 @@
         });
       };
 
+      const getJobTypeRules = (jobType) => {
+        if (!jobType || !state.metadata?.job_type_rules) {
+          return null;
+        }
+        return state.metadata.job_type_rules[jobType] || null;
+      };
+
+      const getCategoryOptionByValue = (value) => {
+        if (!value || !state.metadata?.choice_sets?.position_categories) {
+          return null;
+        }
+        return state.metadata.choice_sets.position_categories.find(
+          (option) => String(option.value) === String(value)
+        );
+      };
+
+      const getCategoryOptionsForJobType = (jobType) => {
+        const options = state.metadata?.choice_sets?.position_categories || [];
+        const rules = getJobTypeRules(jobType);
+        if (!rules || !Array.isArray(rules.allowed_category_codes) || !rules.allowed_category_codes.length) {
+          return options;
+        }
+        const allowed = new Set(rules.allowed_category_codes);
+        return options.filter((option) => allowed.has(option.code));
+      };
+
+      const refreshCategoryOptions = (jobType, { selectedValue = '', fallbackValue = '' } = {}) => {
+        if (!refs.positionCategory) {
+          return;
+        }
+        const filteredOptions = getCategoryOptionsForJobType(jobType);
+        let items = [...filteredOptions];
+        const ensureValue = selectedValue || fallbackValue;
+        if (ensureValue) {
+          const hasSelection = items.some((item) => String(item.value) === String(ensureValue));
+          if (!hasSelection) {
+            const fallbackOption = getCategoryOptionByValue(ensureValue);
+            if (fallbackOption) {
+              items = [fallbackOption, ...items];
+            }
+          }
+        }
+        populateSelect(refs.positionCategory, items, {
+          blankLabel: 'Selecciona sub-categoría',
+          keepValue: true,
+          selectedValues: selectedValue ? [selectedValue] : null,
+        });
+      };
+
+      const clearRoomsSelection = () => {
+        if (!refs.positionRooms) {
+          return;
+        }
+        Array.from(refs.positionRooms.options || []).forEach((option) => {
+          option.selected = false;
+        });
+      };
+
       const populateStaticOptions = () => {
         if (!state.metadata || state.orderLocked) {
           return;
         }
 
-        populateSelect(refs.positionCategory, state.metadata.choice_sets.position_categories, { blankLabel: 'Selecciona categoría' });
         populateSelect(refs.positionJobType, state.metadata.choice_sets.position_job_types, {
           includeBlank: false,
           keepValue: true,
         });
+        const activeJobType = refs.positionJobType?.value || '';
+        refreshCategoryOptions(activeJobType);
+        syncLocationFields(activeJobType, { keepExistingValues: Boolean(refs.positionId?.value) });
         populateSelect(refs.positionFarm, state.metadata.farms, { valueKey: 'id', labelKey: 'name', blankLabel: 'Selecciona granja' });
         const currentFarm = refs.positionFarm?.value || '';
         const selectedHandoff = refs.positionHandoff?.value || '';
@@ -1453,16 +1542,14 @@
         setEditingPosition(position ? position.id : null);
         if (!position) {
             refs.positionId.value = '';
-            if (refs.positionCodeDisplay) {
-              refs.positionCodeDisplay.classList.add('hidden');
-            }
-          if (refs.positionCodeValue) {
-            refs.positionCodeValue.textContent = '—';
-          }
+          let initialJobType = '';
           if (refs.positionJobType) {
             const firstOption = refs.positionJobType.options?.[0];
-            refs.positionJobType.value = firstOption ? firstOption.value : '';
+            initialJobType = firstOption ? firstOption.value : '';
+            refs.positionJobType.value = initialJobType;
           }
+          refreshCategoryOptions(initialJobType, { selectedValue: '' });
+          syncLocationFields(initialJobType);
           const currentFarm = refs.positionFarm?.value || '';
           updateHouseOptions(currentFarm, { selectedHouse: '', selectedRooms: [], keepValue: false });
           updateHandoffOptions({ excludeId: null, selected: '', farmId: currentFarm, keepValue: false });
@@ -1477,16 +1564,11 @@
         } else {
           refs.positionId.value = position.id;
           refs.positionName.value = position.name || '';
-          if (refs.positionCodeDisplay) {
-            refs.positionCodeDisplay.classList.add('hidden');
-          }
-          if (refs.positionCodeValue) {
-            refs.positionCodeValue.textContent = position.code || '—';
-          }
-          refs.positionCategory.value = position.category_id || '';
           if (refs.positionJobType) {
             refs.positionJobType.value = position.job_type || refs.positionJobType.value || '';
           }
+          const effectiveJobType = refs.positionJobType?.value || '';
+          refreshCategoryOptions(effectiveJobType, { selectedValue: position.category_id || '' });
           refs.positionValidFrom.value = position.valid_from || '';
           refs.positionValidUntil.value = position.valid_until || '';
           const farmId = position.farm?.id ? String(position.farm.id) : '';
@@ -1507,6 +1589,7 @@
           if (refs.positionHandoff) {
             refs.positionHandoff.value = handoffId;
           }
+          syncLocationFields(effectiveJobType, { keepExistingValues: Boolean(farmId) });
         }
         focusWrapper(refs.positionFormWrapper, refs.positionName);
       };
@@ -1515,12 +1598,6 @@
         setEditingPosition(null);
         resetForm(refs.positionForm, refs.positionMessage);
         toggleWrapper(refs.positionFormWrapper, false);
-        if (refs.positionCodeDisplay) {
-          refs.positionCodeDisplay.classList.add('hidden');
-        }
-        if (refs.positionCodeValue) {
-          refs.positionCodeValue.textContent = '—';
-        }
         const currentFarm = refs.positionFarm?.value || '';
         updateHandoffOptions({ keepValue: false, farmId: currentFarm, excludeId: null, selected: '' });
         if (refs.positionHandoff) {
@@ -1814,6 +1891,12 @@
 
       refs.positionHouse?.addEventListener('change', (event) => {
         updateRoomOptions(event.target.value, { selectedRooms: [], keepValue: false });
+      });
+
+      refs.positionJobType?.addEventListener('change', (event) => {
+        const jobType = event.target.value || '';
+        refreshCategoryOptions(jobType, { selectedValue: '' });
+        syncLocationFields(jobType);
       });
 
       const showStep = (requestedStep, { syncUrl = true } = {}) => {

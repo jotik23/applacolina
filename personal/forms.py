@@ -15,6 +15,8 @@ from .models import (
     CalendarStatus,
     OperatorRestPeriod,
     PositionDefinition,
+    JOB_TYPE_CATEGORY_CODE_MAP,
+    JOB_TYPES_REQUIRING_LOCATION,
     RestDayOfWeek,
     RestPeriodStatus,
     Role,
@@ -340,9 +342,20 @@ class PositionDefinitionForm(forms.ModelForm):
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
         category = cleaned_data.get("category")
+        job_type = cleaned_data.get("job_type")
+        farm = cleaned_data.get("farm")
         chicken_house = cleaned_data.get("chicken_house")
         rooms_value = cleaned_data.get("rooms")  # type: ignore[assignment]
         selected_rooms: list[Room] = list(rooms_value) if rooms_value is not None else []
+        if job_type and category:
+            allowed_codes = JOB_TYPE_CATEGORY_CODE_MAP.get(job_type, ())
+            if allowed_codes and category.code not in allowed_codes:
+                self.add_error(
+                    "category",
+                    "Selecciona una sub-categoría válida para la categoría indicada.",
+                )
+        if job_type in JOB_TYPES_REQUIRING_LOCATION and not farm:
+            self.add_error("farm", "Debes seleccionar una granja para esta categoría.")
         if selected_rooms:
             if not chicken_house:
                 self.add_error(

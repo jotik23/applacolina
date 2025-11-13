@@ -75,19 +75,14 @@
                   <input id="position-name" type="text" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
                 </label>
 
-                <div id="position-code-display" class="hidden flex flex-col gap-1 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  <span class="font-semibold text-slate-700">Código asignado</span>
-                  <span id="position-code-value">—</span>
-                </div>
-
                 <label class="flex flex-col text-sm text-slate-700">
                   Categoría
-                  <select id="position-category" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                  <select id="position-job-type" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
-                  Tipo de puesto
-                  <select id="position-job-type" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
+                  Sub-categoría
+                  <select id="position-category" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                 </label>
 
                 <label class="flex flex-col text-sm text-slate-700">
@@ -100,17 +95,17 @@
                   <input id="position-valid-until" type="date" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand" />
                 </label>
 
-                <label class="flex flex-col text-sm text-slate-700">
+                <label class="flex flex-col text-sm text-slate-700" data-location-field="farm">
                   Granja
                   <select id="position-farm" required class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                 </label>
 
-                <label class="flex flex-col text-sm text-slate-700">
+                <label class="flex flex-col text-sm text-slate-700" data-location-field="house">
                   Galpón (opcional)
                   <select id="position-house" class="mt-1 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                 </label>
 
-                <label class="flex flex-col text-sm text-slate-700">
+                <label class="flex flex-col text-sm text-slate-700" data-location-field="rooms">
                   Salones (opcional)
                   <select id="position-rooms" multiple class="mt-1 h-40 rounded border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"></select>
                   <span class="mt-1 text-xs text-slate-500">Usa Ctrl/⌘ + clic para seleccionar varios salones.</span>

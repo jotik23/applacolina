@@ -396,13 +396,59 @@ class PositionCategoryCode(models.TextChoices):
     OFICIOS_VARIOS = "OFICIOS_VARIOS", _("Oficios varios")
     VACUNADOR = "VACUNADOR", _("Vacunador")
     AUXILIAR_OPERATIVO = "AUXILIAR_OPERATIVO", _("Auxiliar operativo")
+    ADMINISTRADOR = "ADMINISTRADOR", _("Administrador")
+    AUXILIAR_ADMINISTRATIVO = "AUXILIAR_ADMINISTRATIVO", _("Auxiliar administrativo")
+    AUXILIAR_CONTABLE = "AUXILIAR_CONTABLE", _("Auxiliar contable")
+    CONTADOR = "CONTADOR", _("Contador")
+    ASESOR = "ASESOR", _("Asesor")
+    ADMINISTRATIVO_OTRO = "ADMINISTRATIVO_OTRO", _("Otro")
+    VENDEDOR = "VENDEDOR", _("Vendedor")
+    TRANSPORTADOR = "TRANSPORTADOR", _("Transportador")
+    AUXILIAR_VENTAS = "AUXILIAR_VENTAS", _("Auxiliar ventas")
 
 
 class PositionJobType(models.TextChoices):
     PRODUCTION = "production", _("Producción")
     CLASSIFICATION = "classification", _("Clasificación")
-    ADMINISTRATIVE = "administrative", _("Administrativo")
+    ADMINISTRATIVE = "administrative", _("Administración")
     SALES = "sales", _("Ventas")
+
+
+JOB_TYPE_CATEGORY_CODE_MAP: dict[str, tuple[str, ...]] = {
+    PositionJobType.PRODUCTION: (
+        PositionCategoryCode.GALPONERO_LEVANTE_DIA,
+        PositionCategoryCode.GALPONERO_LEVANTE_NOCHE,
+        PositionCategoryCode.GALPONERO_PRODUCCION_DIA,
+        PositionCategoryCode.GALPONERO_PRODUCCION_NOCHE,
+        PositionCategoryCode.LIDER_GRANJA,
+        PositionCategoryCode.OFICIOS_VARIOS,
+        PositionCategoryCode.VACUNADOR,
+    ),
+    PositionJobType.CLASSIFICATION: (
+        PositionCategoryCode.CLASIFICADOR_DIA,
+        PositionCategoryCode.CLASIFICADOR_NOCHE,
+    ),
+    PositionJobType.ADMINISTRATIVE: (
+        PositionCategoryCode.ADMINISTRADOR,
+        PositionCategoryCode.AUXILIAR_ADMINISTRATIVO,
+        PositionCategoryCode.AUXILIAR_CONTABLE,
+        PositionCategoryCode.CONTADOR,
+        PositionCategoryCode.SUPERVISOR,
+        PositionCategoryCode.LIDER_TECNICO,
+        PositionCategoryCode.ASESOR,
+        PositionCategoryCode.ADMINISTRATIVO_OTRO,
+    ),
+    PositionJobType.SALES: (
+        PositionCategoryCode.VENDEDOR,
+        PositionCategoryCode.TRANSPORTADOR,
+        PositionCategoryCode.AUXILIAR_VENTAS,
+    ),
+}
+
+JOB_TYPES_REQUIRING_LOCATION: tuple[str, ...] = (
+    PositionJobType.PRODUCTION,
+    PositionJobType.CLASSIFICATION,
+)
 
 
 class PositionCategory(models.Model):
@@ -492,13 +538,15 @@ class PositionDefinition(models.Model):
         PositionCategory,
         on_delete=models.PROTECT,
         related_name="positions",
-        verbose_name="Categoría",
+        verbose_name="Sub-categoría",
     )
     farm = models.ForeignKey(
         Farm,
         on_delete=models.PROTECT,
         related_name="position_definitions",
         verbose_name="Granja",
+        null=True,
+        blank=True,
     )
     chicken_house = models.ForeignKey(
         ChickenHouse,
@@ -538,6 +586,25 @@ class PositionDefinition(models.Model):
 
     def clean(self) -> None:
         super().clean()
+        category_code = self.category.code if self.category_id and self.category else None
+        allowed_codes = JOB_TYPE_CATEGORY_CODE_MAP.get(self.job_type)
+        if allowed_codes and category_code and category_code not in allowed_codes:
+            raise ValidationError(
+                {
+                    "category": _(
+                        "Selecciona una sub-categoría válida para la categoría %(job_type)s."
+                    )
+                    % {"job_type": self.get_job_type_display()}
+                }
+            )
+
+        if self.job_type in JOB_TYPES_REQUIRING_LOCATION and not self.farm_id:
+            raise ValidationError(
+                {
+                    "farm": _("Debes seleccionar una granja para esta categoría."),
+                }
+            )
+
         if self.valid_until and self.valid_until < self.valid_from:
             raise ValidationError("La fecha de fin debe ser igual o posterior a la de inicio.")
 

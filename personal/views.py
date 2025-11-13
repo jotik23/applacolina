@@ -35,6 +35,8 @@ from .models import (
     AssignmentChangeLog,
     DayOfWeek,
     CalendarStatus,
+    JOB_TYPE_CATEGORY_CODE_MAP,
+    JOB_TYPES_REQUIRING_LOCATION,
     OperatorRestPeriod,
     OperatorSalary,
     PositionCategory,
@@ -2652,6 +2654,21 @@ class CalendarMetadataView(StaffRequiredMixin, View):
             for operator in operator_qs
         ]
 
+        category_by_code = {category["code"]: category for category in categories_payload}
+        job_type_rules: dict[str, dict[str, Any]] = {}
+        for job_type_value, _ in PositionJobType.choices:
+            allowed_codes = [
+                code for code in JOB_TYPE_CATEGORY_CODE_MAP.get(job_type_value, ())
+                if code in category_by_code
+            ]
+            job_type_rules[job_type_value] = {
+                "allowed_category_codes": allowed_codes,
+                "allowed_category_ids": [
+                    str(category_by_code[code]["id"]) for code in allowed_codes
+                ],
+                "requires_location": job_type_value in JOB_TYPES_REQUIRING_LOCATION,
+            }
+
         response_payload: Dict[str, Any] = {
             "positions": positions_payload,
             "operators": operators_payload,
@@ -2683,6 +2700,7 @@ class CalendarMetadataView(StaffRequiredMixin, View):
                 "rest_sources": _choice_payload(RestPeriodSource.choices),
                 "salary_payment_types": _choice_payload(OperatorSalary.PaymentType.choices),
             },
+            "job_type_rules": job_type_rules,
         }
 
         return JsonResponse(response_payload)
