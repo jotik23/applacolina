@@ -3,12 +3,13 @@ Reusable metric cell for daily indicators table.
 Expects `metric` dict-like object with keys: actual, previous, previous_delta, status, unit, decimals.
 {% endcomment %}
 {% with show_metric_unit=show_unit|default_if_none:True %}
+  {% with compact_unit=metric.unit|default_if_none:"" %}
   <td class="px-3 py-4 align-top">
     <div class="space-y-1">
       <div class="flex items-center gap-2">
         <p class="text-base font-semibold text-slate-900">
           {% if metric and metric.actual is not None %}
-            {{ metric.actual|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
+            {{ metric.actual|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
           {% else %}
             --
           {% endif %}
@@ -21,19 +22,19 @@ Expects `metric` dict-like object with keys: actual, previous, previous_delta, s
       </div>
       <div class="text-[11px] text-slate-500">
         {% if metric and metric.previous is not None %}
-          Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
+          Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
           {% with delta=metric.previous_delta %}
             {% if delta is not None %}
               {% if delta > 0 %}
                 {% with trend_label="Subió" trend_class="text-emerald-600" %}
                   <span class="font-semibold {{ trend_class }}">
-                    {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
+                    {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
                   </span>
                 {% endwith %}
               {% elif delta < 0 %}
                 {% with trend_label="Bajó" trend_class="text-rose-600" %}
                   <span class="font-semibold {{ trend_class }}">
-                    {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
+                    {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
                   </span>
                 {% endwith %}
               {% else %}
@@ -47,4 +48,5 @@ Expects `metric` dict-like object with keys: actual, previous, previous_delta, s
       </div>
     </div>
   </td>
+  {% endwith %}
 {% endwith %}

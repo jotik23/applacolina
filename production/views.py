@@ -520,8 +520,9 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
 
             latest_record = latest_record_map.get(batch.id)
             daily_record = daily_records_map.get(batch.id)
-            actual_record = daily_record or latest_record
+            actual_record = daily_record
             previous_record = yesterday_records_map.get(batch.id)
+            record_for_display = daily_record or latest_record
 
             consumption_actual = (
                 float(actual_record.consumption)
@@ -822,8 +823,8 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 alerts.append("Saldo de aves por debajo del 90% del lote inicial.")
 
             notes = (
-                f"Último registro de producción: {actual_record.date:%d %b %Y}."
-                if actual_record
+                f"Último registro de producción: {record_for_display.date:%d %b %Y}."
+                if record_for_display
                 else "Sin registros de producción disponibles."
             )
 
@@ -911,7 +912,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 "daily_snapshot": daily_snapshot,
                 "daily_snapshot_map": daily_snapshot_map,
                 "daily_rollup": daily_rollup,
-                "latest_record_date": actual_record.date if actual_record else None,
+                "latest_record_date": record_for_display.date if record_for_display else None,
             }
 
             all_lots.append(lot_data)
@@ -1828,6 +1829,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             {
                 "batch": self.batch,
                 "active_submenu": "daily_indicators",
+                "batch_navigation": self._build_batch_navigation(),
                 "week_rows": self.week_rows,
                 "week_navigation": self.week_navigation,
                 "selected_day": self.selected_day,
@@ -1911,6 +1913,48 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         avg_weight, uniformity = self._resolve_weight_snapshot(self.selected_day)
         self.selected_avg_weight = avg_weight
         self.selected_uniformity = uniformity
+
+    def _build_batch_navigation(self) -> Dict[str, Optional[Dict[str, str]]]:
+        """Compute previous/next active batches to allow quick navigation."""
+
+        active_batches = list(
+            BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE).only(
+                "id", "birth_date", "initial_quantity"
+            )
+        )
+        if not active_batches:
+            return {"previous": None, "next": None}
+
+        today = timezone.localdate()
+        active_batches.sort(
+            key=lambda batch: (
+                -max((today - batch.birth_date).days, 0),
+                -batch.initial_quantity,
+                batch.pk,
+            )
+        )
+        label_map = build_active_batch_label_map(active_batches)
+        batch_ids = [batch.pk for batch in active_batches]
+        try:
+            current_index = batch_ids.index(self.batch.pk)
+        except ValueError:
+            return {"previous": None, "next": None}
+
+        def serialize(target: Optional[BirdBatch]) -> Optional[Dict[str, str]]:
+            if not target:
+                return None
+            return {
+                "id": str(target.pk),
+                "label": resolve_batch_label(target, label_map),
+                "url": reverse("production:batch-production-board", args=[target.pk]),
+            }
+
+        previous_batch = active_batches[current_index - 1] if current_index > 0 else None
+        next_batch = (
+            active_batches[current_index + 1] if current_index < len(active_batches) - 1 else None
+        )
+
+        return {"previous": serialize(previous_batch), "next": serialize(next_batch)}
 
     def _init_timeline(self) -> None:
         raw_day = self.request.POST.get("date") or self.request.GET.get("day")

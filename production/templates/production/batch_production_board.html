@@ -57,9 +57,46 @@
               {% endif %}
             </p>
           </div>
-          <a href="{% url 'production:index' %}#lot-{{ batch.id }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900">
-            ← Volver al resumen
-          </a>
+          <div class="flex items-center gap-3 text-base" aria-label="Navegación entre lotes activos">
+            {% with previous=batch_navigation.previous next=batch_navigation.next %}
+              {% if previous %}
+                <a
+                  href="{{ previous.url }}"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-lg font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
+                  aria-label="Ver lote anterior ({{ previous.label }})"
+                  title="{{ previous.label }}"
+                >
+                  ←
+                  <span class="sr-only">Anterior: {{ previous.label }}</span>
+                </a>
+              {% else %}
+                <span
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-100 text-lg font-semibold text-slate-300"
+                  aria-hidden="true"
+                >
+                  ←
+                </span>
+              {% endif %}
+              {% if next %}
+                <a
+                  href="{{ next.url }}"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-lg font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
+                  aria-label="Ver lote siguiente ({{ next.label }})"
+                  title="{{ next.label }}"
+                >
+                  →
+                  <span class="sr-only">Siguiente: {{ next.label }}</span>
+                </a>
+              {% else %}
+                <span
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-100 text-lg font-semibold text-slate-300"
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              {% endif %}
+            {% endwith %}
+          </div>
         </div>
       </div>
     </header>

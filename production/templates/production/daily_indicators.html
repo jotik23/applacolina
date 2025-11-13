@@ -64,7 +64,15 @@
                 {% for lot in farm.lots %}
                   {% with daily_map=lot.daily_snapshot_map %}
                     {% with production=daily_map.production consumption=daily_map.consumption mortality=daily_map.mortality discard=daily_map.discard egg=daily_map.egg_weight %}
-                      <tr id="lot-{{ lot.id }}" class="border-t border-slate-100 {% if focused_lot_id == lot.id %}bg-emerald-50/70{% endif %}">
+                      <tr
+                        id="lot-{{ lot.id }}"
+                        class="group border-t border-slate-100 transition-colors cursor-pointer focus-within:bg-emerald-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 {% if focused_lot_id == lot.id %}bg-emerald-50/70{% else %}hover:bg-emerald-50/50{% endif %}"
+                        data-lot-row
+                        data-href="{% url 'production:batch-production-board' lot.id %}"
+                        role="link"
+                        tabindex="0"
+                        aria-label="Abrir tablero de producción diaria del lote {{ lot.barn_houses_display }}"
+                      >
                         <td class="px-4 py-4 align-top">
                           <div class="space-y-1">
                             <a href="{% url 'production:batch-production-board' lot.id %}" class="text-sm font-semibold text-emerald-700 hover:underline">
@@ -103,7 +111,7 @@
                           <div class="space-y-1">
                             <p class="text-base font-semibold text-slate-900">
                               {% if egg and egg.actual is not None %}
-                                {{ egg.actual|floatformat:egg.decimals }} {{ egg.unit }}
+                                {{ egg.actual|floatformat:egg.decimals }} gr
                               {% else %}
                                 --
                               {% endif %}
@@ -147,4 +155,32 @@
       </div>
     {% endif %}
   </section>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var lotRows = document.querySelectorAll('[data-lot-row]');
+
+      lotRows.forEach(function (row) {
+        var href = row.getAttribute('data-href');
+        if (!href) {
+          return;
+        }
+
+        function navigateToBoard() {
+          window.location.href = href;
+        }
+
+        row.addEventListener('click', function () {
+          navigateToBoard();
+        });
+
+        row.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigateToBoard();
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}
