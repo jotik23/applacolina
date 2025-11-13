@@ -795,35 +795,32 @@ def _eligible_operator_map(
 
     operator_qs = (
         UserProfile.objects.prefetch_related("roles", "suggested_positions")
-        .filter(suggested_positions__in=position_ids, is_staff=False)
-        .distinct()
+        .filter(is_staff=False, is_active=True)
+        .order_by("apellidos", "nombres")
     )
 
-    operators_by_position: dict[int, set[int]] = defaultdict(set)
-    operator_cache: dict[int, Any] = {}
+    operator_cache: dict[int, UserProfile] = {}
+    suggested_position_map: dict[int, set[int]] = {}
 
     for operator in operator_qs:
         operator_cache[operator.id] = operator
-        for suggested in operator.suggested_positions.all():
-            if suggested.id in position_ids:
-                operators_by_position[suggested.id].add(operator.id)
+        suggested_ids = {
+            suggested.id
+            for suggested in operator.suggested_positions.all()
+            if suggested.id is not None and suggested.id in position_ids
+        }
+        suggested_position_map[operator.id] = suggested_ids
 
     result: dict[int, dict[date, List[dict[str, Any]]]] = defaultdict(dict)
 
     for position in positions:
-        operator_ids = operators_by_position.get(position.id, set())
         for day in date_columns:
             if not position.is_active_on(day):
                 result[position.id][day] = []
                 continue
 
-            if not operator_ids:
-                result[position.id][day] = []
-                continue
-
             choices: List[dict[str, Any]] = []
-            for operator_id in operator_ids:
-                operator = operator_cache.get(operator_id)
+            for operator_id, operator in operator_cache.items():
                 if not operator:
                     continue
 
@@ -839,20 +836,22 @@ def _eligible_operator_map(
                 if role_label:
                     label = f"{label} · {role_label}"
 
+                is_recommended = position.id in suggested_position_map.get(operator_id, set())
+
                 choices.append(
                     {
                         "id": operator_id,
                         "label": label,
                         "alert": AssignmentAlertLevel.NONE,
                         "disabled": disabled,
+                        "recommended": is_recommended,
                     }
                 )
 
-            choices.sort(key=lambda item: item["label"].lower())
+            choices.sort(key=lambda item: (not item.get("recommended", False), item["label"].lower()))
             result[position.id][day] = choices
 
     return result
-
 
 def _calculate_stats(rows: Iterable[dict[str, Any]]) -> dict[str, int]:
     stats = {
@@ -1224,6 +1223,8 @@ FARM_GROUP_COLOR_SEQUENCE: tuple[str, ...] = (
 CLASSIFIER_GROUP_COLOR: str = "bg-indigo-50"
 REST_GROUP_COLOR: str = "bg-slate-50"
 MISC_GROUP_COLOR: str = "bg-slate-100"
+ADMINISTRATIVE_GROUP_COLOR: str = "bg-orange-50"
+SALES_GROUP_COLOR: str = "bg-yellow-50"
 
 
 def _build_operational_position_groups(
@@ -1237,6 +1238,8 @@ def _build_operational_position_groups(
 
     farm_map: dict[int, dict[str, Any]] = {}
     classifier_map: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    administrative_rows: list[dict[str, Any]] = []
+    sales_rows: list[dict[str, Any]] = []
     misc_rows: list[dict[str, Any]] = []
 
     def _row_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
@@ -1257,6 +1260,14 @@ def _build_operational_position_groups(
         category_code = getattr(category, "code", "")
         if category_code in CLASSIFIER_CATEGORY_CODES:
             classifier_map[category_code].append(row)
+            continue
+
+        job_type = getattr(position, "job_type", "")
+        if job_type == PositionJobType.ADMINISTRATIVE:
+            administrative_rows.append(row)
+            continue
+        if job_type == PositionJobType.SALES:
+            sales_rows.append(row)
             continue
 
         farm_id = getattr(position, "farm_id", None)
@@ -1355,35 +1366,6 @@ def _build_operational_position_groups(
         groups_payload.append(group_entry)
         group_map[group_key] = group_entry
 
-    misc_group_payload: Optional[dict[str, Any]] = None
-    if misc_rows:
-        misc_rows.sort(key=_row_sort_key)
-        misc_key = "misc-positions"
-        misc_label = "Otras posiciones"
-        misc_ids: list[int] = []
-        for row in misc_rows:
-            row["display_group"] = {
-                "key": misc_key,
-                "type": "misc",
-                "label": misc_label,
-                "color_class": MISC_GROUP_COLOR,
-            }
-            position = row.get("position")
-            if position and position.id is not None:
-                misc_ids.append(position.id)
-                position_to_group[position.id] = misc_key
-
-        ordered_rows.extend(misc_rows)
-        misc_group_payload = {
-            "key": misc_key,
-            "type": "misc",
-            "label": misc_label,
-            "color_class": MISC_GROUP_COLOR,
-            "position_ids": misc_ids,
-        }
-        groups_payload.append(misc_group_payload)
-        group_map[misc_key] = misc_group_payload
-
     classifier_rows: list[dict[str, Any]] = []
     for category_code in CLASSIFIER_CATEGORY_DISPLAY_ORDER:
         category_rows = classifier_map.pop(category_code, [])
@@ -1442,6 +1424,87 @@ def _build_operational_position_groups(
             "positions": [],
             "position_ids": [],
         }
+
+    def _attach_flat_group(
+        target_rows: list[dict[str, Any]],
+        *,
+        key: str,
+        label: str,
+        color_class: str,
+        group_type: str,
+    ) -> Optional[dict[str, Any]]:
+        if not target_rows:
+            return None
+
+        target_rows.sort(key=_row_sort_key)
+        position_ids: list[int] = []
+        for row in target_rows:
+            row["display_group"] = {
+                "key": key,
+                "type": group_type,
+                "label": label,
+                "color_class": color_class,
+            }
+            position = row.get("position")
+            if position and position.id is not None:
+                position_ids.append(position.id)
+                position_to_group[position.id] = key
+
+        ordered_rows.extend(target_rows)
+        group_entry = {
+            "key": key,
+            "type": group_type,
+            "label": label,
+            "color_class": color_class,
+            "position_ids": position_ids,
+        }
+        groups_payload.append(group_entry)
+        group_map[key] = group_entry
+        return group_entry
+
+    administrative_group_payload = _attach_flat_group(
+        administrative_rows,
+        key="administrative-positions",
+        label="Administración",
+        color_class=ADMINISTRATIVE_GROUP_COLOR,
+        group_type="administrative",
+    )
+    sales_group_payload = _attach_flat_group(
+        sales_rows,
+        key="sales-positions",
+        label="Ventas",
+        color_class=SALES_GROUP_COLOR,
+        group_type="sales",
+    )
+
+    misc_group_payload: Optional[dict[str, Any]] = None
+    if misc_rows:
+        misc_rows.sort(key=_row_sort_key)
+        misc_key = "misc-positions"
+        misc_label = "Otras posiciones"
+        misc_ids: list[int] = []
+        for row in misc_rows:
+            row["display_group"] = {
+                "key": misc_key,
+                "type": "misc",
+                "label": misc_label,
+                "color_class": MISC_GROUP_COLOR,
+            }
+            position = row.get("position")
+            if position and position.id is not None:
+                misc_ids.append(position.id)
+                position_to_group[position.id] = misc_key
+
+        ordered_rows.extend(misc_rows)
+        misc_group_payload = {
+            "key": misc_key,
+            "type": "misc",
+            "label": misc_label,
+            "color_class": MISC_GROUP_COLOR,
+            "position_ids": misc_ids,
+        }
+        groups_payload.append(misc_group_payload)
+        group_map[misc_key] = misc_group_payload
 
     appended_ids = {id(row) for row in ordered_rows}
     for row in row_list:
@@ -1505,6 +1568,8 @@ def _build_operational_position_groups(
         "rests": rest_items,
         "rest_group": rest_group_payload,
         "misc_group": misc_group_payload,
+        "administrative_group": administrative_group_payload,
+        "sales_group": sales_group_payload,
         "groups": groups_payload,
         "group_map": group_map,
         "position_to_group": position_to_group,

@@ -13,6 +13,7 @@ from personal.models import (
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
+    PositionJobType,
     RestPeriodSource,
     RestPeriodStatus,
     ShiftAssignment,
@@ -746,7 +747,63 @@ class CalendarActivePositionVisibilityTests(TestCase):
             },
         )
         self.assertEqual(response_inside.status_code, 200)
-        self.assertEqual(len(response_inside.json().get("results", [])), 1)
+        inside_ids = {item["id"] for item in response_inside.json().get("results", [])}
+        self.assertIn(operator.pk, inside_ids)
+
+    def test_eligible_operators_include_all_active_profiles(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana general",
+            start_date=date(2025, 10, 13),
+            end_date=date(2025, 10, 15),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        position = PositionDefinition.objects.create(
+            name="Posición disponible",
+            code="PARTIAL-ALL",
+            category=self.category,
+            farm=self.farm,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+        )
+
+        recommended = UserProfile.objects.create_user(
+            cedula="4002",
+            password="test",  # noqa: S106 - test credential
+            nombres="Operario",
+            apellidos="Sugerido",
+            telefono="3100000007",
+        )
+        recommended.suggested_positions.add(position)
+
+        additional = UserProfile.objects.create_user(
+            cedula="4003",
+            password="test",  # noqa: S106 - test credential
+            nombres="Operario",
+            apellidos="General",
+            telefono="3100000008",
+        )
+
+        url = reverse(
+            "personal-api:calendar-eligible-operators",
+            args=[calendar.pk],
+        )
+        response = self.client.get(
+            url,
+            {
+                "position": str(position.pk),
+                "date": calendar.start_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        results = response.json().get("results", [])
+        result_ids = {item["id"] for item in results}
+        self.assertTrue({recommended.pk, additional.pk}.issubset(result_ids))
+        self.assertTrue(
+            any(item.get("recommended") and item["id"] == recommended.pk for item in results)
+        )
 
     def test_summary_marks_slots_outside_validity(self) -> None:
         calendar = ShiftCalendar.objects.create(
@@ -777,3 +834,101 @@ class CalendarActivePositionVisibilityTests(TestCase):
 
         self.assertFalse(slot_map[calendar.start_date.isoformat()])
         self.assertTrue(slot_map[(calendar.start_date + timedelta(days=1)).isoformat()])
+
+    def test_administrative_and_sales_positions_grouped_by_category(self) -> None:
+        calendar = ShiftCalendar.objects.create(
+            name="Semana categorías",
+            start_date=date(2025, 12, 1),
+            end_date=date(2025, 12, 3),
+            status=CalendarStatus.DRAFT,
+            created_by=self.user,
+        )
+
+        production_position = PositionDefinition.objects.create(
+            name="Producción base",
+            code="PROD-BASE",
+            category=self.category,
+            farm=self.farm,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+        )
+
+        classification_category, _ = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.CLASIFICADOR_DIA,
+            defaults={
+                "shift_type": ShiftType.DAY,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+        administrative_category, _ = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.ADMINISTRADOR,
+            defaults={
+                "shift_type": ShiftType.DAY,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+        sales_category, _ = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.VENDEDOR,
+            defaults={
+                "shift_type": ShiftType.DAY,
+                "rest_max_consecutive_days": 8,
+                "rest_post_shift_days": 0,
+                "rest_monthly_days": 5,
+            },
+        )
+
+        classification_position = PositionDefinition.objects.create(
+            name="Clasificador base",
+            code="CLASS-ROLE",
+            category=classification_category,
+            job_type=PositionJobType.CLASSIFICATION,
+            farm=self.farm,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+        )
+        administrative_position = PositionDefinition.objects.create(
+            name="Administración general",
+            code="ADMIN-ROLE",
+            category=administrative_category,
+            job_type=PositionJobType.ADMINISTRATIVE,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+        )
+        sales_position = PositionDefinition.objects.create(
+            name="Ventas territoriales",
+            code="SALES-ROLE",
+            category=sales_category,
+            job_type=PositionJobType.SALES,
+            valid_from=calendar.start_date,
+            valid_until=calendar.end_date,
+        )
+
+        response = self.client.get(reverse("personal:calendar-detail", args=[calendar.pk]))
+        self.assertEqual(response.status_code, 200)
+
+        rows = response.context["rows"]
+
+        def row_index(position: PositionDefinition) -> int:
+            return next(idx for idx, row in enumerate(rows) if row["position"].pk == position.pk)
+
+        production_idx = row_index(production_position)
+        classification_idx = row_index(classification_position)
+        administrative_idx = row_index(administrative_position)
+        sales_idx = row_index(sales_position)
+
+        classification_group = rows[classification_idx]["display_group"]
+        administrative_group = rows[administrative_idx]["display_group"]
+        sales_group = rows[sales_idx]["display_group"]
+
+        self.assertLess(production_idx, classification_idx)
+        self.assertLess(classification_idx, administrative_idx)
+        self.assertLess(administrative_idx, sales_idx)
+        self.assertEqual(classification_group["key"], "classifiers")
+        self.assertEqual(administrative_group["key"], "administrative-positions")
+        self.assertEqual(administrative_group["label"], "Administración")
+        self.assertEqual(sales_group["key"], "sales-positions")
+        self.assertEqual(sales_group["label"], "Ventas")
