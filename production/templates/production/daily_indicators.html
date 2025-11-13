@@ -88,19 +88,66 @@
                           </div>
                         </td>
 
-                        {% include "production/partials/_daily_metric_cell.html" with metric=production %}
+                        {% with metric=production show_metric_unit=True %}
+                          {% with compact_unit=metric.unit|default_if_none:"" %}
+                            <td class="px-3 py-4 align-top">
+                              <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                  <p class="text-base font-semibold text-slate-900">
+                                    {% if metric and metric.actual is not None %}
+                                      {{ metric.actual|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% else %}
+                                      --
+                                    {% endif %}
+                                  </p>
+                                  {% if metric and metric.status %}
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                                    </span>
+                                  {% endif %}
+                                </div>
+                                <div class="text-[11px] text-slate-500">
+                                  {% if metric and metric.previous is not None %}
+                                    Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% with delta=metric.previous_delta %}
+                                      {% if delta is not None %}
+                                        {% if delta > 0 %}
+                                          {% with trend_label="Subió" trend_class="text-emerald-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% elif delta < 0 %}
+                                          {% with trend_label="Bajó" trend_class="text-rose-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% else %}
+                                          <span class="font-semibold text-slate-600">Sin cambio</span>
+                                        {% endif %}
+                                      {% endif %}
+                                    {% endwith %}
+                                  {% else %}
+                                    Sin dato del día anterior.
+                                  {% endif %}
+                                </div>
+                              </div>
+                            </td>
+                          {% endwith %}
+                        {% endwith %}
                         <td class="px-3 py-4 align-top">
                           <div class="space-y-1">
                             <p class="text-base font-semibold text-slate-900">
                               {% if lot.daily_rollup.production_cartons_today is not None %}
-                                {{ lot.daily_rollup.production_cartons_today|floatformat:1 }}
+                                {{ lot.daily_rollup.production_cartons_today|floatformat:1 }} cartones
                               {% else %}
                                 --
                               {% endif %}
                             </p>
                             <div class="text-[11px] text-slate-500">
                               {% if lot.daily_rollup.production_cartons_previous is not None %}
-                                Ayer {{ lot.daily_rollup.production_cartons_previous|floatformat:1 }}
+                                Ayer {{ lot.daily_rollup.production_cartons_previous|floatformat:1 }} cartones
                               {% else %}
                                 Sin dato del día anterior.
                               {% endif %}
@@ -118,7 +165,7 @@
                             </p>
                             <div class="text-[11px] text-slate-500">
                               {% if egg and egg.previous is not None %}
-                                Ayer {{ egg.previous|floatformat:egg.decimals }} {{ egg.unit }}
+                                Ayer {{ egg.previous|floatformat:egg.decimals }} gr
                                 {% if egg.previous_delta is not None %}
                                   <span class="font-semibold {% if egg.previous_delta > 0 %}text-emerald-600{% elif egg.previous_delta < 0 %}text-rose-600{% else %}text-slate-600{% endif %}">
                                     {% if egg.previous_delta > 0 %}+{% endif %}{{ egg.previous_delta|floatformat:egg.decimals }} {{ egg.unit }}
@@ -130,9 +177,150 @@
                             </div>
                           </div>
                         </td>
-                        {% include "production/partials/_daily_metric_cell.html" with metric=consumption show_unit=False %}
-                        {% include "production/partials/_daily_metric_cell.html" with metric=mortality %}
-                        {% include "production/partials/_daily_metric_cell.html" with metric=discard %}
+                        {% with metric=consumption show_metric_unit=False %}
+                          {% with compact_unit=metric.unit|default_if_none:"" %}
+                            <td class="px-3 py-4 align-top">
+                              <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                  <p class="text-base font-semibold text-slate-900">
+                                    {% if metric and metric.actual is not None %}
+                                      {{ metric.actual|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% else %}
+                                      --
+                                    {% endif %}
+                                  </p>
+                                  {% if metric and metric.status %}
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                                    </span>
+                                  {% endif %}
+                                </div>
+                                <div class="text-[11px] text-slate-500">
+                                  {% if metric and metric.previous is not None %}
+                                    Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% with delta=metric.previous_delta %}
+                                      {% if delta is not None %}
+                                        {% if delta > 0 %}
+                                          {% with trend_label="Subió" trend_class="text-emerald-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% elif delta < 0 %}
+                                          {% with trend_label="Bajó" trend_class="text-rose-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% else %}
+                                          <span class="font-semibold text-slate-600">Sin cambio</span>
+                                        {% endif %}
+                                      {% endif %}
+                                    {% endwith %}
+                                  {% else %}
+                                    Sin dato del día anterior.
+                                  {% endif %}
+                                </div>
+                              </div>
+                            </td>
+                          {% endwith %}
+                        {% endwith %}
+                        {% with metric=mortality show_metric_unit=True %}
+                          {% with compact_unit=metric.unit|default_if_none:"" %}
+                            <td class="px-3 py-4 align-top">
+                              <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                  <p class="text-base font-semibold text-slate-900">
+                                    {% if metric and metric.actual is not None %}
+                                      {{ metric.actual|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% else %}
+                                      --
+                                    {% endif %}
+                                  </p>
+                                  {% if metric and metric.status %}
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                                    </span>
+                                  {% endif %}
+                                </div>
+                                <div class="text-[11px] text-slate-500">
+                                  {% if metric and metric.previous is not None %}
+                                    Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% with delta=metric.previous_delta %}
+                                      {% if delta is not None %}
+                                        {% if delta > 0 %}
+                                          {% with trend_label="Subió" trend_class="text-emerald-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% elif delta < 0 %}
+                                          {% with trend_label="Bajó" trend_class="text-rose-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% else %}
+                                          <span class="font-semibold text-slate-600">Sin cambio</span>
+                                        {% endif %}
+                                      {% endif %}
+                                    {% endwith %}
+                                  {% else %}
+                                    Sin dato del día anterior.
+                                  {% endif %}
+                                </div>
+                              </div>
+                            </td>
+                          {% endwith %}
+                        {% endwith %}
+                        {% with metric=discard show_metric_unit=True %}
+                          {% with compact_unit=metric.unit|default_if_none:"" %}
+                            <td class="px-3 py-4 align-top">
+                              <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                  <p class="text-base font-semibold text-slate-900">
+                                    {% if metric and metric.actual is not None %}
+                                      {{ metric.actual|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% else %}
+                                      --
+                                    {% endif %}
+                                  </p>
+                                  {% if metric and metric.status %}
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
+                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
+                                    </span>
+                                  {% endif %}
+                                </div>
+                                <div class="text-[11px] text-slate-500">
+                                  {% if metric and metric.previous is not None %}
+                                    Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                    {% with delta=metric.previous_delta %}
+                                      {% if delta is not None %}
+                                        {% if delta > 0 %}
+                                          {% with trend_label="Subió" trend_class="text-emerald-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% elif delta < 0 %}
+                                          {% with trend_label="Bajó" trend_class="text-rose-600" %}
+                                            <span class="font-semibold {{ trend_class }}">
+                                              {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %}{% if compact_unit == "%" %}%{% else %} {{ metric.unit }}{% endif %}{% endif %}
+                                            </span>
+                                          {% endwith %}
+                                        {% else %}
+                                          <span class="font-semibold text-slate-600">Sin cambio</span>
+                                        {% endif %}
+                                      {% endif %}
+                                    {% endwith %}
+                                  {% else %}
+                                    Sin dato del día anterior.
+                                  {% endif %}
+                                </div>
+                              </div>
+                            </td>
+                          {% endwith %}
+                        {% endwith %}
                       </tr>
                     {% endwith %}
                   {% endwith %}
