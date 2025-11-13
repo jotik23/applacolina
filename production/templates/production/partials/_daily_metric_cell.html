@@ -22,11 +22,25 @@ Expects `metric` dict-like object with keys: actual, previous, previous_delta, s
       <div class="text-[11px] text-slate-500">
         {% if metric and metric.previous is not None %}
           Ayer {{ metric.previous|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
-          {% if metric.previous_delta is not None %}
-            <span class="font-semibold {% if metric.previous_delta > 0 %}text-rose-600{% elif metric.previous_delta < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">
-              {% if metric.previous_delta > 0 %}+{% endif %}{{ metric.previous_delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
-            </span>
-          {% endif %}
+          {% with delta=metric.previous_delta %}
+            {% if delta is not None %}
+              {% if delta > 0 %}
+                {% with trend_label="Subió" trend_class="text-emerald-600" %}
+                  <span class="font-semibold {{ trend_class }}">
+                    {{ trend_label }} {{ delta|floatformat:metric.decimals }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
+                  </span>
+                {% endwith %}
+              {% elif delta < 0 %}
+                {% with trend_label="Bajó" trend_class="text-rose-600" %}
+                  <span class="font-semibold {{ trend_class }}">
+                    {{ trend_label }} {{ delta|floatformat:metric.decimals|cut:"-" }}{% if show_metric_unit and metric.unit %} {{ metric.unit }}{% endif %}
+                  </span>
+                {% endwith %}
+              {% else %}
+                <span class="font-semibold text-slate-600">Sin cambio</span>
+              {% endif %}
+            {% endif %}
+          {% endwith %}
         {% else %}
           Sin dato del día anterior.
         {% endif %}
