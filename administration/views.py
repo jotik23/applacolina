@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from typing import Iterable, Mapping
 import re
 import calendar
 import csv
@@ -36,6 +37,7 @@ from .forms import (
 )
 from .models import (
     ExpenseTypeApprovalRule,
+    PayrollSnapshot,
     Product,
     PurchaseApproval,
     PurchaseRequest,
@@ -85,6 +87,10 @@ from .services.payroll import (
     PayrollComputationError,
     PayrollOverrideData,
     build_payroll_summary,
+)
+from .services.payroll_snapshot import (
+    deserialize_payroll_summary,
+    serialize_payroll_summary,
 )
 
 
@@ -1949,22 +1955,24 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
     template_name = 'administration/purchases/payroll.html'
 
     def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
-        form = self._build_period_form(request.GET)
+        normalized_query = self._normalize_period_query(request.GET)
+        form = self._build_period_form(normalized_query)
         summary = None
-        selected_idle_tokens: set[str] = set()
-        if form.is_valid() and form.period_info:
-            try:
-                summary = build_payroll_summary(
-                    period=form.period_info,
-                    bonified_idle_tokens=selected_idle_tokens,
-                )
-            except PayrollComputationError as exc:
-                form.add_error(None, str(exc))
+        snapshot = None
+        navigation_state: dict[str, bool] = {}
+        form_is_valid = form.is_valid()
+        if form_is_valid and form.period_info:
+            snapshot = self._get_snapshot(form.period_info)
+            summary = self._load_snapshot_summary(snapshot)
+            navigation_state = self._build_navigation_state(form.period_info)
         context = self.get_context_data(
             period_form=form,
             payroll_summary=summary,
+            payroll_snapshot=snapshot,
+            payroll_navigation=navigation_state,
+            payroll_period_is_valid=form_is_valid and bool(form.period_info),
             selected_bonified_tokens=set(),
-            selected_bonified_idle_tokens=selected_idle_tokens,
+            selected_bonified_idle_tokens=set(),
         )
         return self.render_to_response(context)
 
@@ -1975,30 +1983,38 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         bonified_idle_tokens = set(request.POST.getlist('bonified_idle_ids'))
         overrides, override_errors = self._parse_override_payload()
         summary = None
+        snapshot = None
+        navigation_state: dict[str, bool] = {}
         export_response = None
-        if form.is_valid() and form.period_info:
+        form_is_valid = form.is_valid()
+        if form_is_valid and form.period_info:
+            snapshot = self._get_snapshot(form.period_info)
+            navigation_state = self._build_navigation_state(form.period_info)
             try:
-                summary = build_payroll_summary(
+                summary, snapshot, export_response = self._handle_payroll_post_action(
+                    action=action,
                     period=form.period_info,
-                    bonified_rest_tokens=bonified_tokens,
+                    snapshot=snapshot,
+                    bonified_tokens=bonified_tokens,
                     bonified_idle_tokens=bonified_idle_tokens,
                     overrides=overrides,
                 )
-                if summary and action.startswith('export-'):
-                    export_response = self._handle_export_action(summary, action)
-                    if export_response:
-                        return export_response
-                    messages.error(request, 'No encontramos datos para generar el archivo solicitado.')
-                elif summary and not override_errors and action == 'apply':
-                    messages.success(request, 'Montos actualizados. Puedes seguir editando antes de generar la nómina.')
+                if export_response:
+                    return export_response
             except PayrollComputationError as exc:
                 form.add_error(None, str(exc))
         for error in override_errors:
             messages.error(request, error)
 
+        if summary is None and snapshot:
+            summary = self._load_snapshot_summary(snapshot)
+
         context = self.get_context_data(
             period_form=form,
             payroll_summary=summary,
+            payroll_snapshot=snapshot,
+            payroll_navigation=navigation_state,
+            payroll_period_is_valid=form_is_valid and bool(form.period_info),
             selected_bonified_tokens=bonified_tokens,
             selected_bonified_idle_tokens=bonified_idle_tokens,
         )
@@ -2009,6 +2025,16 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         context.setdefault('administration_active_submenu', 'payroll')
         context.setdefault('period_form', kwargs.get('period_form') or PayrollPeriodForm())
         context.setdefault('payroll_summary', kwargs.get('payroll_summary'))
+        context.setdefault('payroll_snapshot', kwargs.get('payroll_snapshot'))
+        nav_state = kwargs.get('payroll_navigation') or {}
+        context.setdefault(
+            'payroll_navigation',
+            {
+                'has_previous': nav_state.get('has_previous', True),
+                'has_next': nav_state.get('has_next', True),
+            },
+        )
+        context.setdefault('payroll_period_is_valid', kwargs.get('payroll_period_is_valid', False))
         context.setdefault('selected_bonified_tokens', kwargs.get('selected_bonified_tokens', set()))
         context.setdefault('selected_bonified_idle_tokens', kwargs.get('selected_bonified_idle_tokens', set()))
         return context
@@ -2065,11 +2091,176 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
             return date(today.year, today.month, 1), date(today.year, today.month, 15)
         return date(today.year, today.month, 16), date(today.year, today.month, last_day)
 
-    def _handle_export_action(self, summary, action: str) -> HttpResponse | None:
-        if action == 'export-overall':
-            filename = f"nomina_{summary.period.start_date:%Y%m%d}_{summary.period.end_date:%Y%m%d}.csv"
-            return self._export_entries_to_csv(summary=summary, entries=summary.entries, filename=filename, title='Liquidación total')
+    def _normalize_period_query(self, query_data: QueryDict) -> QueryDict:
+        params = query_data.copy()
+        navigate_action = params.get('navigate')
+        if not navigate_action:
+            return params
+        start_value = params.get('start_date')
+        end_value = params.get('end_date')
+        try:
+            if start_value and end_value:
+                start = date.fromisoformat(start_value)
+                end = date.fromisoformat(end_value)
+            else:
+                raise ValueError
+        except ValueError:
+            start, end = self._default_period_range()
+        direction = -1 if navigate_action == 'previous' else 1
+        new_start, new_end = self._shift_period(start, end, direction)
+        params['start_date'] = new_start.isoformat()
+        params['end_date'] = new_end.isoformat()
+        params.pop('navigate', None)
+        return params
 
+    def _shift_period(self, start: date, end: date, direction: int) -> tuple[date, date]:
+        if direction not in (-1, 1):
+            return start, end
+        if start.day == 1:
+            if direction == -1:
+                previous_anchor = start - timedelta(days=1)
+                last_day = calendar.monthrange(previous_anchor.year, previous_anchor.month)[1]
+                return date(previous_anchor.year, previous_anchor.month, 16), date(
+                    previous_anchor.year, previous_anchor.month, last_day
+                )
+            last_day = calendar.monthrange(start.year, start.month)[1]
+            return date(start.year, start.month, 16), date(start.year, start.month, last_day)
+        if direction == -1:
+            return date(start.year, start.month, 1), date(start.year, start.month, 15)
+        next_anchor = end + timedelta(days=1)
+        return date(next_anchor.year, next_anchor.month, 1), date(next_anchor.year, next_anchor.month, 15)
+
+    def _handle_payroll_post_action(
+        self,
+        *,
+        action: str,
+        period: PayrollPeriodInfo,
+        snapshot: PayrollSnapshot | None,
+        bonified_tokens: set[str],
+        bonified_idle_tokens: set[str],
+        overrides: dict[int, PayrollOverrideData],
+    ) -> tuple[PayrollSummary | None, PayrollSnapshot | None, HttpResponse | None]:
+        summary: PayrollSummary | None = None
+        export_response: HttpResponse | None = None
+        action = action.strip()
+        if action == 'generate':
+            summary = self._compute_summary(
+                period=period,
+                bonified_tokens=bonified_tokens,
+                bonified_idle_tokens=bonified_idle_tokens,
+                overrides=overrides,
+            )
+            snapshot = self._save_snapshot(
+                period=period,
+                summary=summary,
+                action=PayrollSnapshot.LastAction.GENERATE,
+            )
+            messages.success(self.request, 'Nómina generada con los datos operativos más recientes.')
+            return summary, snapshot, None
+
+        if action.startswith('export-'):
+            summary = self._compute_summary(
+                period=period,
+                bonified_tokens=bonified_tokens,
+                bonified_idle_tokens=bonified_idle_tokens,
+                overrides=overrides,
+            )
+            snapshot = self._save_snapshot(
+                period=period,
+                summary=summary,
+                action=PayrollSnapshot.LastAction.EXPORT,
+                instance=snapshot,
+            )
+            export_response = self._handle_export_action(summary, action)
+            if not export_response:
+                messages.error(self.request, 'No encontramos datos para generar el archivo solicitado.')
+            return summary, snapshot, export_response
+
+        if not snapshot:
+            messages.error(self.request, 'Genera la nómina antes de aplicar ajustes o descargas.')
+            return None, None, None
+
+        summary = self._compute_summary(
+            period=period,
+            bonified_tokens=bonified_tokens,
+            bonified_idle_tokens=bonified_idle_tokens,
+            overrides=overrides,
+        )
+        snapshot = self._save_snapshot(
+            period=period,
+            summary=summary,
+            action=PayrollSnapshot.LastAction.APPLY,
+            instance=snapshot,
+        )
+        messages.success(self.request, 'Montos actualizados y almacenados para este periodo.')
+        return summary, snapshot, None
+
+    def _compute_summary(
+        self,
+        *,
+        period: PayrollPeriodInfo,
+        bonified_tokens: Iterable[str],
+        bonified_idle_tokens: Iterable[str],
+        overrides: Mapping[int, PayrollOverrideData],
+    ) -> PayrollSummary:
+        return build_payroll_summary(
+            period=period,
+            bonified_rest_tokens=bonified_tokens,
+            bonified_idle_tokens=bonified_idle_tokens,
+            overrides=overrides,
+        )
+
+    def _save_snapshot(
+        self,
+        *,
+        period: PayrollPeriodInfo,
+        summary: PayrollSummary,
+        action: str,
+        instance: PayrollSnapshot | None = None,
+    ) -> PayrollSnapshot:
+        payload = serialize_payroll_summary(summary)
+        now = timezone.now()
+        user = self.request.user if self.request.user.is_authenticated else None
+        values = {
+            'payload': payload,
+            'last_computed_at': now,
+            'last_computed_by': user,
+            'last_action': action,
+        }
+        if instance:
+            for field, value in values.items():
+                setattr(instance, field, value)
+            instance.save(update_fields=['payload', 'last_computed_at', 'last_computed_by', 'last_action', 'updated_at'])
+            return instance
+        snapshot, _ = PayrollSnapshot.objects.update_or_create(
+            start_date=period.start_date,
+            end_date=period.end_date,
+            defaults=values,
+        )
+        return snapshot
+
+    def _get_snapshot(self, period: PayrollPeriodInfo) -> PayrollSnapshot | None:
+        return PayrollSnapshot.objects.filter(
+            start_date=period.start_date,
+            end_date=period.end_date,
+        ).first()
+
+    def _load_snapshot_summary(self, snapshot: PayrollSnapshot | None) -> PayrollSummary | None:
+        if not snapshot or not snapshot.payload:
+            return None
+        try:
+            return deserialize_payroll_summary(snapshot.payload)
+        except (ValueError, KeyError):
+            return None
+
+    def _build_navigation_state(self, period: PayrollPeriodInfo | None) -> dict[str, bool]:
+        if not period:
+            return {'has_previous': False, 'has_next': False}
+        previous_exists = PayrollSnapshot.objects.filter(end_date__lt=period.start_date).exists()
+        next_exists = PayrollSnapshot.objects.filter(start_date__gt=period.end_date).exists()
+        return {'has_previous': previous_exists, 'has_next': next_exists}
+
+    def _handle_export_action(self, summary, action: str) -> HttpResponse | None:
         if action.startswith('export-jobtype-'):
             identifier = action.removeprefix('export-jobtype-')
             job_type_value = None if identifier == 'none' else identifier

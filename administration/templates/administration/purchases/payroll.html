@@ -14,6 +14,29 @@
         <p class="mt-1 text-sm text-slate-500">Genera la liquidación quincenal agrupada por tipos de puesto y granjas.</p>
       </div>
       <form method="get" class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm lg:flex-row lg:items-end">
+        <div class="flex flex-col gap-2 text-xs font-semibold text-slate-500">
+          <span>Navegar quincena</span>
+          <div class="flex gap-2">
+            <button
+              type="submit"
+              name="navigate"
+              value="previous"
+              class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+              title="{% if payroll_navigation.has_previous %}Ir a la nómina anterior{% else %}No hay nóminas guardadas previas{% endif %}"
+            >
+              ← Anterior
+            </button>
+            <button
+              type="submit"
+              name="navigate"
+              value="next"
+              class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+              title="{% if payroll_navigation.has_next %}Ir a la nómina siguiente{% else %}No hay nóminas guardadas posteriores{% endif %}"
+            >
+              Siguiente →
+            </button>
+          </div>
+        </div>
         <label class="flex flex-col gap-1 text-xs font-semibold text-slate-500">
           Rango inicial
           {{ period_form.start_date|add_class:"rounded-xl border border-slate-200 px-3 py-2 text-sm" }}
@@ -43,6 +66,42 @@
     {% endif %}
   </section>
 
+  <section class="mt-4 flex flex-col gap-3 rounded-2xl border border-dashed border-slate-200 bg-white/80 p-4 text-xs text-slate-600 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      {% if payroll_snapshot %}
+        <p class="font-semibold text-slate-700">Última actualización</p>
+        <p class="mt-1 text-slate-500">
+          {{ payroll_snapshot.last_computed_at|default_if_none:"Sin registro"|date:"d M Y · H:i" }}
+          · {{ payroll_snapshot.get_last_action_display }}
+        </p>
+      {% else %}
+        <p class="font-semibold text-slate-700">Aún no hay nómina almacenada para este rango.</p>
+        <p class="mt-1 text-slate-500">Genera el resumen para comenzar a realizar ajustes y descargas.</p>
+      {% endif %}
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <form method="post" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="start_date" value="{{ period_form.start_date.value|default_if_none:'' }}">
+        <input type="hidden" name="end_date" value="{{ period_form.end_date.value|default_if_none:'' }}">
+        <button type="submit" name="form_action" value="generate" class="rounded-full border border-slate-200 px-5 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+          {% if payroll_snapshot %}Regenerar nómina{% else %}Generar nómina{% endif %}
+        </button>
+      </form>
+      {% if payroll_summary %}
+        <button
+          type="submit"
+          form="payroll-adjustments-form"
+          name="form_action"
+          value="apply"
+          class="rounded-full bg-brand px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand/90"
+        >
+          Guardar ajustes
+        </button>
+      {% endif %}
+    </div>
+  </section>
+
   {% if payroll_summary %}
     {% if payroll_summary.entries %}
       <section class="mt-6 space-y-6">
@@ -64,7 +123,7 @@
           </article>
         </div>
 
-        <form method="post" class="space-y-8">
+        <form method="post" id="payroll-adjustments-form" class="space-y-8">
           {% csrf_token %}
           <input type="hidden" name="start_date" value="{{ period_form.start_date.value|default_if_none:'' }}">
           <input type="hidden" name="end_date" value="{{ period_form.end_date.value|default_if_none:'' }}">
@@ -261,17 +320,6 @@
             <p class="rounded-2xl border border-slate-200 bg-white/90 p-6 text-sm text-slate-500">No hay información para los tipos de puesto en el rango seleccionado.</p>
           {% endfor %}
 
-          <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm md:flex-row md:items-center md:justify-between">
-            <div>
-              <p class="text-sm font-semibold text-slate-900">Total por liquidar</p>
-              <p class="text-xs text-slate-500">Incluye ajustes y descansos bonificados.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="text-2xl font-semibold text-slate-900">$ {{ payroll_summary.overall_total|cop_currency }}</span>
-              <button type="submit" name="form_action" value="export-overall" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600">Descargar resumen</button>
-              <button type="submit" name="form_action" value="apply" class="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90">Guardar ajustes</button>
-            </div>
-          </div>
         </form>
       </section>
     {% else %}
@@ -280,6 +328,11 @@
         <p class="mt-2">No encontramos turnos ni descansos para la quincena seleccionada.</p>
       </div>
     {% endif %}
+  {% elif payroll_period_is_valid %}
+    <div class="mt-10 rounded-3xl border border-amber-200 bg-amber-50/80 p-10 text-center text-sm text-amber-700">
+      <p class="text-base font-semibold text-amber-900">Genera la nómina para este rango</p>
+      <p class="mt-2">Utiliza el botón “Generar nómina” para crear el resumen y comenzar a aplicar ajustes.</p>
+    </div>
   {% else %}
     <div class="mt-10 rounded-3xl border border-slate-200 bg-white/95 p-10 text-center text-sm text-slate-500">
       <p class="text-base font-semibold text-slate-900">Selecciona un rango válido</p>

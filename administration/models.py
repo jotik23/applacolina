@@ -661,3 +661,43 @@ class PurchaseAuditLog(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.purchase_request.timeline_code} · {self.event}"
+
+
+class PayrollSnapshot(TimeStampedModel):
+    class LastAction(models.TextChoices):
+        GENERATE = "generate", "Generación inicial"
+        UPDATE = "update", "Actualización"
+        APPLY = "apply", "Ajuste manual"
+        EXPORT = "export", "Exportación"
+
+    start_date = models.DateField("Fecha inicial")
+    end_date = models.DateField("Fecha final")
+    payload = models.JSONField("Resumen almacenado", default=dict, blank=True)
+    last_computed_at = models.DateTimeField("Calculado en", null=True, blank=True)
+    last_computed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="payroll_snapshots",
+        null=True,
+        blank=True,
+    )
+    last_action = models.CharField(
+        "Última acción",
+        max_length=20,
+        choices=LastAction.choices,
+        default=LastAction.GENERATE,
+    )
+
+    class Meta:
+        verbose_name = "Nómina almacenada"
+        verbose_name_plural = "Nóminas almacenadas"
+        ordering = ("-start_date", "-end_date")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("start_date", "end_date"),
+                name="unique_payroll_period_snapshot",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.start_date:%Y-%m-%d} / {self.end_date:%Y-%m-%d}"
