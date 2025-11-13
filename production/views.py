@@ -43,14 +43,6 @@ from production.services.daily_board import save_daily_room_entries
 from production.services.reference_tables import get_reference_targets, reset_reference_targets_cache
 
 
-class ScorecardMetric(TypedDict):
-    label: str
-    value: str
-    delta: float
-    is_positive: bool
-    description: str
-
-
 class MortalityRecord(TypedDict):
     label: str
     quantity: int
@@ -207,24 +199,8 @@ def resolve_batch_label(batch: BirdBatch, label_map: Mapping[int, str]) -> str:
     return label_map.get(batch.pk, f"Lote #{batch.pk}")
 
 
-class FilterConfig(TypedDict):
-    farms: List[str]
-    barns: List[str]
-    ranges: List[str]
-    breeds: List[str]
-    egg_sizes: List[str]
-
-
-class UpcomingMilestone(TypedDict):
-    title: str
-    detail: str
-    due_on: date
-
-
-class ProductionHomeView(StaffRequiredMixin, TemplateView):
-    """Render the landing page for the poultry production module."""
-
-    template_name = "production/index.html"
+class ProductionDashboardContextMixin(StaffRequiredMixin):
+    """Build the shared poultry production dashboard context."""
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -257,54 +233,6 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             context.update(
                 {
                     "farms": [],
-                    "global_metrics": [
-                        ScorecardMetric(
-                            label="Aves activas",
-                            value="0",
-                            delta=0.0,
-                            is_positive=True,
-                            description="Sin lotes activos registrados.",
-                        ),
-                        ScorecardMetric(
-                            label="Consumo semanal total (kg)",
-                            value="0",
-                            delta=0.0,
-                            is_positive=True,
-                            description="No hay consumo registrado.",
-                        ),
-                        ScorecardMetric(
-                            label="Uniformidad promedio",
-                            value="--",
-                            delta=0.0,
-                            is_positive=True,
-                            description="Sin datos de sesiones de pesaje.",
-                        ),
-                        ScorecardMetric(
-                            label="Peso vivo promedio (kg)",
-                            value="--",
-                            delta=0.0,
-                            is_positive=True,
-                            description="Sin datos de peso registrados.",
-                        ),
-                    ],
-                    "filters": FilterConfig(
-                        farms=[],
-                        barns=[],
-                        ranges=[
-                            "Últimas 4 semanas",
-                            "Últimos 3 meses",
-                            "Ciclo completo",
-                            "Personalizado…",
-                        ],
-                        breeds=[],
-                        egg_sizes=["Huevos pequeños", "M", "L", "XL", "Jumbo", "Doble yema"],
-                    ),
-                    "upcoming_milestones": [],
-                    "total_lots": 0,
-                    "total_barn_allocations": 0,
-                    "total_initial_birds": 0,
-                    "total_current_birds": 0,
-                    "total_feed_to_date": 0,
                     "dashboard_generated_at": timezone.now(),
                     "today": today,
                     "yesterday": yesterday,
@@ -488,7 +416,6 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
 
         farms_map: Dict[int, Dict[str, object]] = {}
         all_lots: List[LotOverview] = []
-        total_barn_allocations = 0
 
         for batch in batches:
             stats = production_map.get(batch.id, {})
@@ -891,7 +818,6 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
                 )
                 barn_names.append(f"{allocation.room.chicken_house.name} · {allocation.room.name}")
 
-            total_barn_allocations += len(barns_list)
             barn_names_display = ", ".join(barn_names) if barn_names else "Sin asignación"
 
             lot_data: LotOverview = {
@@ -988,85 +914,10 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
             )
         farms_context.sort(key=lambda farm: farm["name"])
 
-        total_lots = len(all_lots)
-        total_initial_birds = sum(lot["initial_birds"] for lot in all_lots)
-        total_current_birds = sum(lot["current_birds"] for lot in all_lots)
-        total_weekly_feed = round(sum(lot["weekly_feed_kg"] for lot in all_lots), 2)
-        total_feed_to_date = round(sum(lot["total_feed_to_date_kg"] for lot in all_lots), 2)
-
-        global_metrics: List[ScorecardMetric] = [
-            ScorecardMetric(
-                label="Aves activas",
-                value=f"{total_current_birds:,}",
-                delta=0.0,
-                is_positive=True,
-                description="Inventario vivo total en lotes activos.",
-            ),
-            ScorecardMetric(
-                label="Consumo semanal total (kg)",
-                value=f"{total_weekly_feed:,.1f}",
-                delta=0.0,
-                is_positive=True,
-                description="Suma del consumo registrado en los últimos 7 días.",
-            ),
-        ]
-
-        farm_names = sorted({farm["name"] for farm in farms_context})
-        barn_filter_names = sorted(
-            {
-                f'{allocation["name"]} · {farm["name"]}'
-                for farm in farms_context
-                for lot in farm["lots"]
-                for allocation in lot["barns"]
-            }
-        )
-        breed_names = sorted({lot["breed"] for lot in all_lots})
-
-        filters = FilterConfig(
-            farms=farm_names,
-            barns=barn_filter_names,
-            ranges=[
-                "Últimas 4 semanas",
-                "Últimos 3 meses",
-                "Ciclo completo",
-                "Personalizado…",
-            ],
-            breeds=breed_names,
-            egg_sizes=["Huevos pequeños", "M", "L", "XL", "Jumbo", "Doble yema"],
-        )
-
-        upcoming_milestones: List[UpcomingMilestone] = []
-        for farm in farms_context:
-            for lot in farm["lots"]:
-                latest_updates = [
-                    allocation["last_update"] for allocation in lot["barns"] if allocation["last_update"]
-                ]
-                if not latest_updates:
-                    continue
-                next_due = max(latest_updates) + timedelta(days=7)
-                upcoming_milestones.append(
-                    UpcomingMilestone(
-                        title=f"Seguimiento de pesaje {lot['label']}",
-                        detail=f"{farm['name']} · {lot['barn_names_display']}",
-                        due_on=next_due,
-                    )
-                )
-        upcoming_milestones.sort(key=lambda milestone: milestone["due_on"])
-        upcoming_milestones = upcoming_milestones[:3]
-
         context.update(
             {
                 "farms": farms_context,
-                "global_metrics": global_metrics,
-                "filters": filters,
-                "upcoming_milestones": upcoming_milestones,
-                "total_lots": total_lots,
-                "total_barn_allocations": total_barn_allocations,
-                "total_initial_birds": total_initial_birds,
-                "total_current_birds": total_current_birds,
-                "total_feed_to_date": total_feed_to_date,
                 "dashboard_generated_at": timezone.now(),
-                "active_submenu": "overview",
                 "today": today,
                 "yesterday": yesterday,
                 "focused_lot_id": focused_lot_id,
@@ -1075,7 +926,7 @@ class ProductionHomeView(StaffRequiredMixin, TemplateView):
         return context
 
 
-class DailyIndicatorsView(ProductionHomeView):
+class DailyIndicatorsView(ProductionDashboardContextMixin, TemplateView):
     """Present a consolidated snapshot of daily lot indicators."""
 
     template_name = "production/daily_indicators.html"
@@ -1915,7 +1766,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         context.update(
             {
                 "batch": self.batch,
-                "active_submenu": "overview",
+                "active_submenu": "daily_indicators",
                 "week_rows": self.week_rows,
                 "week_navigation": self.week_navigation,
                 "selected_day": self.selected_day,
@@ -2291,7 +2142,6 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
 
 batch_production_board_view = BatchProductionBoardView.as_view()
-production_home_view = ProductionHomeView.as_view()
 daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
 farm_update_view = FarmUpdateView.as_view()

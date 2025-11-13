@@ -4,15 +4,14 @@ from .views import (
     batch_production_board_view,
     batch_allocation_delete_view,
     batch_management_view,
+    bird_batch_delete_view,
+    bird_batch_update_view,
     chicken_house_delete_view,
     chicken_house_update_view,
     daily_indicators_view,
     farm_delete_view,
     farm_update_view,
     infrastructure_home_view,
-    production_home_view,
-    bird_batch_delete_view,
-    bird_batch_update_view,
     reference_tables_view,
     room_delete_view,
     room_update_view,
@@ -21,8 +20,8 @@ from .views import (
 app_name = "production"
 
 urlpatterns = [
+    path("", daily_indicators_view, name="index"),
     path("indicadores-dia/", daily_indicators_view, name="daily-indicators"),
-    path("", production_home_view, name="index"),
     path("lotes/", batch_management_view, name="batches"),
     path("lotes/<int:pk>/produccion/", batch_production_board_view, name="batch-production-board"),
     path("lotes/<int:pk>/editar/", bird_batch_update_view, name="batch-update"),

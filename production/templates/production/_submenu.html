@@ -9,14 +9,6 @@
       Indicadores del día
     </a>
     <a
-      href="{% url 'production:index' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'overview' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'overview' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'overview' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Resumen operativo
-    </a>
-    <a
       href="{% url 'production:batches' %}"
       class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'batches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'batches' %}aria-current="page"{% endif %}
