@@ -120,6 +120,7 @@ class LotOverview(TypedDict):
     daily_snapshot: List["DailySnapshotMetric"]
     daily_snapshot_map: Dict[str, "DailySnapshotMetric"]
     daily_rollup: DailyIndicatorAggregate
+    latest_record_date: Optional[date]
 
 
 class DailySnapshotMetric(TypedDict):
@@ -414,6 +415,18 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 return None
             return round(actual_value - previous_value, decimals)
 
+        def normalize_value(
+            value: Optional[float],
+            divisor: float,
+            precision: int,
+        ) -> Optional[float]:
+            if value is None:
+                return None
+            try:
+                return round(float(value) / divisor, precision)
+            except (ArithmeticError, ValueError, TypeError, ZeroDivisionError):
+                return None
+
         farms_map: Dict[int, Dict[str, object]] = {}
         all_lots: List[LotOverview] = []
 
@@ -421,8 +434,8 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             stats = production_map.get(batch.id, {})
             total_mortality = int(stats.get("total_mortality", 0) or 0)
             total_discard = int(stats.get("total_discard", 0) or 0)
-            bird_balance = total_mortality + total_discard
-            current_birds = max(batch.initial_quantity - bird_balance, 0)
+            current_birds = max(batch.initial_quantity - total_mortality, 0)
+            bird_balance = batch.initial_quantity - current_birds
 
             weekly_consumption = float(stats.get("weekly_consumption") or Decimal("0"))
             total_consumption = float(stats.get("total_consumption") or Decimal("0"))
@@ -560,6 +573,18 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 else None
             )
 
+            birds_previous_day = current_birds + int(mortality_actual or 0)
+            posture_percent_actual = (
+                round((production_actual / current_birds) * 100, 2)
+                if production_actual is not None and current_birds
+                else None
+            )
+            posture_percent_previous = (
+                round((production_previous / birds_previous_day) * 100, 2)
+                if production_previous is not None and birds_previous_day
+                else None
+            )
+
             reference_targets = get_reference_targets(
                 batch.breed,
                 (today - batch.birth_date).days // 7 if batch.birth_date else 0,
@@ -613,22 +638,31 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             daily_snapshot: List[DailySnapshotMetric] = []
 
             consumption_target = reference_targets["consumption_kg"]
-            consumption_delta, consumption_status = evaluate_delta(
+            consumption_target_value = float(consumption_target) if consumption_target is not None else None
+            consumption_delta_raw, consumption_status = evaluate_delta(
                 consumption_actual,
                 consumption_target,
                 tolerance_value=max(consumption_target * 0.05, 5.0),
             )
+            consumption_actual_bags = normalize_value(consumption_actual, 40, 2)
+            consumption_previous_bags = normalize_value(consumption_previous, 40, 2)
+            consumption_target_bags = normalize_value(consumption_target_value, 40, 2)
+            consumption_delta_display = normalize_value(consumption_delta_raw, 40, 2)
             daily_snapshot.append(
                 DailySnapshotMetric(
-                    label="Consumo diario",
+                    label="Consumo",
                     slug="consumption",
-                    unit="kg",
-                    decimals=1,
-                    actual=consumption_actual,
-                    target=consumption_target,
-                    delta=consumption_delta,
-                    previous=consumption_previous,
-                    previous_delta=compute_previous_delta(consumption_actual, consumption_previous, 1),
+                    unit="bultos 40 kg",
+                    decimals=2,
+                    actual=consumption_actual_bags,
+                    target=consumption_target_bags,
+                    delta=consumption_delta_display,
+                    previous=consumption_previous_bags,
+                    previous_delta=compute_previous_delta(
+                        consumption_actual_bags,
+                        consumption_previous_bags,
+                        2,
+                    ),
                     status=consumption_status,
                 )
             )
@@ -676,61 +710,64 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             )
 
             egg_target = reference_targets["egg_weight_g"]
-            egg_delta, egg_status = evaluate_delta(
+            egg_target_value = float(egg_target) if egg_target is not None else None
+            egg_delta_raw, egg_status = evaluate_delta(
                 egg_weight_actual,
                 egg_target,
                 tolerance_value=1.2,
             )
+            egg_weight_display = normalize_value(egg_weight_actual, 300, 2)
+            egg_weight_previous_display = normalize_value(egg_weight_previous, 300, 2)
+            egg_target_display = normalize_value(egg_target_value, 300, 2)
+            egg_delta_display = normalize_value(egg_delta_raw, 300, 2)
             daily_snapshot.append(
                 DailySnapshotMetric(
-                    label="Peso huevo",
+                    label="Peso del huevo",
                     slug="egg_weight",
-                    unit="g",
-                    decimals=1,
-                    actual=egg_weight_actual,
-                    target=egg_target,
-                    delta=egg_delta,
-                    previous=egg_weight_previous,
-                    previous_delta=compute_previous_delta(egg_weight_actual, egg_weight_previous, 1),
+                    unit="kg",
+                    decimals=2,
+                    actual=egg_weight_display,
+                    target=egg_target_display,
+                    delta=egg_delta_display,
+                    previous=egg_weight_previous_display,
+                    previous_delta=compute_previous_delta(
+                        egg_weight_display,
+                        egg_weight_previous_display,
+                        2,
+                    ),
                     status=egg_status,
                 )
             )
 
             production_target = reference_targets["production_percent"]
             production_delta, production_status = evaluate_delta(
-                production_actual,
+                posture_percent_actual,
                 production_target,
                 tolerance_value=2.0,
             )
             daily_snapshot.append(
                 DailySnapshotMetric(
-                    label="Producción",
+                    label="% de postura",
                     slug="production",
                     unit="%",
-                    decimals=1,
-                    actual=production_actual,
+                    decimals=2,
+                    actual=posture_percent_actual,
                     target=production_target,
                     delta=production_delta,
-                    previous=production_previous,
-                    previous_delta=compute_previous_delta(production_actual, production_previous, 1),
+                    previous=posture_percent_previous,
+                    previous_delta=compute_previous_delta(
+                        posture_percent_actual,
+                        posture_percent_previous,
+                        2,
+                    ),
                     status=production_status,
                 )
             )
 
-            consumption_bags_today = (
-                round(consumption_actual / 40, 2) if consumption_actual is not None else None
-            )
-            consumption_bags_previous = (
-                round(consumption_previous / 40, 2) if consumption_previous is not None else None
-            )
-            production_cartons_today: Optional[float] = None
-            production_cartons_previous: Optional[float] = None
-            if production_actual is not None and current_birds:
-                eggs_today = (production_actual / 100) * current_birds
-                production_cartons_today = round(eggs_today / 30, 1)
-            if production_previous is not None and current_birds:
-                eggs_previous = (production_previous / 100) * current_birds
-                production_cartons_previous = round(eggs_previous / 30, 1)
+            consumption_bags_today = consumption_actual_bags
+            consumption_bags_previous = consumption_previous_bags
+            production_cartons_today = normalize_value(production_actual, 30, 1)
+            production_cartons_previous = normalize_value(production_previous, 30, 1)
 
             daily_rollup: DailyIndicatorAggregate = {
                 "consumption_bags_today": consumption_bags_today,
@@ -742,13 +779,21 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             daily_snapshot_map = {metric["slug"]: metric for metric in daily_snapshot}
 
             alerts: List[str] = []
-            if consumption_status == "high" and consumption_delta is not None:
+            consumption_delta_text_value = (
+                consumption_delta_display
+                if consumption_delta_display is not None
+                else consumption_delta_raw
+            )
+            consumption_unit_label = (
+                "bultos (40 kg)" if consumption_delta_display is not None else "kg"
+            )
+            if consumption_status == "high" and consumption_delta_text_value is not None:
                 alerts.append(
-                    f"Consumo diario +{consumption_delta:.1f} kg sobre la tabla."
+                    f"Consumo diario +{consumption_delta_text_value:.2f} {consumption_unit_label} sobre la tabla."
                 )
-            if consumption_status == "low" and consumption_delta is not None:
+            if consumption_status == "low" and consumption_delta_text_value is not None:
                 alerts.append(
-                    f"Consumo diario {consumption_delta:.1f} kg por debajo del objetivo."
+                    f"Consumo diario {consumption_delta_text_value:.2f} {consumption_unit_label} por debajo del objetivo."
                 )
             if uniformity is not None and uniformity < 85:
                 alerts.append(f"Uniformidad promedio {uniformity:.1f}% por debajo del objetivo.")
@@ -851,6 +896,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 "daily_snapshot": daily_snapshot,
                 "daily_snapshot_map": daily_snapshot_map,
                 "daily_rollup": daily_rollup,
+                "latest_record_date": actual_record.date if actual_record else None,
             }
 
             all_lots.append(lot_data)
