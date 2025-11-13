@@ -103,6 +103,7 @@ class LotOverview(TypedDict):
     feed_per_bird_avg_three_days: Optional[float]
     barn_count: int
     barn_names_display: str
+    barn_houses_display: str
     uniformity: Optional[float]
     avg_weight: Optional[float]
     target_weight: Optional[float]
@@ -678,12 +679,16 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                     label="Mortalidad",
                     slug="mortality",
                     unit="aves",
-                    decimals=1,
+                    decimals=0,
                     actual=mortality_actual,
                     target=mortality_target,
                     delta=mortality_delta,
                     previous=mortality_previous,
-                    previous_delta=compute_previous_delta(mortality_actual, mortality_previous, 1),
+                    previous_delta=compute_previous_delta(
+                        mortality_actual,
+                        mortality_previous,
+                        0,
+                    ),
                     status=mortality_status,
                 )
             )
@@ -699,12 +704,16 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                     label="Descarte",
                     slug="discard",
                     unit="aves",
-                    decimals=1,
+                    decimals=0,
                     actual=discard_actual,
                     target=discard_target,
                     delta=discard_delta,
                     previous=discard_previous,
-                    previous_delta=compute_previous_delta(discard_actual, discard_previous, 1),
+                    previous_delta=compute_previous_delta(
+                        discard_actual,
+                        discard_previous,
+                        0,
+                    ),
                     status=discard_status,
                 )
             )
@@ -820,6 +829,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
 
             barns_list: List[BarnAllocation] = []
             barn_names: List[str] = []
+            barn_house_names: List[str] = []
 
             for allocation in batch.allocations.all():
                 share = allocation.quantity / batch.initial_quantity if batch.initial_quantity else 0
@@ -861,9 +871,13 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                         last_update=last_update,
                     )
                 )
-                barn_names.append(f"{allocation.room.chicken_house.name} · {allocation.room.name}")
+                house_name = allocation.room.chicken_house.name
+                barn_names.append(f"{house_name} · {allocation.room.name}")
+                if house_name not in barn_house_names:
+                    barn_house_names.append(house_name)
 
             barn_names_display = ", ".join(barn_names) if barn_names else "Sin asignación"
+            barn_houses_display = ", ".join(barn_house_names) if barn_house_names else "Sin galpón"
 
             lot_data: LotOverview = {
                 "id": batch.pk,
@@ -879,6 +893,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 "feed_per_bird_avg_three_days": feed_per_bird_avg_three_days,
                 "barn_count": len(barns_list),
                 "barn_names_display": barn_names_display,
+                "barn_houses_display": barn_houses_display,
                 "uniformity": round(uniformity, 2) if uniformity is not None else None,
                 "avg_weight": round(avg_weight, 2) if avg_weight is not None else None,
                 "target_weight": None,

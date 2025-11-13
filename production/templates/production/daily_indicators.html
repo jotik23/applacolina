@@ -47,16 +47,17 @@
             </dl>
           </header>
 
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto rounded-2xl border border-emerald-50 bg-gradient-to-b from-white via-emerald-50/20 to-slate-50/70 shadow-[inset_0_1px_0_rgba(16,185,129,0.2)]">
             <table class="w-full border-collapse text-sm text-slate-700">
               <thead>
-                <tr class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr class="bg-emerald-50/70 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700 shadow-sm">
                   <th scope="col" class="px-4 py-3 text-left">Lote</th>
                   <th scope="col" class="px-3 py-3 text-left">% de postura</th>
-                  <th scope="col" class="px-3 py-3 text-left">Consumo (bultos 40 kg)</th>
+                  <th scope="col" class="px-3 py-3 text-left">Producción (cart)</th>
+                  <th scope="col" class="px-3 py-3 text-left">Gr/Huevo</th>
+                  <th scope="col" class="px-3 py-3 text-left">Consumo (bultos)</th>
                   <th scope="col" class="px-3 py-3 text-left">Mortalidad (aves)</th>
                   <th scope="col" class="px-3 py-3 text-left">Descarte (aves)</th>
-                  <th scope="col" class="px-3 py-3 text-left">Peso del huevo (kg)</th>
                 </tr>
               </thead>
               <tbody>
@@ -67,7 +68,7 @@
                         <td class="px-4 py-4 align-top">
                           <div class="space-y-1">
                             <a href="{% url 'production:batch-production-board' lot.id %}" class="text-sm font-semibold text-emerald-700 hover:underline">
-                              {{ lot.label }}: {{ lot.current_birds|intcomma }} aves - Sem {{ lot.age_weeks }}
+                              Lote {{ lot.barn_houses_display }}: {{ lot.current_birds|intcomma }} Aves - Sem {{ lot.age_weeks }}
                             </a>
                             <p class="text-[11px] text-slate-500">
                               {% if lot.latest_record_date %}
@@ -80,10 +81,24 @@
                         </td>
 
                         {% include "production/partials/_daily_metric_cell.html" with metric=production %}
-                        {% include "production/partials/_daily_metric_cell.html" with metric=consumption %}
-                        {% include "production/partials/_daily_metric_cell.html" with metric=mortality %}
-                        {% include "production/partials/_daily_metric_cell.html" with metric=discard %}
-
+                        <td class="px-3 py-4 align-top">
+                          <div class="space-y-1">
+                            <p class="text-base font-semibold text-slate-900">
+                              {% if lot.daily_rollup.production_cartons_today is not None %}
+                                {{ lot.daily_rollup.production_cartons_today|floatformat:1 }}
+                              {% else %}
+                                --
+                              {% endif %}
+                            </p>
+                            <div class="text-[11px] text-slate-500">
+                              {% if lot.daily_rollup.production_cartons_previous is not None %}
+                                Ayer {{ lot.daily_rollup.production_cartons_previous|floatformat:1 }}
+                              {% else %}
+                                Sin dato del día anterior.
+                              {% endif %}
+                            </div>
+                          </div>
+                        </td>
                         <td class="px-3 py-4 align-top">
                           <div class="space-y-1">
                             <p class="text-base font-semibold text-slate-900">
@@ -107,6 +122,9 @@
                             </div>
                           </div>
                         </td>
+                        {% include "production/partials/_daily_metric_cell.html" with metric=consumption show_unit=False %}
+                        {% include "production/partials/_daily_metric_cell.html" with metric=mortality %}
+                        {% include "production/partials/_daily_metric_cell.html" with metric=discard %}
                       </tr>
                     {% endwith %}
                   {% endwith %}
