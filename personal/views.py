@@ -178,9 +178,6 @@ def _build_rest_rows(
         operator = operator_map.get(operator_id)
         if not operator:
             continue
-        if operator.is_staff:
-            continue
-
         operator_name = _operator_display_name(operator)
         role_label = _primary_role_label(operator)
 
@@ -410,8 +407,6 @@ def _build_assignment_matrix(
         operator_id = getattr(operator, "id", None)
         if not operator_id:
             continue
-        if operator and operator.is_staff:
-            continue
         if operator_id not in operator_map and operator:
             operator_map[operator_id] = operator
         start = max(rest_period.start_date, calendar.start_date)
@@ -426,7 +421,6 @@ def _build_assignment_matrix(
             Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=calendar.end_date),
             Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=calendar.start_date),
             is_active=True,
-            is_staff=False,
         )
         .prefetch_related("roles")
         .order_by("apellidos", "nombres")
@@ -615,9 +609,6 @@ def _build_assignment_matrix(
                     }
 
                     is_current_assignment_operator = bool(assignment and assignment.operator_id == operator_id)
-                    if operator.is_staff and not is_current_assignment_operator:
-                        continue
-
                     base_label = _format_operator_label(operator)
                     suffix = _operator_status_suffix(operator_id, day)
                     choice_data["label"] = f"{base_label} - {suffix}" if suffix else base_label
@@ -724,8 +715,6 @@ def _build_assignment_matrix(
             operator = operator_map.get(operator_id)
             if not operator:
                 continue
-            if operator.is_staff:
-                continue
 
             periods = periods_by_operator.get(operator_id, [])
             current_period = next(
@@ -795,7 +784,7 @@ def _eligible_operator_map(
 
     operator_qs = (
         UserProfile.objects.prefetch_related("roles", "suggested_positions")
-        .filter(is_staff=False, is_active=True)
+        .filter(is_active=True)
         .order_by("apellidos", "nombres")
     )
 
