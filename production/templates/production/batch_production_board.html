@@ -112,11 +112,11 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div class="flex gap-2">
               {% if week_navigation.previous_url %}
-                <a href="{{ week_navigation.previous_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">← Semana previa</a>
+                <a href="{{ week_navigation.previous_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">← Sem prev.</a>
               {% else %}
-                <span class="inline-flex items-center justify-center rounded-lg border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">← Semana previa</span>
+                <span class="inline-flex items-center justify-center rounded-lg border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">← Sem pre.</span>
               {% endif %}
-              <a href="{{ week_navigation.next_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">Semana siguiente →</a>
+              <a href="{{ week_navigation.next_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">Sem sig. →</a>
             </div>
             <form method="get" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
               <label for="quick-day" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ir a fecha</label>
@@ -130,11 +130,11 @@
             <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-[11px] text-slate-500/90">
               <tr>
                 <th class="px-4 py-3">Día</th>
-                <th class="px-4 py-3 text-right">Producción (huevos)</th>
-                <th class="px-4 py-3 text-right">Consumo (kg)</th>
+                <th class="px-4 py-3 text-right">Producción (cartones)</th>
+                <th class="px-4 py-3 text-right">Consumo (bultos)</th>
                 <th class="px-4 py-3 text-right">% Postura</th>
                 <th class="px-4 py-3 text-right">Consumo g/ave</th>
-                <th class="px-4 py-3 text-right">Peso huevo (g)</th>
+                <th class="px-4 py-3 text-right">Gr/Huevo</th>
                 <th class="px-4 py-3 text-right">Mortalidad / Descarte</th>
                 <th class="px-4 py-3 text-right">Editar</th>
               </tr>
@@ -146,15 +146,15 @@
                     {{ day.date|date:"l d M" }}
                   </td>
                   <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
-                    {% if day.production %}
-                      {{ day.production|floatformat:0|intcomma }}
+                    {% if day.production_cartons %}
+                      {{ day.production_cartons|floatformat:1 }}
                     {% else %}
                       —
                     {% endif %}
                   </td>
                   <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
-                    {% if day.consumption %}
-                      {{ day.consumption|floatformat:0|intcomma }} kg
+                    {% if day.consumption_bags %}
+                      {{ day.consumption_bags|floatformat:2 }}
                     {% else %}
                       —
                     {% endif %}
@@ -174,8 +174,8 @@
                     {% endif %}
                   </td>
                   <td class="px-4 py-3 text-right text-[13px] font-semibold text-slate-900">
-                    {% if day.average_egg_weight %}
-                      {{ day.average_egg_weight|floatformat:0 }} g
+                    {% if day.egg_weight_per_egg %}
+                      {{ day.egg_weight_per_egg|floatformat:2 }} gr
                     {% else %}
                       —
                     {% endif %}
@@ -234,9 +234,11 @@
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (huevos)</dt>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (cartones)</dt>
             <dd class="mt-1 text-2xl font-semibold text-slate-900">
-              {% if selected_summary.record %}
+              {% if selected_summary.production_cartons %}
+                {{ selected_summary.production_cartons|floatformat:1 }} cartones
+              {% elif selected_summary.record %}
                 {{ selected_summary.record.production|floatformat:0|intcomma }} huevos
               {% else %}
                 —
@@ -244,10 +246,24 @@
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo total</dt>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo total (bultos)</dt>
             <dd class="mt-1 text-2xl font-semibold text-slate-900">
-              {% if selected_summary.record %}
+              {% if selected_summary.consumption_bags %}
+                {{ selected_summary.consumption_bags|floatformat:2 }} bultos
+              {% elif selected_summary.record %}
                 {{ selected_summary.record.consumption|floatformat:0|intcomma }} kg
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gr/Huevo</dt>
+            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+              {% if selected_summary.egg_weight_per_egg %}
+                {{ selected_summary.egg_weight_per_egg|floatformat:2 }} gr
+              {% elif selected_summary.record and selected_summary.record.average_egg_weight %}
+                {{ selected_summary.record.average_egg_weight|floatformat:0 }} g
               {% else %}
                 —
               {% endif %}

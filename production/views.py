@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
 from urllib.parse import urlencode
 
@@ -1902,7 +1902,10 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 date__lte=self.week_end,
             ).order_by("date")
         )
-        self.current_birds_map = self._build_current_birds_map(history_records, self.week_dates)
+        (
+            self.current_birds_map,
+            self.posture_birds_map,
+        ) = self._build_bird_population_maps(history_records, self.week_dates)
         self.week_rows = self._build_week_rows()
         self.room_snapshots = self._build_room_snapshots()
         self.form_initial = self._build_form_initial(self.room_snapshots, self.selected_record)
@@ -2107,6 +2110,22 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         for day in self.week_dates:
             record = self.records_map.get(day)
             birds = self.current_birds_map.get(day, self._allocated_population())
+            posture_birds = self.posture_birds_map.get(day, birds)
+            production_cartons = self._normalize_metric(
+                record.production if record else None,
+                Decimal("30"),
+                1,
+            )
+            consumption_bags = self._normalize_metric(
+                record.consumption if record else None,
+                Decimal("40"),
+                2,
+            )
+            egg_weight_per_egg = self._normalize_metric(
+                record.average_egg_weight if record else None,
+                Decimal("300"),
+                2,
+            )
             rows.append(
                 {
                     "date": day,
@@ -2114,32 +2133,41 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                     "is_selected": day == self.selected_day,
                     "production": record.production if record else None,
                     "consumption": record.consumption if record else None,
-                    "hen_day": self._hen_day_pct(record, birds),
+                    "production_cartons": production_cartons,
+                    "consumption_bags": consumption_bags,
+                    "hen_day": self._hen_day_pct(record, posture_birds),
                     "feed_per_bird": self._feed_per_bird(record, birds),
                     "average_egg_weight": record.average_egg_weight if record else None,
+                    "egg_weight_per_egg": egg_weight_per_egg,
                     "mortality": record.mortality if record else None,
                     "discard": record.discard if record else None,
                 }
             )
         return rows
 
-    def _build_current_birds_map(
+    def _build_bird_population_maps(
         self,
         history_records: List[ProductionRecord],
         days: List[date],
-    ) -> Dict[date, int]:
+    ) -> Tuple[Dict[date, int], Dict[date, int]]:
         starting_population = self._allocated_population()
         result: Dict[date, int] = {}
+        posture_result: Dict[date, int] = {}
         running_losses = 0
+        running_mortality = 0
         pointer = 0
         total_records = len(history_records)
         for day in days:
             while pointer < total_records and history_records[pointer].date <= day:
                 record = history_records[pointer]
-                running_losses += int(record.mortality or 0) + int(record.discard or 0)
+                daily_mortality = int(record.mortality or 0)
+                daily_discard = int(record.discard or 0)
+                running_losses += daily_mortality + daily_discard
+                running_mortality += daily_mortality
                 pointer += 1
             result[day] = max(starting_population - running_losses, 0)
-        return result
+            posture_result[day] = max(starting_population - running_mortality, 0)
+        return result, posture_result
 
     def _build_week_navigation(self) -> Dict[str, Any]:
         prev_url = (
@@ -2175,11 +2203,27 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
     def _build_selected_summary(self) -> Dict[str, Any]:
         record = self.records_map.get(self.selected_day) or self.selected_record
         birds = self.current_birds_map.get(self.selected_day, self._allocated_population())
+        posture_birds = self.posture_birds_map.get(self.selected_day, birds)
         return {
             "record": record,
             "birds": birds,
-            "hen_day": self._hen_day_pct(record, birds),
+            "hen_day": self._hen_day_pct(record, posture_birds),
             "feed_per_bird": self._feed_per_bird(record, birds),
+            "production_cartons": self._normalize_metric(
+                record.production if record else None,
+                Decimal("30"),
+                1,
+            ),
+            "consumption_bags": self._normalize_metric(
+                record.consumption if record else None,
+                Decimal("40"),
+                2,
+            ),
+            "egg_weight_per_egg": self._normalize_metric(
+                record.average_egg_weight if record else None,
+                Decimal("300"),
+                2,
+            ),
         }
 
     def _allocated_population(self) -> int:
@@ -2196,6 +2240,25 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         except (ArithmeticError, ValueError, TypeError):
             return 0
         return int(decimal_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    @staticmethod
+    def _normalize_metric(
+        value: Decimal | int | float | None,
+        divisor: Decimal,
+        precision: int,
+    ) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        try:
+            decimal_value = Decimal(value) / divisor
+        except (ArithmeticError, InvalidOperation, ValueError, TypeError):
+            return None
+        quantizer = Decimal("1").scaleb(-precision) if precision > 0 else Decimal("1")
+        try:
+            normalized = decimal_value.quantize(quantizer, rounding=ROUND_HALF_UP)
+        except (ArithmeticError, InvalidOperation):
+            return None
+        return float(normalized)
 
     def _resolve_weight_snapshot(self, target_day: date) -> tuple[Optional[float], Optional[float]]:
         room_ids = [allocation.room_id for allocation in self.allocations]
