@@ -11,8 +11,10 @@ from django.db import models
 from django.db.models import Prefetch
 
 from personal.models import (
+    JOB_TYPE_CATEGORY_CODE_MAP,
     OperatorRestPeriod,
     OperatorSalary,
+    PositionDefinition,
     PositionJobType,
     RestPeriodStatus,
     Role,
@@ -45,6 +47,12 @@ ROLE_JOB_TYPE_MAP: dict[str, str] = {
     Role.RoleName.CLASIFICADOR: PositionJobType.CLASSIFICATION,
     Role.RoleName.ADMINISTRADOR: PositionJobType.ADMINISTRATIVE,
     Role.RoleName.SUPERVISOR: PositionJobType.ADMINISTRATIVE,
+}
+
+CATEGORY_JOB_TYPE_MAP: dict[str, str] = {
+    category_code: job_type
+    for job_type, category_codes in JOB_TYPE_CATEGORY_CODE_MAP.items()
+    for category_code in category_codes
 }
 
 
@@ -192,7 +200,7 @@ def build_payroll_summary(
 
     assignments = list(
         ShiftAssignment.objects.filter(date__range=(period.start_date, period.end_date))
-        .select_related("operator", "position", "position__farm")
+        .select_related("operator", "position", "position__farm", "position__category")
         .order_by("date")
     )
 
@@ -244,7 +252,10 @@ def build_payroll_summary(
                 "salary_records",
                 queryset=OperatorSalary.objects.order_by("-effective_from", "-id"),
             ),
-            "suggested_positions",
+            Prefetch(
+                "suggested_positions",
+                queryset=PositionDefinition.objects.select_related("category"),
+            ),
             "roles",
         )
     )
@@ -292,7 +303,7 @@ def build_payroll_summary(
             assignments_by_operator[assignment.operator_id].append(assignment)
             position = assignment.position
             if position:
-                job_type_value = position.job_type or PositionJobType.PRODUCTION
+                job_type_value = _resolve_position_job_type(position) or PositionJobType.PRODUCTION
                 job_type_counter[assignment.operator_id][job_type_value] += 1
                 farm_id = position.farm_id
                 farm_counter[assignment.operator_id][farm_id] += 1
@@ -567,10 +578,23 @@ def _resolve_primary_farm(counter: Counter[int | None] | None) -> int | None:
     return max(counter.items(), key=lambda item: (item[1], item[0] if item[0] is not None else -1))[0]
 
 
+def _resolve_position_job_type(position: PositionDefinition | None) -> str | None:
+    if not position:
+        return None
+    category = getattr(position, "category", None)
+    category_code = getattr(category, "code", None)
+    if category_code:
+        mapped_job_type = CATEGORY_JOB_TYPE_MAP.get(category_code)
+        if mapped_job_type:
+            return mapped_job_type
+    job_type_value = getattr(position, "job_type", None)
+    return job_type_value or None
+
+
 def _resolve_job_type_from_suggestions(operator: UserProfile) -> str | None:
     job_type_counter: Counter[str] = Counter()
     for position in operator.suggested_positions.all():
-        job_type_value = getattr(position, "job_type", None)
+        job_type_value = _resolve_position_job_type(position)
         if job_type_value:
             job_type_counter[job_type_value] += 1
     if not job_type_counter:

@@ -227,6 +227,38 @@ class PayrollServiceTests(TestCase):
         self.assertEqual(entry.job_type, PositionJobType.ADMINISTRATIVE)
         self.assertEqual(entry.job_type_label, "Administración")
 
+    def test_job_type_inferred_from_position_category(self):
+        operator = self._create_operator(
+            cedula="900",
+            payment_type=OperatorSalary.PaymentType.MONTHLY,
+            amount=Decimal("1300000"),
+        )
+        administrative_category, _ = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.ADMINISTRADOR,
+            defaults={"shift_type": ShiftType.DAY},
+        )
+        administrative_position = PositionDefinition.objects.create(
+            name="Administrador general",
+            code="POS-ADMIN",
+            category=administrative_category,
+            farm=self.farm,
+            valid_from=date(2024, 1, 1),
+            job_type=PositionJobType.PRODUCTION,
+        )
+        ShiftAssignment.objects.create(
+            calendar=self.calendar,
+            position=administrative_position,
+            date=date(2025, 4, 2),
+            operator=operator,
+        )
+
+        period = resolve_payroll_period(date(2025, 4, 1), date(2025, 4, 15))
+        summary = build_payroll_summary(period=period)
+
+        entry = summary.entries[0]
+        self.assertEqual(entry.job_type, PositionJobType.ADMINISTRATIVE)
+        self.assertEqual(entry.job_type_label, "Administración")
+
     def _create_operator(
         self,
         *,
