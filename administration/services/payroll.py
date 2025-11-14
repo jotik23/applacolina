@@ -262,9 +262,7 @@ def build_payroll_summary(
     operator_map = {operator.pk: operator for operator in operators}
 
     relevant_operator_ids = [
-        pk
-        for pk in operator_ids
-        if pk in operator_map and not operator_map[pk].is_staff
+        pk for pk in operator_ids if pk in operator_map and not operator_map[pk].is_superuser
     ]
 
     if not relevant_operator_ids:
@@ -366,7 +364,7 @@ def build_payroll_summary(
 
     for operator_id in sorted_operator_ids:
         operator = operator_map.get(operator_id)
-        if not operator or operator.is_staff:
+        if not operator or operator.is_superuser:
             continue
 
         job_type_value = job_type_by_operator.get(operator_id)

@@ -259,6 +259,21 @@ class PayrollServiceTests(TestCase):
         self.assertEqual(entry.job_type, PositionJobType.ADMINISTRATIVE)
         self.assertEqual(entry.job_type_label, "Administración")
 
+    def test_staff_operator_not_excluded_from_payroll(self):
+        operator = self._create_operator(
+            cedula="950",
+            payment_type=OperatorSalary.PaymentType.MONTHLY,
+            amount=Decimal("1500000"),
+            is_staff=True,
+        )
+        self._assign_days(operator, [date(2025, 4, 5)])
+
+        period = resolve_payroll_period(date(2025, 4, 1), date(2025, 4, 15))
+        summary = build_payroll_summary(period=period)
+
+        self.assertEqual(len(summary.entries), 1)
+        self.assertEqual(summary.entries[0].operator.id, operator.id)
+
     def _create_operator(
         self,
         *,
@@ -266,6 +281,8 @@ class PayrollServiceTests(TestCase):
         payment_type: str,
         amount: Decimal,
         rest_days_per_week: int = 1,
+        is_staff: bool = False,
+        is_superuser: bool = False,
     ) -> UserProfile:
         operator = UserProfile.objects.create(
             cedula=cedula,
@@ -273,6 +290,8 @@ class PayrollServiceTests(TestCase):
             apellidos="Test",
             telefono=f"{cedula}000",
             employment_start_date=date(2024, 1, 1),
+            is_staff=is_staff,
+            is_superuser=is_superuser,
         )
         OperatorSalary.objects.create(
             operator=operator,
