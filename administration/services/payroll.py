@@ -15,6 +15,7 @@ from personal.models import (
     OperatorSalary,
     PositionJobType,
     RestPeriodStatus,
+    Role,
     ShiftAssignment,
     UserProfile,
 )
@@ -37,6 +38,14 @@ MONTH_LABELS = {
 
 class PayrollComputationError(Exception):
     """Raised when the payroll summary cannot be generated."""
+
+
+ROLE_JOB_TYPE_MAP: dict[str, str] = {
+    Role.RoleName.GALPONERO: PositionJobType.PRODUCTION,
+    Role.RoleName.CLASIFICADOR: PositionJobType.CLASSIFICATION,
+    Role.RoleName.ADMINISTRADOR: PositionJobType.ADMINISTRATIVE,
+    Role.RoleName.SUPERVISOR: PositionJobType.ADMINISTRATIVE,
+}
 
 
 @dataclass(frozen=True)
@@ -230,12 +239,13 @@ def build_payroll_summary(
         )
 
     operators = list(
-        UserProfile.objects.filter(pk__in=operator_ids)
-        .prefetch_related(
+        UserProfile.objects.filter(pk__in=operator_ids).prefetch_related(
             Prefetch(
                 "salary_records",
                 queryset=OperatorSalary.objects.order_by("-effective_from", "-id"),
             ),
+            "suggested_positions",
+            "roles",
         )
     )
     operator_map = {operator.pk: operator for operator in operators}
@@ -250,7 +260,8 @@ def build_payroll_summary(
         return PayrollSummary(
             period=period,
             entries=[],
-            totals_by_role=[],
+            totals_by_job_type=[],
+            totals_by_farm=[],
             overall_total=Decimal("0.00"),
         )
 
@@ -320,7 +331,12 @@ def build_payroll_summary(
     farm_label_by_operator: dict[int, str] = {}
 
     for operator_id in relevant_operator_ids:
+        operator = operator_map.get(operator_id)
         job_type_value = _resolve_primary_job_type(job_type_counter.get(operator_id))
+        if not job_type_value and operator:
+            job_type_value = _resolve_job_type_from_suggestions(operator) or _resolve_job_type_from_roles(
+                operator
+            )
         job_type_by_operator[operator_id] = job_type_value
         job_type_label_by_operator[operator_id] = _job_type_label(job_type_value)
         farm_id_value = _resolve_primary_farm(farm_counter.get(operator_id))
@@ -549,6 +565,39 @@ def _resolve_primary_farm(counter: Counter[int | None] | None) -> int | None:
     if not counter:
         return None
     return max(counter.items(), key=lambda item: (item[1], item[0] if item[0] is not None else -1))[0]
+
+
+def _resolve_job_type_from_suggestions(operator: UserProfile) -> str | None:
+    job_type_counter: Counter[str] = Counter()
+    for position in operator.suggested_positions.all():
+        job_type_value = getattr(position, "job_type", None)
+        if job_type_value:
+            job_type_counter[job_type_value] += 1
+    if not job_type_counter:
+        return None
+    return max(job_type_counter.items(), key=lambda item: (item[1], item[0] or ""))[0]
+
+
+def _resolve_job_type_from_roles(operator: UserProfile) -> str | None:
+    role_names = [role.name for role in operator.roles.all() if getattr(role, "name", None)]
+    if not role_names:
+        return None
+    preferred_order = (
+        Role.RoleName.CLASIFICADOR,
+        Role.RoleName.ADMINISTRADOR,
+        Role.RoleName.SUPERVISOR,
+        Role.RoleName.GALPONERO,
+    )
+    for candidate in preferred_order:
+        if candidate in role_names:
+            mapped = ROLE_JOB_TYPE_MAP.get(candidate)
+            if mapped:
+                return mapped
+    for role_name in role_names:
+        mapped = ROLE_JOB_TYPE_MAP.get(role_name)
+        if mapped:
+            return mapped
+    return None
 
 
 def _job_type_label(value: str | None) -> str:

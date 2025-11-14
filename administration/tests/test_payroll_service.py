@@ -14,6 +14,7 @@ from personal.models import (
     PositionCategoryCode,
     PositionDefinition,
     PositionJobType,
+    Role,
     ShiftAssignment,
     ShiftCalendar,
     ShiftType,
@@ -181,6 +182,50 @@ class PayrollServiceTests(TestCase):
         )
         entry_bonus = summary_bonus.entries[0]
         self.assertEqual(entry_bonus.discounted_non_worked_count, entry.non_worked_count - 1)
+
+    def test_operator_without_assignments_uses_suggested_positions_for_job_type(self):
+        operator = self._create_operator(
+            cedula="700",
+            payment_type=OperatorSalary.PaymentType.MONTHLY,
+            amount=Decimal("1000000"),
+        )
+        classification_category, _ = PositionCategory.objects.get_or_create(
+            code=PositionCategoryCode.CLASIFICADOR_DIA,
+            defaults={"shift_type": ShiftType.DAY},
+        )
+        classification_position = PositionDefinition.objects.create(
+            name="Clasificación día",
+            code="POS-CLAS",
+            category=classification_category,
+            farm=self.farm,
+            valid_from=date(2024, 1, 1),
+            job_type=PositionJobType.CLASSIFICATION,
+        )
+        operator.suggested_positions.add(classification_position)
+
+        period = resolve_payroll_period(date(2025, 4, 1), date(2025, 4, 15))
+        summary = build_payroll_summary(period=period)
+
+        entry = summary.entries[0]
+        self.assertEqual(entry.job_type, PositionJobType.CLASSIFICATION)
+        self.assertEqual(entry.job_type_label, "Clasificación")
+        self.assertIn("Clasificación", [total.job_type_label for total in summary.totals_by_job_type])
+
+    def test_operator_without_assignments_uses_roles_for_job_type(self):
+        operator = self._create_operator(
+            cedula="800",
+            payment_type=OperatorSalary.PaymentType.MONTHLY,
+            amount=Decimal("1100000"),
+        )
+        admin_role = Role.objects.create(name=Role.RoleName.ADMINISTRADOR)
+        operator.roles.add(admin_role)
+
+        period = resolve_payroll_period(date(2025, 4, 1), date(2025, 4, 15))
+        summary = build_payroll_summary(period=period)
+
+        entry = summary.entries[0]
+        self.assertEqual(entry.job_type, PositionJobType.ADMINISTRATIVE)
+        self.assertEqual(entry.job_type_label, "Administración")
 
     def _create_operator(
         self,
