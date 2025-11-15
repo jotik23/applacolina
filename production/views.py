@@ -2292,18 +2292,35 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 production_record__date=self.selected_day,
             )
         }
+        room_ids = [allocation.room_id for allocation in self.allocations]
+        mortality_totals = (
+            ProductionRoomRecord.objects.filter(
+                production_record__bird_batch=self.batch,
+                room_id__in=room_ids,
+                production_record__date__lte=self.selected_day,
+            )
+            .values("room_id")
+            .annotate(total=Sum("mortality"))
+        )
+        room_mortality_map = {
+            entry["room_id"]: int(entry["total"] or 0) for entry in mortality_totals
+        }
 
         snapshots: List[RoomProductionSnapshot] = []
         for allocation in self.allocations:
             room = allocation.room
             room_record = room_records.get(room.pk)
+            allocated_birds = allocation.quantity or 0
+            cumulative_mortality = room_mortality_map.get(room.pk, 0)
+            current_birds = max(allocated_birds - cumulative_mortality, 0)
             snapshots.append(
                 RoomProductionSnapshot(
                     room_id=room.pk,
                     room_name=room.name,
                     chicken_house_id=room.chicken_house_id,
                     chicken_house_name=room.chicken_house.name,
-                    allocated_birds=allocation.quantity or 0,
+                    allocated_birds=allocated_birds,
+                    current_birds=current_birds,
                     production=room_record.production if room_record else None,
                     consumption=room_record.consumption if room_record else None,
                     mortality=room_record.mortality if room_record else None,
@@ -2411,7 +2428,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
         breakdown: List[Dict[str, Any]] = []
         for snapshot in self.room_snapshots:
-            birds = snapshot.allocated_birds or 0
+            birds = snapshot.current_birds or 0
             breakdown.append(
                 {
                     "room_name": snapshot.room_name,

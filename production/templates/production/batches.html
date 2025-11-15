@@ -208,7 +208,9 @@
                                     {{ item.room.name }}
                                   </label>
                                   {% if item.initial %}
-                                    <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Actual {{ item.initial|intcomma }}</span>
+                                    <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                      Vivas {{ item.alive_birds|default:item.initial|intcomma }} (Muertas {{ item.mortality|default:0|intcomma }})
+                                    </span>
                                   {% endif %}
                                 </div>
                                 <div class="flex items-center gap-3">

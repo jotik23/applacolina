@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 from django import forms
 from django.db import transaction
+from django.db.models import Sum
 
 from production.models import (
     BirdBatch,
@@ -17,6 +18,7 @@ from production.models import (
     EggClassificationBatch,
     EggType,
     Farm,
+    ProductionRoomRecord,
     Room,
 )
 from production.services.egg_classification import (
@@ -39,6 +41,7 @@ class RoomProductionSnapshot:
     chicken_house_id: int
     chicken_house_name: str
     allocated_birds: int
+    current_birds: int
     production: Optional[Decimal]
     consumption: Optional[Decimal]
     mortality: Optional[int]
@@ -224,6 +227,7 @@ class BatchDistributionForm(forms.Form):
     def build_groups(self) -> Tuple[List[Dict[str, Any]], int]:
         groups: List[Dict[str, Any]] = []
         overall_total = 0
+        room_mortality_map = self._get_room_mortality_map()
 
         initial_assignments_total = sum(
             allocation.quantity for allocation in self.batch.allocations.all()
@@ -252,13 +256,24 @@ class BatchDistributionForm(forms.Form):
                 allocated_before = allocation.quantity if allocation else 0
                 proposed_total = initial_assignments_total - allocated_before + (value or 0)
                 would_exceed = proposed_total > self.batch.initial_quantity
+                initial_quantity = allocation.quantity if allocation else None
+                room_mortality = (
+                    room_mortality_map.get(metadata["room"].pk, 0) if allocation else None
+                )
+                alive_birds = (
+                    max(initial_quantity - room_mortality, 0)
+                    if initial_quantity is not None and room_mortality is not None
+                    else initial_quantity
+                )
 
                 fields.append(
                     {
                         "field": bound_field,
                         "room": metadata["room"],
                         "value": value,
-                        "initial": allocation.quantity if allocation else None,
+                        "initial": initial_quantity,
+                        "alive_birds": alive_birds,
+                        "mortality": room_mortality,
                         "proposed_total": proposed_total,
                         "would_exceed": would_exceed,
                     }
@@ -288,6 +303,28 @@ class BatchDistributionForm(forms.Form):
     @property
     def total_after_clean(self) -> Optional[int]:
         return self._clean_total
+
+    def _get_room_mortality_map(self) -> Dict[int, int]:
+        if hasattr(self, "_room_mortality_map"):
+            return self._room_mortality_map
+
+        room_ids = [metadata["room"].pk for metadata in self.room_metadata.values()]
+        if not room_ids:
+            self._room_mortality_map = {}
+            return self._room_mortality_map
+
+        mortality_totals = (
+            ProductionRoomRecord.objects.filter(
+                production_record__bird_batch=self.batch,
+                room_id__in=room_ids,
+            )
+            .values("room_id")
+            .annotate(total=Sum("mortality"))
+        )
+        self._room_mortality_map = {
+            entry["room_id"]: int(entry["total"] or 0) for entry in mortality_totals
+        }
+        return self._room_mortality_map
 
 
 class BatchDailyProductionForm(forms.Form):
