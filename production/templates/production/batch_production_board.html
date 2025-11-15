@@ -14,7 +14,6 @@
             Tablero de producción diaria
           </span>
           <div class="space-y-1">
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Lote</p>
             <h1 class="text-3xl font-semibold text-slate-900">{{ batch }}</h1>
           </div>
           <p class="text-sm text-slate-500">
@@ -101,7 +100,7 @@
       </div>
     </header>
 
-    <div class="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+    <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] 2xl:grid-cols-[1.3fr_0.7fr]">
       <section class="rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/80">
         <header class="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="space-y-1">
@@ -203,19 +202,99 @@
             </tbody>
           </table>
         </div>
+
+        {% if selected_room_breakdown %}
+          <div class="mt-8 rounded-2xl border border-slate-200/80 bg-white/70 p-5">
+            <header class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Desglose diario por salón</p>
+                <p class="text-xs text-slate-500">Valores del {{ selected_day|date:"l d \\d\\e F" }}.</p>
+              </div>
+            </header>
+            <div class="mt-4 overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
+                <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-[11px] text-slate-500/90">
+                  <tr>
+                    <th class="px-3 py-3">Salón</th>
+                    <th class="px-3 py-3 text-right">Producción (cartones)</th>
+                    <th class="px-3 py-3 text-right">Consumo (bultos)</th>
+                    <th class="px-3 py-3 text-right">% Postura</th>
+                    <th class="px-3 py-3 text-right">Consumo g/ave</th>
+                    <th class="px-3 py-3 text-right">Mortalidad / Descarte</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  {% for room in selected_room_breakdown %}
+                    <tr class="bg-white/80">
+                      <td class="px-3 py-3 text-sm font-semibold text-slate-900">
+                        <div>{{ room.room_name }}</div>
+                        <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">{{ room.chicken_house_name }}</p>
+                      </td>
+                      <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
+                        {% if room.production_cartons %}
+                          {{ room.production_cartons|floatformat:1 }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
+                        {% if room.consumption_bags %}
+                          {{ room.consumption_bags|floatformat:2 }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="px-3 py-3 text-right text-[13px] font-semibold text-emerald-700">
+                        {% if room.hen_day %}
+                          {{ room.hen_day|floatformat:2 }}%
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
+                        {% if room.feed_per_bird %}
+                          {{ room.feed_per_bird|floatformat:0 }} g
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="px-3 py-3 text-right text-[13px] text-slate-900">
+                        {% if room.mortality %}
+                          <span class="font-semibold">{{ room.mortality|intcomma }}</span>
+                        {% else %}
+                          —
+                        {% endif %}
+                        /
+                        {% if room.discard %}
+                          <span class="font-semibold">{{ room.discard|intcomma }}</span>
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="6" class="px-3 py-4 text-center text-xs text-slate-500">No hay salones con datos registrados para este día.</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
       </section>
 
-      <section class="rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/80">
-        <header class="space-y-2 border-b border-slate-200 pb-4">
+      <section class="rounded-2xl bg-white/90 p-5 shadow-sm ring-1 ring-slate-200/80">
+        <header class="space-y-2 border-b border-slate-200 pb-3">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gestión diaria</p>
-          <h2 class="text-2xl font-semibold text-slate-900">{{ selected_day|date:"l d \\d\\e F Y" }}</h2>
+          <h2 class="text-xl font-semibold text-slate-900">{{ selected_day|date:"l d \\d\\e F Y" }}</h2>
           <p class="text-sm text-slate-500">Revisa métricas y registra ajustes por salón o por galpón.</p>
         </header>
 
-        <dl class="mt-6 grid gap-4 sm:grid-cols-2">
+        <dl class="mt-5 grid gap-3 sm:grid-cols-2">
           <div>
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">% postura</dt>
-            <dd class="mt-1 text-2xl font-semibold text-emerald-700">
+            <dd class="mt-1 text-xl font-semibold text-emerald-700">
               {% if selected_summary.hen_day %}
                 {{ selected_summary.hen_day|floatformat:2 }}%
               {% else %}
@@ -225,7 +304,7 @@
           </div>
           <div>
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo g/ave</dt>
-            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+            <dd class="mt-1 text-xl font-semibold text-slate-900">
               {% if selected_summary.feed_per_bird %}
                 {{ selected_summary.feed_per_bird|floatformat:1 }} g
               {% else %}
@@ -235,7 +314,7 @@
           </div>
           <div>
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (cartones)</dt>
-            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+            <dd class="mt-1 text-xl font-semibold text-slate-900">
               {% if selected_summary.production_cartons %}
                 {{ selected_summary.production_cartons|floatformat:1 }} cartones
               {% elif selected_summary.record %}
@@ -247,7 +326,7 @@
           </div>
           <div>
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo total (bultos)</dt>
-            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+            <dd class="mt-1 text-xl font-semibold text-slate-900">
               {% if selected_summary.consumption_bags %}
                 {{ selected_summary.consumption_bags|floatformat:2 }} bultos
               {% elif selected_summary.record %}
@@ -259,7 +338,7 @@
           </div>
           <div>
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gr/Huevo</dt>
-            <dd class="mt-1 text-2xl font-semibold text-slate-900">
+            <dd class="mt-1 text-xl font-semibold text-slate-900">
               {% if selected_summary.egg_weight_per_egg %}
                 {{ selected_summary.egg_weight_per_egg|floatformat:2 }} gr
               {% elif selected_summary.record and selected_summary.record.average_egg_weight %}
@@ -292,132 +371,28 @@
                   <p class="text-xs text-slate-500">Registra valores puntuales para cada salón asignado.</p>
                 </div>
                 <button type="submit" name="input_mode" value="rooms" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">
-                  Guardar por salón
+                  Guardar
                 </button>
               </header>
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
-                  <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-slate-500/90">
-                    <tr>
-                      <th class="px-3 py-3">Salón</th>
-                      <th class="px-3 py-3">Galpón</th>
-                      <th class="px-3 py-3 text-right">Producción (huevos)</th>
-                      <th class="px-3 py-3 text-right">Consumo</th>
-                      <th class="px-3 py-3 text-right">Mortalidad</th>
-                      <th class="px-3 py-3 text-right">Descarte</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-100">
-                    {% for row in room_rows %}
-                      <tr class="bg-white/90">
-                        <td class="px-3 py-3 text-sm font-semibold text-slate-900">{{ row.room_name }}</td>
-                        <td class="px-3 py-3 text-xs text-slate-500">{{ row.chicken_house_name }}</td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ row.fields.production }}
-                            {% for error in row.fields.production.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ row.fields.consumption }}
-                            {% for error in row.fields.consumption.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ row.fields.mortality }}
-                            {% for error in row.fields.mortality.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ row.fields.discard }}
-                            {% for error in row.fields.discard.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                      </tr>
-                    {% empty %}
-                      <tr>
-                        <td colspan="6" class="px-3 py-4 text-center text-xs text-slate-500">No hay salones asignados.</td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section class="space-y-4 rounded-xl border border-slate-200/80 p-4 shadow-sm">
-              <header class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registro agregado por galpón</p>
-                  <p class="text-xs text-slate-500">Ingresa los totales por galpón; se distribuirán automáticamente según las aves por salón.</p>
+              <div class="space-y-2">
+                <div class="grid grid-cols-[0.55fr_repeat(4,minmax(5rem,1fr))] gap-3 rounded-lg bg-slate-100/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Salón</span>
+                  <span class="text-right">Producción (huevos)</span>
+                  <span class="text-right">Consumo</span>
+                  <span class="text-right">Mortalidad</span>
+                  <span class="text-right">Descarte</span>
                 </div>
-                <button type="submit" name="input_mode" value="barns" class="inline-flex items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50">
-                  Distribuir y guardar
-                </button>
-              </header>
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-600">
-                  <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-slate-500/90">
-                    <tr>
-                      <th class="px-3 py-3">Galpón</th>
-                      <th class="px-3 py-3 text-right">Aves</th>
-                      <th class="px-3 py-3 text-right">Producción (huevos)</th>
-                      <th class="px-3 py-3 text-right">Consumo</th>
-                      <th class="px-3 py-3 text-right">Mortalidad</th>
-                      <th class="px-3 py-3 text-right">Descarte</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-100">
-                    {% for barn in barn_rows %}
-                      <tr class="bg-white/90">
-                        <td class="px-3 py-3 text-sm font-semibold text-slate-900">{{ barn.name }}</td>
-                        <td class="px-3 py-3 text-right text-sm text-slate-600">{{ barn.birds|intcomma }}</td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ barn.fields.production }}
-                            {% for error in barn.fields.production.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ barn.fields.consumption }}
-                            {% for error in barn.fields.consumption.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ barn.fields.mortality }}
-                            {% for error in barn.fields.mortality.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                        <td class="px-3 py-2">
-                          <div class="space-y-1 text-right">
-                            {{ barn.fields.discard }}
-                            {% for error in barn.fields.discard.errors %}
-                              <p class="text-[11px] text-rose-600">{{ error }}</p>
-                            {% endfor %}
-                          </div>
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+                {% for row in room_rows %}
+                  <div class="grid grid-cols-[0.55fr_repeat(4,minmax(5rem,1fr))] items-center gap-3 rounded-lg bg-white/90 px-4 py-2 text-sm text-slate-800">
+                    <div class="font-semibold text-slate-900">{{ row.room_name }}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=row.fields.production wrapper_classes="ml-auto w-full" %}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=row.fields.consumption wrapper_classes="ml-auto w-full" %}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=row.fields.mortality wrapper_classes="ml-auto w-full" %}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=row.fields.discard wrapper_classes="ml-auto w-full" %}</div>
+                  </div>
+                {% empty %}
+                  <p class="px-3 py-4 text-center text-xs text-slate-500">No hay salones asignados.</p>
+                {% endfor %}
               </div>
             </section>
 
@@ -432,6 +407,37 @@
                 {% endfor %}
               </div>
             </div>
+
+            <section class="space-y-4 rounded-xl border border-slate-200/80 p-4 shadow-sm">
+              <header class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registro agregado por galpón</p>
+                  <p class="text-xs text-slate-500">Ingresa los totales por galpón; se distribuirán automáticamente según las aves por salón.</p>
+                </div>
+                <button type="submit" name="input_mode" value="barns" class="inline-flex items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50">
+                  Distribuir y guardar
+                </button>
+              </header>
+              <div class="space-y-2">
+                <div class="grid grid-cols-[0.6fr_repeat(4,minmax(5rem,1fr))] gap-3 rounded-lg bg-slate-100/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Galpón</span>
+                  <span class="text-right">Producción (huevos)</span>
+                  <span class="text-right">Consumo</span>
+                  <span class="text-right">Mortalidad</span>
+                  <span class="text-right">Descarte</span>
+                </div>
+                {% for barn in barn_rows %}
+                  <div class="grid grid-cols-[0.6fr_repeat(4,minmax(5rem,1fr))] items-center gap-3 rounded-lg bg-white/90 px-4 py-2 text-sm text-slate-800">
+                    <div class="font-semibold text-slate-900">{{ barn.name }}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=barn.fields.production wrapper_classes="ml-auto w-full" %}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=barn.fields.consumption wrapper_classes="ml-auto w-full" %}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=barn.fields.mortality wrapper_classes="ml-auto w-full" %}</div>
+                    <div class="text-right">{% include "production/_inline_field.html" with field=barn.fields.discard wrapper_classes="ml-auto w-full" %}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            </section>
+
           </form>
         {% else %}
           <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">

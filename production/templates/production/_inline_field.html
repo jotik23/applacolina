@@ -1,0 +1,12 @@
+{% comment %}
+  Reutilizable para renderizar campos de formulario en celdas compactas manteniendo errores.
+  Espera la variable `field` y acepta `wrapper_classes` para definir el ancho máximo.
+{% endcomment %}
+<div class="inline-flex w-full flex-col items-stretch gap-1 text-right {{ wrapper_classes|default:'' }}">
+  <div class="w-full overflow-hidden rounded-lg">
+    {{ field }}
+  </div>
+  {% for error in field.errors %}
+    <p class="text-[11px] text-rose-600">{{ error }}</p>
+  {% endfor %}
+</div>

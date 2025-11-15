@@ -1964,6 +1964,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 "week_navigation": self.week_navigation,
                 "selected_day": self.selected_day,
                 "selected_summary": self.selected_summary,
+                "selected_room_breakdown": self.room_breakdown_rows,
                 "room_form": form if self.allocations else None,
                 "room_rows": form.room_rows if form else [],
                 "barn_rows": form.barn_rows if form else [],
@@ -2038,6 +2039,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         ) = self._build_bird_population_maps(history_records, self.week_dates)
         self.week_rows = self._build_week_rows()
         self.room_snapshots = self._build_room_snapshots()
+        self.room_breakdown_rows = self._build_room_breakdown()
         self.form_initial = self._build_form_initial(self.room_snapshots, self.selected_record)
         self.selected_summary = self._build_selected_summary()
         self.week_navigation = self._build_week_navigation()
@@ -2275,6 +2277,35 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             )
         return rows
 
+    def _build_room_breakdown(self) -> List[Dict[str, Any]]:
+        if not self.room_snapshots:
+            return []
+
+        breakdown: List[Dict[str, Any]] = []
+        for snapshot in self.room_snapshots:
+            birds = snapshot.allocated_birds or 0
+            breakdown.append(
+                {
+                    "room_name": snapshot.room_name,
+                    "chicken_house_name": snapshot.chicken_house_name,
+                    "production_cartons": self._normalize_metric(
+                        snapshot.production,
+                        Decimal("30"),
+                        1,
+                    ),
+                    "consumption_bags": self._normalize_metric(
+                        snapshot.consumption,
+                        Decimal("40"),
+                        2,
+                    ),
+                    "hen_day": self._hen_day_from_value(snapshot.production, birds),
+                    "feed_per_bird": self._feed_per_bird_from_value(snapshot.consumption, birds),
+                    "mortality": snapshot.mortality,
+                    "discard": snapshot.discard,
+                }
+            )
+        return breakdown
+
     def _build_bird_population_maps(
         self,
         history_records: List[ProductionRecord],
@@ -2423,19 +2454,32 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         return (avg_weight, avg_uniformity)
 
     def _hen_day_pct(self, record: Optional[ProductionRecord], birds: int) -> Optional[float]:
-        if not record or not record.production or birds <= 0:
-            return None
-        try:
-            return float((record.production / Decimal(birds)) * Decimal("100"))
-        except (ArithmeticError, ValueError):
-            return None
+        production = record.production if record else None
+        return self._hen_day_from_value(production, birds)
 
     def _feed_per_bird(self, record: Optional[ProductionRecord], birds: int) -> Optional[float]:
-        if not record or record.consumption is None or birds <= 0:
+        consumption = record.consumption if record else None
+        return self._feed_per_bird_from_value(consumption, birds)
+
+    @staticmethod
+    def _hen_day_from_value(production: Optional[Decimal | int | float], birds: int) -> Optional[float]:
+        if not production or birds <= 0:
             return None
         try:
-            return float((record.consumption * Decimal("1000")) / Decimal(birds))
-        except (ArithmeticError, ValueError):
+            return float((Decimal(production) / Decimal(birds)) * Decimal("100"))
+        except (ArithmeticError, InvalidOperation, ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _feed_per_bird_from_value(
+        consumption: Optional[Decimal | int | float],
+        birds: int,
+    ) -> Optional[float]:
+        if consumption in (None, "") or birds <= 0:
+            return None
+        try:
+            return float((Decimal(consumption) * Decimal("1000")) / Decimal(birds))
+        except (ArithmeticError, InvalidOperation, ValueError, TypeError):
             return None
 
 
