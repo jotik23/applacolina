@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from datetime import date, timedelta
 from calendar import monthrange
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
@@ -2066,6 +2066,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         context.update(
             {
                 "batch": self.batch,
+                "batch_heading": self._build_batch_heading(),
                 "active_submenu": "daily_indicators",
                 "batch_navigation": self._build_batch_navigation(),
                 "week_rows": self.week_rows,
@@ -2198,6 +2199,25 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         )
 
         return {"previous": serialize(previous_batch), "next": serialize(next_batch)}
+
+    def _build_batch_heading(self) -> str:
+        """Return a readable heading like 'Lote Galpón 1, Galpón 2 - Granja'."""
+
+        farm_name = self.batch.farm.name
+        if not self.allocations:
+            return str(self.batch)
+
+        barns: "OrderedDict[str, None]" = OrderedDict()
+        for allocation in self.allocations:
+            house_name = allocation.room.chicken_house.name
+            if house_name not in barns:
+                barns[house_name] = None
+
+        if not barns:
+            return str(self.batch)
+
+        barns_display = ", ".join(barns.keys())
+        return f"Lote {barns_display} - {farm_name}"
 
     def _init_timeline(self) -> None:
         raw_day = self.request.POST.get("date") or self.request.GET.get("day")
