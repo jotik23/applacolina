@@ -2153,7 +2153,8 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         self.selected_summary = self._build_selected_summary()
         self.week_navigation = self._build_week_navigation()
         self.batch_age_days = max((self.selected_day - self.batch.birth_date).days, 0)
-        self.batch_age_weeks = self.batch_age_days // 7
+        # Display the current week of life (1-based) instead of completed weeks only.
+        self.batch_age_weeks = max((self.batch_age_days // 7) + 1, 1)
         avg_weight, uniformity = self._resolve_weight_snapshot(self.selected_day)
         self.selected_avg_weight = avg_weight
         self.selected_uniformity = uniformity
