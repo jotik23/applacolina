@@ -2480,6 +2480,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             "birds": birds,
             "hen_day": self._hen_day_pct(record, posture_birds),
             "feed_per_bird": self._feed_per_bird(record, birds),
+            "production_eggs": self._round_to_int(record.production) if record else None,
             "production_cartons": self._normalize_metric(
                 record.production if record else None,
                 Decimal("30"),
