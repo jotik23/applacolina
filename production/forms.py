@@ -728,19 +728,22 @@ class BreedWeeklyMetricsForm(forms.Form):
         for week in range(1, self.weeks + 1):
             for column in self.columns:
                 field_name = self.build_field_name(column.key, week)
+                widget_attrs = {
+                    "class": f"{self.input_classes} text-right text-xs font-semibold",
+                    "step": column.step,
+                    "min": "0",
+                    "placeholder": column.placeholder or column.label,
+                    "inputmode": "decimal",
+                    "data-reference-field": "true",
+                    "data-reference-week": str(week),
+                    "data-reference-metric": column.key,
+                    "data-reference-field-name": field_name,
+                }
                 self.fields[field_name] = forms.DecimalField(
                     required=False,
                     max_digits=column.max_digits,
                     decimal_places=column.decimal_places,
-                    widget=forms.NumberInput(
-                        attrs={
-                            "class": f"{self.input_classes} text-right text-xs font-semibold",
-                            "step": column.step,
-                            "min": "0",
-                            "placeholder": column.placeholder or column.label,
-                            "inputmode": "decimal",
-                        }
-                    ),
+                    widget=forms.NumberInput(attrs=widget_attrs),
                     label=f"{column.label} semana {week}",
                 )
                 if field_name in self.initial_values:

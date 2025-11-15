@@ -1,5 +1,5 @@
 {% extends "calendario/base.html" %}
-{% load humanize %}
+{% load static humanize %}
 
 {% block title %}Tablas de referencia{% endblock %}
 
@@ -100,7 +100,13 @@
 
       <div class="rounded-2xl border border-slate-200/80 bg-white/95 p-6 shadow-sm">
         {% if selected_breed and metrics_form %}
-          <form method="post" class="space-y-4">
+          <form
+            method="post"
+            class="space-y-4"
+            data-reference-table
+            data-reference-breed-name="{{ selected_breed.name }}"
+            data-reference-breed-id="{{ selected_breed.pk }}"
+          >
             {% csrf_token %}
             <input type="hidden" name="action" value="update-metrics" />
             <input type="hidden" name="breed_id" value="{{ selected_breed.pk }}" />
@@ -108,17 +114,36 @@
               <p class="text-sm font-semibold text-rose-600">{{ metrics_form.non_field_errors|join:", " }}</p>
             {% endif %}
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div class="space-y-1">
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Tabla semanal</p>
-                <p class="text-sm text-slate-500">Todos los campos son opcionales. Usa valores objetivo por semana.</p>
+                <p class="text-sm text-slate-500">
+                  Todos los campos son opcionales. Usa valores objetivo por semana o copia los valores desde otra raza.
+                </p>
               </div>
-              <button
-                type="submit"
-                class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-              >
-                Guardar tabla
-              </button>
+              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                  data-reference-copy
+                >
+                  Copiar tabla
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 shadow-sm transition hover:border-amber-400 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+                  data-reference-paste
+                >
+                  Pegar tabla
+                </button>
+                <button
+                  type="submit"
+                  class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                >
+                  Guardar tabla
+                </button>
+              </div>
             </div>
+            <p class="hidden text-xs font-semibold" data-reference-feedback aria-live="polite"></p>
 
             <div class="overflow-x-auto rounded-2xl border border-slate-200">
               <table class="min-w-full text-xs">
@@ -181,4 +206,5 @@
       </div>
     </div>
   </section>
+  <script src="{% static 'production/js/reference_tables.js' %}" defer></script>
 {% endblock %}
