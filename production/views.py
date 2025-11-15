@@ -2073,6 +2073,11 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 "week_navigation": self.week_navigation,
                 "selected_day": self.selected_day,
                 "selected_summary": self.selected_summary,
+                "reference_metrics": self.reference_metrics,
+                "reference_comparisons": self.reference_comparisons,
+                "weekly_mortality_pct": self.weekly_mortality_pct,
+                "weight_comparison": self.weight_comparison,
+                "mortality_comparison": self.mortality_comparison,
                 "selected_room_breakdown": self.room_breakdown_rows,
                 "room_form": form if self.allocations else None,
                 "room_rows": form.room_rows if form else [],
@@ -2126,6 +2131,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
     def _hydrate_state(self) -> None:
         self._init_timeline()
         self.week_dates = [self.week_start + timedelta(days=index) for index in range(7)]
+        self.history_records: List[ProductionRecord] = []
         records_qs = ProductionRecord.objects.filter(
             bird_batch=self.batch,
             date__range=(self.week_start, self.week_end),
@@ -2142,15 +2148,19 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 date__lte=self.week_end,
             ).order_by("date")
         )
+        self.history_records = history_records
         (
             self.current_birds_map,
             self.posture_birds_map,
         ) = self._build_bird_population_maps(history_records, self.week_dates)
         self.week_rows = self._build_week_rows()
         self.room_snapshots = self._build_room_snapshots()
+        self.reference_metrics = self._resolve_reference_metrics()
         self.room_breakdown_rows = self._build_room_breakdown()
         self.form_initial = self._build_form_initial(self.room_snapshots, self.selected_record)
         self.selected_summary = self._build_selected_summary()
+        self.reference_comparisons = self._build_reference_comparisons()
+        self.weekly_mortality_pct = self._compute_weekly_mortality_pct()
         self.week_navigation = self._build_week_navigation()
         self.batch_age_days = max((self.selected_day - self.batch.birth_date).days, 0)
         # Display the current week of life (1-based) instead of completed weeks only.
@@ -2158,6 +2168,8 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         avg_weight, uniformity = self._resolve_weight_snapshot(self.selected_day)
         self.selected_avg_weight = avg_weight
         self.selected_uniformity = uniformity
+        self.weight_comparison = self._build_weight_comparison()
+        self.mortality_comparison = self._build_mortality_comparison()
 
     def _build_batch_navigation(self) -> Dict[str, Optional[Dict[str, str]]]:
         """Compute previous/next active batches to allow quick navigation."""
@@ -2427,29 +2439,72 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         if not self.room_snapshots:
             return []
 
+        metrics_map = {}
+        reference_metrics = getattr(self, "reference_metrics", {})
+        if isinstance(reference_metrics, dict):
+            metrics_map = reference_metrics.get("metrics", {}) or {}
+        posture_pct_ref = self._to_decimal(metrics_map.get("posture_percentage"))
+        decimal_eggs_per_carton = Decimal("30")
+        decimal_percentage = Decimal("100")
+        cartons_quantizer = Decimal("0.1")
+        posture_quantizer = Decimal("0.01")
+
         breakdown: List[Dict[str, Any]] = []
         for snapshot in self.room_snapshots:
             birds = snapshot.current_birds or 0
+            production_eggs = snapshot.production
+            consumption_value = snapshot.consumption
+
+            production_cartons = self._normalize_metric(
+                production_eggs,
+                decimal_eggs_per_carton,
+                1,
+            )
+            consumption_bags = self._normalize_metric(
+                consumption_value,
+                Decimal("40"),
+                2,
+            )
+            hen_day_value = self._hen_day_from_value(production_eggs, birds)
+            feed_per_bird_value = self._feed_per_bird_from_value(consumption_value, birds)
+
+            actual_eggs_decimal = self._to_decimal(production_eggs)
+            actual_cartons_decimal = (
+                actual_eggs_decimal / decimal_eggs_per_carton if actual_eggs_decimal is not None else None
+            )
+            reference_cartons = None
+            if posture_pct_ref is not None and birds > 0:
+                reference_eggs = (Decimal(birds) * posture_pct_ref) / decimal_percentage
+                reference_cartons = reference_eggs / decimal_eggs_per_carton
+            cartons_diff = None
+            if actual_cartons_decimal is not None and reference_cartons is not None:
+                cartons_diff = (actual_cartons_decimal - reference_cartons).quantize(
+                    cartons_quantizer,
+                    rounding=ROUND_HALF_UP,
+                )
+
+            hen_day_decimal = self._to_decimal(hen_day_value)
+            hen_day_diff = None
+            if hen_day_decimal is not None and posture_pct_ref is not None:
+                hen_day_diff = (hen_day_decimal - posture_pct_ref).quantize(
+                    posture_quantizer,
+                    rounding=ROUND_HALF_UP,
+                )
+
             breakdown.append(
                 {
                     "room_name": snapshot.room_name,
                     "chicken_house_name": snapshot.chicken_house_name,
                     "birds": birds,
-                    "production_eggs": snapshot.production,
-                    "production_cartons": self._normalize_metric(
-                        snapshot.production,
-                        Decimal("30"),
-                        1,
-                    ),
-                    "consumption_bags": self._normalize_metric(
-                        snapshot.consumption,
-                        Decimal("40"),
-                        2,
-                    ),
-                    "hen_day": self._hen_day_from_value(snapshot.production, birds),
-                    "feed_per_bird": self._feed_per_bird_from_value(snapshot.consumption, birds),
+                    "production_eggs": production_eggs,
+                    "production_cartons": production_cartons,
+                    "consumption_bags": consumption_bags,
+                    "hen_day": hen_day_value,
+                    "feed_per_bird": feed_per_bird_value,
                     "mortality": snapshot.mortality,
                     "discard": snapshot.discard,
+                    "cartons_diff": cartons_diff,
+                    "hen_day_diff": hen_day_diff,
                 }
             )
         return breakdown
@@ -2508,6 +2563,209 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             "day": day.isoformat(),
         }
         return f"{base_url}?{urlencode(params)}"
+
+    def _resolve_reference_metrics(self) -> Dict[str, Any]:
+        target_week = min(max(self.selected_week_number, 1), BreedWeeklyGuide.WEEK_MAX)
+        guide = (
+            BreedWeeklyGuide.objects.filter(breed=self.batch.breed, week=target_week)
+            .only(
+                "posture_percentage",
+                "egg_weight_g",
+                "grams_per_bird",
+                "weekly_mortality_percentage",
+                "body_weight_g",
+            )
+            .first()
+        )
+        metrics = {
+            "posture_percentage": guide.posture_percentage if guide else None,
+            "egg_weight_g": guide.egg_weight_g if guide else None,
+            "grams_per_bird": guide.grams_per_bird if guide else None,
+            "weekly_mortality_percentage": guide.weekly_mortality_percentage if guide else None,
+            "body_weight_g": guide.body_weight_g if guide else None,
+        }
+        return {
+            "week": target_week,
+            "has_data": guide is not None,
+            "metrics": metrics,
+        }
+
+    def _build_reference_comparisons(self) -> List[Dict[str, str]]:
+        summary = self.selected_summary
+        metrics = self.reference_metrics.get("metrics", {})
+        record: Optional[ProductionRecord] = summary.get("record")
+        posture_population = Decimal(
+            self.posture_birds_map.get(self.selected_day, self._allocated_population()) or 0
+        )
+        birds_population = Decimal(
+            self.current_birds_map.get(self.selected_day, self._allocated_population()) or 0
+        )
+
+        posture_pct_ref = self._to_decimal(metrics.get("posture_percentage"))
+        grams_per_bird_ref = self._to_decimal(metrics.get("grams_per_bird"))
+        egg_weight_ref = self._to_decimal(metrics.get("egg_weight_g"))
+
+        posture_pct_actual = self._to_decimal(summary.get("hen_day"))
+        actual_cartons = self._to_decimal(summary.get("production_cartons"))
+        actual_eggs = self._to_decimal(summary.get("production_eggs"))
+        actual_bags = self._to_decimal(summary.get("consumption_bags"))
+        actual_feed_per_bird = self._to_decimal(summary.get("feed_per_bird"))
+        actual_egg_weight = self._to_decimal(summary.get("egg_weight_per_egg"))
+
+        if actual_eggs is None and record and record.production is not None:
+            actual_eggs = self._to_decimal(record.production)
+        if actual_cartons is None and actual_eggs is not None:
+            actual_cartons = actual_eggs / Decimal("30")
+        if actual_bags is None and record and record.consumption is not None:
+            actual_consumption = self._to_decimal(record.consumption)
+            if actual_consumption is not None:
+                actual_bags = actual_consumption / Decimal("40")
+        if actual_feed_per_bird is None and record and record.consumption is not None:
+            feed_value = self._feed_per_bird(record, int(birds_population))
+            actual_feed_per_bird = self._to_decimal(feed_value)
+        if actual_egg_weight is None and record and record.average_egg_weight is not None:
+            actual_egg_weight = self._to_decimal(record.average_egg_weight)
+
+        reference_eggs = (
+            (posture_population * posture_pct_ref) / Decimal("100")
+            if posture_pct_ref is not None
+            else None
+        )
+        reference_cartons = (
+            reference_eggs / Decimal("30") if reference_eggs is not None else None
+        )
+        reference_consumption_bags = (
+            (grams_per_bird_ref * birds_population) / Decimal("40000")
+            if grams_per_bird_ref is not None
+            else None
+        )
+
+        comparisons = [
+            self._make_comparison("% postura", posture_pct_actual, posture_pct_ref, 1, "%"),
+            self._make_comparison(
+                "Producción total (cartones)",
+                actual_cartons,
+                reference_cartons,
+                1,
+                " crt",
+                use_thousands=True,
+            ),
+            self._make_comparison(
+                "Producción total (huevos)",
+                actual_eggs,
+                reference_eggs,
+                0,
+                " h",
+                use_thousands=True,
+            ),
+            self._make_comparison("Gr/Huevo", actual_egg_weight, egg_weight_ref, 1, " g"),
+            self._make_comparison(
+                "Consumo total (bultos)",
+                actual_bags,
+                reference_consumption_bags,
+                2,
+                " b",
+                use_thousands=True,
+            ),
+            self._make_comparison(
+                "Consumo gr/ave", actual_feed_per_bird, grams_per_bird_ref, 0, " g"
+            ),
+        ]
+        return comparisons
+
+    def _build_weight_comparison(self) -> Dict[str, str]:
+        metrics = self.reference_metrics.get("metrics", {})
+        actual = self._to_decimal(self.selected_avg_weight)
+        reference = self._to_decimal(metrics.get("body_weight_g"))
+        return self._make_comparison("Peso promedio", actual, reference, 1, " g")
+
+    def _build_mortality_comparison(self) -> Dict[str, str]:
+        metrics = self.reference_metrics.get("metrics", {})
+        actual = self._to_decimal(self.weekly_mortality_pct)
+        reference = self._to_decimal(metrics.get("weekly_mortality_percentage"))
+        return self._make_comparison("% Mortalidad semanal", actual, reference, 2, "%")
+
+    def _compute_weekly_mortality_pct(self) -> Optional[float]:
+        weekly_records = [
+            record
+            for record in (self.history_records or [])
+            if self.week_start <= record.date <= self.week_end
+        ]
+        weekly_losses = sum(int(record.mortality or 0) for record in weekly_records)
+        base_population = self._week_start_population()
+        if base_population <= 0:
+            return None
+        try:
+            return float((Decimal(weekly_losses) / Decimal(base_population)) * Decimal("100"))
+        except (ArithmeticError, InvalidOperation):
+            return None
+
+    def _week_start_population(self) -> int:
+        starting_population = self._allocated_population()
+        losses_before_week = 0
+        for record in self.history_records or []:
+            if record.date >= self.week_start:
+                break
+            losses_before_week += int(record.mortality or 0) + int(record.discard or 0)
+        return max(starting_population - losses_before_week, 0)
+
+    def _make_comparison(
+        self,
+        label: str,
+        actual: Optional[Decimal],
+        reference: Optional[Decimal],
+        precision: int,
+        suffix: str,
+        use_thousands: bool = False,
+    ) -> Dict[str, str]:
+        diff: Optional[Decimal] = None
+        if actual is not None and reference is not None:
+            diff = actual - reference
+        return {
+            "label": label,
+            "actual_display": self._format_value(actual, precision, suffix, use_thousands),
+            "reference_display": self._format_value(reference, precision, suffix, use_thousands),
+            "diff_display": (
+                self._format_value(diff, precision, suffix, use_thousands, show_sign=True)
+                if diff is not None
+                else "—"
+            ),
+        }
+
+    @staticmethod
+    def _format_value(
+        value: Optional[Decimal],
+        precision: int,
+        suffix: str,
+        use_thousands: bool = False,
+        show_sign: bool = False,
+    ) -> str:
+        if value is None:
+            return "—"
+        quantizer = Decimal("1").scaleb(-precision) if precision > 0 else Decimal("1")
+        quantized = value.quantize(quantizer, rounding=ROUND_HALF_UP)
+        if precision == 0:
+            fmt_spec = ",.0f" if use_thousands else ".0f"
+        else:
+            fmt_spec = f",.{precision}f" if use_thousands else f".{precision}f"
+        formatted = format(quantized, fmt_spec)
+        if show_sign:
+            if quantized > 0:
+                formatted = f"+{formatted}"
+            elif quantized == 0:
+                formatted = format(quantized, fmt_spec)
+        return f"{formatted}{suffix}"
+
+    @staticmethod
+    def _to_decimal(value: Any) -> Optional[Decimal]:
+        if value in (None, ""):
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
 
     def _build_selected_summary(self) -> Dict[str, Any]:
         record = self.records_map.get(self.selected_day) or self.selected_record

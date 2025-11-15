@@ -7,8 +7,8 @@
   {% include "production/_submenu.html" with active=active_submenu %}
   <section class="space-y-10">
     <header class="rounded-2xl bg-white/80 p-8 shadow-sm ring-1 ring-slate-200/80">
-      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        <div class="space-y-3">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
+        <div class="space-y-3 max-w-3xl">
           <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">
             <span class="size-2 rounded-full bg-emerald-400"></span>
             Tablero de producción diaria
@@ -21,42 +21,51 @@
             {{ batch_age_weeks }} semanas ({{ batch_age_days }} días)
           </p>
         </div>
-        <div class="flex flex-col items-start gap-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:gap-8">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aves vivas</p>
-            <p class="text-2xl font-semibold text-slate-900">
-              {% if live_birds is not None %}
-                {{ live_birds|intcomma }}
-              {% else %}
-                —
-              {% endif %}
-            </p>
+        <div class="flex w-full flex-col gap-3 text-sm text-slate-600 lg:w-auto lg:flex-row lg:items-center lg:gap-4" style="PADDING-LEFT: 100PX;">
+          <div class="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm lg:min-w-[26rem]">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Indicadores activos</p>
+            <dl class="mt-3 grid grid-cols-2 gap-4 text-slate-900 sm:grid-cols-3 lg:grid-cols-4" >
+              <div class="space-y-1">
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aves vivas</dt>
+                <dd class="text-xl font-semibold">
+                  {% if live_birds is not None %}
+                    {{ live_birds|intcomma }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+              <div class="space-y-1">
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Peso promedio</dt>
+                <dd class="text-lg font-semibold text-slate-900">
+                  <span class="text-emerald-700">{{ weight_comparison.actual_display }}</span>
+                  <span class="text-slate-400">/</span>
+                  <span>{{ weight_comparison.reference_display }}</span>
+                  <span class="text-xs font-semibold text-slate-500">({{ weight_comparison.diff_display }})</span>
+                </dd>
+              </div>
+              <div class="space-y-1">
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">% Uniformidad</dt>
+                <dd class="text-xl font-semibold">
+                  {% if selected_uniformity is not None %}
+                    {{ selected_uniformity|floatformat:1 }}%
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+              <div class="space-y-1">
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">% Mortalidad semanal</dt>
+                <dd class="text-lg font-semibold text-slate-900">
+                  <span class="text-emerald-700">{{ mortality_comparison.actual_display }}</span>
+                  <span class="text-slate-400">/</span>
+                  <span>{{ mortality_comparison.reference_display }}</span>
+                  <span class="text-xs font-semibold text-slate-500">({{ mortality_comparison.diff_display }})</span>
+                </dd>
+              </div>
+            </dl>
           </div>
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Salones activos</p>
-            <p class="text-2xl font-semibold text-slate-900">{{ room_rows|length }}</p>
-          </div>
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Peso promedio</p>
-            <p class="text-2xl font-semibold text-slate-900">
-              {% if selected_avg_weight is not None %}
-                {{ selected_avg_weight|floatformat:1 }} g
-              {% else %}
-                —
-              {% endif %}
-            </p>
-          </div>
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">% Uniformidad</p>
-            <p class="text-2xl font-semibold text-slate-900">
-              {% if selected_uniformity is not None %}
-                {{ selected_uniformity|floatformat:1 }}%
-              {% else %}
-                —
-              {% endif %}
-            </p>
-          </div>
-          <div class="flex items-center gap-3 text-base" aria-label="Navegación entre lotes activos">
+          <div class="flex items-center gap-3 text-base self-start lg:self-center" aria-label="Navegación entre lotes activos">
             {% with previous=batch_navigation.previous next=batch_navigation.next %}
               {% if previous %}
                 <a
@@ -132,7 +141,7 @@
                 <th class="px-4 py-3 text-right">Producción (cartones)</th>
                 <th class="px-4 py-3 text-right">Consumo (bultos)</th>
                 <th class="px-4 py-3 text-right">% Postura</th>
-                <th class="px-4 py-3 text-right">Consumo g/ave</th>
+                <th class="px-4 py-3 text-right">Consumo gr/ave</th>
                 <th class="px-4 py-3 text-right">Gr/Huevo</th>
                 <th class="px-4 py-3 text-right">Mortalidad / Descarte</th>
                 <th class="px-4 py-3 text-right">Acciones</th>
@@ -217,9 +226,11 @@
                   <tr>
                     <th class="px-3 py-3">Salón</th>
                     <th class="px-3 py-3 text-right">Cartones (huevos)</th>
-                    <th class="px-3 py-3 text-right">Consumo (bultos)</th>
+                    <th class="px-3 py-3 text-right">Diff. Tabla</th>
                     <th class="px-3 py-3 text-right">% Postura</th>
-                    <th class="px-3 py-3 text-right">Consumo g/ave</th>
+                    <th class="px-3 py-3 text-right">Dif.Tabla</th>
+                    <th class="px-3 py-3 text-right">Consumo (bultos)</th>
+                    <th class="px-3 py-3 text-right">Consumo gr/ave</th>
                     <th class="px-3 py-3 text-right">Mortalidad / Descarte</th>
                   </tr>
                 </thead>
@@ -244,9 +255,15 @@
                           —
                         {% endif %}
                       </td>
-                      <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
-                        {% if room.consumption_bags %}
-                          {{ room.consumption_bags|floatformat:2 }}
+                      <td class="px-3 py-3 text-right text-[13px] font-semibold">
+                        {% if room.cartons_diff is not None %}
+                          {% if room.cartons_diff > 0 %}
+                            <span class="text-emerald-700">+{{ room.cartons_diff|floatformat:1 }} cart.</span>
+                          {% elif room.cartons_diff < 0 %}
+                            <span class="text-rose-600">{{ room.cartons_diff|floatformat:1 }} cart.</span>
+                          {% else %}
+                            <span class="text-slate-500">{{ room.cartons_diff|floatformat:1 }} cart.</span>
+                          {% endif %}
                         {% else %}
                           —
                         {% endif %}
@@ -254,6 +271,26 @@
                       <td class="px-3 py-3 text-right text-[13px] font-semibold text-emerald-700">
                         {% if room.hen_day %}
                           {{ room.hen_day|floatformat:2 }}%
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="px-3 py-3 text-right text-[13px] font-semibold">
+                        {% if room.hen_day_diff is not None %}
+                          {% if room.hen_day_diff > 0 %}
+                            <span class="text-emerald-700">+{{ room.hen_day_diff|floatformat:2 }}%</span>
+                          {% elif room.hen_day_diff < 0 %}
+                            <span class="text-rose-600">{{ room.hen_day_diff|floatformat:2 }}%</span>
+                          {% else %}
+                            <span class="text-slate-500">{{ room.hen_day_diff|floatformat:2 }}%</span>
+                          {% endif %}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                        <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
+                        {% if room.consumption_bags %}
+                          {{ room.consumption_bags|floatformat:2 }}
                         {% else %}
                           —
                         {% endif %}
@@ -281,7 +318,7 @@
                     </tr>
                   {% empty %}
                     <tr>
-                      <td colspan="6" class="px-3 py-4 text-center text-xs text-slate-500">No hay salones con datos registrados para este día.</td>
+                      <td colspan="8" class="px-3 py-4 text-center text-xs text-slate-500">No hay salones con datos registrados para este día.</td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -295,76 +332,23 @@
         <header class="space-y-2 border-b border-slate-200 pb-3">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción diaria</p>
           <h2 class="text-xl font-semibold text-slate-900">{{ selected_day|date:"l d \\d\\e F Y" }}</h2>
-          <p class="text-sm text-slate-500">Revisa métricas y registra ajustes por salón o por galpón.</p>
+          <p class="text-xs text-slate-500"> Formato: Actual / Referencia (Δ)</p>
         </header>
 
-        <dl class="mt-5 grid gap-3 sm:grid-cols-2">
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">% postura</dt>
-            <dd class="mt-1 text-xl font-semibold text-emerald-700">
-              {% if selected_summary.hen_day %}
-                {{ selected_summary.hen_day|floatformat:2 }}%
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (cartones)</dt>
-            <dd class="mt-1 flex flex-col gap-1 text-xl font-semibold text-slate-900 sm:flex-row sm:items-baseline sm:gap-3">
-              {% if selected_summary.production_cartons %}
-                <span>{{ selected_summary.production_cartons|floatformat:1 }} cartones</span>
-              {% elif selected_summary.record %}
-                {{ selected_summary.record.production|floatformat:0|intcomma }} huevos
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción total (huevos)</dt>
-            <dd class="mt-1 text-xl font-semibold text-slate-900">
-                {% if selected_summary.production_eggs %}
-                    {{ selected_summary.production_eggs|intcomma }} huevos
-                {% else %}
-                —
-                {% endif %}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gr/Huevo</dt>
-            <dd class="mt-1 text-xl font-semibold text-slate-900">
-              {% if selected_summary.egg_weight_per_egg %}
-                {{ selected_summary.egg_weight_per_egg|floatformat:2 }} gr
-              {% elif selected_summary.record and selected_summary.record.average_egg_weight %}
-                {{ selected_summary.record.average_egg_weight|floatformat:0 }} g
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo total (bultos)</dt>
-            <dd class="mt-1 text-xl font-semibold text-slate-900">
-              {% if selected_summary.consumption_bags %}
-                {{ selected_summary.consumption_bags|floatformat:2 }} bultos
-              {% elif selected_summary.record %}
-                {{ selected_summary.record.consumption|floatformat:0|intcomma }} kg
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Consumo Gr/ave</dt>
-            <dd class="mt-1 text-xl font-semibold text-slate-900">
-              {% if selected_summary.feed_per_bird %}
-                {{ selected_summary.feed_per_bird|floatformat:1 }} g
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
+        <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+          {% for comparison in reference_comparisons %}
+            <div class="rounded-xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ comparison.label }}</dt>
+              <dd class="mt-1 text-lg font-semibold text-slate-900">
+                <span class="text-emerald-700">{{ comparison.actual_display }}</span>
+                <span class="text-slate-400">/</span>
+                <span>{{ comparison.reference_display }}</span>
+                <span class="text-xs font-semibold text-slate-500">
+                  ({{ comparison.diff_display }})
+                </span>
+              </dd>
+            </div>
+          {% endfor %}
         </dl>
 
         {% if room_form %}
