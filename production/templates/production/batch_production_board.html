@@ -226,9 +226,9 @@
                 <tbody class="divide-y divide-slate-100">
                   {% for room in selected_room_breakdown %}
                     <tr class="bg-white/80">
-                      <td class="px-3 py-3 text-sm font-semibold text-slate-900">
+                      <td class="py-3 text-sm font-semibold text-slate-900">
                         <div>{{ room.room_name }}</div>
-                        <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">{{ room.chicken_house_name }}</p>
+                        <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">{{ room.birds|intcomma }} aves</p>
                       </td>
                       <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
                         {% if room.production_cartons %}

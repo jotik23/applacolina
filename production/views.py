@@ -2288,6 +2288,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 {
                     "room_name": snapshot.room_name,
                     "chicken_house_name": snapshot.chicken_house_name,
+                    "birds": birds,
                     "production_cartons": self._normalize_metric(
                         snapshot.production,
                         Decimal("30"),
