@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
@@ -398,6 +399,136 @@ class ProductionRoomRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.production_record.date:%Y-%m-%d} · {self.room}"
+
+
+class EggType(models.TextChoices):
+    JUMBO = "jumbo", "Jumbo"
+    TRIPLE_A = "aaa", "AAA"
+    DOUBLE_A = "aa", "AA"
+    SINGLE_A = "a", "A"
+    B = "b", "B"
+    C = "c", "C"
+    D = "d", "D"
+
+
+class EggClassificationBatch(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        CONFIRMED = "confirmed", "Recibido"
+        CLASSIFIED = "classified", "Clasificado"
+
+    production_record = models.OneToOneField(
+        ProductionRecord,
+        on_delete=models.CASCADE,
+        related_name="egg_classification",
+        verbose_name="Registro de producción",
+    )
+    bird_batch = models.ForeignKey(
+        BirdBatch,
+        on_delete=models.CASCADE,
+        related_name="egg_classifications",
+        verbose_name="Lote",
+    )
+    reported_cartons = models.DecimalField(
+        "Cartones reportados",
+        max_digits=10,
+        decimal_places=2,
+    )
+    received_cartons = models.DecimalField(
+        "Cartones recibidos",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    notes = models.TextField("Notas para conciliación", blank=True)
+    status = models.CharField(
+        "Estado",
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    confirmed_at = models.DateTimeField("Confirmado en", null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_batches_confirmed",
+        verbose_name="Confirmado por",
+        null=True,
+        blank=True,
+    )
+    classified_at = models.DateTimeField("Clasificado en", null=True, blank=True)
+    classified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_batches_classified",
+        verbose_name="Clasificado por",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Lote de clasificación de huevo"
+        verbose_name_plural = "Lotes de clasificación de huevo"
+        ordering = ("-production_record__date", "-created_at")
+
+    def __str__(self) -> str:
+        return f"{self.production_record.date:%Y-%m-%d} · {self.bird_batch}"
+
+    @property
+    def farm(self) -> Farm:
+        return self.bird_batch.farm
+
+    @property
+    def production_date(self) -> date:
+        return self.production_record.date
+
+    @property
+    def received_difference(self) -> Decimal:
+        if self.received_cartons is None:
+            return Decimal("0")
+        return Decimal(self.received_cartons) - Decimal(self.reported_cartons)
+
+    @property
+    def classified_total(self) -> Decimal:
+        cached = getattr(self, "_classified_total_cache", None)
+        if cached is not None:
+            return cached
+        aggregates = self.classification_entries.aggregate(total=Sum("cartons"))
+        total = aggregates.get("total") or Decimal("0")
+        self._classified_total_cache = total
+        return total
+
+    @property
+    def pending_cartons(self) -> Decimal:
+        if self.received_cartons is None:
+            return Decimal(self.reported_cartons)
+        return Decimal(self.received_cartons) - self.classified_total
+
+
+class EggClassificationEntry(models.Model):
+    batch = models.ForeignKey(
+        EggClassificationBatch,
+        on_delete=models.CASCADE,
+        related_name="classification_entries",
+        verbose_name="Lote de clasificación",
+    )
+    egg_type = models.CharField("Tipo de huevo", max_length=8, choices=EggType.choices)
+    cartons = models.DecimalField("Cartones", max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Resultado de clasificación"
+        verbose_name_plural = "Resultados de clasificación"
+        unique_together = ("batch", "egg_type")
+        ordering = ("batch", "egg_type")
+
+    def __str__(self) -> str:
+        egg_label = self.get_egg_type_display()
+        return f"{self.batch} · {egg_label} ({self.cartons})"
 
 
 class WeightSampleSession(models.Model):

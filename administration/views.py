@@ -5,8 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Iterable, Mapping
 import re
 import calendar
-import csv
-from io import StringIO
+from io import BytesIO
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -22,6 +21,7 @@ from django.utils.dateparse import parse_date
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.views import generic
+from openpyxl import Workbook
 
 from applacolina.mixins import StaffRequiredMixin
 from production.models import BirdBatch, ChickenHouse, Farm
@@ -2269,8 +2269,8 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
                 return None
             label = entries[0].job_type_label
             slug = slugify(job_type_value or label or 'sin-tipo') or 'sin-tipo'
-            filename = f"nomina_puesto_{slug}_{summary.period.start_date:%Y%m%d}.csv"
-            return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Tipo {label}")
+            filename = f"nomina_puesto_{slug}_{summary.period.start_date:%Y%m%d}.xlsx"
+            return self._export_entries_to_xlsx(summary=summary, entries=entries, filename=filename, title=f"Tipo {label}")
 
         if action.startswith('export-farm-'):
             identifier = action.removeprefix('export-farm-')
@@ -2286,8 +2286,8 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
                 return None
             label = entries[0].farm_label or 'Otros'
             slug = slugify(label) or 'otros'
-            filename = f"nomina_granja_{slug}_{summary.period.start_date:%Y%m%d}.csv"
-            return self._export_entries_to_csv(
+            filename = f"nomina_granja_{slug}_{summary.period.start_date:%Y%m%d}.xlsx"
+            return self._export_entries_to_xlsx(
                 summary=summary,
                 entries=entries,
                 filename=filename,
@@ -2303,12 +2303,22 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
             if not entries:
                 return None
             collaborator = entries[0].operator.get_full_name()
-            filename = f"nomina_colaborador_{operator_id}_{summary.period.start_date:%Y%m%d}.csv"
-            return self._export_entries_to_csv(summary=summary, entries=entries, filename=filename, title=f"Colaborador {collaborator}", include_total=False)
+            filename = f"nomina_colaborador_{operator_id}_{summary.period.start_date:%Y%m%d}.xlsx"
+            return self._export_entries_to_xlsx(summary=summary, entries=entries, filename=filename, title=f"Colaborador {collaborator}", include_total=False)
 
         return None
 
-    def _export_entries_to_csv(
+    @staticmethod
+    def _normalize_export_value(value):
+        if value is None:
+            return ''
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, (int, float, bool)):
+            return value
+        return str(value)
+
+    def _export_entries_to_xlsx(
         self,
         *,
         summary,
@@ -2319,12 +2329,13 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
     ) -> HttpResponse:
         if not entries:
             return None
-        buffer = StringIO()
-        writer = csv.writer(buffer)
-        writer.writerow(['Periodo', summary.period.label])
-        writer.writerow(['Detalle', title])
-        writer.writerow([])
-        writer.writerow([
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Detalle"
+        sheet.append([self._normalize_export_value(value) for value in ('Periodo', summary.period.label)])
+        sheet.append([self._normalize_export_value(value) for value in ('Detalle', title)])
+        sheet.append([])
+        sheet.append([
             'Colaborador',
             'Tipo de puesto',
             'Granja',
@@ -2341,33 +2352,34 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
             'Justificación',
         ])
         for entry in entries:
-            writer.writerow([
-                entry.operator.get_full_name(),
-                entry.job_type_label,
-                entry.farm_label,
-                entry.payment_type_label,
-                entry.worked_days,
-                entry.rest_days,
-                entry.extra_rest_count,
-                entry.bonified_extra_count,
-                entry.non_worked_count,
-                entry.bonified_non_worked_count,
-                f"{entry.base_amount:.2f}",
-                f"{entry.deduction_amount:.2f}",
-                f"{entry.final_amount:.2f}",
-                entry.override_note,
+            sheet.append([
+                self._normalize_export_value(entry.operator.get_full_name()),
+                self._normalize_export_value(entry.job_type_label),
+                self._normalize_export_value(entry.farm_label),
+                self._normalize_export_value(entry.payment_type_label),
+                self._normalize_export_value(entry.worked_days),
+                self._normalize_export_value(entry.rest_days),
+                self._normalize_export_value(entry.extra_rest_count),
+                self._normalize_export_value(entry.bonified_extra_count),
+                self._normalize_export_value(entry.non_worked_count),
+                self._normalize_export_value(entry.bonified_non_worked_count),
+                self._normalize_export_value(entry.base_amount),
+                self._normalize_export_value(entry.deduction_amount),
+                self._normalize_export_value(entry.final_amount),
+                self._normalize_export_value(entry.override_note),
             ])
         if include_total:
             total_amount = sum((entry.final_amount for entry in entries), Decimal('0.00'))
-            writer.writerow([])
-            writer.writerow([
-                'TOTAL',
-                '', '', '', '', '', '', '', '', '', '', '',
-                f"{total_amount:.2f}",
-                '',
-            ])
+            sheet.append([])
+            sheet.append(['TOTAL', *([''] * 11), self._normalize_export_value(total_amount), ''])
 
-        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 

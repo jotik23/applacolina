@@ -9,6 +9,7 @@ from .views import (
     chicken_house_delete_view,
     chicken_house_update_view,
     daily_indicators_view,
+    egg_inventory_dashboard_view,
     farm_delete_view,
     farm_update_view,
     infrastructure_home_view,
@@ -24,6 +25,7 @@ urlpatterns = [
     path("indicadores-dia/", daily_indicators_view, name="daily-indicators"),
     path("lotes/", batch_management_view, name="batches"),
     path("lotes/<int:pk>/produccion/", batch_production_board_view, name="batch-production-board"),
+    path("inventario-huevo/", egg_inventory_dashboard_view, name="egg-inventory"),
     path("lotes/<int:pk>/editar/", bird_batch_update_view, name="batch-update"),
     path("lotes/<int:pk>/eliminar/", bird_batch_delete_view, name="batch-delete"),
     path(

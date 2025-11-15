@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 from django import forms
 from django.db import transaction
@@ -14,9 +14,18 @@ from production.models import (
     BreedReference,
     BreedWeeklyGuide,
     ChickenHouse,
+    EggClassificationBatch,
+    EggType,
     Farm,
     Room,
 )
+from production.services.egg_classification import (
+    confirm_batch_receipt,
+    record_classification_results,
+)
+
+if TYPE_CHECKING:
+    from personal.models import UserProfile
 from production.services.daily_board import RoomEntry
 
 
@@ -734,3 +743,135 @@ class BreedWeeklyMetricsForm(forms.Form):
             }
             week_rows.append((week, row))
         return week_rows
+
+
+class EggBatchReceiptForm(forms.ModelForm):
+    input_classes = BaseInfrastructureForm.input_classes
+
+    class Meta:
+        model = EggClassificationBatch
+        fields = ["received_cartons", "notes"]
+        labels = {
+            "received_cartons": "Cartones recibidos en clasificación",
+            "notes": "Notas para conciliación",
+        }
+        widgets = {
+            "received_cartons": forms.NumberInput(
+                attrs={
+                    "step": "0.01",
+                    "min": "0",
+                    "inputmode": "decimal",
+                    "class": f"{BaseInfrastructureForm.input_classes} text-right font-semibold",
+                    "placeholder": "0",
+                }
+            ),
+            "notes": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": f"{BaseInfrastructureForm.input_classes} text-sm",
+                    "placeholder": "Detalle diferencias o incidencias detectadas",
+                }
+            ),
+        }
+
+    def __init__(self, *args: Any, batch: EggClassificationBatch, **kwargs: Any) -> None:
+        self.batch = batch
+        kwargs.setdefault("instance", batch)
+        super().__init__(*args, **kwargs)
+        self.fields["received_cartons"].required = True
+        self.fields["notes"].required = False
+
+    def clean_received_cartons(self) -> Decimal:
+        value = self.cleaned_data["received_cartons"]
+        if value is None or value <= 0:
+            raise forms.ValidationError("La cantidad recibida debe ser mayor que cero.")
+        return Decimal(value)
+
+    def save(self, actor: Optional["UserProfile"] = None) -> EggClassificationBatch:
+        if not self.is_valid():
+            raise ValueError("El formulario de confirmación no es válido.")
+        notes = self.cleaned_data.get("notes") or ""
+        return confirm_batch_receipt(
+            batch=self.batch,
+            received_cartons=self.cleaned_data["received_cartons"],
+            notes=notes,
+            actor_id=getattr(actor, "id", None),
+        )
+
+
+class EggBatchClassificationForm(forms.Form):
+    input_classes = BaseInfrastructureForm.input_classes
+
+    def __init__(
+        self,
+        *args: Any,
+        batch: EggClassificationBatch,
+        **kwargs: Any,
+    ) -> None:
+        self.batch = batch
+        self.cleaned_entries: dict[str, Decimal] = {}
+        super().__init__(*args, **kwargs)
+        existing_entries = {
+            entry.egg_type: entry.cartons for entry in batch.classification_entries.all()
+        }
+        for egg_type, label in EggType.choices:
+            field_name = self._field_name(egg_type)
+            self.fields[field_name] = forms.DecimalField(
+                required=False,
+                min_value=Decimal("0"),
+                decimal_places=2,
+                max_digits=10,
+                label=label,
+                widget=forms.NumberInput(
+                    attrs={
+                        "class": f"{self.input_classes} text-right font-semibold",
+                        "step": "0.01",
+                        "min": "0",
+                        "inputmode": "decimal",
+                        "placeholder": "0",
+                    }
+                ),
+            )
+            if egg_type in existing_entries:
+                self.fields[field_name].initial = existing_entries[egg_type]
+
+    def _field_name(self, egg_type: str) -> str:
+        return f"type_{egg_type}"
+
+    def clean(self) -> Dict[str, Any]:
+        cleaned = super().clean()
+        if self.batch.received_cartons is None:
+            raise forms.ValidationError("Confirma primero la cantidad recibida antes de clasificar.")
+
+        totals = Decimal("0")
+        entries: dict[str, Decimal] = {}
+        for egg_type, _label in EggType.choices:
+            value = cleaned.get(self._field_name(egg_type))
+            if value in (None, ""):
+                continue
+            decimal_value = Decimal(value).quantize(Decimal("0.01"))
+            if decimal_value <= 0:
+                continue
+            entries[egg_type] = decimal_value
+            totals += decimal_value
+
+        if not entries:
+            raise forms.ValidationError("Registra al menos un tipo de huevo.")
+
+        received = Decimal(self.batch.received_cartons).quantize(Decimal("0.01"))
+        if totals != received:
+            raise forms.ValidationError(
+                f"La suma clasificada ({totals}) debe coincidir con los cartones confirmados ({received})."
+            )
+
+        self.cleaned_entries = entries
+        return cleaned
+
+    def save(self, actor: Optional["UserProfile"] = None) -> EggClassificationBatch:
+        if not self.is_valid():
+            raise ValueError("El formulario de clasificación no es válido.")
+        return record_classification_results(
+            batch=self.batch,
+            entries=self.cleaned_entries,
+            actor_id=getattr(actor, "id", None),
+        )

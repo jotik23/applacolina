@@ -6,3 +6,6 @@ class ProductionConfig(AppConfig):
     name = "production"
     label = "production"
     verbose_name = "Produccion"
+
+    def ready(self) -> None:
+        from . import signals  # noqa: F401
