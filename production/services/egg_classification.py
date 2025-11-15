@@ -208,16 +208,28 @@ def summarize_classified_inventory() -> list[InventoryRow]:
         )
         .order_by("egg_type")
     )
+    aggregate_map = {aggregate["egg_type"]: aggregate for aggregate in aggregates}
+
+    ordered_types = [
+        EggType.JUMBO,
+        EggType.TRIPLE_A,
+        EggType.DOUBLE_A,
+        EggType.SINGLE_A,
+        EggType.B,
+        EggType.C,
+        EggType.D,
+    ]
+    label_map = dict(EggType.choices)
+
     rows: list[InventoryRow] = []
-    for aggregate in aggregates:
-        egg_type = aggregate["egg_type"]
-        label = dict(EggType.choices).get(egg_type, egg_type)
-        total = aggregate["total"] or Decimal("0")
-        classified_at = aggregate["last_classified"]
+    for egg_type in ordered_types:
+        aggregate = aggregate_map.get(egg_type)
+        total = Decimal(aggregate["total"] or 0) if aggregate else Decimal("0")
+        classified_at = aggregate["last_classified"] if aggregate else None
         rows.append(
             InventoryRow(
                 egg_type=egg_type,
-                label=label,
+                label=label_map.get(egg_type, egg_type),
                 cartons=total,
                 last_classified_at=classified_at.date() if classified_at else None,
             )

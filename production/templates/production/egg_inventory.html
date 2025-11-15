@@ -37,6 +37,19 @@
       </dl>
     </header>
 
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <p class="text-sm text-slate-500">
+        Monitorea los pendientes o abre el cardex diario solo cuando lo necesites.
+      </p>
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+        data-action="show-cardex"
+      >
+        Ver cardex diario
+      </button>
+    </div>
+
     <div class="grid gap-6 lg:grid-cols-12">
       <section class="space-y-6 lg:col-span-5">
         <article class="rounded-2xl border border-slate-200/70 bg-white/95 shadow-sm">
@@ -49,50 +62,81 @@
               {{ pending_batches|length }} activos
             </span>
           </header>
-          {% if pending_batches %}
-            <ul class="divide-y divide-slate-100">
-              {% for batch in pending_batches %}
-                <li>
-                  <a
-                    href="{% url 'production:egg-inventory-batch' batch.id %}"
-                    class="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-emerald-50/40"
-                  >
+          {% if pending_groups %}
+            <div class="space-y-3">
+              {% for day in pending_groups %}
+                <details class="rounded-2xl border border-slate-100/80 bg-slate-50/40 p-0" {% if forloop.first %}open{% endif %}>
+                  <summary class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
                     <div>
-                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {{ batch.production_date|date:"d M" }} · {{ batch.farm_name }}
+                      <p class="text-sm font-semibold text-slate-900">
+                        {{ day.date|date:"l d \\d\\e F" }}
                       </p>
-                      <p class="text-base font-semibold text-slate-900">{{ batch.lot_label }}</p>
-                      <div class="mt-1 flex flex-wrap gap-3 text-[13px] text-slate-600">
-                        <span>Reportado: <strong>{{ batch.reported_cartons|floatformat:1 }}</strong></span>
-                        <span>
-                          Recibido:
-                          <strong>
-                            {% if batch.received_cartons is not None %}
-                              {{ batch.received_cartons|floatformat:1 }}
-                            {% else %}
-                              —
-                            {% endif %}
-                          </strong>
-                        </span>
-                        <span>Pendiente: <strong>{{ batch.pending_cartons|floatformat:1 }}</strong></span>
-                      </div>
+                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {{ day.farms|length }} granja{{ day.farms|length|pluralize }}
+                      </p>
                     </div>
                     <div class="text-right">
-                      <span
-                        class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold {% if batch.status == 'classified' %}border-slate-200 bg-slate-50 text-slate-600{% elif batch.status == 'confirmed' %}border-sky-200 bg-sky-50 text-sky-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}"
-                      >
-                        {{ batch.status_label }}
-                      </span>
-                      {% if batch.difference %}
-                        <p class="mt-2 text-[13px] font-semibold {% if batch.difference > 0 %}text-amber-600{% else %}text-rose-600{% endif %}">
-                          Diferencia: {{ batch.difference|floatformat:1 }}
-                        </p>
-                      {% endif %}
+                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendiente</p>
+                      <p class="text-lg font-semibold text-amber-700">{{ day.total_pending|floatformat:1 }} cart</p>
                     </div>
-                  </a>
-                </li>
+                  </summary>
+                  <div class="space-y-3 border-t border-slate-100 px-4 py-4">
+                    {% for farm in day.farms %}
+                      <div class="rounded-xl border border-slate-200 bg-white/90">
+                        <header class="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+                          <p class="text-sm font-semibold text-slate-900">{{ farm.farm_name }}</p>
+                          <span class="text-xs font-semibold text-slate-500">
+                            {{ farm.batches|length }} lote{{ farm.batches|length|pluralize }}
+                          </span>
+                        </header>
+                        <ul class="divide-y divide-slate-100">
+                          {% for batch in farm.batches %}
+                            <li>
+                              <a
+                                href="{% url 'production:egg-inventory-batch' batch.id %}"
+                                class="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-emerald-50/40"
+                              >
+                                <div>
+                                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    {{ batch.lot_label }}
+                                  </p>
+                                  <div class="mt-1 flex flex-wrap gap-3 text-[13px] text-slate-600">
+                                    <span>Reportado: <strong>{{ batch.reported_cartons|floatformat:1 }}</strong></span>
+                                    <span>
+                                      Recibido:
+                                      <strong>
+                                        {% if batch.received_cartons is not None %}
+                                          {{ batch.received_cartons|floatformat:1 }}
+                                        {% else %}
+                                          —
+                                        {% endif %}
+                                      </strong>
+                                    </span>
+                                    <span>Pendiente: <strong>{{ batch.pending_cartons|floatformat:1 }}</strong></span>
+                                  </div>
+                                </div>
+                                <div class="text-right">
+                                  <span
+                                    class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold {% if batch.status == 'classified' %}border-slate-200 bg-slate-50 text-slate-600{% elif batch.status == 'confirmed' %}border-sky-200 bg-sky-50 text-sky-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}"
+                                  >
+                                    {{ batch.status_label }}
+                                  </span>
+                                  {% if batch.difference %}
+                                    <p class="mt-2 text-[13px] font-semibold {% if batch.difference > 0 %}text-amber-600{% else %}text-rose-600{% endif %}">
+                                      Diferencia: {{ batch.difference|floatformat:1 }}
+                                    </p>
+                                  {% endif %}
+                                </div>
+                              </a>
+                            </li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </details>
               {% endfor %}
-            </ul>
+            </div>
           {% else %}
             <p class="px-5 py-8 text-center text-sm text-slate-500">Todos los lotes están conciliados.</p>
           {% endif %}
@@ -106,12 +150,18 @@
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario clasificado</p>
               <h2 class="text-lg font-semibold text-slate-900">Por tipo de huevo</h2>
             </div>
-            <div class="text-right text-xs text-slate-500">
-              <p class="font-semibold uppercase tracking-wide">Total disponible</p>
-              <p class="text-lg font-semibold text-slate-900">{{ inventory_total|floatformat:1 }} cart</p>
+            <div class="flex flex-wrap gap-4 text-right text-xs text-slate-500">
+              <div>
+                <p class="font-semibold uppercase tracking-wide text-emerald-700">Venta</p>
+                <p class="text-lg font-semibold text-slate-900">{{ inventory_sellable_total|floatformat:1 }} cart</p>
+              </div>
+              <div>
+                <p class="font-semibold uppercase tracking-wide text-rose-600">Descarte (D)</p>
+                <p class="text-lg font-semibold text-rose-700">{{ inventory_discard_total|floatformat:1 }} cart</p>
+              </div>
             </div>
           </header>
-          {% if inventory_rows %}
+          {% if inventory_sellable_rows or inventory_discard_rows %}
             <div class="overflow-x-auto">
               <table class="w-full border-collapse text-sm text-slate-700">
                 <thead>
@@ -122,21 +172,46 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for row in inventory_rows %}
-                    <tr class="border-t border-slate-100">
-                      <td class="px-4 py-3 font-semibold text-slate-900">{{ row.label }}</td>
-                      <td class="px-3 py-3 text-right font-semibold text-slate-800">
-                        {{ row.cartons|floatformat:1 }}
-                      </td>
-                      <td class="px-3 py-3 text-right text-sm text-slate-500">
-                        {% if row.last_classified_at %}
-                          {{ row.last_classified_at|date:"d M" }}
-                        {% else %}
-                          —
-                        {% endif %}
-                      </td>
+                  {% if inventory_sellable_rows %}
+                    <tr class="bg-emerald-50/70 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                      <td colspan="3" class="px-4 py-2">Huevos aptos para la venta</td>
                     </tr>
-                  {% endfor %}
+                    {% for row in inventory_sellable_rows %}
+                      <tr class="border-t border-slate-100">
+                        <td class="px-4 py-3 font-semibold text-slate-900">{{ row.label }}</td>
+                        <td class="px-3 py-3 text-right font-semibold text-slate-800">
+                          {{ row.cartons|floatformat:1 }}
+                        </td>
+                        <td class="px-3 py-3 text-right text-sm text-slate-500">
+                          {% if row.last_classified_at %}
+                            {{ row.last_classified_at|date:"d M" }}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% endif %}
+                  {% if inventory_discard_rows %}
+                    <tr class="bg-rose-50/80 text-[11px] font-semibold uppercase tracking-wide text-rose-700">
+                      <td colspan="3" class="px-4 py-2">No aptos / Descarte</td>
+                    </tr>
+                    {% for row in inventory_discard_rows %}
+                      <tr class="border-t border-rose-100 bg-rose-50/40">
+                        <td class="px-4 py-3 font-semibold text-rose-800">{{ row.label }}</td>
+                        <td class="px-3 py-3 text-right font-semibold text-rose-700">
+                          {{ row.cartons|floatformat:1 }}
+                        </td>
+                        <td class="px-3 py-3 text-right text-sm text-rose-600">
+                          {% if row.last_classified_at %}
+                            {{ row.last_classified_at|date:"d M" }}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% endif %}
                 </tbody>
               </table>
             </div>
@@ -147,7 +222,7 @@
       </section>
     </div>
 
-    <section class="rounded-2xl border border-slate-200/70 bg-white/95 shadow-sm">
+    <section id="cardex-section" class="hidden rounded-2xl border border-slate-200/70 bg-white/95 shadow-sm">
       <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cardex diario</p>
@@ -276,4 +351,18 @@
       {% endif %}
     </section>
   </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const trigger = document.querySelector("[data-action='show-cardex']");
+      const cardex = document.getElementById("cardex-section");
+      if (!trigger || !cardex) {
+        return;
+      }
+      trigger.addEventListener("click", () => {
+        cardex.classList.remove("hidden");
+        cardex.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  </script>
 {% endblock %}

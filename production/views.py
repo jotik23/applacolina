@@ -36,6 +36,7 @@ from production.models import (
     BreedWeeklyGuide,
     ChickenHouse,
     EggClassificationBatch,
+    EggType,
     Farm,
     ProductionRecord,
     ProductionRoomRecord,
@@ -1006,8 +1007,21 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pending_batches = build_pending_batches(limit=120)
+        pending_groups = self._group_pending_batches(pending_batches)
         inventory_rows: list[InventoryRow] = summarize_classified_inventory()
         inventory_total = sum((row.cartons for row in inventory_rows), Decimal("0"))
+        sellable_types = {
+            EggType.JUMBO,
+            EggType.TRIPLE_A,
+            EggType.DOUBLE_A,
+            EggType.SINGLE_A,
+            EggType.B,
+            EggType.C,
+        }
+        inventory_sellable_rows = [row for row in inventory_rows if row.egg_type in sellable_types]
+        inventory_discard_rows = [row for row in inventory_rows if row.egg_type not in sellable_types]
+        sellable_total = sum((row.cartons for row in inventory_sellable_rows), Decimal("0"))
+        discard_total = sum((row.cartons for row in inventory_discard_rows), Decimal("0"))
         unclassified_total = compute_unclassified_total()
         flows: list[InventoryFlow] = build_inventory_flow(days=10)
 
@@ -1015,13 +1029,53 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
             {
                 "active_submenu": "egg_inventory",
                 "pending_batches": pending_batches,
+                "pending_groups": pending_groups,
                 "inventory_rows": inventory_rows,
+                "inventory_sellable_rows": inventory_sellable_rows,
+                "inventory_discard_rows": inventory_discard_rows,
                 "inventory_total": inventory_total,
+                "inventory_sellable_total": sellable_total,
+                "inventory_discard_total": discard_total,
                 "unclassified_total": unclassified_total,
                 "inventory_flow": flows,
             }
         )
         return context
+
+    def _group_pending_batches(self, batches: list[PendingBatch]) -> list[dict[str, Any]]:
+        grouped: list[dict[str, Any]] = []
+        day_map: dict[date, dict[str, Any]] = {}
+        for batch in batches:
+            day_group = day_map.get(batch.production_date)
+            if not day_group:
+                day_group = {
+                    "date": batch.production_date,
+                    "farms": [],
+                    "_farm_map": {},
+                    "total_pending": Decimal("0"),
+                }
+                day_map[batch.production_date] = day_group
+                grouped.append(day_group)
+
+            farm_map = day_group["_farm_map"]
+            farm_group = farm_map.get(batch.farm_name)
+            if not farm_group:
+                farm_group = {"farm_name": batch.farm_name, "batches": []}
+                farm_map[batch.farm_name] = farm_group
+                day_group["farms"].append(farm_group)
+
+            farm_group["batches"].append(batch)
+            day_group["total_pending"] += Decimal(batch.pending_cartons)
+
+        grouped.sort(key=lambda item: item["date"])
+        for day_group in grouped:
+            day_group.pop("_farm_map", None)
+            day_group["farms"].sort(key=lambda farm: farm["farm_name"])
+            for farm_group in day_group["farms"]:
+                farm_group["batches"].sort(
+                    key=lambda batch: (batch.production_date, batch.farm_name, batch.lot_label)
+                )
+        return grouped
 
 
 class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
