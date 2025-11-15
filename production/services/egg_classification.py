@@ -241,9 +241,28 @@ def build_inventory_flow(days: int = 7) -> list[InventoryFlow]:
     if days <= 0:
         return []
 
-    today = timezone.localdate()
-    start_date = today - timedelta(days=days - 1)
+    end_date = timezone.localdate()
+    start_date = end_date - timedelta(days=days - 1)
+    return build_inventory_flow_range(start_date=start_date, end_date=end_date)
 
+
+def build_inventory_flow_range(
+    *,
+    start_date: date,
+    end_date: date,
+    farm_id: Optional[int] = None,
+) -> list[InventoryFlow]:
+    if start_date > end_date:
+        return []
+    return _build_inventory_flow(start_date=start_date, end_date=end_date, farm_id=farm_id)
+
+
+def _build_inventory_flow(
+    *,
+    start_date: date,
+    end_date: date,
+    farm_id: Optional[int],
+) -> list[InventoryFlow]:
     def _display_name(user) -> Optional[str]:
         if not user:
             return None
@@ -258,9 +277,15 @@ def build_inventory_flow(days: int = 7) -> list[InventoryFlow]:
         username = getattr(user, "username", None)
         return username or str(user)
 
+    batches_qs = EggClassificationBatch.objects.filter(
+        production_record__date__gte=start_date,
+        production_record__date__lte=end_date,
+    )
+    if farm_id:
+        batches_qs = batches_qs.filter(bird_batch__farm_id=farm_id)
+
     batches = (
-        EggClassificationBatch.objects.filter(production_record__date__gte=start_date)
-        .select_related(
+        batches_qs.select_related(
             "bird_batch",
             "bird_batch__farm",
             "production_record",
@@ -299,8 +324,9 @@ def build_inventory_flow(days: int = 7) -> list[InventoryFlow]:
         )
         records_by_day[batch.production_date].append(record)
 
+    total_days = (end_date - start_date).days + 1
     flows: list[InventoryFlow] = []
-    for step in range(days):
+    for step in range(total_days):
         day = start_date + timedelta(days=step)
         day_records = sorted(
             records_by_day.get(day, []),

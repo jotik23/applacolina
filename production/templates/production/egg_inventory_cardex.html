@@ -1,0 +1,208 @@
+{% extends "calendario/base.html" %}
+{% load humanize form_extras %}
+
+{% block title %}Cardex diario{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+
+  <div class="space-y-6">
+    <header class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Inventario operativo</p>
+        <h1 class="text-2xl font-semibold text-slate-900">Cardex diario</h1>
+        <p class="text-sm text-slate-500">
+          Explora los movimientos diarios ordenados del más reciente al más antiguo, filtra por granja y revisa el detalle por tipo de huevo.
+        </p>
+      </div>
+      <a
+        href="{% url 'production:egg-inventory' %}"
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+      >
+        ← Regresar al inventario
+      </a>
+    </header>
+
+    <section class="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <a
+            class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+            href="?month={{ prev_month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}"
+          >
+            ← Anterior
+          </a>
+          <p class="text-base font-semibold text-slate-900">
+            {{ month_start|date:"F Y" }}
+          </p>
+          {% if can_go_next %}
+            <a
+              class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+              href="?month={{ next_month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}"
+            >
+              Siguiente →
+            </a>
+          {% else %}
+            <span class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-400">
+              Siguiente →
+            </span>
+          {% endif %}
+        </div>
+        <form method="get" class="flex flex-wrap items-center gap-3">
+          <input type="hidden" name="month" value="{{ month_slug }}">
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Granja
+            <select
+              name="farm"
+              class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            >
+              <option value="">Todas las granjas</option>
+              {% for farm in farm_options %}
+                <option value="{{ farm.id }}" {% if farm.id == selected_farm_id %}selected{% endif %}>
+                  {{ farm.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <button
+            type="submit"
+            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500"
+          >
+            Aplicar
+          </button>
+          {% if selected_farm_id %}
+            <a
+              href="?month={{ month_slug }}"
+              class="text-sm font-semibold text-slate-500 hover:text-emerald-600"
+            >
+              Quitar filtro
+            </a>
+          {% endif %}
+        </form>
+      </div>
+    </section>
+
+    {% if flows %}
+      <div class="space-y-6">
+        {% for flow in flows %}
+          <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+            <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Día</p>
+                <p class="text-lg font-semibold text-slate-900">{{ flow.day|date:"l d \\d\\e F" }}</p>
+              </div>
+              <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-5">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                  <dt class="font-semibold uppercase tracking-wide text-slate-500">Producido</dt>
+                  <dd class="mt-1 text-lg font-semibold text-slate-900">{{ flow.produced_cartons|cartons }}</dd>
+                </div>
+                <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-right">
+                  <dt class="font-semibold uppercase tracking-wide text-sky-700">Confirmado</dt>
+                  <dd class="mt-1 text-lg font-semibold text-sky-900">{{ flow.confirmed_cartons|cartons }}</dd>
+                </div>
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
+                  <dt class="font-semibold uppercase tracking-wide text-emerald-700">Clasificado</dt>
+                  <dd class="mt-1 text-lg font-semibold text-emerald-900">{{ flow.classified_cartons|cartons }}</dd>
+                </div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
+                  <dt class="font-semibold uppercase tracking-wide text-amber-700">Δ recibido</dt>
+                  <dd class="mt-1 text-lg font-semibold {% if flow.delta_receipt > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
+                    {{ flow.delta_receipt|cartons }}
+                  </dd>
+                </div>
+                <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right">
+                  <dt class="font-semibold uppercase tracking-wide text-rose-700">Δ inventario</dt>
+                  <dd class="mt-1 text-lg font-semibold {% if flow.delta_inventory > 0 %}text-rose-700{% else %}text-slate-900{% endif %}">
+                    {{ flow.delta_inventory|cartons }}
+                  </dd>
+                </div>
+              </dl>
+            </header>
+
+            {% if flow.records %}
+              <div class="overflow-x-auto rounded-xl border border-slate-100">
+                <table class="w-full border-collapse text-sm text-slate-700">
+                  <thead>
+                    <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th class="px-3 py-3 text-left">Granja y lote</th>
+                      <th class="px-3 py-3 text-right">Producido</th>
+                      <th class="px-3 py-3 text-right">Confirmado</th>
+                      <th class="px-3 py-3 text-right">Clasificado</th>
+                      <th class="px-3 py-3 text-right">Δ recibido</th>
+                      <th class="px-3 py-3 text-right">Δ inventario</th>
+                      <th class="px-3 py-3 text-left">Clasificador</th>
+                      <th class="px-3 py-3 text-left">Galponero</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for record in flow.records %}
+                      <tr class="border-t border-slate-100">
+                        <td class="px-3 py-3 font-semibold text-slate-900">
+                          <p>{{ record.farm_name }}</p>
+                          <p class="text-xs font-normal text-slate-500">{{ record.lot_label }}</p>
+                        </td>
+                        <td class="px-3 py-3 text-right">{{ record.produced_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right">{{ record.confirmed_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right">{{ record.classified_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right {% if record.delta_receipt > 0 %}text-amber-700{% endif %}">
+                          {{ record.delta_receipt|cartons }}
+                        </td>
+                        <td class="px-3 py-3 text-right {% if record.delta_inventory > 0 %}text-rose-700{% endif %}">
+                          {{ record.delta_inventory|cartons }}
+                        </td>
+                        <td class="px-3 py-3 text-xs text-slate-600">
+                          {% if record.classifier_name %}
+                            {{ record.classifier_name }}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                        <td class="px-3 py-3 text-xs text-slate-600">
+                          {% if record.collector_name %}
+                            {{ record.collector_name }}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="text-sm text-slate-500">No hubo movimientos para este día.</p>
+            {% endif %}
+
+            <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Desglose por tipo de huevo</p>
+              <div class="mt-3 overflow-x-auto">
+                <table class="w-full border-collapse text-sm text-slate-700">
+                  <thead>
+                    <tr class="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      {% for type in type_order %}
+                        <th class="px-3 py-2 text-center">{{ type.label }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="border-t border-slate-200 bg-white/90">
+                      {% for type in type_order %}
+                        <td class="px-3 py-3 text-center font-semibold text-slate-900">
+                          {{ flow.type_breakdown|dict_get:type.key|cartons }}
+                        </td>
+                      {% endfor %}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-5 py-6 text-center text-sm text-slate-500">
+        No se registraron movimientos para este mes y filtros seleccionados.
+      </p>
+    {% endif %}
+  </div>
+{% endblock %}

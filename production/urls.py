@@ -10,6 +10,7 @@ from .views import (
     chicken_house_update_view,
     daily_indicators_view,
     egg_inventory_batch_detail_view,
+    egg_inventory_cardex_view,
     egg_inventory_dashboard_view,
     farm_delete_view,
     farm_update_view,
@@ -27,6 +28,11 @@ urlpatterns = [
     path("lotes/", batch_management_view, name="batches"),
     path("lotes/<int:pk>/produccion/", batch_production_board_view, name="batch-production-board"),
     path("inventario-huevo/", egg_inventory_dashboard_view, name="egg-inventory"),
+    path(
+        "inventario-huevo/cardex/",
+        egg_inventory_cardex_view,
+        name="egg-inventory-cardex",
+    ),
     path(
         "inventario-huevo/lote/<int:pk>/",
         egg_inventory_batch_detail_view,

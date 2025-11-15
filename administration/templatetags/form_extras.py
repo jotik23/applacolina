@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django import template
 
@@ -57,3 +57,31 @@ def cop_currency(value):
     integer_part, decimal_part = f"{absolute:.2f}".split('.')
     integer_display = format(int(integer_part), ',').replace(',', '.')
     return f"{sign}{integer_display},{decimal_part}"
+
+
+def _coerce_decimal(value):
+    if isinstance(value, Decimal):
+        return value
+    if value in (None, '', '—', '...'):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+@register.filter(name="cartons")
+def format_cartons(value, decimals: int = 1):
+    """Format carton amounts with thousand separators and fallback dash."""
+    number = _coerce_decimal(value)
+    if number is None:
+        return "—"
+
+    try:
+        decimals_int = max(int(decimals), 0)
+    except (TypeError, ValueError):
+        decimals_int = 1
+
+    quantize_exp = Decimal("1").scaleb(-decimals_int) if decimals_int else Decimal("1")
+    quantized = number.quantize(quantize_exp, rounding=ROUND_HALF_UP)
+    return format(quantized, f",.{decimals_int}f")

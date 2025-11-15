@@ -112,3 +112,49 @@ class EggInventoryDashboardTests(TestCase):
         self.assertEqual(sum(entry.cartons for entry in entries), Decimal("150"))
         self.assertEqual(batch.status, batch.Status.CLASSIFIED)
         self.assertEqual(batch.classified_total, Decimal("150"))
+
+    def test_cardex_view_filters_by_month_and_farm(self) -> None:
+        batch = self.record.egg_classification
+        batch.received_cartons = Decimal("150")
+        batch.save(update_fields=["received_cartons"])
+        EggClassificationEntry.objects.create(batch=batch, egg_type="jumbo", cartons=Decimal("80"))
+        EggClassificationEntry.objects.create(batch=batch, egg_type="aaa", cartons=Decimal("70"))
+
+        other_farm = Farm.objects.create(name="Auxiliar")
+        other_batch = BirdBatch.objects.create(
+            farm=other_farm,
+            status=BirdBatch.Status.ACTIVE,
+            birth_date=date.today(),
+            initial_quantity=800,
+            breed=self.breed,
+        )
+        other_record = ProductionRecord.objects.create(
+            bird_batch=other_batch,
+            date=date.today(),
+            production=Decimal("100"),
+            consumption=Decimal("80"),
+            mortality=1,
+            discard=0,
+        )
+        other_classification = other_record.egg_classification
+        other_classification.received_cartons = Decimal("90")
+        other_classification.save(update_fields=["received_cartons"])
+        EggClassificationEntry.objects.create(batch=other_classification, egg_type="aa", cartons=Decimal("90"))
+
+        url = reverse("production:egg-inventory-cardex")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "production/egg_inventory_cardex.html")
+        flows = response.context["flows"]
+        self.assertTrue(flows)
+        self.assertLessEqual(flows[0].day, date.today())
+
+        filtered_response = self.client.get(url, {"farm": other_farm.pk})
+        self.assertEqual(filtered_response.status_code, 200)
+        filtered_flows = filtered_response.context["flows"]
+        self.assertTrue(
+            all(
+                all(record.farm_name == other_farm.name for record in flow.records)
+                for flow in filtered_flows
+            )
+        )

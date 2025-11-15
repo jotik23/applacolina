@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date, timedelta
+from calendar import monthrange
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
 from urllib.parse import urlencode
@@ -45,10 +46,10 @@ from production.models import (
 )
 from production.services.daily_board import save_daily_room_entries
 from production.services.egg_classification import (
-    InventoryFlow,
     InventoryRow,
     PendingBatch,
     build_inventory_flow,
+    build_inventory_flow_range,
     build_pending_batches,
     compute_unclassified_total,
     summarize_classified_inventory,
@@ -1023,7 +1024,6 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
         sellable_total = sum((row.cartons for row in inventory_sellable_rows), Decimal("0"))
         discard_total = sum((row.cartons for row in inventory_discard_rows), Decimal("0"))
         unclassified_total = compute_unclassified_total()
-        flows: list[InventoryFlow] = build_inventory_flow(days=10)
 
         context.update(
             {
@@ -1037,7 +1037,6 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
                 "inventory_sellable_total": sellable_total,
                 "inventory_discard_total": discard_total,
                 "unclassified_total": unclassified_total,
-                "inventory_flow": flows,
             }
         )
         return context
@@ -1076,6 +1075,99 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
                     key=lambda batch: (batch.production_date, batch.farm_name, batch.lot_label)
                 )
         return grouped
+
+
+class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
+    template_name = "production/egg_inventory_cardex.html"
+    egg_type_labels = dict(EggType.choices)
+    type_order = [
+        {"key": EggType.JUMBO, "label": egg_type_labels[EggType.JUMBO]},
+        {"key": EggType.TRIPLE_A, "label": egg_type_labels[EggType.TRIPLE_A]},
+        {"key": EggType.DOUBLE_A, "label": egg_type_labels[EggType.DOUBLE_A]},
+        {"key": EggType.SINGLE_A, "label": egg_type_labels[EggType.SINGLE_A]},
+        {"key": EggType.B, "label": egg_type_labels[EggType.B]},
+        {"key": EggType.C, "label": egg_type_labels[EggType.C]},
+        {"key": EggType.D, "label": egg_type_labels[EggType.D]},
+    ]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        month_start = self._resolve_month()
+        month_end = self._resolve_month_end(month_start)
+        farm_options = list(Farm.objects.order_by("name").values("id", "name"))
+        valid_ids = {option["id"] for option in farm_options}
+        selected_farm_id = self._resolve_farm_id(valid_ids)
+        flows = build_inventory_flow_range(
+            start_date=month_start,
+            end_date=month_end,
+            farm_id=selected_farm_id,
+        )
+        flows.sort(key=lambda flow: flow.day, reverse=True)
+
+        prev_month = self._add_months(month_start, -1)
+        next_month = self._add_months(month_start, 1)
+        current_month_start = timezone.localdate().replace(day=1)
+        can_go_next = next_month <= current_month_start
+
+        context.update(
+            {
+                "active_submenu": "egg_inventory",
+                "flows": flows,
+                "month_start": month_start,
+                "month_end": month_end,
+                "month_slug": self._month_slug(month_start),
+                "prev_month_slug": self._month_slug(prev_month),
+                "next_month_slug": self._month_slug(next_month),
+                "can_go_next": can_go_next,
+                "selected_farm_id": selected_farm_id,
+                "farm_options": farm_options,
+                "type_order": self.type_order,
+            }
+        )
+        return context
+
+    def _resolve_month(self) -> date:
+        today = timezone.localdate()
+        default_month = today.replace(day=1)
+        raw_month = self.request.GET.get("month")
+        if not raw_month:
+            return default_month
+        try:
+            year_str, month_str = raw_month.split("-", 1)
+            year = int(year_str)
+            month = int(month_str)
+            if 1 <= month <= 12:
+                return date(year, month, 1)
+        except (ValueError, TypeError):
+            pass
+        return default_month
+
+    def _resolve_month_end(self, month_start: date) -> date:
+        last_day = monthrange(month_start.year, month_start.month)[1]
+        month_end = date(month_start.year, month_start.month, last_day)
+        today = timezone.localdate()
+        if month_start.year == today.year and month_start.month == today.month:
+            return today
+        return month_end
+
+    def _add_months(self, month_start: date, delta: int) -> date:
+        month_index = (month_start.year * 12 + month_start.month - 1) + delta
+        target_year = month_index // 12
+        target_month = month_index % 12 + 1
+        return date(target_year, target_month, 1)
+
+    def _month_slug(self, month_start: date) -> str:
+        return f"{month_start:%Y-%m}"
+
+    def _resolve_farm_id(self, valid_ids: set[int]) -> Optional[int]:
+        raw_value = self.request.GET.get("farm")
+        if raw_value in (None, "", "all"):
+            return None
+        try:
+            farm_id = int(raw_value)
+        except (TypeError, ValueError):
+            return None
+        return farm_id if farm_id in valid_ids else None
 
 
 class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
@@ -2503,6 +2595,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
 batch_production_board_view = BatchProductionBoardView.as_view()
 egg_inventory_dashboard_view = EggInventoryDashboardView.as_view()
+egg_inventory_cardex_view = EggInventoryCardexView.as_view()
 egg_inventory_batch_detail_view = EggInventoryBatchDetailView.as_view()
 daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()

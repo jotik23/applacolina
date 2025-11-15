@@ -1,5 +1,5 @@
 {% extends "calendario/base.html" %}
-{% load humanize %}
+{% load humanize form_extras %}
 
 {% block title %}Detalle de lote {{ batch.bird_batch }}{% endblock %}
 
@@ -38,14 +38,14 @@
           <div class="rounded-xl bg-slate-50 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Reportado</dt>
             <dd class="text-lg font-semibold text-slate-900">
-              {{ batch.reported_cartons|floatformat:1 }} cart
+              {{ batch.reported_cartons|cartons }} cart
             </dd>
           </div>
           <div class="rounded-xl bg-slate-50 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Recibido</dt>
             <dd class="text-lg font-semibold text-slate-900">
               {% if batch.received_cartons %}
-                {{ batch.received_cartons|floatformat:1 }} cart
+                {{ batch.received_cartons|cartons }} cart
               {% else %}
                 —
               {% endif %}
@@ -54,7 +54,7 @@
           <div class="rounded-xl bg-slate-50 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendiente</dt>
             <dd class="text-lg font-semibold text-slate-900">
-              {{ batch.pending_cartons|floatformat:1 }} cart
+              {{ batch.pending_cartons|cartons }} cart
             </dd>
           </div>
           <div class="rounded-xl bg-slate-50 px-3 py-2">
@@ -147,7 +147,7 @@
               {% for entry in entries %}
                 <li class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
                   <span class="font-semibold text-slate-900">{{ entry.get_egg_type_display }}</span>
-                  <span class="text-slate-500">{{ entry.cartons|floatformat:1 }} cart</span>
+                  <span class="text-slate-500">{{ entry.cartons|cartons }} cart</span>
                 </li>
               {% endfor %}
             </ul>
