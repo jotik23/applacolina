@@ -1,0 +1,161 @@
+{% extends "calendario/base.html" %}
+{% load humanize %}
+
+{% block title %}Detalle de lote {{ batch.bird_batch }}{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+
+  <div class="space-y-6">
+    <header class="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Inventario operativo</p>
+        <h1 class="text-2xl font-semibold text-slate-900">Confirmar y clasificar</h1>
+        <p class="text-sm text-slate-500">
+          Registra la cantidad recibida y distribuye por tipo antes de enviar a inventario.
+        </p>
+      </div>
+      <a
+        href="{{ return_url }}"
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300"
+      >
+        ← Volver al inventario
+      </a>
+    </header>
+
+    <article class="rounded-2xl border border-slate-200/70 bg-white/95 shadow-sm">
+      <header class="space-y-1 border-b border-slate-100 px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {{ batch.production_date|date:"l d \\d\\e F" }} · {{ batch.bird_batch.farm.name }}
+        </p>
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-xl font-semibold text-slate-900">{{ batch.bird_batch }}</h2>
+          <span class="rounded-full border px-3 py-1 text-xs font-semibold {% if batch.status == 'classified' %}border-slate-200 bg-slate-50 text-slate-600{% elif batch.status == 'confirmed' %}border-sky-200 bg-sky-50 text-sky-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
+            {{ batch.get_status_display }}
+          </span>
+        </div>
+        <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-4">
+          <div class="rounded-xl bg-slate-50 px-3 py-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Reportado</dt>
+            <dd class="text-lg font-semibold text-slate-900">
+              {{ batch.reported_cartons|floatformat:1 }} cart
+            </dd>
+          </div>
+          <div class="rounded-xl bg-slate-50 px-3 py-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Recibido</dt>
+            <dd class="text-lg font-semibold text-slate-900">
+              {% if batch.received_cartons %}
+                {{ batch.received_cartons|floatformat:1 }} cart
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div class="rounded-xl bg-slate-50 px-3 py-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendiente</dt>
+            <dd class="text-lg font-semibold text-slate-900">
+              {{ batch.pending_cartons|floatformat:1 }} cart
+            </dd>
+          </div>
+          <div class="rounded-xl bg-slate-50 px-3 py-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Galponero</dt>
+            <dd class="text-lg font-semibold text-slate-900">
+              {% if batch.production_record.created_by %}
+                {{ batch.production_record.created_by.get_full_name|default:batch.production_record.created_by }}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+        {% if batch.notes %}
+          <p class="text-sm text-amber-700">Notas: {{ batch.notes }}</p>
+        {% endif %}
+      </header>
+
+      <div class="space-y-6 p-5">
+        <form method="post" class="space-y-4 rounded-xl border border-amber-100 bg-amber-50/60 p-4 shadow-inner">
+          {% csrf_token %}
+          <input type="hidden" name="form" value="receipt">
+          <input type="hidden" name="batch_id" value="{{ batch.pk }}">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-amber-700">Confirmar recibido</h3>
+          {% for field in receipt_form %}
+            <div class="space-y-1">
+              <label class="text-xs font-semibold uppercase tracking-wide text-amber-700" for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}
+                <p class="text-xs text-amber-700/80">{{ field.help_text }}</p>
+              {% endif %}
+              {% for error in field.errors %}
+                <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endfor %}
+          {% if receipt_form.non_field_errors %}
+            {% for error in receipt_form.non_field_errors %}
+              <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
+            {% endfor %}
+          {% endif %}
+          <div class="flex justify-end gap-3">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-amber-500">
+              Guardar recibido
+            </button>
+          </div>
+        </form>
+
+        <form method="post" class="space-y-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-inner">
+          {% csrf_token %}
+          <input type="hidden" name="form" value="classification">
+          <input type="hidden" name="batch_id" value="{{ batch.pk }}">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-emerald-700">Clasificación por tipo</h3>
+            {% if not batch.received_cartons %}
+              <span class="text-xs font-semibold uppercase tracking-wide text-amber-600">Confirma recibido para habilitar</span>
+            {% endif %}
+          </div>
+          <fieldset {% if not batch.received_cartons %}disabled{% endif %} class="grid gap-3 sm:grid-cols-2">
+            {% for field in classification_form %}
+              <label class="space-y-1 text-xs font-semibold uppercase tracking-wide text-emerald-700" for="{{ field.id_for_label }}">
+                <span>{{ field.label }}</span>
+                {{ field }}
+                {% for error in field.errors %}
+                  <p class="text-[11px] font-semibold text-rose-600">{{ error }}</p>
+                {% endfor %}
+              </label>
+            {% endfor %}
+          </fieldset>
+          {% if classification_form.non_field_errors %}
+            {% for error in classification_form.non_field_errors %}
+              <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
+            {% endfor %}
+          {% endif %}
+          <div class="flex justify-end">
+            <button
+              type="submit"
+              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500 {% if not batch.received_cartons %}cursor-not-allowed opacity-60{% endif %}"
+              {% if not batch.received_cartons %}disabled{% endif %}
+            >
+              Enviar a inventario
+            </button>
+          </div>
+        </form>
+
+        <section class="rounded-xl border border-slate-200/60 bg-white p-4 shadow-inner">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-600">Clasificación registrada</h3>
+          {% if entries %}
+            <ul class="mt-3 flex flex-wrap gap-3 text-sm text-slate-700">
+              {% for entry in entries %}
+                <li class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1">
+                  <span class="font-semibold text-slate-900">{{ entry.get_egg_type_display }}</span>
+                  <span class="text-slate-500">{{ entry.cartons|floatformat:1 }} cart</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="mt-2 text-sm text-slate-500">No hay detalle registrado aún.</p>
+          {% endif %}
+        </section>
+      </div>
+    </article>
+  </div>
+{% endblock %}

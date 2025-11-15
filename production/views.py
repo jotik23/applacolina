@@ -1002,53 +1002,10 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
 
 class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
     template_name = "production/egg_inventory.html"
-    pending_batches: list[PendingBatch]
-    selected_batch: Optional[EggClassificationBatch]
-
-    def dispatch(self, request, *args, **kwargs):
-        self.pending_batches = build_pending_batches(limit=120)
-        self.selected_batch_id = self._resolve_selected_batch_id(request)
-        self.selected_batch = self._fetch_selected_batch(request)
-        return super().dispatch(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        if not self.selected_batch:
-            messages.error(
-                request,
-                "No se encontró el lote seleccionado. Selecciona uno de la lista antes de registrar cambios.",
-            )
-            return redirect("production:egg-inventory")
-
-        form_key = request.POST.get("form")
-        if form_key == "receipt":
-            form = EggBatchReceiptForm(request.POST, batch=self.selected_batch)
-            if form.is_valid():
-                form.save(actor=request.user)
-                messages.success(request, "Cantidad recibida confirmada correctamente.")
-                return redirect(self._current_url())
-            return self.render_to_response(self.get_context_data(receipt_form=form))
-
-        if form_key == "classification":
-            form = EggBatchClassificationForm(request.POST, batch=self.selected_batch)
-            if form.is_valid():
-                form.save(actor=request.user)
-                messages.success(request, "Clasificación registrada y enviada a inventario.")
-                return redirect(self._current_url())
-            return self.render_to_response(self.get_context_data(classification_form=form))
-
-        messages.error(request, "No se pudo determinar el formulario enviado.")
-        return redirect(self._current_url())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        receipt_form = kwargs.get("receipt_form")
-        classification_form = kwargs.get("classification_form")
-
-        if self.selected_batch and receipt_form is None:
-            receipt_form = EggBatchReceiptForm(batch=self.selected_batch)
-        if self.selected_batch and classification_form is None:
-            classification_form = EggBatchClassificationForm(batch=self.selected_batch)
-
+        pending_batches = build_pending_batches(limit=120)
         inventory_rows: list[InventoryRow] = summarize_classified_inventory()
         inventory_total = sum((row.cartons for row in inventory_rows), Decimal("0"))
         unclassified_total = compute_unclassified_total()
@@ -1057,65 +1014,70 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
         context.update(
             {
                 "active_submenu": "egg_inventory",
-                "pending_batches": self.pending_batches,
-                "selected_batch": self.selected_batch,
-                "selected_batch_id": self.selected_batch.pk if self.selected_batch else None,
-                "receipt_form": receipt_form,
-                "classification_form": classification_form,
+                "pending_batches": pending_batches,
                 "inventory_rows": inventory_rows,
                 "inventory_total": inventory_total,
                 "unclassified_total": unclassified_total,
                 "inventory_flow": flows,
-                "selected_batch_entries": list(self.selected_batch.classification_entries.all())
-                if self.selected_batch
-                else [],
             }
         )
         return context
 
-    def _resolve_selected_batch_id(self, request) -> Optional[int]:
-        raw_value = request.POST.get("batch_id") if request.method == "POST" else request.GET.get("batch")
-        batch_id = self._coerce_int(raw_value)
-        if batch_id:
-            return batch_id
-        if self.pending_batches:
-            return self.pending_batches[0].id
-        return None
 
-    def _fetch_selected_batch(self, request) -> Optional[EggClassificationBatch]:
-        if not self.selected_batch_id:
-            return None
-        batch = (
+class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
+    template_name = "production/egg_inventory_batch_detail.html"
+    batch: EggClassificationBatch
+
+    def dispatch(self, request, *args, **kwargs):
+        self.batch = self._get_batch()
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        form_key = request.POST.get("form")
+        if form_key == "receipt":
+            form = EggBatchReceiptForm(request.POST, batch=self.batch)
+            if form.is_valid():
+                form.save(actor=request.user)
+                messages.success(request, "Cantidad recibida confirmada correctamente.")
+                return redirect(self.request.path)
+            return self.render_to_response(self.get_context_data(receipt_form=form))
+
+        if form_key == "classification":
+            form = EggBatchClassificationForm(request.POST, batch=self.batch)
+            if form.is_valid():
+                form.save(actor=request.user)
+                messages.success(request, "Clasificación registrada y enviada a inventario.")
+                return redirect(self.request.path)
+            return self.render_to_response(self.get_context_data(classification_form=form))
+
+        messages.error(request, "No se pudo determinar el formulario enviado.")
+        return redirect(self.request.path)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        receipt_form = kwargs.get("receipt_form") or EggBatchReceiptForm(batch=self.batch)
+        classification_form = kwargs.get("classification_form") or EggBatchClassificationForm(batch=self.batch)
+        context.update(
+            {
+                "active_submenu": "egg_inventory",
+                "batch": self.batch,
+                "receipt_form": receipt_form,
+                "classification_form": classification_form,
+                "entries": list(self.batch.classification_entries.all()),
+                "return_url": reverse("production:egg-inventory"),
+            }
+        )
+        return context
+
+    def _get_batch(self) -> EggClassificationBatch:
+        return get_object_or_404(
             EggClassificationBatch.objects.select_related(
                 "bird_batch",
                 "bird_batch__farm",
                 "production_record",
-            )
-            .prefetch_related("classification_entries")
-            .filter(pk=self.selected_batch_id)
-            .first()
+            ).prefetch_related("classification_entries"),
+            pk=self.kwargs["pk"],
         )
-        if batch is None:
-            messages.warning(
-                request,
-                "El lote seleccionado ya no está disponible. Se mostrará el listado actualizado.",
-            )
-        return batch
-
-    def _coerce_int(self, raw_value: Optional[str]) -> Optional[int]:
-        if raw_value in (None, "", "None"):
-            return None
-        try:
-            value = int(raw_value)
-        except (TypeError, ValueError):
-            return None
-        return value if value > 0 else None
-
-    def _current_url(self) -> str:
-        base_url = reverse("production:egg-inventory")
-        if self.selected_batch_id:
-            return f"{base_url}?batch={self.selected_batch_id}"
-        return base_url
 
 
 class DailyIndicatorsView(ProductionDashboardContextMixin, TemplateView):
@@ -2289,6 +2251,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                     "room_name": snapshot.room_name,
                     "chicken_house_name": snapshot.chicken_house_name,
                     "birds": birds,
+                    "production_eggs": snapshot.production,
                     "production_cartons": self._normalize_metric(
                         snapshot.production,
                         Decimal("30"),
@@ -2486,6 +2449,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 
 batch_production_board_view = BatchProductionBoardView.as_view()
 egg_inventory_dashboard_view = EggInventoryDashboardView.as_view()
+egg_inventory_batch_detail_view = EggInventoryBatchDetailView.as_view()
 daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
 farm_update_view = FarmUpdateView.as_view()

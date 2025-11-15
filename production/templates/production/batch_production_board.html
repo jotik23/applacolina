@@ -111,11 +111,11 @@
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div class="flex gap-2">
               {% if week_navigation.previous_url %}
-                <a href="{{ week_navigation.previous_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">← Sem prev.</a>
+                <a href="{{ week_navigation.previous_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">← Anterior</a>
               {% else %}
-                <span class="inline-flex items-center justify-center rounded-lg border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">← Sem pre.</span>
+                <span class="inline-flex items-center justify-center rounded-lg border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">← Anterior</span>
               {% endif %}
-              <a href="{{ week_navigation.next_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">Sem sig. →</a>
+              <a href="{{ week_navigation.next_url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">Siguiente →</a>
             </div>
             <form method="get" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
               <label for="quick-day" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ir a fecha</label>
@@ -135,7 +135,7 @@
                 <th class="px-4 py-3 text-right">Consumo g/ave</th>
                 <th class="px-4 py-3 text-right">Gr/Huevo</th>
                 <th class="px-4 py-3 text-right">Mortalidad / Descarte</th>
-                <th class="px-4 py-3 text-right">Editar</th>
+                <th class="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 bg-white">
@@ -194,7 +194,7 @@
                   </td>
                   <td class="px-4 py-3 text-right">
                     <a href="{{ day.url }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700">
-                      Editar
+                      Ver
                     </a>
                   </td>
                 </tr>
@@ -216,7 +216,7 @@
                 <thead class="bg-slate-100/80 font-semibold uppercase tracking-wide text-[11px] text-slate-500/90">
                   <tr>
                     <th class="px-3 py-3">Salón</th>
-                    <th class="px-3 py-3 text-right">Producción (cartones)</th>
+                    <th class="px-3 py-3 text-right">Cartones (huevos)</th>
                     <th class="px-3 py-3 text-right">Consumo (bultos)</th>
                     <th class="px-3 py-3 text-right">% Postura</th>
                     <th class="px-3 py-3 text-right">Consumo g/ave</th>
@@ -226,13 +226,20 @@
                 <tbody class="divide-y divide-slate-100">
                   {% for room in selected_room_breakdown %}
                     <tr class="bg-white/80">
-                      <td class="py-3 text-sm font-semibold text-slate-900">
-                        <div>{{ room.room_name }}</div>
-                        <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">{{ room.birds|intcomma }} aves</p>
+                      <td class="px py-3 text-xs font-semibold text-slate-900">
+                        <div>
+                          {{ room.room_name }}
+                        </div>
+                        <span class="text-[11px] font-medium text-slate-500">{{ room.birds|intcomma }} aves</span>
                       </td>
                       <td class="px-3 py-3 text-right text-[13px] font-semibold text-slate-900">
                         {% if room.production_cartons %}
-                          {{ room.production_cartons|floatformat:1 }}
+                          {{ room.production_cartons|floatformat:1 }} cart.
+                          {% if room.production_eggs %}
+                            <span class="block text-[11px] font-medium text-slate-500">({{ room.production_eggs|intcomma }} huevos)</span>
+                          {% endif %}
+                        {% elif room.production_eggs %}
+                          {{ room.production_eggs|intcomma }} huevos
                         {% else %}
                           —
                         {% endif %}

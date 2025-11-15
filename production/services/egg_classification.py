@@ -8,7 +8,6 @@ from typing import Dict, Mapping, Optional
 
 from django.db import transaction
 from django.db.models import Case, IntegerField, Max, Sum, Value, When
-from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from production.models import (
@@ -42,12 +41,30 @@ class InventoryRow:
 
 
 @dataclass(frozen=True)
+class InventoryFlowRecord:
+    batch_id: int
+    farm_name: str
+    lot_label: str
+    produced_cartons: Decimal
+    confirmed_cartons: Optional[Decimal]
+    classified_cartons: Decimal
+    type_breakdown: Dict[str, Decimal]
+    classifier_name: Optional[str]
+    collector_name: Optional[str]
+    delta_receipt: Decimal
+    delta_inventory: Decimal
+
+
+@dataclass(frozen=True)
 class InventoryFlow:
     day: date
     produced_cartons: Decimal
     confirmed_cartons: Decimal
     classified_cartons: Decimal
     type_breakdown: Dict[str, Decimal]
+    records: list[InventoryFlowRecord]
+    delta_receipt: Decimal
+    delta_inventory: Decimal
 
 
 def ensure_batch_for_record(record: ProductionRecord) -> EggClassificationBatch:
@@ -215,51 +232,87 @@ def build_inventory_flow(days: int = 7) -> list[InventoryFlow]:
     today = timezone.localdate()
     start_date = today - timedelta(days=days - 1)
 
-    produced_map: dict[date, Dict[str, Decimal]] = {}
-    production_qs = (
-        EggClassificationBatch.objects.filter(production_record__date__gte=start_date)
-        .values("production_record__date")
-        .annotate(
-            produced=Sum("reported_cartons"),
-            confirmed=Sum("received_cartons"),
-        )
-    )
-    for row in production_qs:
-        day = row["production_record__date"]
-        produced_map[day] = {
-            "produced": row["produced"] or Decimal("0"),
-            "confirmed": row["confirmed"] or Decimal("0"),
-        }
+    def _display_name(user) -> Optional[str]:
+        if not user:
+            return None
+        full_name = user.get_full_name()
+        if full_name:
+            return full_name
+        short_name = getattr(user, "get_short_name", None)
+        if callable(short_name):
+            short_value = short_name()
+            if short_value:
+                return short_value
+        username = getattr(user, "username", None)
+        return username or str(user)
 
-    breakdown: dict[date, Dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-    classification_totals: dict[date, Decimal] = defaultdict(Decimal)
-    classification_qs = (
-        EggClassificationEntry.objects.filter(batch__classified_at__isnull=False)
-        .annotate(classification_date=TruncDate("batch__classified_at"))
-        .filter(classification_date__gte=start_date)
-        .values("classification_date", "egg_type")
-        .annotate(total=Sum("cartons"))
+    batches = (
+        EggClassificationBatch.objects.filter(production_record__date__gte=start_date)
+        .select_related(
+            "bird_batch",
+            "bird_batch__farm",
+            "production_record",
+            "production_record__created_by",
+            "classified_by",
+        )
+        .prefetch_related("classification_entries")
+        .order_by("production_record__date", "bird_batch__farm__name", "bird_batch__id")
     )
-    for row in classification_qs:
-        day = row["classification_date"]
-        total = row["total"] or Decimal("0")
-        egg_type = row["egg_type"]
-        breakdown[day][egg_type] += total
-        classification_totals[day] += total
+
+    records_by_day: dict[date, list[InventoryFlowRecord]] = defaultdict(list)
+    for batch in batches:
+        entries = list(batch.classification_entries.all())
+        record_breakdown: Dict[str, Decimal] = defaultdict(Decimal)
+        classified_total = Decimal("0")
+        for entry in entries:
+            qty = Decimal(entry.cartons or 0)
+            record_breakdown[entry.egg_type] += qty
+            classified_total += qty
+
+        confirmed_value = Decimal(batch.received_cartons) if batch.received_cartons is not None else None
+        confirmed_for_math = confirmed_value if confirmed_value is not None else Decimal("0")
+        inventory_source = confirmed_value if confirmed_value is not None else Decimal(batch.reported_cartons)
+        record = InventoryFlowRecord(
+            batch_id=batch.pk,
+            farm_name=batch.bird_batch.farm.name,
+            lot_label=str(batch.bird_batch),
+            produced_cartons=Decimal(batch.reported_cartons),
+            confirmed_cartons=confirmed_value,
+            classified_cartons=classified_total,
+            type_breakdown=dict(record_breakdown),
+            classifier_name=_display_name(batch.classified_by),
+            collector_name=_display_name(getattr(batch.production_record, "created_by", None)),
+            delta_receipt=Decimal(batch.reported_cartons) - confirmed_for_math,
+            delta_inventory=inventory_source - classified_total,
+        )
+        records_by_day[batch.production_date].append(record)
 
     flows: list[InventoryFlow] = []
     for step in range(days):
         day = start_date + timedelta(days=step)
-        produced = produced_map.get(day, {}).get("produced", Decimal("0"))
-        confirmed = produced_map.get(day, {}).get("confirmed", Decimal("0"))
-        classified = classification_totals.get(day, Decimal("0"))
+        day_records = sorted(
+            records_by_day.get(day, []),
+            key=lambda record: (record.farm_name, record.lot_label),
+        )
+        produced = sum((record.produced_cartons for record in day_records), Decimal("0"))
+        confirmed = sum(((record.confirmed_cartons or Decimal("0")) for record in day_records), Decimal("0"))
+        classified = sum((record.classified_cartons for record in day_records), Decimal("0"))
+        delta_receipt = sum((record.delta_receipt for record in day_records), Decimal("0"))
+        delta_inventory = sum((record.delta_inventory for record in day_records), Decimal("0"))
+        day_breakdown: Dict[str, Decimal] = defaultdict(Decimal)
+        for record in day_records:
+            for egg_type, qty in record.type_breakdown.items():
+                day_breakdown[egg_type] += qty
         flows.append(
             InventoryFlow(
                 day=day,
                 produced_cartons=produced,
                 confirmed_cartons=confirmed,
                 classified_cartons=classified,
-                type_breakdown=dict(breakdown.get(day, {})),
+                type_breakdown=dict(day_breakdown),
+                records=day_records,
+                delta_receipt=delta_receipt,
+                delta_inventory=delta_inventory,
             )
         )
     return flows

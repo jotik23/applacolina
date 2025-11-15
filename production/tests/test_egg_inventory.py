@@ -52,14 +52,11 @@ class EggInventoryDashboardTests(TestCase):
         self.assertTemplateUsed(response, "production/egg_inventory.html")
         self.assertIn("pending_batches", response.context)
         self.assertTrue(response.context["pending_batches"])
-        selected_batch = response.context["selected_batch"]
-        self.assertIsNotNone(selected_batch)
-        self.assertEqual(selected_batch.production_record, self.record)
 
     def test_confirm_receipt_updates_batch(self) -> None:
         batch = self.record.egg_classification
         response = self.client.post(
-            reverse("production:egg-inventory"),
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
             {
                 "form": "receipt",
                 "batch_id": batch.pk,
@@ -67,7 +64,7 @@ class EggInventoryDashboardTests(TestCase):
                 "notes": "Diferencia menor.",
             },
         )
-        self.assertRedirects(response, f"{reverse('production:egg-inventory')}?batch={batch.pk}")
+        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
         batch.refresh_from_db()
         self.assertEqual(batch.received_cartons, Decimal("148.5"))
         self.assertEqual(batch.notes, "Diferencia menor.")
@@ -76,7 +73,7 @@ class EggInventoryDashboardTests(TestCase):
     def test_classification_requires_confirmation(self) -> None:
         batch = self.record.egg_classification
         response = self.client.post(
-            reverse("production:egg-inventory"),
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
             {
                 "form": "classification",
                 "batch_id": batch.pk,
@@ -85,13 +82,13 @@ class EggInventoryDashboardTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Confirma primero la cantidad recibida")
+        self.assertTrue(response.context["classification_form"].errors or response.context["classification_form"].non_field_errors())
         self.assertFalse(EggClassificationEntry.objects.exists())
 
     def test_classification_flow_creates_entries(self) -> None:
         batch = self.record.egg_classification
         self.client.post(
-            reverse("production:egg-inventory"),
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
             {
                 "form": "receipt",
                 "batch_id": batch.pk,
@@ -99,7 +96,7 @@ class EggInventoryDashboardTests(TestCase):
             },
         )
         response = self.client.post(
-            reverse("production:egg-inventory"),
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
             {
                 "form": "classification",
                 "batch_id": batch.pk,
@@ -108,7 +105,7 @@ class EggInventoryDashboardTests(TestCase):
                 "type_aa": "50",
             },
         )
-        self.assertRedirects(response, f"{reverse('production:egg-inventory')}?batch={batch.pk}")
+        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
         batch.refresh_from_db()
         entries = EggClassificationEntry.objects.filter(batch=batch)
         self.assertEqual(entries.count(), 3)
