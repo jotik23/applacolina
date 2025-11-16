@@ -1,0 +1,76 @@
+{% extends "calendario/base.html" %}
+{% load humanize form_extras %}
+
+{% block title %}Eliminar despacho{% endblock %}
+
+{% block content %}
+  {% include "production/_submenu.html" with active=active_submenu %}
+
+  <div class="space-y-6">
+    <header class="rounded-2xl border border-rose-200/70 bg-rose-50 px-5 py-4 shadow-sm">
+      <p class="text-xs font-semibold uppercase tracking-wide text-rose-600">Confirmación requerida</p>
+      <h1 class="text-2xl font-semibold text-rose-700">Eliminar despacho</h1>
+      <p class="text-sm text-rose-700">
+        Esta acción revierte los cartones al inventario disponible. Asegúrate de que el despacho realmente no se ejecutó.
+      </p>
+    </header>
+
+    <section class="rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+      <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha</dt>
+          <dd class="mt-1 font-semibold text-slate-900">{{ dispatch.date|date:"l d \\d\\e F" }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Destino</dt>
+          <dd class="mt-1 font-semibold text-slate-900">{{ dispatch.get_destination_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Conductor</dt>
+          <dd class="mt-1 font-semibold text-slate-900">{{ dispatch.driver_name }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Vendedor</dt>
+          <dd class="mt-1 font-semibold text-slate-900">{{ dispatch.seller_name }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total cartones</dt>
+          <dd class="mt-1 text-lg font-semibold text-emerald-700">{{ dispatch.total_cartons|cartons }} cart</dd>
+        </div>
+        {% if dispatch.notes %}
+          <div class="sm:col-span-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas</dt>
+            <dd class="mt-1 text-slate-700">{{ dispatch.notes }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+      <div class="mt-4 rounded-xl bg-slate-50/80 px-4 py-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalle por tipo</p>
+        <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+          {% for item in dispatch.items.all %}
+            <span class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 shadow-sm">
+              {{ item.get_egg_type_display }} · <span class="text-emerald-700">{{ item.cartons|cartons }} cart</span>
+            </span>
+          {% empty %}
+            <span class="text-slate-500">Sin detalle registrado.</span>
+          {% endfor %}
+        </div>
+      </div>
+      <form method="post" class="mt-6 flex flex-wrap items-center justify-between gap-3">
+        {% csrf_token %}
+        <a
+          href="{% url 'production:egg-dispatch-list' %}"
+          class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+        >
+          Cancelar
+        </a>
+        <button
+          type="submit"
+          class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500"
+        >
+          Sí, eliminar
+        </button>
+      </form>
+    </section>
+  </div>
+{% endblock %}

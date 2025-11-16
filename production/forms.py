@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP, InvalidOperation
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 
 from production.models import (
     BirdBatch,
@@ -15,6 +17,8 @@ from production.models import (
     BreedReference,
     BreedWeeklyGuide,
     ChickenHouse,
+    EggDispatch,
+    EggDispatchItem,
     EggClassificationBatch,
     EggType,
     Farm,
@@ -916,3 +920,170 @@ class EggBatchClassificationForm(forms.Form):
             entries=self.cleaned_entries,
             actor_id=getattr(actor, "id", None),
         )
+
+
+class EggDispatchForm(forms.ModelForm):
+    input_classes = BaseInfrastructureForm.input_classes
+    egg_type_order = [
+        EggType.JUMBO,
+        EggType.TRIPLE_A,
+        EggType.DOUBLE_A,
+        EggType.SINGLE_A,
+        EggType.B,
+        EggType.C,
+        EggType.D,
+    ]
+
+    class Meta:
+        model = EggDispatch
+        fields = ["date", "destination", "driver", "seller", "notes"]
+        labels = {
+            "date": "Fecha de despacho",
+            "destination": "Destino",
+            "driver": "Conductor",
+            "seller": "Vendedor responsable",
+            "notes": "Notas u observaciones",
+        }
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}),
+            "notes": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "placeholder": "Detalle la ruta o incidencias del despacho",
+                }
+            ),
+        }
+
+    def __init__(
+        self,
+        *args: Any,
+        inventory_map: Optional[Mapping[str, Decimal]] = None,
+        **kwargs: Any,
+    ) -> None:
+        self.inventory_map = self._normalize_inventory_map(inventory_map or {})
+        self.cleaned_quantities: dict[str, Decimal] = {}
+        self.cleaned_total = Decimal("0")
+        super().__init__(*args, **kwargs)
+        self._configure_base_fields()
+        self.type_field_map: dict[str, str] = {}
+        existing_items: dict[str, Decimal] = {}
+        if self.instance and getattr(self.instance, "pk", None):
+            existing_items = {
+                item.egg_type: Decimal(item.cartons)
+                for item in self.instance.items.all()  # type: ignore[attr-defined]
+            }
+        for egg_type in self.egg_type_order:
+            field_name = self._field_name(egg_type)
+            field = forms.DecimalField(
+                required=False,
+                min_value=Decimal("0"),
+                decimal_places=2,
+                max_digits=10,
+                label=dict(EggType.choices).get(egg_type, egg_type),
+                widget=forms.NumberInput(
+                    attrs={
+                        "class": f"{self.input_classes} text-right font-semibold",
+                        "step": "0.01",
+                        "min": "0",
+                        "inputmode": "decimal",
+                        "placeholder": "0.00",
+                    }
+                ),
+            )
+            if existing_items:
+                field.initial = existing_items.get(egg_type)
+            self.fields[field_name] = field
+            self.type_field_map[egg_type] = field_name
+            self.inventory_map.setdefault(egg_type, Decimal("0"))
+
+    def _configure_base_fields(self) -> None:
+        user_model = get_user_model()
+        user_qs = user_model.objects.order_by("nombres", "apellidos", "cedula")
+        for field_name in ["driver", "seller"]:
+            field = self.fields[field_name]
+            field.queryset = user_qs
+            field.widget.attrs.setdefault("class", self.input_classes)
+        date_field = self.fields["date"]
+        date_field.widget.attrs.setdefault("class", self.input_classes)
+        if not self.instance.pk and not self.initial.get("date"):
+            date_field.initial = timezone.localdate()
+        destination_field = self.fields["destination"]
+        destination_field.widget.attrs.setdefault("class", self.input_classes)
+        notes_field = self.fields["notes"]
+        existing = notes_field.widget.attrs.get("class", "")
+        notes_field.widget.attrs["class"] = f"{existing} {self.input_classes}".strip()
+
+    def _normalize_inventory_map(self, data: Mapping[str, Decimal]) -> dict[str, Decimal]:
+        normalized: dict[str, Decimal] = {}
+        for key, value in data.items():
+            try:
+                normalized[key] = Decimal(value)
+            except (InvalidOperation, TypeError):
+                normalized[key] = Decimal("0")
+        return normalized
+
+    def _field_name(self, egg_type: str) -> str:
+        return f"type_{egg_type}"
+
+    @property
+    def type_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        label_map = dict(EggType.choices)
+        for egg_type in self.egg_type_order:
+            field_name = self.type_field_map[egg_type]
+            rows.append(
+                {
+                    "egg_type": egg_type,
+                    "label": label_map.get(egg_type, egg_type),
+                    "field": self[field_name],
+                    "available": self.inventory_map.get(egg_type, Decimal("0")),
+                }
+            )
+        return rows
+
+    def clean(self) -> Dict[str, Any]:
+        cleaned = super().clean()
+        totals = Decimal("0")
+        entries: dict[str, Decimal] = {}
+        for egg_type, field_name in self.type_field_map.items():
+            value = cleaned.get(field_name)
+            if value in (None, ""):
+                continue
+            decimal_value = Decimal(value)
+            available = self.inventory_map.get(egg_type, Decimal("0"))
+            if decimal_value > available:
+                self.add_error(
+                    field_name,
+                    f"Inventario insuficiente. Solo hay {available} cart disponibles.",
+                )
+            if decimal_value <= 0:
+                continue
+            entries[egg_type] = decimal_value
+            totals += decimal_value
+
+        if totals <= 0:
+            raise forms.ValidationError("Registra al menos un tipo de huevo para despachar.")
+
+        self.cleaned_quantities = entries
+        self.cleaned_total = totals
+        return cleaned
+
+    def save(self, actor_id: Optional[int] = None) -> EggDispatch:
+        if not self.is_valid():
+            raise ValueError("El formulario de despacho no es válido.")
+        dispatch = super().save(commit=False)
+        dispatch.total_cartons = self.cleaned_total
+        if actor_id:
+            if not dispatch.pk or not dispatch.created_by_id:
+                dispatch.created_by_id = actor_id
+            dispatch.updated_by_id = actor_id
+        dispatch.save()
+        dispatch.items.all().delete()
+        items = [
+            EggDispatchItem(dispatch=dispatch, egg_type=egg_type, cartons=cartons)
+            for egg_type, cartons in self.cleaned_quantities.items()
+            if cartons > 0
+        ]
+        if items:
+            EggDispatchItem.objects.bulk_create(items)
+        return dispatch

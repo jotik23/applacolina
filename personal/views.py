@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from django import forms
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -74,12 +75,16 @@ class CalendarPortalView(LoginView):
         if redirect_to:
             return redirect_to
         user = getattr(self.request, "user", None)
-        if user and getattr(user, "is_staff", False):
+        if not user:
+            return reverse("portal:login")
+        if getattr(user, "is_staff", False):
             return reverse("personal:dashboard")
+        if user.has_perm("production.access_egg_inventory"):
+            return reverse("production:egg-inventory")
         return reverse("task_manager:telegram-mini-app")
 
 
-class CalendarLogoutView(StaffRequiredMixin, LogoutView):
+class CalendarLogoutView(LoginRequiredMixin, LogoutView):
     # Explicitly allow GET requests; Django 5 restricts logout to POST by default.
     http_method_names = ["get", "head", "options", "post"]
     next_page = reverse_lazy("portal:login")

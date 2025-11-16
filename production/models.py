@@ -594,6 +594,102 @@ class EggClassificationEntry(models.Model):
         return f"{self.batch} · {egg_label} ({self.cartons})"
 
 
+class EggDispatchDestination(models.TextChoices):
+    TIERRALTA = "tierralta", "Tierralta"
+    MONTERIA = "monteria", "Montería"
+    BAJO_CAUCA = "bajo_cauca", "Bajo Cauca"
+
+
+class EggDispatch(models.Model):
+    date = models.DateField("Fecha de despacho")
+    destination = models.CharField(
+        "Destino",
+        max_length=32,
+        choices=EggDispatchDestination.choices,
+    )
+    driver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="egg_dispatches_driven",
+        verbose_name="Conductor",
+    )
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="egg_dispatches_sold",
+        verbose_name="Vendedor responsable",
+    )
+    notes = models.TextField("Notas", blank=True)
+    total_cartons = models.DecimalField("Total cartones", max_digits=10, decimal_places=2, default=Decimal("0"))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_dispatches_created",
+        verbose_name="Registrado por",
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_dispatches_updated",
+        verbose_name="Actualizado por",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "Despacho de huevo"
+        verbose_name_plural = "Despachos de huevo"
+        ordering = ("-date", "-created_at")
+
+    def __str__(self) -> str:
+        destination = self.get_destination_display()
+        return f"{self.date:%Y-%m-%d} · {destination}"
+
+    @property
+    def destination_label(self) -> str:
+        return self.get_destination_display()
+
+    @property
+    def driver_name(self) -> str:
+        driver = getattr(self, "driver", None)
+        if not driver:
+            return ""
+        return driver.get_full_name() or driver.get_username()
+
+    @property
+    def seller_name(self) -> str:
+        seller = getattr(self, "seller", None)
+        if not seller:
+            return ""
+        return seller.get_full_name() or seller.get_username()
+
+
+class EggDispatchItem(models.Model):
+    dispatch = models.ForeignKey(
+        EggDispatch,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="Despacho",
+    )
+    egg_type = models.CharField("Tipo de huevo", max_length=8, choices=EggType.choices)
+    cartons = models.DecimalField("Cartones despachados", max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Detalle de despacho"
+        verbose_name_plural = "Detalles de despacho"
+        unique_together = ("dispatch", "egg_type")
+        ordering = ("egg_type",)
+
+    def __str__(self) -> str:
+        return f"{self.dispatch} · {self.get_egg_type_display()} ({self.cartons})"
+
+
 class WeightSampleSession(models.Model):
     """Daily weight capture for a specific room."""
 

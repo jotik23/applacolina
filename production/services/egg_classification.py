@@ -15,6 +15,7 @@ from production.models import (
     EggClassificationBatch,
     EggClassificationSession,
     EggClassificationEntry,
+    EggDispatchItem,
     EggType,
     ProductionRecord,
 )
@@ -96,6 +97,16 @@ class ClassificationSessionDay:
     total_cartons: Decimal
     sessions: list[ClassificationSessionFlowRecord]
 
+
+ORDERED_EGG_TYPES = [
+    EggType.JUMBO,
+    EggType.TRIPLE_A,
+    EggType.DOUBLE_A,
+    EggType.SINGLE_A,
+    EggType.B,
+    EggType.C,
+    EggType.D,
+]
 
 EGGS_PER_CARTON = Decimal("30")
 CARTON_QUANTUM = Decimal("0.01")
@@ -385,6 +396,37 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
     return batches
 
 
+def get_inventory_balance_by_type(*, exclude_dispatch_id: Optional[int] = None) -> dict[str, Decimal]:
+    """Return available classified inventory per egg type after dispatches."""
+
+    classification_totals = (
+        EggClassificationEntry.objects.values("egg_type")
+        .annotate(total=Sum("cartons"))
+        .order_by("egg_type")
+    )
+    classification_map: dict[str, Decimal] = {
+        row["egg_type"]: Decimal(row["total"] or 0) for row in classification_totals if row["egg_type"]
+    }
+
+    dispatch_qs = EggDispatchItem.objects.all()
+    if exclude_dispatch_id:
+        dispatch_qs = dispatch_qs.exclude(dispatch_id=exclude_dispatch_id)
+    dispatch_totals = dispatch_qs.values("egg_type").annotate(total=Sum("cartons"))
+    dispatch_map: dict[str, Decimal] = {
+        row["egg_type"]: Decimal(row["total"] or 0) for row in dispatch_totals if row["egg_type"]
+    }
+
+    balances: dict[str, Decimal] = {}
+    for egg_type in ORDERED_EGG_TYPES:
+        classified_total = classification_map.get(egg_type, Decimal("0"))
+        dispatched_total = dispatch_map.get(egg_type, Decimal("0"))
+        balance = classified_total - dispatched_total
+        if balance < Decimal("0"):
+            balance = Decimal("0")
+        balances[egg_type] = balance
+    return balances
+
+
 def summarize_classified_inventory() -> list[InventoryRow]:
     aggregates = (
         EggClassificationEntry.objects.values("egg_type")
@@ -396,21 +438,13 @@ def summarize_classified_inventory() -> list[InventoryRow]:
     )
     aggregate_map = {aggregate["egg_type"]: aggregate for aggregate in aggregates}
 
-    ordered_types = [
-        EggType.JUMBO,
-        EggType.TRIPLE_A,
-        EggType.DOUBLE_A,
-        EggType.SINGLE_A,
-        EggType.B,
-        EggType.C,
-        EggType.D,
-    ]
     label_map = dict(EggType.choices)
+    balances = get_inventory_balance_by_type()
 
     rows: list[InventoryRow] = []
-    for egg_type in ordered_types:
+    for egg_type in ORDERED_EGG_TYPES:
         aggregate = aggregate_map.get(egg_type)
-        total_cartons = Decimal(aggregate["total"] or 0) if aggregate else Decimal("0")
+        total_cartons = balances.get(egg_type, Decimal("0"))
         classified_at = aggregate["last_classified"] if aggregate else None
         rows.append(
             InventoryRow(

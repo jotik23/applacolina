@@ -11,10 +11,13 @@ from production.models import (
     BirdBatch,
     BreedReference,
     EggClassificationEntry,
+    EggDispatch,
+    EggDispatchDestination,
+    EggType,
     Farm,
     ProductionRecord,
 )
-from production.services.egg_classification import record_classification_results
+from production.services.egg_classification import record_classification_results, summarize_classified_inventory
 
 
 class EggInventoryDashboardTests(TestCase):
@@ -327,3 +330,132 @@ class EggInventoryDashboardTests(TestCase):
         self.assertEqual(batch.status, batch.Status.PENDING)
         self.assertEqual(batch.classification_sessions.count(), 0)
         self.assertEqual(batch.classified_total, Decimal("0"))
+
+
+class EggDispatchViewsTests(TestCase):
+    def setUp(self) -> None:
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            cedula="dispatch-admin",
+            password="strongpass",
+            nombres="Logistica",
+            apellidos="Admin",
+            telefono="3000002010",
+            is_staff=True,
+        )
+        self.client.force_login(self.user)
+        self.farm = Farm.objects.create(name="Central")
+        self.breed = BreedReference.objects.create(name="Hy-Line")
+        self.batch = BirdBatch.objects.create(
+            farm=self.farm,
+            status=BirdBatch.Status.ACTIVE,
+            birth_date=date.today(),
+            initial_quantity=1200,
+            breed=self.breed,
+        )
+        self.record = ProductionRecord.objects.create(
+            bird_batch=self.batch,
+            date=date.today(),
+            production=Decimal("200"),
+            consumption=Decimal("120"),
+            mortality=2,
+            discard=0,
+        )
+        self._seed_inventory()
+
+    def _seed_inventory(self) -> None:
+        batch = self.record.egg_classification
+        batch.received_cartons = Decimal("200")
+        batch.save(update_fields=["received_cartons"])
+        record_classification_results(
+            batch=batch,
+            entries={"jumbo": Decimal("120"), "aaa": Decimal("50"), "aa": Decimal("30")},
+            actor_id=self.user.id,
+        )
+
+    def test_dispatch_creation_consumes_inventory(self) -> None:
+        response = self.client.post(
+            reverse("production:egg-dispatch-create"),
+            {
+                "date": date.today().isoformat(),
+                "destination": EggDispatchDestination.TIERRALTA,
+                "driver": self.user.pk,
+                "seller": self.user.pk,
+                "notes": "Ruta a Tierralta",
+                "type_jumbo": "60",
+                "type_aaa": "30",
+            },
+        )
+        self.assertRedirects(response, reverse("production:egg-dispatch-list"))
+        dispatch = EggDispatch.objects.get()
+        self.assertEqual(dispatch.total_cartons, Decimal("90"))
+        self.assertEqual(dispatch.items.count(), 2)
+        inventory_rows = summarize_classified_inventory()
+        jumbo_row = next(row for row in inventory_rows if row.egg_type == EggType.JUMBO)
+        self.assertEqual(jumbo_row.cartons, Decimal("60"))
+
+    def test_dispatch_prevents_exceeding_inventory(self) -> None:
+        response = self.client.post(
+            reverse("production:egg-dispatch-create"),
+            {
+                "date": date.today().isoformat(),
+                "destination": EggDispatchDestination.MONTERIA,
+                "driver": self.user.pk,
+                "seller": self.user.pk,
+                "type_jumbo": "999",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Inventario insuficiente", status_code=200)
+        self.assertFalse(EggDispatch.objects.exists())
+
+    def test_dispatch_update_replaces_items(self) -> None:
+        dispatch = EggDispatch.objects.create(
+            date=date.today(),
+            destination=EggDispatchDestination.TIERRALTA,
+            driver=self.user,
+            seller=self.user,
+            notes="Inicial",
+            total_cartons=Decimal("40"),
+            created_by=self.user,
+        )
+        dispatch.items.create(egg_type=EggType.JUMBO, cartons=Decimal("40"))
+        response = self.client.post(
+            reverse("production:egg-dispatch-update", args=[dispatch.pk]),
+            {
+                "date": date.today().isoformat(),
+                "destination": EggDispatchDestination.BAJO_CAUCA,
+                "driver": self.user.pk,
+                "seller": self.user.pk,
+                "type_jumbo": "20",
+                "type_aa": "20",
+            },
+        )
+        self.assertRedirects(response, reverse("production:egg-dispatch-list"))
+        dispatch.refresh_from_db()
+        self.assertEqual(dispatch.total_cartons, Decimal("40"))
+        items = {
+            (item.egg_type, item.cartons)
+            for item in dispatch.items.order_by("egg_type")
+        }
+        self.assertEqual(
+            items,
+            {
+                (EggType.JUMBO, Decimal("20")),
+                (EggType.DOUBLE_A, Decimal("20")),
+            },
+        )
+
+    def test_dispatch_list_view_includes_records(self) -> None:
+        EggDispatch.objects.create(
+            date=date.today(),
+            destination=EggDispatchDestination.MONTERIA,
+            driver=self.user,
+            seller=self.user,
+            total_cartons=Decimal("10"),
+            created_by=self.user,
+        )
+        response = self.client.get(reverse("production:egg-dispatch-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("dispatches", response.context)
+        self.assertTrue(response.context["dispatches"])
