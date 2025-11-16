@@ -447,5 +447,159 @@
         {% endif %}
       </section>
     </div>
+
+    {% if selected_egg_batch %}
+      <section class="rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/80">
+        <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cardex diario</p>
+            <h2 class="text-xl font-semibold text-slate-900">Confirmación y clasificación del {{ selected_day|date:"l d \\d\\e F Y" }}</h2>
+            <p class="text-xs text-slate-500">Consulta el estado del lote en el cardex sin salir de este tablero.</p>
+          </div>
+          {% if selected_batch_detail_url %}
+            <a
+              href="{{ selected_batch_detail_url }}"
+              class="inline-flex items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50"
+            >
+              Abrir “Confirmar y clasificar”
+            </a>
+          {% endif %}
+        </header>
+
+        <div class="mt-6 grid gap-6 lg:grid-cols-2">
+          <div class="space-y-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-5">
+            <header class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cartones confirmados</p>
+                <p class="text-sm font-semibold text-slate-900">Conciliación y notas</p>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                {{ selected_receipt_snapshot.status_label }}
+              </span>
+            </header>
+            <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
+              <div class="rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-right">
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reportado</dt>
+                <dd class="mt-1 text-lg font-semibold text-slate-900">
+                  {{ selected_receipt_snapshot.reported_cartons|floatformat:2 }} crt.
+                </dd>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-right">
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Confirmado</dt>
+                <dd class="mt-1 text-lg font-semibold text-slate-900">
+                  {% if selected_receipt_snapshot.received_cartons is not None %}
+                    {{ selected_receipt_snapshot.received_cartons|floatformat:2 }} crt.
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-right">
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pendiente</dt>
+                <dd class="mt-1 text-lg font-semibold text-amber-700">
+                  {{ selected_receipt_snapshot.pending_cartons|floatformat:2 }} crt.
+                </dd>
+              </div>
+            </dl>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas registradas</p>
+              {% if selected_receipt_snapshot.notes %}
+                <p class="mt-1 whitespace-pre-line">{{ selected_receipt_snapshot.notes }}</p>
+              {% else %}
+                <p class="mt-1 text-slate-400">Sin notas registradas.</p>
+              {% endif %}
+            </div>
+            <dl class="grid gap-4 text-xs text-slate-500 sm:grid-cols-2">
+              <div>
+                <dt class="font-semibold uppercase tracking-wide">Confirmado en</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">
+                  {% if selected_receipt_snapshot.confirmed_at %}
+                    {{ selected_receipt_snapshot.confirmed_at|date:"d/m/Y H:i" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+              <div>
+                <dt class="font-semibold uppercase tracking-wide">Confirmado por</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">
+                  {% if selected_receipt_snapshot.confirmed_by %}
+                    {{ selected_receipt_snapshot.confirmed_by }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="space-y-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-5">
+            <header>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Unidades clasificadas</p>
+              <p class="text-sm font-semibold text-slate-900">Detalle por tipo</p>
+            </header>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total clasificado</p>
+              <p class="mt-1 text-3xl font-semibold text-emerald-700">
+                {{ selected_classification_snapshot.classified_cartons|floatformat:2 }} crt.
+              </p>
+            </div>
+            {% if selected_classification_snapshot.entries %}
+              <ul class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white/80">
+                {% for entry in selected_classification_snapshot.entries %}
+                  <li class="flex items-center justify-between px-4 py-3 text-sm text-slate-700">
+                    <span class="font-semibold text-slate-900">{{ entry.label }}</span>
+                    <span class="font-semibold text-slate-900">
+                      {{ entry.cartons|floatformat:2 }} crt.
+                      {% if entry.percentage is not None %}
+                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          ({{ entry.percentage|floatformat:1 }}%)
+                        </span>
+                      {% endif %}
+                    </span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                Aún no se ha registrado la clasificación de este lote.
+              </p>
+            {% endif %}
+            <dl class="grid gap-4 text-xs text-slate-500 sm:grid-cols-2">
+              <div>
+                <dt class="font-semibold uppercase tracking-wide">Fecha de clasificación</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">
+                  {% if selected_classification_snapshot.classified_at %}
+                    {{ selected_classification_snapshot.classified_at|date:"d/m/Y H:i" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+              <div>
+                <dt class="font-semibold uppercase tracking-wide">Días después de producción</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">
+                  {% if selected_classification_snapshot.delay_days is not None %}
+                    {{ selected_classification_snapshot.delay_days }} día{{ selected_classification_snapshot.delay_days|pluralize }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+              <div>
+                <dt class="font-semibold uppercase tracking-wide">Clasificado por</dt>
+                <dd class="mt-1 text-sm font-semibold text-slate-900">
+                  {% if selected_classification_snapshot.classifier_name %}
+                    {{ selected_classification_snapshot.classifier_name }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+    {% endif %}
   </section>
 {% endblock %}

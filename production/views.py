@@ -1,5 +1,5 @@
 from collections import OrderedDict, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from calendar import monthrange
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
@@ -2100,6 +2100,10 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 "room_form": form if self.allocations else None,
                 "room_rows": form.room_rows if form else [],
                 "barn_rows": form.barn_rows if form else [],
+                "selected_egg_batch": self.selected_egg_batch,
+                "selected_batch_detail_url": self.selected_batch_detail_url,
+                "selected_receipt_snapshot": self.selected_receipt_snapshot,
+                "selected_classification_snapshot": self.selected_classification_snapshot,
                 "has_rooms": bool(self.allocations),
                 "week_start": self.week_start,
                 "week_end": self.week_end,
@@ -2177,6 +2181,14 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         self.room_breakdown_rows = self._build_room_breakdown()
         self.form_initial = self._build_form_initial(self.room_snapshots, self.selected_record)
         self.selected_summary = self._build_selected_summary()
+        self.selected_egg_batch = self._resolve_selected_egg_batch()
+        self.selected_batch_detail_url = (
+            reverse("production:egg-inventory-batch", args=[self.selected_egg_batch.pk])
+            if self.selected_egg_batch
+            else None
+        )
+        self.selected_receipt_snapshot = self._build_receipt_snapshot(self.selected_egg_batch)
+        self.selected_classification_snapshot = self._build_classification_snapshot(self.selected_egg_batch)
         self.reference_comparisons = self._build_reference_comparisons()
         self.weekly_mortality_pct = self._compute_weekly_mortality_pct()
         self.week_navigation = self._build_week_navigation()
@@ -2811,6 +2823,96 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 2,
             ),
         }
+
+    def _resolve_selected_egg_batch(self) -> Optional[EggClassificationBatch]:
+        record = self.selected_record
+        if not record:
+            return None
+        return (
+            EggClassificationBatch.objects.select_related(
+                "production_record",
+                "confirmed_by",
+                "classified_by",
+            )
+            .prefetch_related("classification_entries")
+            .filter(production_record=record)
+            .first()
+        )
+
+    def _build_receipt_snapshot(
+        self,
+        batch: Optional[EggClassificationBatch],
+    ) -> Optional[Dict[str, Any]]:
+        if not batch:
+            return None
+        return {
+            "reported_cartons": batch.reported_cartons,
+            "received_cartons": batch.received_cartons,
+            "pending_cartons": batch.pending_cartons,
+            "notes": (batch.notes or "").strip(),
+            "status_label": batch.get_status_display(),
+            "confirmed_at": self._local_datetime(batch.confirmed_at),
+            "confirmed_by": self._display_user(batch.confirmed_by),
+        }
+
+    def _build_classification_snapshot(
+        self,
+        batch: Optional[EggClassificationBatch],
+    ) -> Optional[Dict[str, Any]]:
+        if not batch:
+            return None
+        entries = list(batch.classification_entries.all())
+        entry_map: Dict[str, Decimal] = {entry.egg_type: Decimal(entry.cartons or 0) for entry in entries}
+        entry_rows: List[Dict[str, Any]] = []
+        classified_total = batch.classified_total
+        for egg_type, label in EggType.choices:
+            qty = entry_map.get(egg_type)
+            if not qty:
+                continue
+            percentage = None
+            if classified_total > 0:
+                percentage = (qty / classified_total) * Decimal("100")
+            entry_rows.append({"label": label, "cartons": qty, "percentage": percentage})
+        classified_at = self._local_datetime(batch.classified_at)
+        classification_date = classified_at.date() if classified_at else None
+        delay_days: Optional[int] = None
+        if classification_date:
+            delay_days = (classification_date - batch.production_date).days
+        return {
+            "entries": entry_rows,
+            "classified_cartons": batch.classified_total,
+            "classified_at": classified_at,
+            "classification_date": classification_date,
+            "delay_days": delay_days,
+            "classifier_name": self._display_user(batch.classified_by),
+        }
+
+    @staticmethod
+    def _local_datetime(value: Optional[datetime]) -> Optional[datetime]:
+        if value is None:
+            return None
+        if timezone.is_naive(value):
+            return value
+        return timezone.localtime(value)
+
+    @staticmethod
+    def _display_user(user: Any) -> Optional[str]:
+        if not user:
+            return None
+        full_name = getattr(user, "get_full_name", None)
+        if callable(full_name):
+            value = full_name()
+            if value:
+                return value
+        short_name = getattr(user, "get_short_name", None)
+        if callable(short_name):
+            short_value = short_name()
+            if short_value:
+                return short_value
+        username = getattr(user, "username", None)
+        if username:
+            return username
+        return str(user)
 
     def _allocated_population(self) -> int:
         return self.total_allocated_birds or self.batch.initial_quantity or 0

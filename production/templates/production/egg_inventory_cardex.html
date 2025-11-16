@@ -139,7 +139,17 @@
                       <tr class="border-t border-slate-100">
                         <td class="px-3 py-3 font-semibold text-slate-900">
                           <p>{{ record.farm_name }}</p>
-                          <p class="text-xs font-normal text-slate-500">{{ record.lot_label }}</p>
+                          <p class="text-xs font-normal text-slate-500">
+                            <a
+                              href="{% url 'production:egg-inventory-batch' record.batch_id %}"
+                              class="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-600"
+                            >
+                              {{ record.lot_label }}
+                              <span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">
+                                Confirmar y clasificar
+                              </span>
+                            </a>
+                          </p>
                         </td>
                         <td class="px-3 py-3 text-right">{{ record.produced_cartons|cartons }}</td>
                         <td class="px-3 py-3 text-right">{{ record.confirmed_cartons|cartons }}</td>
