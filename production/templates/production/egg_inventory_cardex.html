@@ -121,6 +121,12 @@
                   <dt class="font-semibold uppercase tracking-wide text-slate-500">Producido</dt>
                   <dd class="mt-1 text-lg font-semibold text-slate-900">{{ flow.produced_cartons|cartons }}</dd>
                 </div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
+                  <dt class="font-semibold uppercase tracking-wide text-amber-700">Δ recibido</dt>
+                  <dd class="mt-1 text-lg font-semibold {% if flow.delta_receipt > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
+                    {{ flow.delta_receipt|cartons }}
+                  </dd>
+                </div>
                 <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-right">
                   <dt class="font-semibold uppercase tracking-wide text-sky-700">Confirmado</dt>
                   <dd class="mt-1 text-lg font-semibold text-sky-900">{{ flow.confirmed_cartons|cartons }}</dd>
@@ -128,12 +134,6 @@
                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
                   <dt class="font-semibold uppercase tracking-wide text-emerald-700">Clasificado</dt>
                   <dd class="mt-1 text-lg font-semibold text-emerald-900">{{ flow.classified_cartons|cartons }}</dd>
-                </div>
-                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-amber-700">Δ recibido</dt>
-                  <dd class="mt-1 text-lg font-semibold {% if flow.delta_receipt > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
-                    {{ flow.delta_receipt|cartons }}
-                  </dd>
                 </div>
                 <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right">
                   <dt class="font-semibold uppercase tracking-wide text-rose-700">Δ inventario</dt>
@@ -151,9 +151,9 @@
                     <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                       <th class="px-3 py-3 text-left">Granja y lote</th>
                       <th class="px-3 py-3 text-right">Producido</th>
+                      <th class="px-3 py-3 text-right">Δ recibido</th>
                       <th class="px-3 py-3 text-right">Confirmado</th>
                       <th class="px-3 py-3 text-right">Clasificado</th>
-                      <th class="px-3 py-3 text-right">Δ recibido</th>
                       <th class="px-3 py-3 text-right">Δ inventario</th>
                       <th class="px-3 py-3 text-left">Clasificador</th>
                       <th class="px-3 py-3 text-left">Galponero</th>
@@ -177,11 +177,11 @@
                           </p>
                         </td>
                         <td class="px-3 py-3 text-right">{{ record.produced_cartons|cartons }}</td>
-                        <td class="px-3 py-3 text-right">{{ record.confirmed_cartons|cartons }}</td>
-                        <td class="px-3 py-3 text-right">{{ record.classified_cartons|cartons }}</td>
                         <td class="px-3 py-3 text-right {% if record.delta_receipt > 0 %}text-amber-700{% endif %}">
                           {{ record.delta_receipt|cartons }}
                         </td>
+                        <td class="px-3 py-3 text-right">{{ record.confirmed_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right">{{ record.classified_cartons|cartons }}</td>
                         <td class="px-3 py-3 text-right {% if record.delta_inventory > 0 %}text-rose-700{% endif %}">
                           {{ record.delta_inventory|cartons }}
                         </td>
