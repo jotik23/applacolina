@@ -78,8 +78,45 @@ class ClassificationSessionRecord:
     total_cartons: Decimal
 
 
+@dataclass(frozen=True)
+class ClassificationSessionFlowRecord:
+    id: int
+    batch_id: int
+    farm_name: str
+    lot_label: str
+    production_date: date
+    produced_cartons: Decimal
+    confirmed_cartons: Optional[Decimal]
+    session_cartons: Decimal
+    classified_at: datetime
+    classifier_name: Optional[str]
+    type_breakdown: Dict[str, Decimal]
+
+
+@dataclass(frozen=True)
+class ClassificationSessionDay:
+    day: date
+    total_cartons: Decimal
+    sessions: list[ClassificationSessionFlowRecord]
+
+
 EGGS_PER_CARTON = Decimal("30")
 CARTON_QUANTUM = Decimal("0.01")
+
+
+def _display_name(user) -> Optional[str]:
+    if not user:
+        return None
+    full_name = user.get_full_name()
+    if full_name:
+        return full_name
+    short_name = getattr(user, "get_short_name", None)
+    if callable(short_name):
+        short_value = short_name()
+        if short_value:
+            return short_value
+    username = getattr(user, "username", None)
+    return username or str(user)
 
 
 def eggs_to_cartons(value: Optional[Decimal]) -> Decimal:
@@ -306,25 +343,23 @@ def build_inventory_flow_range(
     return _build_inventory_flow(start_date=start_date, end_date=end_date, farm_id=farm_id)
 
 
+def build_classification_session_flow_range(
+    *,
+    start_date: date,
+    end_date: date,
+    farm_id: Optional[int] = None,
+) -> list[ClassificationSessionDay]:
+    if start_date > end_date:
+        return []
+    return _build_classification_session_flow(start_date=start_date, end_date=end_date, farm_id=farm_id)
+
+
 def _build_inventory_flow(
     *,
     start_date: date,
     end_date: date,
     farm_id: Optional[int],
 ) -> list[InventoryFlow]:
-    def _display_name(user) -> Optional[str]:
-        if not user:
-            return None
-        full_name = user.get_full_name()
-        if full_name:
-            return full_name
-        short_name = getattr(user, "get_short_name", None)
-        if callable(short_name):
-            short_value = short_name()
-            if short_value:
-                return short_value
-        username = getattr(user, "username", None)
-        return username or str(user)
 
     batches_qs = EggClassificationBatch.objects.filter(
         production_record__date__gte=start_date,
@@ -428,6 +463,79 @@ def _build_inventory_flow(
             )
         )
     return flows
+
+
+def _build_classification_session_flow(
+    *,
+    start_date: date,
+    end_date: date,
+    farm_id: Optional[int],
+) -> list[ClassificationSessionDay]:
+    sessions_qs = EggClassificationSession.objects.filter(
+        classified_at__date__gte=start_date,
+        classified_at__date__lte=end_date,
+    )
+    if farm_id:
+        sessions_qs = sessions_qs.filter(batch__bird_batch__farm_id=farm_id)
+
+    sessions = (
+        sessions_qs.select_related(
+            "batch",
+            "batch__bird_batch",
+            "batch__bird_batch__farm",
+            "batch__production_record",
+            "classified_by",
+        )
+        .prefetch_related("entries")
+        .order_by("-classified_at")
+    )
+
+    records_by_day: dict[date, list[ClassificationSessionFlowRecord]] = defaultdict(list)
+    for session in sessions:
+        breakdown: Dict[str, Decimal] = defaultdict(Decimal)
+        session_total = Decimal("0")
+        for entry in session.entries.all():
+            qty = Decimal(entry.cartons or 0)
+            breakdown[entry.egg_type] += qty
+            session_total += qty
+
+        batch = session.batch
+        confirmed_value = (
+            Decimal(batch.received_cartons) if batch.received_cartons is not None else None
+        )
+        local_dt = timezone.localtime(session.classified_at)
+        records_by_day[local_dt.date()].append(
+            ClassificationSessionFlowRecord(
+                id=session.pk,
+                batch_id=batch.pk,
+                farm_name=batch.bird_batch.farm.name,
+                lot_label=str(batch.bird_batch),
+                production_date=batch.production_date,
+                produced_cartons=Decimal(batch.reported_cartons),
+                confirmed_cartons=confirmed_value,
+                session_cartons=session_total,
+                classified_at=local_dt,
+                classifier_name=_display_name(session.classified_by),
+                type_breakdown=dict(breakdown),
+            )
+        )
+
+    days: list[ClassificationSessionDay] = []
+    for day in sorted(records_by_day.keys(), reverse=True):
+        sessions_for_day = sorted(
+            records_by_day[day],
+            key=lambda record: record.classified_at,
+            reverse=True,
+        )
+        total = sum((record.session_cartons for record in sessions_for_day), Decimal("0"))
+        days.append(
+            ClassificationSessionDay(
+                day=day,
+                total_cartons=total,
+                sessions=sessions_for_day,
+            )
+        )
+    return days
 
 
 def compute_unclassified_total() -> Decimal:

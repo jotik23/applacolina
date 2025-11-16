@@ -12,7 +12,11 @@
         <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Inventario operativo</p>
         <h1 class="text-2xl font-semibold text-slate-900">Cardex diario</h1>
         <p class="text-sm text-slate-500">
-          Explora los movimientos diarios ordenados del más reciente al más antiguo, filtra por granja y revisa el detalle por tipo de huevo.
+          {% if cardex_view == "sessions" %}
+            Visualiza únicamente las clasificaciones registradas, identificando qué lote originó cada parcial y cómo impacta el inventario.
+          {% else %}
+            Explora los movimientos diarios ordenados del más reciente al más antiguo, filtra por granja y revisa el detalle por tipo de huevo.
+          {% endif %}
         </p>
       </div>
       <a
@@ -28,7 +32,7 @@
         <div class="flex items-center gap-3">
           <a
             class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
-            href="?month={{ prev_month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}"
+            href="?month={{ prev_month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}{% if cardex_view != 'production' %}&amp;view={{ cardex_view }}{% endif %}"
           >
             ← Anterior
           </a>
@@ -38,7 +42,7 @@
           {% if can_go_next %}
             <a
               class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
-              href="?month={{ next_month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}"
+              href="?month={{ next_month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}{% if cardex_view != 'production' %}&amp;view={{ cardex_view }}{% endif %}"
             >
               Siguiente →
             </a>
@@ -48,43 +52,64 @@
             </span>
           {% endif %}
         </div>
-        <form method="get" class="flex flex-wrap items-center gap-3">
-          <input type="hidden" name="month" value="{{ month_slug }}">
-          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Granja
-            <select
-              name="farm"
-              class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-            >
-              <option value="">Todas las granjas</option>
-              {% for farm in farm_options %}
-                <option value="{{ farm.id }}" {% if farm.id == selected_farm_id %}selected{% endif %}>
-                  {{ farm.name }}
-                </option>
-              {% endfor %}
-            </select>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Vista
+            <div class="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-[11px]">
+              <a
+                href="?month={{ month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}&amp;view=production"
+                class="rounded-lg px-3 py-1.5 font-semibold {% if cardex_view == 'production' %}bg-emerald-600 text-white{% else %}text-slate-600 hover:text-emerald-700{% endif %}"
+              >
+                Por producción
+              </a>
+              <a
+                href="?month={{ month_slug }}{% if selected_farm_id %}&amp;farm={{ selected_farm_id }}{% endif %}&amp;view=sessions"
+                class="rounded-lg px-3 py-1.5 font-semibold {% if cardex_view == 'sessions' %}bg-emerald-600 text-white{% else %}text-slate-600 hover:text-emerald-700{% endif %}"
+              >
+                Sesiones de clasificación
+              </a>
+            </div>
           </label>
-          <button
-            type="submit"
-            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500"
-          >
-            Aplicar
-          </button>
-          {% if selected_farm_id %}
-            <a
-              href="?month={{ month_slug }}"
-              class="text-sm font-semibold text-slate-500 hover:text-emerald-600"
+        <label class="flex flex-wrap items-center gap-4">
+          <form method="get" class="flex flex-wrap items-center gap-3">
+            <input type="hidden" name="month" value="{{ month_slug }}">
+            <input type="hidden" name="view" value="{{ cardex_view }}">
+            <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Granja
+              <select
+                name="farm"
+                class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              >
+                <option value="">Todas las granjas</option>
+                {% for farm in farm_options %}
+                  <option value="{{ farm.id }}" {% if farm.id == selected_farm_id %}selected{% endif %}>
+                    {{ farm.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+            <button
+              type="submit"
+              class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500"
             >
-              Quitar filtro
-            </a>
-          {% endif %}
-        </form>
+              Aplicar
+            </button>
+            {% if selected_farm_id %}
+              <a
+                href="?month={{ month_slug }}{% if cardex_view != 'production' %}&amp;view={{ cardex_view }}{% endif %}"
+                class="text-sm font-semibold text-slate-500 hover:text-emerald-600"
+              >
+                Quitar filtro
+              </a>
+            {% endif %}
+          </form>
+        </div>
       </div>
     </section>
 
-    {% if flows %}
-      <div class="space-y-6">
-        {% for flow in flows %}
+    {% if cardex_view == "production" %}
+      {% if flows %}
+        <div class="space-y-6">
+          {% for flow in flows %}
           <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
             <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
@@ -263,12 +288,98 @@
               </div>
             </div>
           </article>
-        {% endfor %}
-      </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-5 py-6 text-center text-sm text-slate-500">
+          No se registraron movimientos para este mes y filtros seleccionados.
+        </p>
+      {% endif %}
     {% else %}
-      <p class="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-5 py-6 text-center text-sm text-slate-500">
-        No se registraron movimientos para este mes y filtros seleccionados.
-      </p>
+      {% if session_flows %}
+        <div class="space-y-6">
+          {% for day in session_flows %}
+            <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+              <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Clasificaciones</p>
+                  <p class="text-lg font-semibold text-slate-900">{{ day.day|date:"l d \\d\\e F" }}</p>
+                </div>
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right text-xs text-slate-600">
+                  <p class="font-semibold uppercase tracking-wide text-slate-500">Total clasificado</p>
+                  <p class="mt-1 text-lg font-semibold text-slate-900">{{ day.total_cartons|cartons }}</p>
+                </div>
+              </header>
+              <div class="overflow-x-auto rounded-xl border border-slate-100">
+                <table class="w-full border-collapse text-sm text-slate-700">
+                  <thead>
+                    <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th class="px-3 py-3 text-left">Momento</th>
+                      <th class="px-3 py-3 text-left">Producción</th>
+                      <th class="px-3 py-3 text-right">Producido</th>
+                      <th class="px-3 py-3 text-right">Confirmado</th>
+                      <th class="px-3 py-3 text-right">Parcial</th>
+                      <th class="px-3 py-3 text-left">Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for session in day.sessions %}
+                      <tr class="border-t border-slate-100 align-top">
+                        <td class="px-3 py-3 text-sm">
+                          <p class="font-semibold text-slate-900">{{ session.classified_at|date:"H:i" }}</p>
+                          <p class="text-xs text-slate-500">
+                            {% if session.classifier_name %}
+                              {{ session.classifier_name }}
+                            {% else %}
+                              —
+                            {% endif %}
+                          </p>
+                        </td>
+                        <td class="px-3 py-3 font-semibold text-slate-900">
+                          <p>{{ session.farm_name }}</p>
+                          <p class="text-xs font-normal text-slate-500">
+                            <a
+                              href="{% url 'production:egg-inventory-batch' session.batch_id %}"
+                              class="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-600"
+                            >
+                              {{ session.lot_label }}
+                              <span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">Editar clasificación</span>
+                            </a>
+                          </p>
+                          <p class="text-[11px] text-slate-400">Producción {{ session.production_date|date:"d/m/Y" }}</p>
+                        </td>
+                        <td class="px-3 py-3 text-right">{{ session.produced_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right">{{ session.confirmed_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right font-semibold text-slate-900">{{ session.session_cartons|cartons }}</td>
+                        <td class="px-3 py-3">
+                          {% with breakdown=session.type_breakdown %}
+                            <ul class="flex flex-wrap gap-2 text-[12px] text-slate-700">
+                              {% for type in type_order %}
+                                {% with qty=breakdown|dict_get:type.key %}
+                                  {% if qty %}
+                                    <li class="flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5">
+                                      <span class="font-semibold text-slate-900">{{ type.label }}</span>
+                                      <span>{{ qty|cartons }} cart</span>
+                                    </li>
+                                  {% endif %}
+                                {% endwith %}
+                              {% endfor %}
+                            </ul>
+                          {% endwith %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-5 py-6 text-center text-sm text-slate-500">
+          No se registraron sesiones de clasificación para este mes y filtros seleccionados.
+        </p>
+      {% endif %}
     {% endif %}
   </div>
 {% endblock %}

@@ -48,6 +48,7 @@ from production.services.daily_board import save_daily_room_entries
 from production.services.egg_classification import (
     InventoryRow,
     PendingBatch,
+    build_classification_session_flow_range,
     build_inventory_flow,
     build_inventory_flow_range,
     build_pending_batches,
@@ -1097,12 +1098,23 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
         farm_options = list(Farm.objects.order_by("name").values("id", "name"))
         valid_ids = {option["id"] for option in farm_options}
         selected_farm_id = self._resolve_farm_id(valid_ids)
-        flows = build_inventory_flow_range(
-            start_date=month_start,
-            end_date=month_end,
-            farm_id=selected_farm_id,
-        )
-        flows.sort(key=lambda flow: flow.day, reverse=True)
+        cardex_view = self._resolve_view()
+
+        flows = []
+        session_flows = []
+        if cardex_view == "sessions":
+            session_flows = build_classification_session_flow_range(
+                start_date=month_start,
+                end_date=month_end,
+                farm_id=selected_farm_id,
+            )
+        else:
+            flows = build_inventory_flow_range(
+                start_date=month_start,
+                end_date=month_end,
+                farm_id=selected_farm_id,
+            )
+            flows.sort(key=lambda flow: flow.day, reverse=True)
 
         prev_month = self._add_months(month_start, -1)
         next_month = self._add_months(month_start, 1)
@@ -1122,6 +1134,8 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
                 "selected_farm_id": selected_farm_id,
                 "farm_options": farm_options,
                 "type_order": self.type_order,
+                "cardex_view": cardex_view,
+                "session_flows": session_flows,
             }
         )
         return context
@@ -1168,6 +1182,12 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
         except (TypeError, ValueError):
             return None
         return farm_id if farm_id in valid_ids else None
+
+    def _resolve_view(self) -> str:
+        raw = self.request.GET.get("view")
+        if raw == "sessions":
+            return "sessions"
+        return "production"
 
 
 class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):

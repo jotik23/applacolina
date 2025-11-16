@@ -240,3 +240,25 @@ class EggInventoryDashboardTests(TestCase):
                 for flow in filtered_flows
             )
         )
+
+    def test_cardex_sessions_view_lists_partial_rows(self) -> None:
+        batch = self.record.egg_classification
+        batch.received_cartons = Decimal("150")
+        batch.save(update_fields=["received_cartons"])
+        record_classification_results(
+            batch=batch,
+            entries={"jumbo": Decimal("80"), "aaa": Decimal("70")},
+            actor_id=self.user.id,
+        )
+        url = reverse("production:egg-inventory-cardex")
+        response = self.client.get(url, {"view": "sessions"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["cardex_view"], "sessions")
+        session_flows = response.context["session_flows"]
+        self.assertTrue(session_flows)
+        first_day = session_flows[0]
+        self.assertTrue(first_day.sessions)
+        first_session = first_day.sessions[0]
+        self.assertEqual(first_session.batch_id, batch.pk)
+        self.assertEqual(first_session.session_cartons, Decimal("150"))
+        self.assertEqual(first_session.produced_cartons, batch.reported_cartons)
