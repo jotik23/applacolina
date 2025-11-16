@@ -1303,7 +1303,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 "batch__production_record",
                 "classified_by",
             )
-            .prefetch_related("entries")
+            .prefetch_related("entries", "batch__bird_batch__allocations__room__chicken_house")
             .order_by("-classified_at")
         )
 
@@ -1333,6 +1333,16 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                     )
 
             batch = session.batch
+            reported_cartons = Decimal(batch.reported_cartons or 0)
+            received_cartons_value = Decimal(batch.received_cartons) if batch.received_cartons is not None else None
+            batch_classified_total = Decimal(batch.classified_total)
+            pending_cartons = Decimal(batch.pending_cartons)
+            if pending_cartons < 0:
+                pending_cartons = Decimal("0")
+            missing_receipt_cartons = reported_cartons - (received_cartons_value if received_cartons_value is not None else Decimal("0"))
+            if missing_receipt_cartons < 0:
+                missing_receipt_cartons = Decimal("0")
+            barn_label = self._get_batch_barn_label(batch)
             session_rows.append(
                 {
                     "id": session.pk,
@@ -1344,6 +1354,12 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                     "notes": session.notes,
                     "breakdown": breakdown_rows,
                     "total_cartons": session_total,
+                    "reported_cartons": reported_cartons,
+                    "received_cartons": received_cartons_value,
+                    "classified_cartons": batch_classified_total,
+                    "pending_cartons": pending_cartons,
+                    "missing_receipt_cartons": missing_receipt_cartons,
+                    "barn_label": barn_label,
                 }
             )
             total_cartons += session_total
@@ -1367,6 +1383,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
 
         local_window_start = timezone.localtime(window_start)
         local_window_end = timezone.localtime(window_end)
+        classifier_name = self._display_name(user)
         share_text = self._build_share_text(
             window_start=local_window_start,
             window_end=local_window_end,
@@ -1376,6 +1393,8 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
             goal_remaining=goal_remaining,
             session_rows=session_rows,
             type_totals=type_total_rows,
+            classifier_name=classifier_name,
+            report_date=local_window_end.date(),
         )
         whatsapp_share_url = f"https://wa.me/?text={quote_plus(share_text, safe='')}"
 
@@ -1418,6 +1437,27 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
         quantized = value.quantize(quantize_exp, rounding=ROUND_HALF_UP)
         return format(quantized, f",.{decimals}f")
 
+    def _get_batch_barn_label(self, batch: EggClassificationBatch) -> Optional[str]:
+        bird_batch = batch.bird_batch
+        allocations_qs = getattr(bird_batch, "allocations", None)
+        if allocations_qs is None:
+            return None
+        barn_names: set[str] = set()
+        for allocation in allocations_qs.all():
+            room = getattr(allocation, "room", None)
+            if not room:
+                continue
+            chicken_house = getattr(room, "chicken_house", None)
+            if not chicken_house:
+                continue
+            name = chicken_house.name.strip()
+            if name:
+                barn_names.add(name)
+        if not barn_names:
+            return None
+        ordered = sorted(barn_names)
+        return " / ".join(ordered)
+
     def _build_share_text(
         self,
         *,
@@ -1429,9 +1469,12 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
         goal_remaining: Decimal,
         session_rows: list[dict[str, Any]],
         type_totals: list[dict[str, Any]],
+        classifier_name: Optional[str],
+        report_date: date,
     ) -> str:
-        header = "📋 Resumen de clasificación del turno"
-        range_line = f"🕒 Rango: {window_start:%d %b %H:%M} - {window_end:%d %b %H:%M}"
+        classifier_label = classifier_name or "Sin clasificador"
+        header = f"📋 Resumen de clasificación: {classifier_label}:"
+        range_line = f"🕒 Fecha: {report_date:%d %b}"
         total_line = f"🥚 Total clasificado: {self._format_cartons_text(total_cartons)} cart"
         goal_line = f"🎯 Meta: {self._format_cartons_text(self.target_cartons, decimals=0)} cart"
         if goal_met:
@@ -1443,23 +1486,36 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
 
         if type_totals:
             lines.append("📦 Mix clasificado:")
-            for row in type_totals[:5]:
+            for row in type_totals[:7]:
                 qty = self._format_cartons_text(Decimal(row["cartons"]))
                 lines.append(f"• {row['label']}: {qty} cart")
-            if len(type_totals) > 5:
+            if len(type_totals) > 7:
                 lines.append("• ...")
             lines.append("")
 
         if session_rows:
             lines.append("👷 Sesiones recientes:")
-            for session in session_rows[:5]:
-                session_total = self._format_cartons_text(Decimal(session["total_cartons"]))
-                classifier = session["classifier_name"] or "Sin asignar"
+            visible_sessions = session_rows[:5]
+            for index, session in enumerate(visible_sessions):
                 timestamp = session["classified_at"].strftime("%d %b %H:%M")
-                lines.append(f"• {timestamp} · {classifier}: {session_total} cart")
-                lines.append(f"  ↳ {session['farm_name']} · Lote {session['lot_label']}")
-                if session.get("notes"):
-                    lines.append(f"  📝 {session['notes']}")
+                lot_label = session.get("barn_label") or session["lot_label"]
+                location_label = f"{session['farm_name']} · Lote {lot_label}"
+                lines.append(f"• {timestamp}: {location_label}:")
+                reported_text = self._format_cartons_text(Decimal(session["reported_cartons"]))
+                lines.append(f"  ↳ {reported_text} cart recolección")
+                if session.get("received_cartons") is not None:
+                    received_value = Decimal(session["received_cartons"])
+                else:
+                    received_value = Decimal("0")
+                lines.append(f"  ↳ {self._format_cartons_text(received_value)} cart recibidos")
+                classified_value = Decimal(session.get("classified_cartons") or 0)
+                lines.append(f"  ↳ {self._format_cartons_text(classified_value)} cart clasificados")
+                pending_value = Decimal(session.get("pending_cartons") or 0)
+                lines.append(f"  ↳ {self._format_cartons_text(pending_value)} cart por clasificar")
+                missing_value = Decimal(session.get("missing_receipt_cartons") or 0)
+                lines.append(f"  ↳ {self._format_cartons_text(missing_value)} cart NO RECIBIDOS.")
+                if index < len(visible_sessions) - 1:
+                    lines.append("")
             if len(session_rows) > 5:
                 lines.append("• ...")
         else:
