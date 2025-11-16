@@ -222,6 +222,37 @@ def resolve_batch_label(batch: BirdBatch, label_map: Mapping[int, str]) -> str:
 class ProductionDashboardContextMixin(StaffRequiredMixin):
     """Build the shared poultry production dashboard context."""
 
+    def _resolve_selected_day(self, current_day: date) -> date:
+        """Return the requested day clamped to today when needed."""
+
+        if not getattr(self, "request", None):
+            return current_day
+
+        raw_value = self.request.GET.get("date") or ""
+        requested_day = parse_date(raw_value) if raw_value else None
+        if requested_day is None:
+            return current_day
+        if requested_day > current_day:
+            return current_day
+        return requested_day
+
+    def _build_day_navigation_url(self, target_day: date) -> str:
+        """Preserve the current query params while updating the day."""
+
+        request = getattr(self, "request", None)
+        if not request:
+            return f"?date={target_day.isoformat()}"
+
+        preserved_params: list[tuple[str, str]] = []
+        for key in request.GET:
+            if key == "date":
+                continue
+            for value in request.GET.getlist(key):
+                preserved_params.append((key, value))
+        preserved_params.append(("date", target_day.isoformat()))
+        query_string = urlencode(preserved_params)
+        return f"{request.path}?{query_string}"
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
@@ -230,13 +261,26 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
         if lot_param and lot_param.isdigit():
             focused_lot_id = int(lot_param)
 
-        today = timezone.localdate()
+        current_day = timezone.localdate()
+        today = self._resolve_selected_day(current_day)
         yesterday = today - timedelta(days=1)
+        next_day = today + timedelta(days=1) if today < current_day else None
         week_start = today - timedelta(days=6)
         four_week_start = today - timedelta(days=27)
         year_start = date(today.year, 1, 1)
         history_start = today - timedelta(days=28)
         three_day_start = today - timedelta(days=2)
+
+        navigation_context = {
+            "selected_date": today,
+            "comparison_date": yesterday,
+            "previous_day": yesterday,
+            "next_day": next_day,
+            "previous_day_url": self._build_day_navigation_url(yesterday),
+            "next_day_url": self._build_day_navigation_url(next_day) if next_day else None,
+            "today_url": self._build_day_navigation_url(current_day),
+            "is_today_selected": today == current_day,
+        }
 
         batches = list(
             BirdBatch.objects.filter(status=BirdBatch.Status.ACTIVE)
@@ -257,6 +301,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                     "today": today,
                     "yesterday": yesterday,
                     "focused_lot_id": focused_lot_id,
+                    **navigation_context,
                 }
             )
             return context
@@ -281,7 +326,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
         room_ids = set(room_batch_map.keys())
 
         production_aggregates = (
-            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids)
+            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids, date__lte=today)
             .values("bird_batch_id")
             .annotate(
                 total_consumption=Coalesce(Sum("consumption"), Decimal("0")),
@@ -296,7 +341,9 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 four_week_mortality=Coalesce(
                     Sum("mortality", filter=Q(date__range=(four_week_start, today))), 0
                 ),
-                yearly_mortality=Coalesce(Sum("mortality", filter=Q(date__gte=year_start)), 0),
+                yearly_mortality=Coalesce(
+                    Sum("mortality", filter=Q(date__range=(year_start, today))), 0
+                ),
                 latest_record_date=Max("date"),
                 three_day_production_avg=Avg(
                     "production", filter=Q(date__range=(three_day_start, today))
@@ -313,7 +360,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
 
         latest_record_map: Dict[int, ProductionRecord] = {}
         for record in (
-            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids)
+            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids, date__lte=today)
             .order_by("-date", "-id")
             .iterator()
         ):
@@ -338,7 +385,10 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
 
         weekly_history_map: Dict[int, List[Dict[str, object]]] = defaultdict(list)
         weekly_history_qs = (
-            ProductionRecord.objects.filter(bird_batch_id__in=batch_ids, date__gte=history_start)
+            ProductionRecord.objects.filter(
+                bird_batch_id__in=batch_ids,
+                date__range=(history_start, today),
+            )
             .annotate(week_start=TruncWeek("date"))
             .values("bird_batch_id", "week_start")
             .annotate(feed_kg=Coalesce(Sum("consumption"), Decimal("0")))
@@ -363,6 +413,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             WeightSampleSession.objects.filter(
                 Q(production_record__bird_batch_id__in=batch_ids) | Q(room_id__in=room_ids)
             )
+            .filter(date__lte=today)
             .select_related("production_record__bird_batch", "room__chicken_house")
             .prefetch_related("room__allocations")
             .order_by("-date", "-id")
@@ -1001,6 +1052,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
                 "today": today,
                 "yesterday": yesterday,
                 "focused_lot_id": focused_lot_id,
+                **navigation_context,
             }
         )
         return context

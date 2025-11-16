@@ -7,6 +7,45 @@
   {% include "production/_submenu.html" with active=active_submenu %}
 
   <section class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-white/95 px-5 py-4 shadow-sm ring-1 ring-emerald-100/40">
+      <div class="space-y-1">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">Indicadores diarios</p>
+        <p class="text-2xl font-semibold text-slate-900">
+          {{ selected_date|date:"l d \\d\\e F Y"|capfirst }}
+        </p>
+        <p class="text-xs text-slate-500">
+          Comparado contra {{ comparison_date|date:"l d \\d\\e F Y"|capfirst }}
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 shadow-inner">
+          <a
+            href="{{ previous_day_url }}"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-full text-lg font-semibold text-slate-700 transition hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            aria-label='Ver {{ previous_day|date:"l d \\d\\e F"|capfirst }}'
+          >&larr;</a>
+          {% if next_day_url %}
+            <a
+              href="{{ next_day_url }}"
+              class="inline-flex h-10 w-10 items-center justify-center rounded-full text-lg font-semibold text-slate-700 transition hover:text-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              aria-label='Ver {{ next_day|date:"l d \\d\\e F"|capfirst }}'
+            >&rarr;</a>
+          {% else %}
+            <span
+              class="inline-flex h-10 w-10 items-center justify-center rounded-full text-lg font-semibold text-slate-400"
+              aria-disabled="true"
+            >&rarr;</span>
+          {% endif %}
+        </div>
+        {% if not is_today_selected %}
+          <a
+            href="{{ today_url }}"
+            class="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >Ir a hoy</a>
+        {% endif %}
+      </div>
+    </div>
+
     {% if farms %}
       {% for farm in farms %}
         <section class="rounded-2xl border border-slate-200/70 bg-white/95 shadow-sm ring-1 ring-emerald-100/40">
