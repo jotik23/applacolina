@@ -1495,7 +1495,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
 
         if session_rows:
             lines.append("👷 Sesiones recientes:")
-            visible_sessions = session_rows[:5]
+            visible_sessions = session_rows[:8]
             for index, session in enumerate(visible_sessions):
                 timestamp = session["classified_at"].strftime("%d %b %H:%M")
                 lot_label = session.get("barn_label") or session["lot_label"]
@@ -1516,7 +1516,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 lines.append(f"  ↳ {self._format_cartons_text(missing_value)} cart NO RECIBIDOS.")
                 if index < len(visible_sessions) - 1:
                     lines.append("")
-            if len(session_rows) > 5:
+            if len(session_rows) > 8:
                 lines.append("• ...")
         else:
             lines.append("Sin sesiones registradas en este turno.")
