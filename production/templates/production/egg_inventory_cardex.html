@@ -119,26 +119,26 @@
               <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-5">
                 <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
                   <dt class="font-semibold uppercase tracking-wide text-slate-500">Producido</dt>
-                  <dd class="mt-1 text-lg font-semibold text-slate-900">{{ flow.produced_cartons|cartons }}</dd>
+                  <dd class="mt-1 text-lg font-semibold text-slate-900">{{ flow.produced_cartons|cartons_dash_zero }}</dd>
                 </div>
                 <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-amber-700">Δ recibido</dt>
+                  <dt class="font-semibold uppercase tracking-wide text-amber-700">Recibido</dt>
                   <dd class="mt-1 text-lg font-semibold {% if flow.delta_receipt > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
-                    {{ flow.delta_receipt|cartons }}
+                    {{ flow.delta_receipt|cartons_dash_zero }}
                   </dd>
                 </div>
                 <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-right">
                   <dt class="font-semibold uppercase tracking-wide text-sky-700">Confirmado</dt>
-                  <dd class="mt-1 text-lg font-semibold text-sky-900">{{ flow.confirmed_cartons|cartons }}</dd>
+                  <dd class="mt-1 text-lg font-semibold text-sky-900">{{ flow.confirmed_cartons|cartons_dash_zero }}</dd>
                 </div>
                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
                   <dt class="font-semibold uppercase tracking-wide text-emerald-700">Clasificado</dt>
-                  <dd class="mt-1 text-lg font-semibold text-emerald-900">{{ flow.classified_cartons|cartons }}</dd>
+                  <dd class="mt-1 text-lg font-semibold text-emerald-900">{{ flow.classified_cartons|cartons_dash_zero }}</dd>
                 </div>
                 <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-rose-700">Δ inventario</dt>
+                  <dt class="font-semibold uppercase tracking-wide text-rose-700">Inventario</dt>
                   <dd class="mt-1 text-lg font-semibold {% if flow.delta_inventory > 0 %}text-rose-700{% else %}text-slate-900{% endif %}">
-                    {{ flow.delta_inventory|cartons }}
+                    {{ flow.delta_inventory|cartons_dash_zero }}
                   </dd>
                 </div>
               </dl>
@@ -151,10 +151,14 @@
                     <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                       <th class="px-3 py-3 text-left">Granja y lote</th>
                       <th class="px-3 py-3 text-right">Producido</th>
-                      <th class="px-3 py-3 text-right">Δ recibido</th>
+                      <th class="px-3 py-3 text-right">Recibido</th>
                       <th class="px-3 py-3 text-right">Confirmado</th>
                       <th class="px-3 py-3 text-right">Clasificado</th>
-                      <th class="px-3 py-3 text-right">Δ inventario</th>
+                      <th class="px-3 py-3 text-left">Fecha</th>
+                      {% for type in type_order %}
+                        <th class="px-3 py-3 text-center">{{ type.label }}</th>
+                      {% endfor %}
+                      <th class="px-3 py-3 text-right">Inventario</th>
                       <th class="px-3 py-3 text-left">Clasificador</th>
                       <th class="px-3 py-3 text-left">Galponero</th>
                     </tr>
@@ -163,27 +167,43 @@
                     {% for record in flow.records %}
                       <tr class="border-t border-slate-100">
                         <td class="px-3 py-3 font-semibold text-slate-900">
-                          <p>{{ record.farm_name }}</p>
-                          <p class="text-xs font-normal text-slate-500">
-                            <a
-                              href="{% url 'production:egg-inventory-batch' record.batch_id %}"
-                              class="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-600"
-                            >
-                              {{ record.lot_label }}
-                              <span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-600/80">
-                                Confirmar y clasificar
-                              </span>
-                            </a>
+                          <p>{% if record.chicken_houses %}
+                                Lote {{ record.chicken_houses|join:", " }}
+                              {% else %}
+                                {{ record.lot_label }}
+                              {% endif %}
+                              <a
+                                href="{% url 'production:egg-inventory-batch' record.batch_id %}"
+                                class="ml-2 inline-flex items-center gap-1 rounded-full border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-600"
+                              >
+                                Clasificar
+                                <span aria-hidden="true">→</span>
+                                <span class="sr-only">Ir a confirmar y clasificar</span>
+                              </a>
                           </p>
                         </td>
-                        <td class="px-3 py-3 text-right">{{ record.produced_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right">{{ record.produced_cartons|cartons_dash_zero }}</td>
                         <td class="px-3 py-3 text-right {% if record.delta_receipt > 0 %}text-amber-700{% endif %}">
-                          {{ record.delta_receipt|cartons }}
+                          {{ record.delta_receipt|cartons_dash_zero }}
                         </td>
-                        <td class="px-3 py-3 text-right">{{ record.confirmed_cartons|cartons }}</td>
-                        <td class="px-3 py-3 text-right">{{ record.classified_cartons|cartons }}</td>
+                        <td class="px-3 py-3 text-right">{{ record.confirmed_cartons|cartons_dash_zero }}</td>
+                        <td class="px-3 py-3 text-right">{{ record.classified_cartons|cartons_dash_zero }}</td>
+                        <td class="px-3 py-3 text-xs text-slate-600">
+                          {% if record.last_classified_at %}
+                            {{ record.last_classified_at|date:"d/m · H:i" }}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                        {% for type in type_order %}
+                          <td class="px-3 py-3 text-center">
+                            {% with qty=record.type_breakdown|dict_get:type.key %}
+                              {{ qty|default_if_none:0|cartons_dash_zero }}
+                            {% endwith %}
+                          </td>
+                        {% endfor %}
                         <td class="px-3 py-3 text-right {% if record.delta_inventory > 0 %}text-rose-700{% endif %}">
-                          {{ record.delta_inventory|cartons }}
+                          {{ record.delta_inventory|cartons_dash_zero }}
                         </td>
                         <td class="px-3 py-3 text-xs text-slate-600">
                           {% if record.classifier_name %}
@@ -200,62 +220,6 @@
                           {% endif %}
                         </td>
                       </tr>
-                      {% if record.sessions %}
-                        <tr class="border-t border-slate-100 bg-slate-50/80">
-                          <td colspan="8" class="px-3 py-3">
-                            <div class="space-y-2 text-xs text-slate-600">
-                              <p class="font-semibold uppercase tracking-wide text-slate-500">Parciales registradas</p>
-                              <div class="overflow-x-auto rounded-xl border border-slate-100 bg-white/90">
-                                <table class="w-full border-collapse text-[13px]">
-                                  <thead>
-                                    <tr class="bg-slate-50 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                                      <th class="px-3 py-2 text-left">Momento</th>
-                                      <th class="px-3 py-2 text-left">Clasificador</th>
-                                      <th class="px-3 py-2 text-right">Total</th>
-                                      <th class="px-3 py-2 text-left">Detalle</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {% for session in record.sessions %}
-                                      <tr class="border-t border-slate-100">
-                                        <td class="px-3 py-2 font-semibold text-slate-900">
-                                          {{ session.classified_at|date:"d/m · H:i" }}
-                                        </td>
-                                        <td class="px-3 py-2">
-                                          {% if session.classifier_name %}
-                                            {{ session.classifier_name }}
-                                          {% else %}
-                                            —
-                                          {% endif %}
-                                        </td>
-                                        <td class="px-3 py-2 text-right font-semibold text-slate-900">
-                                          {{ session.total_cartons|cartons }}
-                                        </td>
-                                        <td class="px-3 py-2">
-                                          {% with breakdown=session.type_breakdown %}
-                                            <ul class="flex flex-wrap gap-2 text-[12px] text-slate-700">
-                                              {% for type in type_order %}
-                                                {% with qty=breakdown|dict_get:type.key %}
-                                                  {% if qty %}
-                                                    <li class="flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5">
-                                                      <span class="font-semibold text-slate-900">{{ type.label }}</span>
-                                                      <span>{{ qty|cartons }} cart</span>
-                                                    </li>
-                                                  {% endif %}
-                                                {% endwith %}
-                                              {% endfor %}
-                                            </ul>
-                                          {% endwith %}
-                                        </td>
-                                      </tr>
-                                    {% endfor %}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      {% endif %}
                     {% endfor %}
                   </tbody>
                 </table>
@@ -263,30 +227,6 @@
             {% else %}
               <p class="text-sm text-slate-500">No hubo movimientos para este día.</p>
             {% endif %}
-
-            <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Desglose por tipo de huevo</p>
-              <div class="mt-3 overflow-x-auto">
-                <table class="w-full border-collapse text-sm text-slate-700">
-                  <thead>
-                    <tr class="bg-white text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                      {% for type in type_order %}
-                        <th class="px-3 py-2 text-center">{{ type.label }}</th>
-                      {% endfor %}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr class="border-t border-slate-200 bg-white/90">
-                      {% for type in type_order %}
-                        <td class="px-3 py-3 text-center font-semibold text-slate-900">
-                          {{ flow.type_breakdown|dict_get:type.key|cartons }}
-                        </td>
-                      {% endfor %}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </article>
           {% endfor %}
         </div>
@@ -307,7 +247,7 @@
                 </div>
                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right text-xs text-slate-600">
                   <p class="font-semibold uppercase tracking-wide text-slate-500">Total clasificado</p>
-                  <p class="mt-1 text-lg font-semibold text-slate-900">{{ day.total_cartons|cartons }}</p>
+                  <p class="mt-1 text-lg font-semibold text-slate-900">{{ day.total_cartons|cartons_dash_zero }}</p>
                 </div>
               </header>
               <div class="overflow-x-auto rounded-xl border border-slate-100">
@@ -317,23 +257,22 @@
                       <th class="px-3 py-3 text-left">Momento</th>
                       <th class="px-3 py-3 text-left">Producción</th>
                       <th class="px-3 py-3 text-right">Producido</th>
+                      <th class="px-3 py-3 text-right">Recibido</th>
                       <th class="px-3 py-3 text-right">Confirmado</th>
-                      <th class="px-3 py-3 text-right">Parcial</th>
-                      <th class="px-3 py-3 text-left">Detalle</th>
+                      <th class="px-3 py-3 text-right">Clasificado</th>
+                      {% for type in type_order %}
+                        <th class="px-3 py-3 text-center">{{ type.label }}</th>
+                      {% endfor %}
+                      <th class="px-3 py-3 text-right">Inventario</th>
+                      <th class="px-3 py-3 text-left">Clasificador</th>
+                      <th class="px-3 py-3 text-left">Galponero</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for session in day.sessions %}
                       <tr class="border-t border-slate-100 align-top">
-                        <td class="px-3 py-3 text-sm">
-                          <p class="font-semibold text-slate-900">{{ session.classified_at|date:"H:i" }}</p>
-                          <p class="text-xs text-slate-500">
-                            {% if session.classifier_name %}
-                              {{ session.classifier_name }}
-                            {% else %}
-                              —
-                            {% endif %}
-                          </p>
+                        <td class="px-3 py-3 text-sm font-semibold text-slate-900">
+                          {{ session.classified_at|date:"H:i" }}
                         </td>
                         <td class="px-3 py-3 font-semibold text-slate-900">
                           <p>{{ session.farm_name }}</p>
@@ -348,24 +287,35 @@
                           </p>
                           <p class="text-[11px] text-slate-400">Producción {{ session.production_date|date:"d/m/Y" }}</p>
                         </td>
-                        <td class="px-3 py-3 text-right">{{ session.produced_cartons|cartons }}</td>
-                        <td class="px-3 py-3 text-right">{{ session.confirmed_cartons|cartons }}</td>
-                        <td class="px-3 py-3 text-right font-semibold text-slate-900">{{ session.session_cartons|cartons }}</td>
-                        <td class="px-3 py-3">
-                          {% with breakdown=session.type_breakdown %}
-                            <ul class="flex flex-wrap gap-2 text-[12px] text-slate-700">
-                              {% for type in type_order %}
-                                {% with qty=breakdown|dict_get:type.key %}
-                                  {% if qty %}
-                                    <li class="flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5">
-                                      <span class="font-semibold text-slate-900">{{ type.label }}</span>
-                                      <span>{{ qty|cartons }} cart</span>
-                                    </li>
-                                  {% endif %}
-                                {% endwith %}
-                              {% endfor %}
-                            </ul>
-                          {% endwith %}
+                        <td class="px-3 py-3 text-right">{{ session.produced_cartons|cartons_dash_zero }}</td>
+                        <td class="px-3 py-3 text-right {% if session.delta_receipt > 0 %}text-amber-700{% endif %}">
+                          {{ session.delta_receipt|cartons_dash_zero }}
+                        </td>
+                        <td class="px-3 py-3 text-right">{{ session.confirmed_cartons|cartons_dash_zero }}</td>
+                        <td class="px-3 py-3 text-right font-semibold text-slate-900">{{ session.session_cartons|cartons_dash_zero }}</td>
+                        {% for type in type_order %}
+                          <td class="px-3 py-3 text-center">
+                            {% with qty=session.type_breakdown|dict_get:type.key %}
+                              {{ qty|default_if_none:0|cartons_dash_zero }}
+                            {% endwith %}
+                          </td>
+                        {% endfor %}
+                        <td class="px-3 py-3 text-right {% if session.inventory_balance > 0 %}text-rose-700{% endif %}">
+                          {{ session.inventory_balance|cartons_dash_zero }}
+                        </td>
+                        <td class="px-3 py-3 text-xs text-slate-600">
+                          {% if session.classifier_name %}
+                            {{ session.classifier_name }}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </td>
+                        <td class="px-3 py-3 text-xs text-slate-600">
+                          {% if session.collector_name %}
+                            {{ session.collector_name }}
+                          {% else %}
+                            —
+                          {% endif %}
                         </td>
                       </tr>
                     {% endfor %}

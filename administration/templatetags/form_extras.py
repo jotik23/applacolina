@@ -70,6 +70,19 @@ def _coerce_decimal(value):
         return None
 
 
+def _resolve_decimals(decimals) -> int:
+    try:
+        return max(int(decimals), 0)
+    except (TypeError, ValueError):
+        return 1
+
+
+def _format_decimal(number: Decimal, decimals_int: int) -> str:
+    quantize_exp = Decimal("1").scaleb(-decimals_int) if decimals_int else Decimal("1")
+    quantized = number.quantize(quantize_exp, rounding=ROUND_HALF_UP)
+    return format(quantized, f",.{decimals_int}f")
+
+
 @register.filter(name="cartons")
 def format_cartons(value, decimals: int = 1):
     """Format carton amounts with thousand separators and fallback dash."""
@@ -77,11 +90,20 @@ def format_cartons(value, decimals: int = 1):
     if number is None:
         return "—"
 
-    try:
-        decimals_int = max(int(decimals), 0)
-    except (TypeError, ValueError):
-        decimals_int = 1
+    decimals_int = _resolve_decimals(decimals)
 
-    quantize_exp = Decimal("1").scaleb(-decimals_int) if decimals_int else Decimal("1")
-    quantized = number.quantize(quantize_exp, rounding=ROUND_HALF_UP)
-    return format(quantized, f",.{decimals_int}f")
+    return _format_decimal(number, decimals_int)
+
+
+@register.filter(name="cartons_dash_zero")
+def format_cartons_dash_zero(value, decimals: int = 1):
+    """Format carton values but show '-' whenever the quantity equals zero."""
+    number = _coerce_decimal(value)
+    if number is None:
+        return "—"
+
+    decimals_int = _resolve_decimals(decimals)
+    if number == Decimal("0"):
+        return "-"
+
+    return _format_decimal(number, decimals_int)

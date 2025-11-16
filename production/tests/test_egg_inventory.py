@@ -229,7 +229,7 @@ class EggInventoryDashboardTests(TestCase):
         flows = response.context["flows"]
         self.assertTrue(flows)
         self.assertLessEqual(flows[0].day, date.today())
-        self.assertTrue(any(record.sessions for flow in flows for record in flow.records))
+        self.assertTrue(any(record.last_classified_at for flow in flows for record in flow.records))
 
         filtered_response = self.client.get(url, {"farm": other_farm.pk})
         self.assertEqual(filtered_response.status_code, 200)

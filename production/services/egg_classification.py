@@ -7,10 +7,11 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Mapping, Optional
 
 from django.db import transaction
-from django.db.models import Case, IntegerField, Max, Sum, Value, When
+from django.db.models import Case, IntegerField, Max, Prefetch, Sum, Value, When
 from django.utils import timezone
 
 from production.models import (
+    BirdBatchRoomAllocation,
     EggClassificationBatch,
     EggClassificationSession,
     EggClassificationEntry,
@@ -46,6 +47,7 @@ class InventoryFlowRecord:
     batch_id: int
     farm_name: str
     lot_label: str
+    chicken_houses: list[str]
     produced_cartons: Decimal
     confirmed_cartons: Optional[Decimal]
     classified_cartons: Decimal
@@ -54,7 +56,7 @@ class InventoryFlowRecord:
     collector_name: Optional[str]
     delta_receipt: Decimal
     delta_inventory: Decimal
-    sessions: list["ClassificationSessionRecord"]
+    last_classified_at: Optional[datetime]
 
 
 @dataclass(frozen=True)
@@ -70,15 +72,6 @@ class InventoryFlow:
 
 
 @dataclass(frozen=True)
-class ClassificationSessionRecord:
-    id: int
-    classified_at: datetime
-    classifier_name: Optional[str]
-    type_breakdown: Dict[str, Decimal]
-    total_cartons: Decimal
-
-
-@dataclass(frozen=True)
 class ClassificationSessionFlowRecord:
     id: int
     batch_id: int
@@ -90,7 +83,10 @@ class ClassificationSessionFlowRecord:
     session_cartons: Decimal
     classified_at: datetime
     classifier_name: Optional[str]
+    collector_name: Optional[str]
     type_breakdown: Dict[str, Decimal]
+    delta_receipt: Decimal
+    inventory_balance: Decimal
 
 
 @dataclass(frozen=True)
@@ -117,6 +113,27 @@ def _display_name(user) -> Optional[str]:
             return short_value
     username = getattr(user, "username", None)
     return username or str(user)
+
+
+def _collect_chicken_house_names(batch: EggClassificationBatch) -> list[str]:
+    """Return the distinct chicken houses where the batch is allocated."""
+    allocations = getattr(batch.bird_batch, "allocations", None)
+    if allocations is None:
+        return []
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for allocation in batch.bird_batch.allocations.all():
+        room = allocation.room
+        house = getattr(room, "chicken_house", None)
+        if not house:
+            continue
+        if house.name in seen:
+            continue
+        seen.add(house.name)
+        names.append(house.name)
+    names.sort()
+    return names
 
 
 def eggs_to_cartons(value: Optional[Decimal]) -> Decimal:
@@ -442,6 +459,11 @@ def _build_inventory_flow(
     if farm_id:
         batches_qs = batches_qs.filter(bird_batch__farm_id=farm_id)
 
+    allocation_prefetch = Prefetch(
+        "bird_batch__allocations",
+        queryset=BirdBatchRoomAllocation.objects.select_related("room__chicken_house"),
+    )
+
     batches = (
         batches_qs.select_related(
             "bird_batch",
@@ -450,7 +472,11 @@ def _build_inventory_flow(
             "production_record__created_by",
             "classified_by",
         )
-        .prefetch_related("classification_entries", "classification_sessions__entries")
+        .prefetch_related(
+            "classification_entries",
+            "classification_sessions__entries",
+            allocation_prefetch,
+        )
         .order_by("production_record__date", "bird_batch__farm__name", "bird_batch__id")
     )
 
@@ -464,24 +490,7 @@ def _build_inventory_flow(
             record_breakdown[entry.egg_type] += qty
             classified_total += qty
 
-        session_rows: list[ClassificationSessionRecord] = []
-        sessions = sorted(batch.classification_sessions.all(), key=lambda item: item.classified_at)
-        for session in sessions:
-            session_breakdown: Dict[str, Decimal] = defaultdict(Decimal)
-            session_total = Decimal("0")
-            for entry in session.entries.all():
-                qty = Decimal(entry.cartons or 0)
-                session_breakdown[entry.egg_type] += qty
-                session_total += qty
-            session_rows.append(
-                ClassificationSessionRecord(
-                    id=session.pk,
-                    classified_at=session.classified_at,
-                    classifier_name=_display_name(session.classified_by),
-                    type_breakdown=dict(session_breakdown),
-                    total_cartons=session_total,
-                )
-            )
+        last_classified_at = timezone.localtime(batch.classified_at) if batch.classified_at else None
 
         confirmed_value = Decimal(batch.received_cartons) if batch.received_cartons is not None else None
         confirmed_for_math = confirmed_value if confirmed_value is not None else Decimal("0")
@@ -495,6 +504,7 @@ def _build_inventory_flow(
             batch_id=batch.pk,
             farm_name=batch.bird_batch.farm.name,
             lot_label=str(batch.bird_batch),
+            chicken_houses=_collect_chicken_house_names(batch),
             produced_cartons=produced_cartons,
             confirmed_cartons=confirmed_cartons,
             classified_cartons=classified_cartons,
@@ -503,7 +513,7 @@ def _build_inventory_flow(
             collector_name=_display_name(getattr(batch.production_record, "created_by", None)),
             delta_receipt=delta_receipt,
             delta_inventory=delta_inventory,
-            sessions=session_rows,
+            last_classified_at=last_classified_at,
         )
         records_by_day[batch.production_date].append(record)
 
@@ -552,7 +562,7 @@ def _build_classification_session_flow(
     if farm_id:
         sessions_qs = sessions_qs.filter(batch__bird_batch__farm_id=farm_id)
 
-    sessions = (
+    sessions = list(
         sessions_qs.select_related(
             "batch",
             "batch__bird_batch",
@@ -564,8 +574,9 @@ def _build_classification_session_flow(
         .order_by("-classified_at")
     )
 
-    records_by_day: dict[date, list[ClassificationSessionFlowRecord]] = defaultdict(list)
-    for session in sessions:
+    payload_by_session: dict[int, tuple[Dict[str, Decimal], Decimal, Decimal, Decimal]] = {}
+    cumulative_classified: dict[int, Decimal] = defaultdict(Decimal)
+    for session in sorted(sessions, key=lambda record: record.classified_at):
         breakdown: Dict[str, Decimal] = defaultdict(Decimal)
         session_total = Decimal("0")
         for entry in session.entries.all():
@@ -577,7 +588,35 @@ def _build_classification_session_flow(
         confirmed_value = (
             Decimal(batch.received_cartons) if batch.received_cartons is not None else None
         )
+        confirmed_for_math = confirmed_value if confirmed_value is not None else Decimal("0")
+        inventory_source = confirmed_value if confirmed_value is not None else Decimal(batch.reported_cartons)
+        consumed = cumulative_classified[batch.pk] + session_total
+        remaining_inventory = inventory_source - consumed
+        cumulative_classified[batch.pk] = consumed
+        delta_receipt = Decimal(batch.reported_cartons) - confirmed_for_math
+
+        payload_by_session[session.pk] = (
+            dict(breakdown),
+            session_total,
+            remaining_inventory,
+            delta_receipt,
+        )
+
+    records_by_day: dict[date, list[ClassificationSessionFlowRecord]] = defaultdict(list)
+    for session in sessions:
+        batch = session.batch
         local_dt = timezone.localtime(session.classified_at)
+        confirmed_value = (
+            Decimal(batch.received_cartons) if batch.received_cartons is not None else None
+        )
+        payload = payload_by_session.get(session.pk)
+        if payload:
+            breakdown, session_total, inventory_balance, delta_receipt = payload
+        else:
+            breakdown = {}
+            session_total = Decimal("0")
+            inventory_balance = Decimal("0")
+            delta_receipt = Decimal("0")
         records_by_day[local_dt.date()].append(
             ClassificationSessionFlowRecord(
                 id=session.pk,
@@ -590,7 +629,10 @@ def _build_classification_session_flow(
                 session_cartons=session_total,
                 classified_at=local_dt,
                 classifier_name=_display_name(session.classified_by),
-                type_breakdown=dict(breakdown),
+                collector_name=_display_name(getattr(batch.production_record, "created_by", None)),
+                type_breakdown=breakdown,
+                delta_receipt=delta_receipt,
+                inventory_balance=inventory_balance,
             )
         )
 
