@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    egg_classification_shift_summary_view,
     batch_production_board_view,
     batch_allocation_delete_view,
     batch_management_view,
@@ -36,6 +37,11 @@ urlpatterns = [
         "inventario-huevo/cardex/",
         egg_inventory_cardex_view,
         name="egg-inventory-cardex",
+    ),
+    path(
+        "inventario-huevo/clasificacion-turno/",
+        egg_classification_shift_summary_view,
+        name="egg-classification-shift-summary",
     ),
     path(
         "inventario-huevo/lote/<int:pk>/",

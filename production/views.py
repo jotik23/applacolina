@@ -39,6 +39,7 @@ from production.models import (
     BreedWeeklyGuide,
     ChickenHouse,
     EggClassificationBatch,
+    EggClassificationSession,
     EggDispatch,
     EggDispatchDestination,
     EggType,
@@ -1274,6 +1275,121 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             running["delta_inventory"] += flow.delta_inventory
             totals_by_day[flow.day] = dict(running)
         return totals_by_day
+
+
+class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateView):
+    template_name = "production/egg_classification_shift_summary.html"
+    shift_hours = 12
+    target_cartons = Decimal("700")
+    egg_type_labels = dict(EggType.choices)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        window_end = timezone.now()
+        window_start = window_end - timedelta(hours=self.shift_hours)
+
+        sessions = (
+            EggClassificationSession.objects.filter(classified_at__gte=window_start)
+            .select_related(
+                "batch",
+                "batch__bird_batch",
+                "batch__bird_batch__farm",
+                "batch__production_record",
+                "classified_by",
+            )
+            .prefetch_related("entries")
+            .order_by("-classified_at")
+        )
+
+        session_rows: list[dict[str, Any]] = []
+        total_cartons = Decimal("0")
+        type_totals: dict[str, Decimal] = defaultdict(Decimal)
+
+        for session in sessions:
+            breakdown_map: dict[str, Decimal] = defaultdict(Decimal)
+            session_total = Decimal("0")
+            for entry in session.entries.all():
+                qty = Decimal(entry.cartons or 0)
+                breakdown_map[entry.egg_type] += qty
+                type_totals[entry.egg_type] += qty
+                session_total += qty
+
+            breakdown_rows: list[dict[str, Any]] = []
+            for egg_type in ORDERED_EGG_TYPES:
+                qty = breakdown_map.get(egg_type)
+                if qty and qty > 0:
+                    breakdown_rows.append(
+                        {
+                            "egg_type": egg_type,
+                            "label": self.egg_type_labels.get(egg_type, egg_type),
+                            "cartons": qty,
+                        }
+                    )
+
+            batch = session.batch
+            session_rows.append(
+                {
+                    "id": session.pk,
+                    "lot_label": str(batch.bird_batch),
+                    "farm_name": batch.bird_batch.farm.name,
+                    "production_date": batch.production_date,
+                    "classified_at": timezone.localtime(session.classified_at),
+                    "classifier_name": self._display_name(session.classified_by),
+                    "notes": session.notes,
+                    "breakdown": breakdown_rows,
+                    "total_cartons": session_total,
+                }
+            )
+            total_cartons += session_total
+
+        type_total_rows: list[dict[str, Any]] = []
+        for egg_type in ORDERED_EGG_TYPES:
+            qty = type_totals.get(egg_type)
+            if qty and qty > 0:
+                type_total_rows.append(
+                    {
+                        "egg_type": egg_type,
+                        "label": self.egg_type_labels.get(egg_type, egg_type),
+                        "cartons": qty,
+                    }
+                )
+
+        goal_delta = total_cartons - self.target_cartons
+        goal_remaining = self.target_cartons - total_cartons
+        if goal_remaining < 0:
+            goal_remaining = Decimal("0")
+
+        context.update(
+            {
+                "active_submenu": "egg_inventory",
+                "window_start": timezone.localtime(window_start),
+                "window_end": timezone.localtime(window_end),
+                "session_rows": session_rows,
+                "session_count": len(session_rows),
+                "total_cartons": total_cartons,
+                "target_cartons": self.target_cartons,
+                "goal_delta": goal_delta,
+                "goal_met": total_cartons >= self.target_cartons,
+                "goal_remaining": goal_remaining,
+                "type_totals": type_total_rows,
+                "shift_hours": self.shift_hours,
+            }
+        )
+        return context
+
+    def _display_name(self, user) -> Optional[str]:
+        if not user:
+            return None
+        full_name = user.get_full_name()
+        if full_name:
+            return full_name
+        short_name = getattr(user, "get_short_name", None)
+        if callable(short_name):
+            short_value = short_name()
+            if short_value:
+                return short_value
+        username = getattr(user, "username", None)
+        return username or str(user)
 
 
 class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
@@ -3394,6 +3510,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
 batch_production_board_view = BatchProductionBoardView.as_view()
 egg_inventory_dashboard_view = EggInventoryDashboardView.as_view()
 egg_inventory_cardex_view = EggInventoryCardexView.as_view()
+egg_classification_shift_summary_view = EggClassificationShiftSummaryView.as_view()
 egg_inventory_batch_detail_view = EggInventoryBatchDetailView.as_view()
 egg_dispatch_list_view = EggDispatchListView.as_view()
 egg_dispatch_create_view = EggDispatchCreateView.as_view()
