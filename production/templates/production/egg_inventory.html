@@ -91,7 +91,11 @@
                               >
                                 <div>
                                   <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                    {{ batch.lot_label }}
+                                    {% if batch.chicken_houses %}
+                                      Lote {{ batch.chicken_houses|join:", " }}
+                                    {% else %}
+                                      {{ batch.lot_label }}
+                                    {% endif %}
                                   </p>
                                   <div class="mt-1 flex flex-wrap gap-3 text-[13px] text-slate-600">
                                     <span>Reportado: <strong>{{ batch.reported_cartons|cartons }}</strong></span>

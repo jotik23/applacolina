@@ -25,6 +25,7 @@ class PendingBatch:
     id: int
     production_date: date
     lot_label: str
+    chicken_houses: list[str]
     farm_name: str
     reported_cartons: Decimal
     received_cartons: Optional[Decimal]
@@ -336,6 +337,12 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
             "bird_batch",
             "bird_batch__farm",
         )
+        .prefetch_related(
+            Prefetch(
+                "bird_batch__allocations",
+                queryset=BirdBatchRoomAllocation.objects.select_related("room__chicken_house"),
+            )
+        )
         .annotate(
             status_order=Case(
                 When(status=EggClassificationBatch.Status.PENDING, then=Value(0)),
@@ -359,11 +366,13 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
             continue
         if pending <= Decimal("1"):
             continue
+        chicken_houses = _collect_chicken_house_names(batch)
         batches.append(
             PendingBatch(
                 id=batch.pk,
                 production_date=batch.production_date,
                 lot_label=str(batch.bird_batch),
+                chicken_houses=chicken_houses,
                 farm_name=batch.farm.name,
                 reported_cartons=Decimal(batch.reported_cartons),
                 received_cartons=Decimal(batch.received_cartons) if batch.received_cartons is not None else None,
