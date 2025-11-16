@@ -473,6 +473,28 @@ class EggClassificationBatch(models.Model):
         verbose_name = "Lote de clasificación de huevo"
         verbose_name_plural = "Lotes de clasificación de huevo"
         ordering = ("-production_record__date", "-created_at")
+        permissions = [
+            (
+                "access_egg_inventory",
+                "Puede acceder a la vista de Clasificación e inventario de huevo",
+            ),
+            (
+                "confirm_egg_batch_receipt",
+                "Puede confirmar cartones recibidos en un lote de clasificación",
+            ),
+            (
+                "record_egg_classification",
+                "Puede registrar resultados de clasificación de huevo",
+            ),
+            (
+                "revert_egg_classification_session",
+                "Puede revertir iteraciones de clasificación registradas",
+            ),
+            (
+                "reset_egg_classification_day",
+                "Puede restablecer completamente el progreso de un lote de clasificación",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.production_record.date:%Y-%m-%d} · {self.bird_batch}"

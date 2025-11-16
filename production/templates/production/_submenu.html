@@ -1,44 +1,50 @@
 <nav class="border-b border-slate-200/70" data-app-submenu>
   <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
-    <a
-      href="{% url 'production:daily-indicators' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'daily_indicators' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'daily_indicators' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'daily_indicators' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Indicadores del día
-    </a>
-    <a
-      href="{% url 'production:egg-inventory' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'egg_inventory' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'egg_inventory' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'egg_inventory' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Clasificación e inventario
-    </a>
-    <a
-      href="{% url 'production:batches' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'batches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'batches' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'batches' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Lotes de aves
-    </a>
-    <a
-      href="{% url 'production:infrastructure' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'infrastructure' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'infrastructure' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'infrastructure' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Infraestructura
-    </a>
-    <a
-      href="{% url 'production:reference-tables' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'reference_tables' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'reference_tables' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'reference_tables' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Tablas de referencia
-    </a>
+    {% if request.user.is_staff %}
+      <a
+        href="{% url 'production:daily-indicators' %}"
+        class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'daily_indicators' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+        {% if active == 'daily_indicators' %}aria-current="page"{% endif %}
+      >
+        <span class="h-2 w-2 rounded-full {% if active == 'daily_indicators' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+        Indicadores del día
+      </a>
+    {% endif %}
+    {% if request.user.is_staff or perms.production.access_egg_inventory %}
+      <a
+        href="{% url 'production:egg-inventory' %}"
+        class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'egg_inventory' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+        {% if active == 'egg_inventory' %}aria-current="page"{% endif %}
+      >
+        <span class="h-2 w-2 rounded-full {% if active == 'egg_inventory' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+        Clasificación e inventario
+      </a>
+    {% endif %}
+    {% if request.user.is_staff %}
+      <a
+        href="{% url 'production:batches' %}"
+        class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'batches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+        {% if active == 'batches' %}aria-current="page"{% endif %}
+      >
+        <span class="h-2 w-2 rounded-full {% if active == 'batches' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+        Lotes de aves
+      </a>
+      <a
+        href="{% url 'production:infrastructure' %}"
+        class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'infrastructure' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+        {% if active == 'infrastructure' %}aria-current="page"{% endif %}
+      >
+        <span class="h-2 w-2 rounded-full {% if active == 'infrastructure' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+        Infraestructura
+      </a>
+      <a
+        href="{% url 'production:reference-tables' %}"
+        class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'reference_tables' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+        {% if active == 'reference_tables' %}aria-current="page"{% endif %}
+      >
+        <span class="h-2 w-2 rounded-full {% if active == 'reference_tables' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+        Tablas de referencia
+      </a>
+    {% endif %}
   </div>
 </nav>

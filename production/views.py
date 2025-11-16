@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Avg, Count, Max, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncWeek
@@ -16,7 +17,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import DeleteView, TemplateView, UpdateView
 
-from applacolina.mixins import StaffRequiredMixin
+from applacolina.mixins import EggInventoryPermissionMixin, StaffRequiredMixin
 from production.forms import (
     BatchDailyProductionForm,
     BatchDistributionForm,
@@ -1058,7 +1059,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
         return context
 
 
-class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
+class EggInventoryDashboardView(EggInventoryPermissionMixin, TemplateView):
     template_name = "production/egg_inventory.html"
 
     def get_context_data(self, **kwargs):
@@ -1133,7 +1134,7 @@ class EggInventoryDashboardView(StaffRequiredMixin, TemplateView):
         return grouped
 
 
-class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
+class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
     template_name = "production/egg_inventory_cardex.html"
     egg_type_labels = dict(EggType.choices)
     type_order = [
@@ -1270,9 +1271,21 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
         return totals_by_day
 
 
-class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
+class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
     template_name = "production/egg_inventory_batch_detail.html"
     batch: EggClassificationBatch
+
+    def _has_action_permission(self, perm_code: str) -> bool:
+        user = getattr(self.request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+            return True
+        return user.has_perm(perm_code)
+
+    def _require_action_permission(self, perm_code: str) -> None:
+        if not self._has_action_permission(perm_code):
+            raise PermissionDenied
 
     def dispatch(self, request, *args, **kwargs):
         self.batch = self._get_batch()
@@ -1281,6 +1294,7 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         form_key = request.POST.get("form")
         if form_key == "receipt":
+            self._require_action_permission("production.confirm_egg_batch_receipt")
             form = EggBatchReceiptForm(request.POST, batch=self.batch)
             if form.is_valid():
                 form.save(actor=request.user)
@@ -1289,6 +1303,7 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
             return self.render_to_response(self.get_context_data(receipt_form=form))
 
         if form_key == "classification":
+            self._require_action_permission("production.record_egg_classification")
             form = EggBatchClassificationForm(request.POST, batch=self.batch)
             if form.is_valid():
                 form.save(actor=request.user)
@@ -1300,6 +1315,7 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
             return self.render_to_response(self.get_context_data(classification_form=form))
 
         if form_key == "delete_session":
+            self._require_action_permission("production.revert_egg_classification_session")
             session_id = request.POST.get("session_id")
             session = (
                 self.batch.classification_sessions.filter(pk=session_id).first()
@@ -1314,6 +1330,7 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
             return redirect(self.request.path)
 
         if form_key == "reset_batch":
+            self._require_action_permission("production.reset_egg_classification_day")
             reset_batch_progress(batch=self.batch)
             messages.success(
                 request,
@@ -1333,6 +1350,10 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
         session_rows = self._build_session_rows()
         pending_value = max(Decimal(self.batch.pending_cartons), Decimal("0"))
         can_submit = self.batch.received_cartons is not None and pending_value > 0
+        can_confirm_receipt = self._has_action_permission("production.confirm_egg_batch_receipt")
+        can_record_classification = self._has_action_permission("production.record_egg_classification")
+        can_revert_sessions = self._has_action_permission("production.revert_egg_classification_session")
+        can_reset_batch = self._has_action_permission("production.reset_egg_classification_day")
         batch_snapshot = {
             "reported_cartons": self.batch.reported_cartons,
             "received_cartons": self.batch.received_cartons,
@@ -1350,7 +1371,11 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
                 "batch_snapshot": batch_snapshot,
                 "pending_for_form": pending_value,
                 "can_submit_classification": can_submit,
-                "has_resettable_progress": bool(self.batch.received_cartons or session_rows),
+                "can_confirm_receipt": can_confirm_receipt,
+                "can_record_classification": can_record_classification,
+                "can_revert_sessions": can_revert_sessions,
+                "can_reset_batch": can_reset_batch,
+                "has_resettable_progress": bool(can_reset_batch and (self.batch.received_cartons or session_rows)),
                 "return_url": reverse("production:egg-inventory"),
             }
         )
