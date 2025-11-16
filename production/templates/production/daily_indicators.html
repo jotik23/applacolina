@@ -139,11 +139,6 @@
                                       --
                                     {% endif %}
                                   </p>
-                                  {% if metric and metric.status %}
-                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
-                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
-                                    </span>
-                                  {% endif %}
                                 </div>
                                 <div class="text-[11px] text-slate-500">
                                   {% if metric and metric.previous is not None %}
@@ -228,11 +223,6 @@
                                       --
                                     {% endif %}
                                   </p>
-                                  {% if metric and metric.status %}
-                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
-                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
-                                    </span>
-                                  {% endif %}
                                 </div>
                                 <div class="text-[11px] text-slate-500">
                                   {% if metric and metric.previous is not None %}
@@ -276,11 +266,6 @@
                                       --
                                     {% endif %}
                                   </p>
-                                  {% if metric and metric.status %}
-                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
-                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
-                                    </span>
-                                  {% endif %}
                                 </div>
                                 <div class="text-[11px] text-slate-500">
                                   {% if metric and metric.previous is not None %}
@@ -324,11 +309,6 @@
                                       --
                                     {% endif %}
                                   </p>
-                                  {% if metric and metric.status %}
-                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if metric.status == 'high' %}bg-rose-100 text-rose-700{% elif metric.status == 'low' %}bg-sky-100 text-sky-700{% elif metric.status == 'ok' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-600{% endif %}">
-                                      {% if metric.status == 'high' %}Sobre{% elif metric.status == 'low' %}Bajo{% elif metric.status == 'ok' %}En rango{% else %}Sin dato{% endif %}
-                                    </span>
-                                  {% endif %}
                                 </div>
                                 <div class="text-[11px] text-slate-500">
                                   {% if metric and metric.previous is not None %}
