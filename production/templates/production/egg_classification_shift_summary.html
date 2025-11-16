@@ -19,12 +19,22 @@
             {{ session_count }} {{ session_count|pluralize:"sesión,sesiones" }}
           </p>
         </div>
-        <a
-          href="{% url 'production:egg-inventory' %}"
-          class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
-        >
-          ← Regresar a inventario
-        </a>
+        <div class="flex flex-wrap gap-3">
+          <a
+            href="{{ whatsapp_share_url }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-white"
+          >
+            Compartir por WhatsApp
+          </a>
+          <a
+            href="{% url 'production:egg-inventory' %}"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
+          >
+            ← Regresar a inventario
+          </a>
+        </div>
       </div>
       <dl class="grid gap-4 text-xs text-slate-600 sm:grid-cols-3">
         <div class="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 text-center">

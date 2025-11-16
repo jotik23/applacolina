@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from calendar import monthrange
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote_plus
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
@@ -1365,11 +1365,25 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
         if goal_remaining < 0:
             goal_remaining = Decimal("0")
 
+        local_window_start = timezone.localtime(window_start)
+        local_window_end = timezone.localtime(window_end)
+        share_text = self._build_share_text(
+            window_start=local_window_start,
+            window_end=local_window_end,
+            total_cartons=total_cartons,
+            goal_met=total_cartons >= self.target_cartons,
+            goal_delta=goal_delta,
+            goal_remaining=goal_remaining,
+            session_rows=session_rows,
+            type_totals=type_total_rows,
+        )
+        whatsapp_share_url = f"https://wa.me/?text={quote_plus(share_text, safe='')}"
+
         context.update(
             {
                 "active_submenu": "egg_inventory",
-                "window_start": timezone.localtime(window_start),
-                "window_end": timezone.localtime(window_end),
+                "window_start": local_window_start,
+                "window_end": local_window_end,
                 "session_rows": session_rows,
                 "session_count": len(session_rows),
                 "total_cartons": total_cartons,
@@ -1379,6 +1393,8 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 "goal_remaining": goal_remaining,
                 "type_totals": type_total_rows,
                 "shift_hours": self.shift_hours,
+                "share_text": share_text,
+                "whatsapp_share_url": whatsapp_share_url,
             }
         )
         return context
@@ -1396,6 +1412,62 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 return short_value
         username = getattr(user, "username", None)
         return username or str(user)
+
+    def _format_cartons_text(self, value: Decimal, decimals: int = 1) -> str:
+        quantize_exp = Decimal("1").scaleb(-decimals)
+        quantized = value.quantize(quantize_exp, rounding=ROUND_HALF_UP)
+        return format(quantized, f",.{decimals}f")
+
+    def _build_share_text(
+        self,
+        *,
+        window_start: datetime,
+        window_end: datetime,
+        total_cartons: Decimal,
+        goal_met: bool,
+        goal_delta: Decimal,
+        goal_remaining: Decimal,
+        session_rows: list[dict[str, Any]],
+        type_totals: list[dict[str, Any]],
+    ) -> str:
+        header = "📋 Resumen de clasificación del turno"
+        range_line = f"🕒 Rango: {window_start:%d %b %H:%M} - {window_end:%d %b %H:%M}"
+        total_line = f"🥚 Total clasificado: {self._format_cartons_text(total_cartons)} cart"
+        goal_line = f"🎯 Meta: {self._format_cartons_text(self.target_cartons, decimals=0)} cart"
+        if goal_met:
+            status_line = f"✅ Resultado: +{self._format_cartons_text(goal_delta)} cart sobre la meta."
+        else:
+            status_line = f"⚠️ Resultado: faltan {self._format_cartons_text(goal_remaining)} cart."
+
+        lines = [header, range_line, total_line, goal_line, status_line, ""]
+
+        if type_totals:
+            lines.append("📦 Mix clasificado:")
+            for row in type_totals[:5]:
+                qty = self._format_cartons_text(Decimal(row["cartons"]))
+                lines.append(f"• {row['label']}: {qty} cart")
+            if len(type_totals) > 5:
+                lines.append("• ...")
+            lines.append("")
+
+        if session_rows:
+            lines.append("👷 Sesiones recientes:")
+            for session in session_rows[:5]:
+                session_total = self._format_cartons_text(Decimal(session["total_cartons"]))
+                classifier = session["classifier_name"] or "Sin asignar"
+                timestamp = session["classified_at"].strftime("%d %b %H:%M")
+                lines.append(f"• {timestamp} · {classifier}: {session_total} cart")
+                lines.append(f"  ↳ {session['farm_name']} · Lote {session['lot_label']}")
+                if session.get("notes"):
+                    lines.append(f"  📝 {session['notes']}")
+            if len(session_rows) > 5:
+                lines.append("• ...")
+        else:
+            lines.append("Sin sesiones registradas en este turno.")
+
+        lines.append("")
+        lines.append("Enviado desde La Colina 🟢")
+        return "\n".join(lines)
 
 
 class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
