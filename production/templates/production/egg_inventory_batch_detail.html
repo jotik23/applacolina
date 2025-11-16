@@ -209,7 +209,7 @@
           {% if session_rows %}
             <ol class="mt-4 space-y-3">
               {% for session in session_rows %}
-                <li class="rounded-2xl border border-slate-200/70 bg-white/90 p-4">
+                <li class="space-y-3 rounded-2xl border border-slate-200/70 bg-white/90 p-4">
                   <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm text-slate-600">
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registrado el</p>
@@ -231,6 +231,18 @@
                         {% endif %}
                       </p>
                     </div>
+                    <form
+                      method="post"
+                      class="ml-auto inline-flex items-center gap-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-rose-700 shadow-sm transition hover:border-rose-200 hover:bg-rose-100"
+                      onsubmit="return confirm('Esta iteración se eliminará y los totales se recalcularán. ¿Deseas continuar?');"
+                    >
+                      {% csrf_token %}
+                      <input type="hidden" name="form" value="delete_session">
+                      <input type="hidden" name="session_id" value="{{ session.id }}">
+                      <button type="submit" class="inline-flex items-center gap-2">
+                        <span>Revertir</span>
+                      </button>
+                    </form>
                   </div>
                   {% if session.entries %}
                     <ul class="mt-3 flex flex-wrap gap-2 text-[13px] text-slate-700">
@@ -249,6 +261,34 @@
             <p class="mt-2 text-sm text-slate-500">Aún no hay registros parciales para este lote.</p>
           {% endif %}
         </section>
+
+        {% if has_resettable_progress %}
+          <section class="rounded-2xl border border-rose-100 bg-white/95 p-5 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-rose-500">Acciones de recuperación</p>
+                <h3 class="text-lg font-semibold text-slate-900">Reiniciar el día</h3>
+                <p class="text-sm text-slate-500">
+                  Elimina cualquier confirmación y clasificaciones registradas para comenzar de nuevo con este lote.
+                </p>
+              </div>
+              <form
+                method="post"
+                class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-rose-500"
+                onsubmit="return confirm('Restablecer el día eliminará confirmaciones y clasificaciones guardadas. Esta acción no se puede deshacer. ¿Continuar?');"
+              >
+                {% csrf_token %}
+                <input type="hidden" name="form" value="reset_batch">
+                <button type="submit" class="inline-flex items-center gap-2">
+                  <span>Restablecer día</span>
+                </button>
+              </form>
+            </div>
+            <p class="mt-3 text-xs text-slate-500">
+              Esta acción limpia las cantidades confirmadas, borra las sesiones e indicadores asociados y devuelve el lote al estado pendiente.
+            </p>
+          </section>
+        {% endif %}
       </div>
     </article>
   </div>

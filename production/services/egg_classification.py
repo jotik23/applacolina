@@ -239,6 +239,80 @@ def record_classification_results(
     return batch
 
 
+def delete_classification_session(*, session: EggClassificationSession) -> EggClassificationBatch:
+    """Delete a specific classification iteration and refresh batch aggregates."""
+    batch = session.batch
+    with transaction.atomic():
+        session.delete()
+        aggregates = EggClassificationEntry.objects.filter(batch=batch).aggregate(total=Sum("cartons"))
+        total_classified = Decimal(aggregates.get("total") or 0)
+        batch._classified_total_cache = total_classified
+        latest_session = (
+            batch.classification_sessions.order_by("-classified_at", "-pk").first()
+        )
+        if latest_session:
+            batch.classified_at = latest_session.classified_at
+            batch.classified_by = latest_session.classified_by
+        else:
+            batch.classified_at = None
+            batch.classified_by = None
+
+        if total_classified <= 0:
+            batch.status = (
+                EggClassificationBatch.Status.CONFIRMED
+                if batch.received_cartons is not None
+                else EggClassificationBatch.Status.PENDING
+            )
+        else:
+            source_cartons = (
+                Decimal(batch.received_cartons)
+                if batch.received_cartons is not None
+                else Decimal(batch.reported_cartons)
+            )
+            if total_classified >= source_cartons:
+                batch.status = EggClassificationBatch.Status.CLASSIFIED
+            else:
+                batch.status = EggClassificationBatch.Status.CONFIRMED
+
+        batch.save(
+            update_fields=[
+                "classified_at",
+                "classified_by",
+                "status",
+                "updated_at",
+            ]
+        )
+    return batch
+
+
+def reset_batch_progress(*, batch: EggClassificationBatch) -> EggClassificationBatch:
+    """Remove confirmations and sessions so the batch can be reprocessed."""
+    with transaction.atomic():
+        EggClassificationSession.objects.filter(batch=batch).delete()
+        EggClassificationEntry.objects.filter(batch=batch).delete()
+        batch._classified_total_cache = Decimal("0")
+        batch.received_cartons = Decimal("0")
+        batch.notes = ""
+        batch.status = EggClassificationBatch.Status.PENDING
+        batch.confirmed_at = None
+        batch.confirmed_by_id = None
+        batch.classified_at = None
+        batch.classified_by_id = None
+        batch.save(
+            update_fields=[
+                "received_cartons",
+                "notes",
+                "status",
+                "confirmed_at",
+                "confirmed_by",
+                "classified_at",
+                "classified_by",
+                "updated_at",
+            ]
+        )
+    return batch
+
+
 def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
     qs = (
         EggClassificationBatch.objects.select_related(

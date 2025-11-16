@@ -53,6 +53,8 @@ from production.services.egg_classification import (
     build_inventory_flow_range,
     build_pending_batches,
     compute_unclassified_total,
+    delete_classification_session,
+    reset_batch_progress,
     summarize_classified_inventory,
 )
 from production.services.reference_tables import get_reference_targets, reset_reference_targets_cache
@@ -1219,6 +1221,28 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
                 return redirect(self.request.path)
             return self.render_to_response(self.get_context_data(classification_form=form))
 
+        if form_key == "delete_session":
+            session_id = request.POST.get("session_id")
+            session = (
+                self.batch.classification_sessions.filter(pk=session_id).first()
+                if session_id
+                else None
+            )
+            if not session:
+                messages.error(request, "No se encontró la iteración seleccionada.")
+                return redirect(self.request.path)
+            delete_classification_session(session=session)
+            messages.success(request, "La iteración de clasificación fue revertida.")
+            return redirect(self.request.path)
+
+        if form_key == "reset_batch":
+            reset_batch_progress(batch=self.batch)
+            messages.success(
+                request,
+                "Se restableció el día: puedes volver a confirmar y clasificar desde cero.",
+            )
+            return redirect(self.request.path)
+
         messages.error(request, "No se pudo determinar el formulario enviado.")
         return redirect(self.request.path)
 
@@ -1248,6 +1272,7 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
                 "batch_snapshot": batch_snapshot,
                 "pending_for_form": pending_value,
                 "can_submit_classification": can_submit,
+                "has_resettable_progress": bool(self.batch.received_cartons or session_rows),
                 "return_url": reverse("production:egg-inventory"),
             }
         )

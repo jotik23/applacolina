@@ -262,3 +262,68 @@ class EggInventoryDashboardTests(TestCase):
         self.assertEqual(first_session.batch_id, batch.pk)
         self.assertEqual(first_session.session_cartons, Decimal("150"))
         self.assertEqual(first_session.produced_cartons, batch.reported_cartons)
+
+    def test_can_delete_classification_session(self) -> None:
+        batch = self.record.egg_classification
+        self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "receipt",
+                "batch_id": batch.pk,
+                "received_cartons": "120.0",
+            },
+        )
+        self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "classification",
+                "batch_id": batch.pk,
+                "type_jumbo": "60",
+            },
+        )
+        session = batch.classification_sessions.first()
+        response = self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "delete_session",
+                "session_id": session.pk if session else "",
+            },
+        )
+        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
+        batch.refresh_from_db()
+        self.assertEqual(batch.classification_sessions.count(), 0)
+        self.assertEqual(batch.classified_total, Decimal("0"))
+        self.assertEqual(batch.status, batch.Status.CONFIRMED)
+
+    def test_can_reset_batch_progress(self) -> None:
+        batch = self.record.egg_classification
+        self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "receipt",
+                "batch_id": batch.pk,
+                "received_cartons": "140.0",
+                "notes": "Recepción inicial",
+            },
+        )
+        self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "classification",
+                "batch_id": batch.pk,
+                "type_jumbo": "40",
+                "type_aaa": "30",
+            },
+        )
+        response = self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "reset_batch",
+            },
+        )
+        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
+        batch.refresh_from_db()
+        self.assertEqual(batch.received_cartons, Decimal("0"))
+        self.assertEqual(batch.status, batch.Status.PENDING)
+        self.assertEqual(batch.classification_sessions.count(), 0)
+        self.assertEqual(batch.classified_total, Decimal("0"))
