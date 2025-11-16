@@ -54,7 +54,7 @@
           <div class="rounded-xl bg-slate-50 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendiente</dt>
             <dd class="text-lg font-semibold text-slate-900">
-              {{ batch_snapshot.pending_cartons|cartons }} cart
+              <span data-pending-summary>{{ batch_snapshot.pending_cartons|cartons }}</span> cart
             </dd>
           </div>
           <div class="rounded-xl bg-slate-50 px-3 py-2">
@@ -74,71 +74,113 @@
       </header>
 
       <div class="space-y-6 p-5">
-        <form method="post" class="space-y-4 rounded-xl border border-amber-100 bg-amber-50/60 p-4 shadow-inner">
-          {% csrf_token %}
-          <input type="hidden" name="form" value="receipt">
-          <input type="hidden" name="batch_id" value="{{ batch.pk }}">
-          <h3 class="text-sm font-semibold uppercase tracking-wide text-amber-700">Confirmar recibido</h3>
-          {% for field in receipt_form %}
-            <div class="space-y-1">
-              <label class="text-xs font-semibold uppercase tracking-wide text-amber-700" for="{{ field.id_for_label }}">{{ field.label }}</label>
-              {{ field }}
-              {% if field.help_text %}
-                <p class="text-xs text-amber-700/80">{{ field.help_text }}</p>
-              {% endif %}
-              {% for error in field.errors %}
+        <div class="grid gap-6 lg:grid-cols-5">
+          <form method="post" class="flex flex-col gap-5 rounded-2xl border border-amber-100 bg-white/95 p-5 shadow-sm lg:col-span-2">
+            {% csrf_token %}
+            <input type="hidden" name="form" value="receipt">
+            <input type="hidden" name="batch_id" value="{{ batch.pk }}">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[0.4em] text-amber-500">Confirmar recibido</p>
+              <p class="text-sm text-slate-500">Concilia la entrega y deja contexto para el equipo.</p>
+            </div>
+            <div class="space-y-4">
+              {% with field=receipt_form.received_cartons %}
+                <label class="space-y-2 text-xs font-semibold uppercase tracking-wide text-slate-600" for="{{ field.id_for_label }}">
+                  <span>{{ field.label }}</span>
+                  <div class="relative">
+                    {{ field|add_class:"pr-12" }}
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-wide text-amber-500">cart</span>
+                  </div>
+                  {% for error in field.errors %}
+                    <p class="text-[11px] font-semibold text-rose-600">{{ error }}</p>
+                  {% endfor %}
+                </label>
+              {% endwith %}
+              {% with field=receipt_form.notes %}
+                <label class="space-y-2 text-xs font-semibold uppercase tracking-wide text-slate-600" for="{{ field.id_for_label }}">
+                  <span>{{ field.label }}</span>
+                  {{ field }}
+                  {% if field.help_text %}
+                    <p class="text-xs text-slate-500">{{ field.help_text }}</p>
+                  {% endif %}
+                  {% for error in field.errors %}
+                    <p class="text-[11px] font-semibold text-rose-600">{{ error }}</p>
+                  {% endfor %}
+                </label>
+              {% endwith %}
+            </div>
+            {% if receipt_form.non_field_errors %}
+              {% for error in receipt_form.non_field_errors %}
                 <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
               {% endfor %}
-            </div>
-          {% endfor %}
-          {% if receipt_form.non_field_errors %}
-            {% for error in receipt_form.non_field_errors %}
-              <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
-            {% endfor %}
-          {% endif %}
-          <div class="flex justify-end gap-3">
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-amber-500">
-              Guardar recibido
-            </button>
-          </div>
-        </form>
-
-        <form method="post" class="space-y-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-inner">
-          {% csrf_token %}
-          <input type="hidden" name="form" value="classification">
-          <input type="hidden" name="batch_id" value="{{ batch.pk }}">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-emerald-700">Clasificación por tipo</h3>
-            {% if not batch.received_cartons %}
-              <span class="text-xs font-semibold uppercase tracking-wide text-amber-600">Confirma recibido para habilitar</span>
             {% endif %}
-          </div>
-          <fieldset {% if not batch.received_cartons %}disabled{% endif %} class="grid gap-3 sm:grid-cols-2">
-            {% for field in classification_form %}
-              <label class="space-y-1 text-xs font-semibold uppercase tracking-wide text-emerald-700" for="{{ field.id_for_label }}">
-                <span>{{ field.label }}</span>
-                {{ field }}
-                {% for error in field.errors %}
-                  <p class="text-[11px] font-semibold text-rose-600">{{ error }}</p>
-                {% endfor %}
-              </label>
-            {% endfor %}
-          </fieldset>
-          {% if classification_form.non_field_errors %}
-            {% for error in classification_form.non_field_errors %}
-              <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
-            {% endfor %}
+            <div class="flex justify-end">
+              <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-amber-500 sm:w-auto">
+                Guardar recibido
+              </button>
+            </div>
+          </form>
+
+          <form method="post" class="flex flex-col gap-5 rounded-2xl border border-emerald-100 bg-white/95 p-5 shadow-sm lg:col-span-3">
+            {% csrf_token %}
+            <input type="hidden" name="form" value="classification">
+            <input type="hidden" name="batch_id" value="{{ batch.pk }}">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.4em] text-emerald-600">Clasificación por tipo</p>
+                <p class="text-sm text-slate-500">Distribuye los cartones confirmados. La suma debe igualar {{ batch_snapshot.received_cartons|cartons }} cart.</p>
+              </div>
+              {% if not batch.received_cartons %}
+                <span class="text-xs font-semibold uppercase tracking-wide text-amber-600">Confirma recibido para habilitar</span>
+              {% else %}
+                <span class="flex flex-col gap-0.5 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-2 text-emerald-900 transition-colors" data-pending-pill>
+              <span class="text-[11px] font-semibold uppercase tracking-[0.3em] text-emerald-500" data-pending-label>Pendiente</span>
+              <span class="text-xl font-semibold leading-tight">
+                <span data-pending-value>{{ batch_snapshot.pending_cartons|cartons }}</span>
+                <span class="text-sm font-semibold uppercase text-emerald-500" data-pending-unit>cart</span>
+              </span>
+            </span>
           {% endif %}
-          <div class="flex justify-end">
-            <button
-              type="submit"
-              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500 {% if not batch.received_cartons %}cursor-not-allowed opacity-60{% endif %}"
+            </div>
+            <fieldset
               {% if not batch.received_cartons %}disabled{% endif %}
+              class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+              data-classification-fieldset
+              data-received-cartons="{{ batch_snapshot.received_cartons|default_if_none:'0' }}"
             >
-              Enviar a inventario
-            </button>
-          </div>
-        </form>
+              {% for field in classification_form %}
+                <div class="rounded-xl border border-slate-100 bg-slate-50/40 p-3">
+                  <label class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-600" for="{{ field.id_for_label }}">
+                    <span>{{ field.label }}</span>
+                    <span class="text-[10px] text-slate-400">cartones</span>
+                  </label>
+                  <div class="relative mt-2">
+                    {{ field|add_class:"pr-12" }}
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">cart</span>
+                  </div>
+                  {% for error in field.errors %}
+                    <p class="mt-1 text-[11px] font-semibold text-rose-600">{{ error }}</p>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </fieldset>
+            {% if classification_form.non_field_errors %}
+              {% for error in classification_form.non_field_errors %}
+                <p class="text-xs font-semibold text-rose-600">{{ error }}</p>
+              {% endfor %}
+            {% endif %}
+            <div class="flex justify-end">
+              <button
+                type="submit"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-500 sm:w-auto {% if not batch.received_cartons %}cursor-not-allowed opacity-60{% endif %}"
+                data-submit-classification
+                {% if not batch.received_cartons %}disabled{% endif %}
+              >
+                Enviar a inventario
+              </button>
+            </div>
+          </form>
+        </div>
 
         <section class="rounded-xl border border-slate-200/60 bg-white p-4 shadow-inner">
           <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-600">Clasificación registrada</h3>
@@ -158,4 +200,70 @@
       </div>
     </article>
   </div>
+
+  <script>
+    (function () {
+      const fieldset = document.querySelector('[data-classification-fieldset]');
+      const pendingValueEl = document.querySelector('[data-pending-value]');
+      const pendingSummaryEl = document.querySelector('[data-pending-summary]');
+      const pendingPill = document.querySelector('[data-pending-pill]');
+      const pendingLabel = document.querySelector('[data-pending-label]');
+      const pendingUnit = document.querySelector('[data-pending-unit]');
+      const submitBtn = document.querySelector('[data-submit-classification]');
+      if (!fieldset || !pendingValueEl) {
+        return;
+      }
+      const received = parseFloat(fieldset.getAttribute('data-received-cartons') || '0');
+      if (!received) {
+        return;
+      }
+      const formatter = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      const inputs = fieldset.querySelectorAll('input[type="number"]');
+
+      function updatePendingDisplay() {
+        let total = 0;
+        inputs.forEach((input) => {
+          const value = parseFloat(input.value);
+          if (!Number.isNaN(value)) {
+            total += value;
+          }
+        });
+        const pending = received - total;
+        const formatted = formatter.format(pending);
+        pendingValueEl.textContent = formatted;
+        if (pendingSummaryEl) {
+          pendingSummaryEl.textContent = formatted;
+        }
+        if (pendingPill) {
+          const negative = pending < 0;
+          pendingPill.classList.toggle('border-rose-200', negative);
+          pendingPill.classList.toggle('bg-rose-50/90', negative);
+          pendingPill.classList.toggle('text-rose-900', negative);
+          pendingPill.classList.toggle('border-emerald-200', !negative);
+          pendingPill.classList.toggle('bg-emerald-50/90', !negative);
+          pendingPill.classList.toggle('text-emerald-900', !negative);
+          if (pendingLabel) {
+            pendingLabel.textContent = negative ? 'Excedente' : 'Pendiente';
+            pendingLabel.classList.toggle('text-rose-500', negative);
+            pendingLabel.classList.toggle('text-emerald-500', !negative);
+          }
+          if (pendingUnit) {
+            pendingUnit.classList.toggle('text-rose-500', negative);
+            pendingUnit.classList.toggle('text-emerald-500', !negative);
+          }
+        }
+        if (submitBtn) {
+          const negative = pending < 0;
+          submitBtn.disabled = negative;
+          submitBtn.classList.toggle('cursor-not-allowed', negative);
+          submitBtn.classList.toggle('opacity-60', negative);
+        }
+      }
+
+      inputs.forEach((input) => {
+        input.addEventListener('input', updatePendingDisplay);
+      });
+      updatePendingDisplay();
+    })();
+  </script>
 {% endblock %}

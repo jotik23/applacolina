@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Mapping, Optional
 
 from django.db import transaction
@@ -71,40 +71,21 @@ EGGS_PER_CARTON = Decimal("30")
 CARTON_QUANTUM = Decimal("0.01")
 
 
-def _to_decimal(value: Optional[Decimal]) -> Optional[Decimal]:
-    if value in (None, "", "—", "..."):
-        return None
-    if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(value)
-    except (InvalidOperation, ArithmeticError, TypeError, ValueError):
-        return None
-
-
-def eggs_to_cartons(value: Optional[Decimal]) -> Optional[Decimal]:
-    """Convert an egg count into its carton representation."""
-    decimal_value = _to_decimal(value)
-    if decimal_value is None:
-        return None
-    if decimal_value == 0:
+def eggs_to_cartons(value: Optional[Decimal]) -> Decimal:
+    """Normalize egg counts into carton units."""
+    if value is None:
         return Decimal("0")
-    cartons = decimal_value / EGGS_PER_CARTON
-    return cartons.quantize(CARTON_QUANTUM, rounding=ROUND_HALF_UP)
-
-
-def eggs_to_cartons_or_zero(value: Optional[Decimal]) -> Decimal:
-    converted = eggs_to_cartons(value)
-    return converted if converted is not None else Decimal("0")
+    return (Decimal(value) / EGGS_PER_CARTON).quantize(CARTON_QUANTUM, rounding=ROUND_HALF_UP)
 
 
 def ensure_batch_for_record(record: ProductionRecord) -> EggClassificationBatch:
     """Guarantee there is a classification batch tied to the production record."""
+    reported_cartons = eggs_to_cartons(record.production)
     batch, _ = EggClassificationBatch.objects.get_or_create(
         production_record=record,
         defaults={
             "bird_batch": record.bird_batch,
-            "reported_cartons": record.production,
+            "reported_cartons": reported_cartons,
         },
     )
 
@@ -113,8 +94,8 @@ def ensure_batch_for_record(record: ProductionRecord) -> EggClassificationBatch:
         batch.bird_batch = record.bird_batch
         dirty_fields.append("bird_batch")
 
-    if batch.reported_cartons != record.production:
-        batch.reported_cartons = record.production
+    if batch.reported_cartons != reported_cartons:
+        batch.reported_cartons = reported_cartons
         dirty_fields.append("reported_cartons")
 
     if dirty_fields:
@@ -213,26 +194,22 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
         pending = batch.pending_cartons
         if pending < 0:
             pending = Decimal("0")
-        pending_cartons = eggs_to_cartons_or_zero(pending)
-        reported_cartons = eggs_to_cartons_or_zero(batch.reported_cartons)
-        if reported_cartons <= Decimal("0"):
+        if batch.reported_cartons <= Decimal("0"):
             continue
-        if pending_cartons <= Decimal("1"):
+        if pending <= Decimal("1"):
             continue
-        received_cartons = eggs_to_cartons(batch.received_cartons)
-        difference = eggs_to_cartons(batch.received_difference)
         batches.append(
             PendingBatch(
                 id=batch.pk,
                 production_date=batch.production_date,
                 lot_label=str(batch.bird_batch),
                 farm_name=batch.farm.name,
-                reported_cartons=reported_cartons,
-                received_cartons=received_cartons,
-                pending_cartons=pending_cartons,
+                reported_cartons=Decimal(batch.reported_cartons),
+                received_cartons=Decimal(batch.received_cartons) if batch.received_cartons is not None else None,
+                pending_cartons=pending,
                 status=batch.status,
                 status_label=batch.get_status_display(),
-                difference=difference if difference is not None else Decimal("0"),
+                difference=Decimal(batch.received_difference),
             )
         )
     return batches
@@ -263,8 +240,7 @@ def summarize_classified_inventory() -> list[InventoryRow]:
     rows: list[InventoryRow] = []
     for egg_type in ordered_types:
         aggregate = aggregate_map.get(egg_type)
-        total = Decimal(aggregate["total"] or 0) if aggregate else Decimal("0")
-        total_cartons = eggs_to_cartons_or_zero(total)
+        total_cartons = Decimal(aggregate["total"] or 0) if aggregate else Decimal("0")
         classified_at = aggregate["last_classified"] if aggregate else None
         rows.append(
             InventoryRow(
@@ -340,20 +316,20 @@ def _build_inventory_flow(
     for batch in batches:
         entries = list(batch.classification_entries.all())
         record_breakdown: Dict[str, Decimal] = defaultdict(Decimal)
-        classified_total_eggs = Decimal("0")
+        classified_total = Decimal("0")
         for entry in entries:
             qty = Decimal(entry.cartons or 0)
-            record_breakdown[entry.egg_type] += eggs_to_cartons_or_zero(qty)
-            classified_total_eggs += qty
+            record_breakdown[entry.egg_type] += qty
+            classified_total += qty
 
         confirmed_value = Decimal(batch.received_cartons) if batch.received_cartons is not None else None
         confirmed_for_math = confirmed_value if confirmed_value is not None else Decimal("0")
         inventory_source = confirmed_value if confirmed_value is not None else Decimal(batch.reported_cartons)
-        produced_cartons = eggs_to_cartons_or_zero(batch.reported_cartons)
-        confirmed_cartons = eggs_to_cartons(confirmed_value)
-        classified_cartons = eggs_to_cartons_or_zero(classified_total_eggs)
-        delta_receipt = eggs_to_cartons_or_zero(Decimal(batch.reported_cartons) - confirmed_for_math)
-        delta_inventory = eggs_to_cartons_or_zero(inventory_source - classified_total_eggs)
+        produced_cartons = Decimal(batch.reported_cartons)
+        confirmed_cartons = confirmed_value
+        classified_cartons = classified_total
+        delta_receipt = Decimal(batch.reported_cartons) - confirmed_for_math
+        delta_inventory = inventory_source - classified_total
         record = InventoryFlowRecord(
             batch_id=batch.pk,
             farm_name=batch.bird_batch.farm.name,
@@ -417,5 +393,5 @@ def compute_unclassified_total() -> Decimal:
         source = received_value if received_value is not None else reported
         balance = source - classified
         if balance > 0:
-            pending_total += eggs_to_cartons_or_zero(balance)
+            pending_total += balance
     return pending_total

@@ -48,8 +48,6 @@ from production.services.daily_board import save_daily_room_entries
 from production.services.egg_classification import (
     InventoryRow,
     PendingBatch,
-    eggs_to_cartons,
-    eggs_to_cartons_or_zero,
     build_inventory_flow,
     build_inventory_flow_range,
     build_pending_batches,
@@ -1194,8 +1192,11 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
             form = EggBatchClassificationForm(request.POST, batch=self.batch)
             if form.is_valid():
                 form.save(actor=request.user)
-                messages.success(request, "Clasificación registrada y enviada a inventario.")
-                return redirect(self.request.path)
+                messages.success(
+                    request,
+                    "Clasificación guardada. El inventario ya refleja el reparto y puedes seguir con otros lotes.",
+                )
+                return redirect(reverse("production:egg-inventory"))
             return self.render_to_response(self.get_context_data(classification_form=form))
 
         messages.error(request, "No se pudo determinar el formulario enviado.")
@@ -1209,14 +1210,14 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
         entry_rows = [
             {
                 "label": entry.get_egg_type_display(),
-                "cartons": eggs_to_cartons_or_zero(entry.cartons),
+                "cartons": entry.cartons,
             }
             for entry in entries
         ]
         batch_snapshot = {
-            "reported_cartons": eggs_to_cartons_or_zero(self.batch.reported_cartons),
-            "received_cartons": eggs_to_cartons(self.batch.received_cartons),
-            "pending_cartons": eggs_to_cartons_or_zero(self.batch.pending_cartons),
+            "reported_cartons": self.batch.reported_cartons,
+            "received_cartons": self.batch.received_cartons,
+            "pending_cartons": self.batch.pending_cartons,
         }
         context.update(
             {

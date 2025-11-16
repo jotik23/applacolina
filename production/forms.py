@@ -899,9 +899,9 @@ class EggBatchClassificationForm(forms.Form):
             raise forms.ValidationError("Registra al menos un tipo de huevo.")
 
         received = Decimal(self.batch.received_cartons).quantize(Decimal("0.01"))
-        if totals != received:
+        if totals > received:
             raise forms.ValidationError(
-                f"La suma clasificada ({totals}) debe coincidir con los cartones confirmados ({received})."
+                f"La suma clasificada ({totals}) no puede superar los cartones confirmados ({received})."
             )
 
         self.cleaned_entries = entries

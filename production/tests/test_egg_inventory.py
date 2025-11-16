@@ -105,13 +105,61 @@ class EggInventoryDashboardTests(TestCase):
                 "type_aa": "50",
             },
         )
-        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
+        self.assertRedirects(response, reverse("production:egg-inventory"))
         batch.refresh_from_db()
         entries = EggClassificationEntry.objects.filter(batch=batch)
         self.assertEqual(entries.count(), 3)
         self.assertEqual(sum(entry.cartons for entry in entries), Decimal("150"))
         self.assertEqual(batch.status, batch.Status.CLASSIFIED)
         self.assertEqual(batch.classified_total, Decimal("150"))
+
+    def test_classification_allows_partial_totals(self) -> None:
+        batch = self.record.egg_classification
+        self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "receipt",
+                "batch_id": batch.pk,
+                "received_cartons": "150.0",
+            },
+        )
+        response = self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "classification",
+                "batch_id": batch.pk,
+                "type_jumbo": "60",
+                "type_aaa": "40",
+            },
+            follow=True,
+        )
+        self.assertRedirects(response, reverse("production:egg-inventory"))
+        batch.refresh_from_db()
+        self.assertEqual(batch.classified_total, Decimal("100"))
+
+    def test_classification_rejects_totals_above_received(self) -> None:
+        batch = self.record.egg_classification
+        self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "receipt",
+                "batch_id": batch.pk,
+                "received_cartons": "150.0",
+            },
+        )
+        response = self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "classification",
+                "batch_id": batch.pk,
+                "type_jumbo": "120",
+                "type_aaa": "40",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["classification_form"].non_field_errors())
+        batch.refresh_from_db()
+        self.assertEqual(batch.classification_entries.count(), 0)
 
     def test_cardex_view_filters_by_month_and_farm(self) -> None:
         batch = self.record.egg_classification
