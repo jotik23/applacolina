@@ -48,6 +48,8 @@ from production.services.daily_board import save_daily_room_entries
 from production.services.egg_classification import (
     InventoryRow,
     PendingBatch,
+    eggs_to_cartons,
+    eggs_to_cartons_or_zero,
     build_inventory_flow,
     build_inventory_flow_range,
     build_pending_batches,
@@ -1203,13 +1205,28 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         receipt_form = kwargs.get("receipt_form") or EggBatchReceiptForm(batch=self.batch)
         classification_form = kwargs.get("classification_form") or EggBatchClassificationForm(batch=self.batch)
+        entries = list(self.batch.classification_entries.all())
+        entry_rows = [
+            {
+                "label": entry.get_egg_type_display(),
+                "cartons": eggs_to_cartons_or_zero(entry.cartons),
+            }
+            for entry in entries
+        ]
+        batch_snapshot = {
+            "reported_cartons": eggs_to_cartons_or_zero(self.batch.reported_cartons),
+            "received_cartons": eggs_to_cartons(self.batch.received_cartons),
+            "pending_cartons": eggs_to_cartons_or_zero(self.batch.pending_cartons),
+        }
         context.update(
             {
                 "active_submenu": "egg_inventory",
                 "batch": self.batch,
                 "receipt_form": receipt_form,
                 "classification_form": classification_form,
-                "entries": list(self.batch.classification_entries.all()),
+                "entries": entries,
+                "entry_rows": entry_rows,
+                "batch_snapshot": batch_snapshot,
                 "return_url": reverse("production:egg-inventory"),
             }
         )
