@@ -850,10 +850,8 @@ class EggBatchClassificationForm(forms.Form):
     ) -> None:
         self.batch = batch
         self.cleaned_entries: dict[str, Decimal] = {}
+        self.current_classified = Decimal(batch.classified_total)
         super().__init__(*args, **kwargs)
-        existing_entries = {
-            entry.egg_type: entry.cartons for entry in batch.classification_entries.all()
-        }
         for egg_type, label in EggType.choices:
             field_name = self._field_name(egg_type)
             self.fields[field_name] = forms.DecimalField(
@@ -872,8 +870,6 @@ class EggBatchClassificationForm(forms.Form):
                     }
                 ),
             )
-            if egg_type in existing_entries:
-                self.fields[field_name].initial = existing_entries[egg_type]
 
     def _field_name(self, egg_type: str) -> str:
         return f"type_{egg_type}"
@@ -882,6 +878,10 @@ class EggBatchClassificationForm(forms.Form):
         cleaned = super().clean()
         if self.batch.received_cartons is None:
             raise forms.ValidationError("Confirma primero la cantidad recibida antes de clasificar.")
+
+        pending_cartons = max(Decimal(self.batch.pending_cartons), Decimal("0"))
+        if pending_cartons <= 0:
+            raise forms.ValidationError("Este lote no tiene cartones pendientes por clasificar.")
 
         totals = Decimal("0")
         entries: dict[str, Decimal] = {}
@@ -899,9 +899,10 @@ class EggBatchClassificationForm(forms.Form):
             raise forms.ValidationError("Registra al menos un tipo de huevo.")
 
         received = Decimal(self.batch.received_cartons).quantize(Decimal("0.01"))
-        if totals > received:
+        current_total = self.current_classified.quantize(Decimal("0.01"))
+        if totals + current_total > received:
             raise forms.ValidationError(
-                f"La suma clasificada ({totals}) no puede superar los cartones confirmados ({received})."
+                f"La suma clasificada ({totals + current_total}) no puede superar los cartones confirmados ({received})."
             )
 
         self.cleaned_entries = entries

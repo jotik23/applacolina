@@ -1194,9 +1194,9 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
                 form.save(actor=request.user)
                 messages.success(
                     request,
-                    "Clasificación guardada. El inventario ya refleja el reparto y puedes seguir con otros lotes.",
+                    "Clasificación parcial registrada. El inventario ya refleja el movimiento y puedes seguir con este lote.",
                 )
-                return redirect(reverse("production:egg-inventory"))
+                return redirect(self.request.path)
             return self.render_to_response(self.get_context_data(classification_form=form))
 
         messages.error(request, "No se pudo determinar el formulario enviado.")
@@ -1207,13 +1207,10 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
         receipt_form = kwargs.get("receipt_form") or EggBatchReceiptForm(batch=self.batch)
         classification_form = kwargs.get("classification_form") or EggBatchClassificationForm(batch=self.batch)
         entries = list(self.batch.classification_entries.all())
-        entry_rows = [
-            {
-                "label": entry.get_egg_type_display(),
-                "cartons": entry.cartons,
-            }
-            for entry in entries
-        ]
+        entry_rows = self._build_entry_rows(entries)
+        session_rows = self._build_session_rows()
+        pending_value = max(Decimal(self.batch.pending_cartons), Decimal("0"))
+        can_submit = self.batch.received_cartons is not None and pending_value > 0
         batch_snapshot = {
             "reported_cartons": self.batch.reported_cartons,
             "received_cartons": self.batch.received_cartons,
@@ -1227,7 +1224,10 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
                 "classification_form": classification_form,
                 "entries": entries,
                 "entry_rows": entry_rows,
+                "session_rows": session_rows,
                 "batch_snapshot": batch_snapshot,
+                "pending_for_form": pending_value,
+                "can_submit_classification": can_submit,
                 "return_url": reverse("production:egg-inventory"),
             }
         )
@@ -1239,9 +1239,55 @@ class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):
                 "bird_batch",
                 "bird_batch__farm",
                 "production_record",
-            ).prefetch_related("classification_entries"),
+            ).prefetch_related(
+                "classification_entries",
+                "classification_sessions__entries",
+            ),
             pk=self.kwargs["pk"],
         )
+
+    def _build_entry_rows(self, entries: List[Any]) -> List[Dict[str, Any]]:
+        totals: Dict[str, Decimal] = defaultdict(Decimal)
+        for entry in entries:
+            totals[entry.egg_type] += Decimal(entry.cartons or 0)
+
+        rows: List[Dict[str, Any]] = []
+        for egg_type, label in EggType.choices:
+            qty = totals.get(egg_type)
+            if not qty:
+                continue
+            rows.append(
+                {
+                    "type": egg_type,
+                    "label": label,
+                    "cartons": qty,
+                }
+            )
+        return rows
+
+    def _build_session_rows(self) -> List[Dict[str, Any]]:
+        sessions = sorted(
+            self.batch.classification_sessions.all(),
+            key=lambda session: (session.classified_at, session.pk),
+        )
+        session_rows: List[Dict[str, Any]] = []
+        for session in sessions:
+            entries = list(session.entries.all())
+            entry_rows = [
+                {"label": entry.get_egg_type_display(), "cartons": entry.cartons}
+                for entry in entries
+            ]
+            total_cartons = sum((Decimal(entry.cartons or 0) for entry in entries), Decimal("0"))
+            session_rows.append(
+                {
+                    "id": session.pk,
+                    "classified_at": session.classified_at,
+                    "classified_by": session.classified_by,
+                    "entries": entry_rows,
+                    "total": total_cartons,
+                }
+            )
+        return session_rows
 
 
 class DailyIndicatorsView(ProductionDashboardContextMixin, TemplateView):

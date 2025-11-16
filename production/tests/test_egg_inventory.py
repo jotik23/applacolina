@@ -14,6 +14,7 @@ from production.models import (
     Farm,
     ProductionRecord,
 )
+from production.services.egg_classification import record_classification_results
 
 
 class EggInventoryDashboardTests(TestCase):
@@ -105,13 +106,14 @@ class EggInventoryDashboardTests(TestCase):
                 "type_aa": "50",
             },
         )
-        self.assertRedirects(response, reverse("production:egg-inventory"))
+        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
         batch.refresh_from_db()
         entries = EggClassificationEntry.objects.filter(batch=batch)
         self.assertEqual(entries.count(), 3)
         self.assertEqual(sum(entry.cartons for entry in entries), Decimal("150"))
         self.assertEqual(batch.status, batch.Status.CLASSIFIED)
         self.assertEqual(batch.classified_total, Decimal("150"))
+        self.assertEqual(batch.classification_sessions.count(), 1)
 
     def test_classification_allows_partial_totals(self) -> None:
         batch = self.record.egg_classification
@@ -133,9 +135,24 @@ class EggInventoryDashboardTests(TestCase):
             },
             follow=True,
         )
-        self.assertRedirects(response, reverse("production:egg-inventory"))
+        self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
         batch.refresh_from_db()
         self.assertEqual(batch.classified_total, Decimal("100"))
+        self.assertEqual(batch.status, batch.Status.CONFIRMED)
+
+        second_response = self.client.post(
+            reverse("production:egg-inventory-batch", args=[batch.pk]),
+            {
+                "form": "classification",
+                "batch_id": batch.pk,
+                "type_aa": "50",
+            },
+        )
+        self.assertRedirects(second_response, reverse("production:egg-inventory-batch", args=[batch.pk]))
+        batch.refresh_from_db()
+        self.assertEqual(batch.classified_total, Decimal("150"))
+        self.assertEqual(batch.status, batch.Status.CLASSIFIED)
+        self.assertEqual(batch.classification_sessions.count(), 2)
 
     def test_classification_rejects_totals_above_received(self) -> None:
         batch = self.record.egg_classification
@@ -160,13 +177,25 @@ class EggInventoryDashboardTests(TestCase):
         self.assertTrue(response.context["classification_form"].non_field_errors())
         batch.refresh_from_db()
         self.assertEqual(batch.classification_entries.count(), 0)
+        self.assertEqual(batch.classification_sessions.count(), 0)
+
+    def test_service_rejects_zero_entries(self) -> None:
+        batch = self.record.egg_classification
+        batch.received_cartons = Decimal("100")
+        batch.save(update_fields=["received_cartons"])
+        with self.assertRaises(ValueError):
+            record_classification_results(batch=batch, entries={"jumbo": Decimal("0")}, actor_id=self.user.id)
+        self.assertEqual(batch.classification_sessions.count(), 0)
 
     def test_cardex_view_filters_by_month_and_farm(self) -> None:
         batch = self.record.egg_classification
         batch.received_cartons = Decimal("150")
         batch.save(update_fields=["received_cartons"])
-        EggClassificationEntry.objects.create(batch=batch, egg_type="jumbo", cartons=Decimal("80"))
-        EggClassificationEntry.objects.create(batch=batch, egg_type="aaa", cartons=Decimal("70"))
+        record_classification_results(
+            batch=batch,
+            entries={"jumbo": Decimal("80"), "aaa": Decimal("70")},
+            actor_id=self.user.id,
+        )
 
         other_farm = Farm.objects.create(name="Auxiliar")
         other_batch = BirdBatch.objects.create(
@@ -187,7 +216,11 @@ class EggInventoryDashboardTests(TestCase):
         other_classification = other_record.egg_classification
         other_classification.received_cartons = Decimal("90")
         other_classification.save(update_fields=["received_cartons"])
-        EggClassificationEntry.objects.create(batch=other_classification, egg_type="aa", cartons=Decimal("90"))
+        record_classification_results(
+            batch=other_classification,
+            entries={"aa": Decimal("90")},
+            actor_id=self.user.id,
+        )
 
         url = reverse("production:egg-inventory-cardex")
         response = self.client.get(url)
@@ -196,6 +229,7 @@ class EggInventoryDashboardTests(TestCase):
         flows = response.context["flows"]
         self.assertTrue(flows)
         self.assertLessEqual(flows[0].day, date.today())
+        self.assertTrue(any(record.sessions for flow in flows for record in flow.records))
 
         filtered_response = self.client.get(url, {"farm": other_farm.pk})
         self.assertEqual(filtered_response.status_code, 200)

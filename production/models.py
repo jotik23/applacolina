@@ -507,6 +507,41 @@ class EggClassificationBatch(models.Model):
             return Decimal(self.reported_cartons)
         return Decimal(self.received_cartons) - self.classified_total
 
+    def refresh_from_db(self, using=None, fields=None, **kwargs) -> None:
+        super().refresh_from_db(using=using, fields=fields, **kwargs)
+        if hasattr(self, "_classified_total_cache"):
+            delattr(self, "_classified_total_cache")
+
+
+class EggClassificationSession(models.Model):
+    batch = models.ForeignKey(
+        EggClassificationBatch,
+        on_delete=models.CASCADE,
+        related_name="classification_sessions",
+        verbose_name="Lote de clasificación",
+    )
+    classified_at = models.DateTimeField("Clasificado en", default=timezone.now)
+    classified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_classification_sessions",
+        verbose_name="Clasificado por",
+        null=True,
+        blank=True,
+    )
+    notes = models.CharField("Notas", max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Sesión de clasificación de huevo"
+        verbose_name_plural = "Sesiones de clasificación de huevo"
+        ordering = ("-classified_at", "-created_at")
+
+    def __str__(self) -> str:
+        timestamp = timezone.localtime(self.classified_at)
+        return f"{self.batch} · {timestamp:%Y-%m-%d %H:%M}"
+
 
 class EggClassificationEntry(models.Model):
     batch = models.ForeignKey(
@@ -514,6 +549,12 @@ class EggClassificationEntry(models.Model):
         on_delete=models.CASCADE,
         related_name="classification_entries",
         verbose_name="Lote de clasificación",
+    )
+    session = models.ForeignKey(
+        EggClassificationSession,
+        on_delete=models.CASCADE,
+        related_name="entries",
+        verbose_name="Sesión de clasificación",
     )
     egg_type = models.CharField("Tipo de huevo", max_length=8, choices=EggType.choices)
     cartons = models.DecimalField("Cartones", max_digits=10, decimal_places=2)
@@ -523,8 +564,8 @@ class EggClassificationEntry(models.Model):
     class Meta:
         verbose_name = "Resultado de clasificación"
         verbose_name_plural = "Resultados de clasificación"
-        unique_together = ("batch", "egg_type")
-        ordering = ("batch", "egg_type")
+        unique_together = ("session", "egg_type")
+        ordering = ("session", "egg_type")
 
     def __str__(self) -> str:
         egg_label = self.get_egg_type_display()

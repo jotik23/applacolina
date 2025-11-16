@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Mapping, Optional
 
@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from production.models import (
     EggClassificationBatch,
+    EggClassificationSession,
     EggClassificationEntry,
     EggType,
     ProductionRecord,
@@ -53,6 +54,7 @@ class InventoryFlowRecord:
     collector_name: Optional[str]
     delta_receipt: Decimal
     delta_inventory: Decimal
+    sessions: list["ClassificationSessionRecord"]
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,15 @@ class InventoryFlow:
     records: list[InventoryFlowRecord]
     delta_receipt: Decimal
     delta_inventory: Decimal
+
+
+@dataclass(frozen=True)
+class ClassificationSessionRecord:
+    id: int
+    classified_at: datetime
+    classifier_name: Optional[str]
+    type_breakdown: Dict[str, Decimal]
+    total_cartons: Decimal
 
 
 EGGS_PER_CARTON = Decimal("30")
@@ -137,27 +148,49 @@ def record_classification_results(
     entries: Mapping[str, Decimal],
     actor_id: Optional[int],
 ) -> EggClassificationBatch:
-    """Replace the classification distribution for the batch."""
+    """Append a new classification session for the batch."""
     timestamp = timezone.now()
-    with transaction.atomic():
-        batch.classification_entries.all().delete()
+    sanitized_entries: list[tuple[str, Decimal]] = []
+    for egg_type, cartons in entries.items():
+        qty = Decimal(cartons)
+        if qty <= 0:
+            continue
+        sanitized_entries.append((egg_type, qty))
 
-        entry_models: list[EggClassificationEntry] = []
-        for egg_type, cartons in entries.items():
-            if cartons <= 0:
-                continue
-            entry_models.append(
-                EggClassificationEntry(
-                    batch=batch,
-                    egg_type=egg_type,
-                    cartons=cartons,
-                )
+    if not sanitized_entries:
+        raise ValueError("No hay cantidades positivas para clasificar.")
+
+    with transaction.atomic():
+        session = EggClassificationSession.objects.create(
+            batch=batch,
+            classified_at=timestamp,
+            classified_by_id=actor_id,
+        )
+        entry_models: list[EggClassificationEntry] = [
+            EggClassificationEntry(
+                batch=batch,
+                session=session,
+                egg_type=egg_type,
+                cartons=qty,
             )
+            for egg_type, qty in sanitized_entries
+        ]
         EggClassificationEntry.objects.bulk_create(entry_models)
 
+        aggregates = EggClassificationEntry.objects.filter(batch=batch).aggregate(total=Sum("cartons"))
+        total_classified = Decimal(aggregates.get("total") or 0)
+        batch._classified_total_cache = total_classified
         batch.classified_at = timestamp
         batch.classified_by_id = actor_id
-        batch.status = EggClassificationBatch.Status.CLASSIFIED
+        source_cartons = (
+            Decimal(batch.received_cartons)
+            if batch.received_cartons is not None
+            else Decimal(batch.reported_cartons)
+        )
+        if total_classified >= source_cartons:
+            batch.status = EggClassificationBatch.Status.CLASSIFIED
+        else:
+            batch.status = EggClassificationBatch.Status.CONFIRMED
         batch.save(
             update_fields=[
                 "classified_at",
@@ -308,7 +341,7 @@ def _build_inventory_flow(
             "production_record__created_by",
             "classified_by",
         )
-        .prefetch_related("classification_entries")
+        .prefetch_related("classification_entries", "classification_sessions__entries")
         .order_by("production_record__date", "bird_batch__farm__name", "bird_batch__id")
     )
 
@@ -321,6 +354,25 @@ def _build_inventory_flow(
             qty = Decimal(entry.cartons or 0)
             record_breakdown[entry.egg_type] += qty
             classified_total += qty
+
+        session_rows: list[ClassificationSessionRecord] = []
+        sessions = sorted(batch.classification_sessions.all(), key=lambda item: item.classified_at)
+        for session in sessions:
+            session_breakdown: Dict[str, Decimal] = defaultdict(Decimal)
+            session_total = Decimal("0")
+            for entry in session.entries.all():
+                qty = Decimal(entry.cartons or 0)
+                session_breakdown[entry.egg_type] += qty
+                session_total += qty
+            session_rows.append(
+                ClassificationSessionRecord(
+                    id=session.pk,
+                    classified_at=session.classified_at,
+                    classifier_name=_display_name(session.classified_by),
+                    type_breakdown=dict(session_breakdown),
+                    total_cartons=session_total,
+                )
+            )
 
         confirmed_value = Decimal(batch.received_cartons) if batch.received_cartons is not None else None
         confirmed_for_math = confirmed_value if confirmed_value is not None else Decimal("0")
@@ -342,6 +394,7 @@ def _build_inventory_flow(
             collector_name=_display_name(getattr(batch.production_record, "created_by", None)),
             delta_receipt=delta_receipt,
             delta_inventory=delta_inventory,
+            sessions=session_rows,
         )
         records_by_day[batch.production_date].append(record)
 
