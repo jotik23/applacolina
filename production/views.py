@@ -1287,10 +1287,16 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
         context = super().get_context_data(**kwargs)
         window_end = timezone.now()
         window_start = window_end - timedelta(hours=self.shift_hours)
+        user = getattr(self.request, "user", None)
+
+        sessions_qs = EggClassificationSession.objects.filter(classified_at__gte=window_start)
+        if user and user.is_authenticated:
+            sessions_qs = sessions_qs.filter(classified_by=user)
+        else:
+            sessions_qs = sessions_qs.none()
 
         sessions = (
-            EggClassificationSession.objects.filter(classified_at__gte=window_start)
-            .select_related(
+            sessions_qs.select_related(
                 "batch",
                 "batch__bird_batch",
                 "batch__bird_batch__farm",
