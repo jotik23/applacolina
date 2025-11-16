@@ -46,6 +46,7 @@ from production.models import (
 )
 from production.services.daily_board import save_daily_room_entries
 from production.services.egg_classification import (
+    InventoryFlow,
     InventoryRow,
     PendingBatch,
     build_classification_session_flow_range,
@@ -1103,6 +1104,7 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
         cardex_view = self._resolve_view()
 
         flows = []
+        flow_cumulative_totals: dict[date, dict[str, Decimal]] = {}
         session_flows = []
         if cardex_view == "sessions":
             session_flows = build_classification_session_flow_range(
@@ -1116,6 +1118,7 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
                 end_date=month_end,
                 farm_id=selected_farm_id,
             )
+            flow_cumulative_totals = self._build_flow_cumulative_totals(flows)
             flows.sort(key=lambda flow: flow.day, reverse=True)
 
         prev_month = self._add_months(month_start, -1)
@@ -1138,6 +1141,7 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
                 "type_order": self.type_order,
                 "cardex_view": cardex_view,
                 "session_flows": session_flows,
+                "flow_cumulative_totals": flow_cumulative_totals,
             }
         )
         return context
@@ -1190,6 +1194,28 @@ class EggInventoryCardexView(StaffRequiredMixin, TemplateView):
         if raw == "sessions":
             return "sessions"
         return "production"
+
+    def _build_flow_cumulative_totals(
+        self, flows: list[InventoryFlow]
+    ) -> dict[date, dict[str, Decimal]]:
+        if not flows:
+            return {}
+        running = {
+            "produced_cartons": Decimal("0"),
+            "delta_receipt": Decimal("0"),
+            "confirmed_cartons": Decimal("0"),
+            "classified_cartons": Decimal("0"),
+            "delta_inventory": Decimal("0"),
+        }
+        totals_by_day: dict[date, dict[str, Decimal]] = {}
+        for flow in sorted(flows, key=lambda current: current.day):
+            running["produced_cartons"] += flow.produced_cartons
+            running["delta_receipt"] += flow.delta_receipt
+            running["confirmed_cartons"] += flow.confirmed_cartons
+            running["classified_cartons"] += flow.classified_cartons
+            running["delta_inventory"] += flow.delta_inventory
+            totals_by_day[flow.day] = dict(running)
+        return totals_by_day
 
 
 class EggInventoryBatchDetailView(StaffRequiredMixin, TemplateView):

@@ -111,38 +111,40 @@
         <div class="space-y-6">
           {% for flow in flows %}
           <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
-            <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Día</p>
-                <p class="text-lg font-semibold text-slate-900">{{ flow.day|date:"l d \\d\\e F" }}</p>
-              </div>
-              <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-5">
-                <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-slate-500">Producido</dt>
-                  <dd class="mt-1 text-lg font-semibold text-slate-900">{{ flow.produced_cartons|cartons_dash_zero }}</dd>
+              <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Día</p>
+                  <p class="text-lg font-semibold text-slate-900">{{ flow.day|date:"l d \\d\\e F" }}</p>
                 </div>
-                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-amber-700">Recibido</dt>
-                  <dd class="mt-1 text-lg font-semibold {% if flow.delta_receipt > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
-                    {{ flow.delta_receipt|cartons_dash_zero }}
-                  </dd>
-                </div>
-                <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-sky-700">Confirmado</dt>
-                  <dd class="mt-1 text-lg font-semibold text-sky-900">{{ flow.confirmed_cartons|cartons_dash_zero }}</dd>
-                </div>
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-emerald-700">Clasificado</dt>
-                  <dd class="mt-1 text-lg font-semibold text-emerald-900">{{ flow.classified_cartons|cartons_dash_zero }}</dd>
-                </div>
-                <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right">
-                  <dt class="font-semibold uppercase tracking-wide text-rose-700">Inventario</dt>
-                  <dd class="mt-1 text-lg font-semibold {% if flow.delta_inventory > 0 %}text-rose-700{% else %}text-slate-900{% endif %}">
-                    {{ flow.delta_inventory|cartons_dash_zero }}
-                  </dd>
-                </div>
-              </dl>
-            </header>
+                {% with totals=flow_cumulative_totals|dict_get:flow.day|default:flow %}
+                  <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-5">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                      <dt class="font-semibold uppercase tracking-wide text-slate-500">Producido</dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900">{{ totals.produced_cartons|cartons_dash_zero }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
+                      <dt class="font-semibold uppercase tracking-wide text-amber-700">Por Recibir</dt>
+                      <dd class="mt-1 text-lg font-semibold {% if totals.delta_receipt > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
+                        {{ totals.delta_receipt|cartons_dash_zero }}
+                      </dd>
+                    </div>
+                    <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-right">
+                      <dt class="font-semibold uppercase tracking-wide text-sky-700">Confirmado</dt>
+                      <dd class="mt-1 text-lg font-semibold text-sky-900">{{ totals.confirmed_cartons|cartons_dash_zero }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-right">
+                      <dt class="font-semibold uppercase tracking-wide text-emerald-700">Clasificado</dt>
+                      <dd class="mt-1 text-lg font-semibold text-emerald-900">{{ totals.classified_cartons|cartons_dash_zero }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-right">
+                      <dt class="font-semibold uppercase tracking-wide text-rose-700">Por Clasificar</dt>
+                      <dd class="mt-1 text-lg font-semibold {% if totals.delta_inventory > 0 %}text-rose-700{% else %}text-slate-900{% endif %}">
+                        {{ totals.delta_inventory|cartons_dash_zero }}
+                      </dd>
+                    </div>
+                  </dl>
+                {% endwith %}
+              </header>
 
             {% if flow.records %}
               <div class="overflow-x-auto rounded-xl border border-slate-100">
@@ -151,14 +153,14 @@
                     <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                       <th class="px-3 py-3 text-left">Granja y lote</th>
                       <th class="px-3 py-3 text-right">Producido</th>
-                      <th class="px-3 py-3 text-right">Recibido</th>
+                      <th class="px-3 py-3 text-right">Por Recibir</th>
                       <th class="px-3 py-3 text-right">Confirmado</th>
                       <th class="px-3 py-3 text-right">Clasificado</th>
                       <th class="px-3 py-3 text-left">Fecha</th>
                       {% for type in type_order %}
                         <th class="px-3 py-3 text-center">{{ type.label }}</th>
                       {% endfor %}
-                      <th class="px-3 py-3 text-right">Inventario</th>
+                      <th class="px-3 py-3 text-right">Por Clasificar</th>
                       <th class="px-3 py-3 text-left">Clasificador</th>
                       <th class="px-3 py-3 text-left">Galponero</th>
                     </tr>
@@ -257,13 +259,13 @@
                       <th class="px-3 py-3 text-left">Momento</th>
                       <th class="px-3 py-3 text-left">Producción</th>
                       <th class="px-3 py-3 text-right">Producido</th>
-                      <th class="px-3 py-3 text-right">Recibido</th>
+                      <th class="px-3 py-3 text-right">Por Recibir</th>
                       <th class="px-3 py-3 text-right">Confirmado</th>
+                      <th class="px-3 py-3 text-right">Por Clasificar</th>
                       <th class="px-3 py-3 text-right">Clasificado</th>
                       {% for type in type_order %}
                         <th class="px-3 py-3 text-center">{{ type.label }}</th>
                       {% endfor %}
-                      <th class="px-3 py-3 text-right">Inventario</th>
                       <th class="px-3 py-3 text-left">Clasificador</th>
                       <th class="px-3 py-3 text-left">Galponero</th>
                     </tr>
@@ -292,6 +294,9 @@
                           {{ session.delta_receipt|cartons_dash_zero }}
                         </td>
                         <td class="px-3 py-3 text-right">{{ session.confirmed_cartons|cartons_dash_zero }}</td>
+                        <td class="px-3 py-3 text-right {% if session.inventory_balance > 0 %}text-rose-700{% endif %}">
+                          {{ session.inventory_balance|cartons_dash_zero }}
+                        </td>
                         <td class="px-3 py-3 text-right font-semibold text-slate-900">{{ session.session_cartons|cartons_dash_zero }}</td>
                         {% for type in type_order %}
                           <td class="px-3 py-3 text-center">
@@ -300,9 +305,6 @@
                             {% endwith %}
                           </td>
                         {% endfor %}
-                        <td class="px-3 py-3 text-right {% if session.inventory_balance > 0 %}text-rose-700{% endif %}">
-                          {{ session.inventory_balance|cartons_dash_zero }}
-                        </td>
                         <td class="px-3 py-3 text-xs text-slate-600">
                           {% if session.classifier_name %}
                             {{ session.classifier_name }}
