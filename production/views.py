@@ -1443,7 +1443,7 @@ class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
         return session_rows
 
 
-class EggDispatchListView(EggInventoryPermissionMixin, TemplateView):
+class EggDispatchListView(StaffRequiredMixin, TemplateView):
     template_name = "production/egg_dispatch_list.html"
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
@@ -1536,7 +1536,7 @@ class EggDispatchListView(EggInventoryPermissionMixin, TemplateView):
         return date(year, month, 1)
 
 
-class EggDispatchFormMixin(EggInventoryPermissionMixin, SuccessMessageMixin):
+class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
     model = EggDispatch
     form_class = EggDispatchForm
     template_name = "production/egg_dispatch_form.html"
@@ -1604,7 +1604,7 @@ class EggDispatchUpdateView(EggDispatchFormMixin, UpdateView):
         return context
 
 
-class EggDispatchDeleteView(EggInventoryPermissionMixin, SuccessMessageMixin, DeleteView):
+class EggDispatchDeleteView(StaffRequiredMixin, SuccessMessageMixin, DeleteView):
     model = EggDispatch
     template_name = "production/egg_dispatch_confirm_delete.html"
     success_url = reverse_lazy("production:egg-dispatch-list")

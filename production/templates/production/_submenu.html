@@ -19,6 +19,8 @@
         <span class="h-2 w-2 rounded-full {% if active == 'egg_inventory' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
         Clasificación e inventario
       </a>
+    {% endif %}
+    {% if request.user.is_staff %}
       <a
         href="{% url 'production:egg-dispatch-list' %}"
         class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'egg_dispatches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"

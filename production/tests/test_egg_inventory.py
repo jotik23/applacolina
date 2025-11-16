@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
 
@@ -459,3 +460,20 @@ class EggDispatchViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("dispatches", response.context)
         self.assertTrue(response.context["dispatches"])
+
+    def test_only_staff_can_access_dispatch_views(self) -> None:
+        self.client.logout()
+        user_model = get_user_model()
+        regular = user_model.objects.create_user(
+            cedula="regular-user",
+            password="strongpass",
+            nombres="Regular",
+            apellidos="User",
+            telefono="3000004000",
+            is_staff=False,
+        )
+        permission = Permission.objects.get(codename="access_egg_inventory")
+        regular.user_permissions.add(permission)
+        self.client.force_login(regular)
+        response = self.client.get(reverse("production:egg-dispatch-list"))
+        self.assertRedirects(response, reverse("task_manager:telegram-mini-app"))
