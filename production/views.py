@@ -1523,7 +1523,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 pending_value = Decimal(session.get("pending_cartons") or 0)
                 lines.append(f"  ↳ {self._format_cartons_text(pending_value)} cart por clasificar")
                 missing_value = Decimal(session.get("missing_receipt_cartons") or 0)
-                lines.append(f"  ↳ {self._format_cartons_text(missing_value)} cart NO RECIBIDOS.")
+                lines.append(f"  ↳ {self._format_cartons_text(missing_value)} cart DESAPARECIDOS!.")
                 if index < len(visible_sessions) - 1:
                     lines.append("")
             if len(session_rows) > 8:
