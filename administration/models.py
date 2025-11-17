@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-from production.models import ChickenHouse, Farm
+from production.models import ChickenHouse, EggDispatchDestination, Farm
 
 
 class TimeStampedModel(models.Model):
@@ -701,3 +701,202 @@ class PayrollSnapshot(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.start_date:%Y-%m-%d} / {self.end_date:%Y-%m-%d}"
+
+
+class Sale(TimeStampedModel):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Pre-factura"
+        CONFIRMED = "confirmed", "Venta confirmada"
+        PAID = "paid", "Venta pagada"
+
+    class PaymentCondition(models.TextChoices):
+        CASH = "cash", "Contado"
+        CREDIT = "credit", "Crédito"
+
+    date = models.DateField("Fecha de venta")
+    customer = models.ForeignKey(
+        Supplier,
+        on_delete=models.PROTECT,
+        related_name="sales",
+        verbose_name="Cliente (tercero)",
+    )
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sales",
+        verbose_name="Vendedor",
+    )
+    warehouse_destination = models.CharField(
+        "Bodega (destino)",
+        max_length=32,
+        choices=EggDispatchDestination.choices,
+        blank=True,
+    )
+    status = models.CharField(
+        "Estado",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+    payment_condition = models.CharField(
+        "Condición de pago",
+        max_length=20,
+        choices=PaymentCondition.choices,
+        default=PaymentCondition.CREDIT,
+    )
+    payment_due_date = models.DateField("Fecha esperada de pago", null=True, blank=True)
+    total_amount = models.DecimalField(
+        "Total factura",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    auto_withholding_amount = models.DecimalField(
+        "Autorretención",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    notes = models.TextField("Notas para el equipo comercial", blank=True)
+    confirmed_at = models.DateTimeField("Confirmado en", null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="sales_confirmed",
+        null=True,
+        blank=True,
+    )
+    paid_at = models.DateTimeField("Pagado en", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Venta"
+        verbose_name_plural = "Ventas"
+        ordering = ("-date", "-id")
+
+    def __str__(self) -> str:
+        return f"Venta #{self.pk}"
+
+    @property
+    def inventory_destination_label(self) -> str:
+        if not self.warehouse_destination:
+            return ""
+        return dict(EggDispatchDestination.choices).get(self.warehouse_destination, self.warehouse_destination)
+
+    @property
+    def subtotal_amount(self) -> Decimal:
+        items_manager = getattr(self, "items", None)
+        if items_manager is None:
+            return Decimal("0.00")
+        return sum((Decimal(item.subtotal or 0) for item in items_manager.all()), Decimal("0.00"))
+
+    @property
+    def payments_total(self) -> Decimal:
+        payments_manager = getattr(self, "payments", None)
+        if payments_manager is None:
+            return Decimal("0.00")
+        return sum((Decimal(payment.amount or 0) for payment in payments_manager.all()), Decimal("0.00"))
+
+    @property
+    def balance_due(self) -> Decimal:
+        subtotal = Decimal(self.total_amount or Decimal("0.00"))
+        withholding = Decimal(self.auto_withholding_amount or Decimal("0.00"))
+        paid = Decimal(self.payments_total)
+        balance = subtotal - withholding - paid
+        if balance < Decimal("0.00"):
+            return Decimal("0.00")
+        return balance
+
+
+class SaleProductType(models.TextChoices):
+    JUMBO = "jumbo", "Jumbo"
+    TRIPLE_A = "aaa", "AAA"
+    DOUBLE_A = "aa", "AA"
+    SINGLE_A = "a", "A"
+    B = "b", "B"
+    C = "c", "C"
+    D = "d", "D"
+    HEN = "hen", "Gallina"
+    HEN_MANURE = "hen_manure", "Gallinaza"
+
+
+class SaleItem(TimeStampedModel):
+    sale = models.ForeignKey(
+        Sale,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="Venta",
+    )
+    product_type = models.CharField(
+        "Producto",
+        max_length=16,
+        choices=SaleProductType.choices,
+    )
+    quantity = models.DecimalField(
+        "Cantidad",
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
+    unit_price = models.DecimalField(
+        "Precio unitario",
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
+    subtotal = models.DecimalField(
+        "Subtotal",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    class Meta:
+        verbose_name = "Detalle de venta"
+        verbose_name_plural = "Detalles de venta"
+        ordering = ("product_type",)
+
+    def __str__(self) -> str:
+        label = dict(SaleProductType.choices).get(self.product_type, self.product_type)
+        return f"{label} · {self.quantity}"
+
+    def compute_subtotal(self) -> Decimal:
+        return (Decimal(self.quantity or 0) * Decimal(self.unit_price or 0)).quantize(Decimal("0.01"))
+
+    def save(self, *args, **kwargs):
+        self.subtotal = self.compute_subtotal()
+        super().save(*args, **kwargs)
+
+
+class SalePayment(TimeStampedModel):
+    class Method(models.TextChoices):
+        CASH = "cash", "Efectivo"
+        TRANSFER = "transfer", "Transferencia"
+
+    sale = models.ForeignKey(
+        Sale,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        verbose_name="Venta",
+    )
+    date = models.DateField("Fecha de abono")
+    amount = models.DecimalField(
+        "Monto",
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
+    method = models.CharField(
+        "Modalidad",
+        max_length=20,
+        choices=Method.choices,
+        default=Method.CASH,
+    )
+    notes = models.CharField("Notas del abono", max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "Abono de venta"
+        verbose_name_plural = "Abonos de venta"
+        ordering = ("-date", "-id")
+
+    def __str__(self) -> str:
+        return f"{self.get_method_display()} · {self.amount}"

@@ -1,0 +1,266 @@
+{% extends "calendario/base.html" %}
+{% load humanize form_extras %}
+
+{% block title %}Ventas{% endblock %}
+
+{% block content %}
+  {% include "administration/_submenu.html" with active=administration_active_submenu %}
+
+  <div class="space-y-6">
+    <header class="rounded-2xl border border-slate-200/70 bg-white px-5 py-6 shadow-sm">
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div class="max-w-2xl space-y-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Cadena comercial</p>
+          <h1 class="text-3xl font-semibold text-slate-900">Ventas y facturación a clientes</h1>
+          <p class="text-sm text-slate-600">
+            Consulta las pre-facturas en construcción, valida qué inventario queda en cada bodega y acompaña la cartera
+            de clientes con recordatorios claros de cobro. Todo el flujo está pensado para conversaciones profesionales,
+            con mensajes explícitos y sin sorpresas para el equipo de ventas.
+          </p>
+        </div>
+        <dl class="grid gap-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-2">
+          <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-emerald-800">
+            <dt>Saldo comercial</dt>
+            <dd class="mt-2 text-3xl font-semibold text-emerald-900">
+              {{ sales_metrics.outstanding_total|default:0|floatformat:0|intcomma }} <span class="text-sm font-semibold">COP</span>
+            </dd>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
+            <dt>Ventas monitoreadas</dt>
+            <dd class="mt-2 text-3xl font-semibold text-slate-900">
+              {{ sales|length }}
+              {% if sales_limit %}
+                <span class="text-xs font-semibold text-slate-500">/ {{ sales_limit }}</span>
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <dl class="mt-5 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
+        <div class="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pre-facturas activas</dt>
+          <dd class="mt-1 text-2xl font-semibold text-slate-900">{{ sales_metrics.draft_count }}</dd>
+        </div>
+        <div class="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ventas confirmadas</dt>
+          <dd class="mt-1 text-2xl font-semibold text-slate-900">{{ sales_metrics.confirmed_count }}</dd>
+        </div>
+        <div class="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ventas pagadas</dt>
+          <dd class="mt-1 text-2xl font-semibold text-slate-900">{{ sales_metrics.paid_count }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
+      <form method="get" class="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="search">
+          Búsqueda rápida
+        </label>
+        <input
+          type="search"
+          id="search"
+          name="q"
+          value="{{ sales_search_query }}"
+          placeholder="Cliente, vendedor o nota"
+          class="w-52 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+        >
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="status">
+          Estado
+        </label>
+        <select
+          id="status"
+          name="status"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+        >
+          <option value="">Todos</option>
+          {% for code, label in status_choices %}
+            <option value="{{ code }}" {% if sales_status_filter == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button
+          type="submit"
+          class="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+        >
+          Aplicar filtros
+        </button>
+        {% if sales_status_filter or sales_search_query %}
+          <a
+            href="{% url 'administration:sales' %}"
+            class="text-xs font-semibold uppercase tracking-wide text-slate-500 underline"
+          >
+            Limpiar
+          </a>
+        {% endif %}
+      </form>
+      <a
+        href="{% url 'administration:sale-create' %}"
+        class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+      >
+        Registrar nueva venta
+      </a>
+    </div>
+
+    <section class="grid gap-6 lg:grid-cols-2">
+      <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+        <header class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Agenda de cobros</p>
+            <h2 class="text-lg font-semibold text-slate-900">Próximos pagos esperados</h2>
+          </div>
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {{ sales_metrics.upcoming|length }} pendiente{{ sales_metrics.upcoming|length|pluralize }}
+          </span>
+        </header>
+        {% if sales_metrics.upcoming %}
+          <ul class="divide-y divide-slate-100">
+            {% for sale in sales_metrics.upcoming %}
+              <li class="py-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-sm font-semibold text-slate-900">
+                      {{ sale.customer.name }} · vence {{ sale.payment_due_date|default:sale.date|date:"d \d\e F" }}
+                    </p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Responsable: {{ sale.seller.get_full_name|default:sale.seller.get_username }}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-sky-500">Saldo</p>
+                    <p class="text-lg font-semibold text-slate-900">
+                      {{ sale.balance_due|floatformat:0|intcomma }} COP
+                    </p>
+                  </div>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">
+                  {{ sale.get_status_display }} · {{ sale.get_payment_condition_display }}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="py-4 text-center text-sm text-slate-500">Sin compromisos inmediatos. Todo está al día.</p>
+        {% endif %}
+      </article>
+      <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+        <header class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario por bodega</p>
+            <h2 class="text-lg font-semibold text-slate-900">Despachos asignados a vendedores</h2>
+          </div>
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {{ warehouse_snapshots|length }} bodeg{{ warehouse_snapshots|length|pluralize:"a,as" }}
+          </span>
+        </header>
+        {% if warehouse_snapshots %}
+          <ul class="divide-y divide-slate-100">
+            {% for snapshot in warehouse_snapshots %}
+              <li class="py-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="text-sm font-semibold text-slate-900">
+                      {{ snapshot.seller_name }} · {{ snapshot.destination_label }}
+                    </p>
+                    <p class="text-xs text-slate-500">{{ snapshot.total_available_cartons|floatformat:0|intcomma }} cartones disponibles</p>
+                  </div>
+                  <span class="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                    Inventario vivo
+                  </span>
+                </div>
+                <dl class="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  {% for egg_type, quantity in snapshot.ordered_available %}
+                    {% if quantity > 0 %}
+                      <div class="rounded-lg border border-slate-100 px-3 py-2 text-slate-600">
+                        <dt class="font-semibold text-slate-900">{{ egg_type_label_map|dict_get:egg_type|default:egg_type }}</dt>
+                        <dd class="mt-1 font-semibold text-slate-800">{{ quantity|floatformat:0|intcomma }} cart</dd>
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                  {% if snapshot.total_available_cartons == 0 %}
+                    <p class="col-span-2 text-slate-500">Sin inventario disponible.</p>
+                  {% endif %}
+                </dl>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="py-4 text-center text-sm text-slate-500">Aún no hay despachos asociados a vendedores.</p>
+        {% endif %}
+      </article>
+    </section>
+
+    <section class="rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm">
+      <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Operación diaria</p>
+          <h2 class="text-lg font-semibold text-slate-900">Relación de ventas (ordenadas por fecha)</h2>
+        </div>
+        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {{ sales|length }} registro{{ sales|length|pluralize }}
+        </span>
+      </header>
+      {% if sales %}
+        <ul class="divide-y divide-slate-100">
+          {% for sale in sales %}
+            <li class="px-5 py-4">
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.1fr)_auto] lg:items-start">
+                <div class="space-y-1">
+                  <p class="text-sm font-semibold text-slate-900">
+                    {{ sale.date|date:"l d \d\e F" }} · {{ sale.customer.name }}
+                  </p>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {{ sale.get_status_display }} · {{ sale.get_payment_condition_display }}
+                  </p>
+                  {% if sale.notes %}
+                    <p class="text-xs text-slate-500">{{ sale.notes }}</p>
+                  {% endif %}
+                </div>
+                <dl class="grid grid-cols-2 gap-3 text-sm text-slate-600">
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total factura</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">{{ sale.total_amount|floatformat:0|intcomma }} COP</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Saldo</dt>
+                    <dd class="mt-1 font-semibold {% if sale.balance_due > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                      {{ sale.balance_due|floatformat:0|intcomma }} COP
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Vendedor</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">{{ sale.seller.get_full_name|default:sale.seller.get_username }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Bodega</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">
+                      {% if sale.inventory_destination_label %}
+                        {{ sale.inventory_destination_label }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </dd>
+                  </div>
+                </dl>
+                <div class="flex flex-col items-end gap-2 text-xs font-semibold text-slate-500">
+                  <a
+                    href="{% url 'administration:sale-update' sale.pk %}"
+                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-1.5 text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700"
+                  >
+                    Gestionar venta
+                  </a>
+                  <span class="text-[11px] uppercase tracking-wide text-slate-400">
+                    {% with payment_count=sale.payments.all|length item_count=sale.items.all|length %}
+                      {{ payment_count }} abono{{ payment_count|pluralize }} · {{ item_count }} ítem{{ item_count|pluralize }}
+                    {% endwith %}
+                  </span>
+                </div>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="py-6 text-center text-sm text-slate-500">Comienza registrando una venta para visualizar información aquí.</p>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

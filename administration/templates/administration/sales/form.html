@@ -1,0 +1,278 @@
+{% extends "calendario/base.html" %}
+{% load form_extras humanize %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  {% include "administration/_submenu.html" with active=administration_active_submenu %}
+
+  <div class="space-y-6">
+    <header class="rounded-2xl border border-slate-200/70 bg-white px-5 py-6 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Ciclo comercial</p>
+          <h1 class="text-3xl font-semibold text-slate-900">{{ page_title }}</h1>
+          <p class="text-sm text-slate-600">
+            Documenta una entrega con textos claros, valida el inventario por bodega y define cómo se cobrará. Los
+            formularios priorizan la conversación con el cliente, de modo que cada mensaje sea profesional y accionable.
+          </p>
+        </div>
+        {% if sale %}
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estado actual</p>
+            <p class="mt-1 text-xl font-semibold text-slate-900">{{ sale.get_status_display }}</p>
+            <p class="text-xs text-slate-500">Saldo: {{ sale.balance_due|floatformat:0|intcomma }} COP</p>
+          </div>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if form.non_field_errors %}
+      <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        {% for error in form.non_field_errors %}
+          <p>{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6" novalidate>
+      {% csrf_token %}
+      <section class="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
+        <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+          <header>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Datos principales</p>
+            <h2 class="text-lg font-semibold text-slate-900">Cliente, vendedor y cobranza</h2>
+          </header>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
+              {{ form.date|add_class:"mt-1" }}
+              {% if form.date.errors %}
+                <p class="text-xs text-rose-600">{{ form.date.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.customer.id_for_label }}">{{ form.customer.label }}</label>
+              {{ form.customer|add_class:"mt-1" }}
+              {% if form.customer.errors %}
+                <p class="text-xs text-rose-600">{{ form.customer.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.seller.id_for_label }}">{{ form.seller.label }}</label>
+              {{ form.seller|add_class:"mt-1" }}
+              {% if form.seller.errors %}
+                <p class="text-xs text-rose-600">{{ form.seller.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+              {{ form.status|add_class:"mt-1" }}
+              {% if form.status.errors %}
+                <p class="text-xs text-rose-600">{{ form.status.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.warehouse_destination.id_for_label }}">{{ form.warehouse_destination.label }}</label>
+              {{ form.warehouse_destination|add_class:"mt-1" }}
+              <p class="mt-1 text-xs text-slate-500">Selecciona la bodega solo cuando confíes el inventario.</p>
+              {% if form.warehouse_destination.errors %}
+                <p class="text-xs text-rose-600">{{ form.warehouse_destination.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.payment_condition.id_for_label }}">{{ form.payment_condition.label }}</label>
+              {{ form.payment_condition|add_class:"mt-1" }}
+              {% if form.payment_condition.errors %}
+                <p class="text-xs text-rose-600">{{ form.payment_condition.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.payment_due_date.id_for_label }}">{{ form.payment_due_date.label }}</label>
+              {{ form.payment_due_date|add_class:"mt-1" }}
+              {% if form.payment_due_date.errors %}
+                <p class="text-xs text-rose-600">{{ form.payment_due_date.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.auto_withholding_amount.id_for_label }}">{{ form.auto_withholding_amount.label }}</label>
+              {{ form.auto_withholding_amount|add_class:"mt-1" }}
+              {% if form.auto_withholding_amount.errors %}
+                <p class="text-xs text-rose-600">{{ form.auto_withholding_amount.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+              {{ form.notes|add_class:"mt-1" }}
+              {% if form.notes.errors %}
+                <p class="text-xs text-rose-600">{{ form.notes.errors|striptags }}</p>
+              {% endif %}
+            </div>
+          </div>
+        </article>
+        <aside class="space-y-4 rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+          <header>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponibilidad</p>
+            <h2 class="text-lg font-semibold text-slate-900">Inventario por tipo</h2>
+            <p class="text-xs text-slate-500">Valores basados en los despachos confirmados para el vendedor elegido.</p>
+          </header>
+          {% if inventory_rows %}
+            <table class="w-full border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <th class="px-3 py-2 text-left">Tipo</th>
+                  <th class="px-3 py-2 text-right">Cartones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in inventory_rows %}
+                  <tr class="border-t border-slate-100">
+                    <td class="px-3 py-2 font-semibold text-slate-900">{{ row.label }}</td>
+                    <td class="px-3 py-2 text-right font-semibold text-slate-700">{{ row.available|cartons }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="text-sm text-slate-500">Selecciona un vendedor y destino para calcular el saldo disponible.</p>
+          {% endif %}
+          {% if sale %}
+            <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumen económico</p>
+              <p class="mt-2 text-sm">Valor total: <span class="font-semibold text-slate-900">{{ sale.total_amount|floatformat:0|intcomma }} COP</span></p>
+              <p class="text-sm">Autorretención: <span class="font-semibold">{{ sale.auto_withholding_amount|floatformat:0|intcomma }} COP</span></p>
+              <p class="text-sm">Saldo pendiente: <span class="font-semibold {% if sale.balance_due > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">{{ sale.balance_due|floatformat:0|intcomma }} COP</span></p>
+            </div>
+          {% endif %}
+        </aside>
+      </section>
+
+      <section class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+        <header class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalle de productos</p>
+            <h2 class="text-lg font-semibold text-slate-900">Cartones y tarifas</h2>
+          </div>
+          <p class="text-xs text-slate-500">Ingresa cantidades y precios para cada presentación.</p>
+        </header>
+        <div class="overflow-x-auto">
+          <table class="mt-3 w-full min-w-[640px] border-collapse text-sm text-slate-600">
+            <thead>
+              <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th class="px-3 py-2 text-left">Producto</th>
+                <th class="px-3 py-2 text-right">Cantidad (cart)</th>
+                <th class="px-3 py-2 text-right">Precio unitario (COP)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in form.product_rows %}
+                <tr class="border-t border-slate-100">
+                  <td class="px-3 py-2 font-semibold text-slate-900">{{ row.label }}</td>
+                  <td class="px-3 py-2">
+                    {{ row.quantity_field|add_class:"text-right" }}
+                    {% if row.quantity_field.errors %}
+                      <p class="text-xs text-rose-600">{{ row.quantity_field.errors|striptags }}</p>
+                    {% endif %}
+                  </td>
+                  <td class="px-3 py-2">
+                    {{ row.price_field|add_class:"text-right" }}
+                    {% if row.price_field.errors %}
+                      <p class="text-xs text-rose-600">{{ row.price_field.errors|striptags }}</p>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <a href="{{ cancel_url }}" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300">Cancelar</a>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">
+          {{ submit_label }}
+        </button>
+      </div>
+    </form>
+
+    {% if sale %}
+      <section class="grid gap-6 lg:grid-cols-2">
+        <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+          <header class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Historial de abonos</p>
+              <h2 class="text-lg font-semibold text-slate-900">Abonos registrados</h2>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ payments|length }} registro{{ payments|length|pluralize }}</span>
+          </header>
+          {% if payments %}
+            <ul class="divide-y divide-slate-100">
+              {% for payment in payments %}
+                <li class="flex items-center justify-between py-3 text-sm text-slate-600">
+                  <div>
+                    <p class="font-semibold text-slate-900">{{ payment.date|date:"d/m/Y" }} · {{ payment.get_method_display }}</p>
+                    {% if payment.notes %}
+                      <p class="text-xs text-slate-500">{{ payment.notes }}</p>
+                    {% endif %}
+                  </div>
+                  <p class="font-semibold text-slate-900">{{ payment.amount|floatformat:0|intcomma }} COP</p>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="py-4 text-sm text-slate-500">Cuando registres abonos aparecerán aquí para tener trazabilidad inmediata.</p>
+          {% endif %}
+        </article>
+        <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+          <header class="border-b border-slate-100 pb-3">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registrar abono</p>
+            <h2 class="text-lg font-semibold text-slate-900">Control de cartera</h2>
+            <p class="text-xs text-slate-500">Registra pagos parciales o totales para mantener el saldo actualizado.</p>
+          </header>
+          {% if payment_form.non_field_errors %}
+            <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {% for error in payment_form.non_field_errors %}
+                <p>{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <form method="post" class="mt-4 space-y-4" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="intent" value="payment">
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ payment_form.date.id_for_label }}">{{ payment_form.date.label }}</label>
+              {{ payment_form.date|add_class:"mt-1" }}
+              {% if payment_form.date.errors %}
+                <p class="text-xs text-rose-600">{{ payment_form.date.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ payment_form.amount.id_for_label }}">{{ payment_form.amount.label }}</label>
+              {{ payment_form.amount|add_class:"mt-1" }}
+              {% if payment_form.amount.errors %}
+                <p class="text-xs text-rose-600">{{ payment_form.amount.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ payment_form.method.id_for_label }}">{{ payment_form.method.label }}</label>
+              {{ payment_form.method|add_class:"mt-1" }}
+              {% if payment_form.method.errors %}
+                <p class="text-xs text-rose-600">{{ payment_form.method.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ payment_form.notes.id_for_label }}">{{ payment_form.notes.label }}</label>
+              {{ payment_form.notes|add_class:"mt-1" }}
+              {% if payment_form.notes.errors %}
+                <p class="text-xs text-rose-600">{{ payment_form.notes.errors|striptags }}</p>
+              {% endif %}
+            </div>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+              Registrar abono
+            </button>
+          </form>
+        </article>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}
