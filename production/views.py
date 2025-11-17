@@ -1300,12 +1300,13 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 "classified_by",
             )
             .prefetch_related("entries", "batch__bird_batch__allocations__room__chicken_house")
-            .order_by("-classified_at")
+            .order_by("classified_at", "pk")
         )
 
         session_rows: list[dict[str, Any]] = []
         total_cartons = Decimal("0")
         type_totals: dict[str, Decimal] = defaultdict(Decimal)
+        batch_cumulative_classified: dict[int, Decimal] = defaultdict(Decimal)
 
         for session in sessions:
             breakdown_map: dict[str, Decimal] = defaultdict(Decimal)
@@ -1332,13 +1333,20 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
             reported_cartons = Decimal(batch.reported_cartons or 0)
             received_cartons_value = Decimal(batch.received_cartons) if batch.received_cartons is not None else None
             batch_classified_total = Decimal(batch.classified_total)
-            pending_cartons = Decimal(batch.pending_cartons)
-            if pending_cartons < 0:
-                pending_cartons = Decimal("0")
+            batch_pending_value = Decimal(batch.pending_cartons or 0)
+            if batch_pending_value < 0:
+                batch_pending_value = Decimal("0")
             missing_receipt_cartons = reported_cartons - (received_cartons_value if received_cartons_value is not None else Decimal("0"))
             if missing_receipt_cartons < 0:
                 missing_receipt_cartons = Decimal("0")
             barn_label = self._get_batch_barn_label(batch)
+            batch_cumulative_classified[batch.pk] += session_total
+            if received_cartons_value is not None:
+                pending_cartons = received_cartons_value - batch_cumulative_classified[batch.pk]
+            else:
+                pending_cartons = batch_pending_value
+            if pending_cartons < 0:
+                pending_cartons = Decimal("0")
             session_rows.append(
                 {
                     "id": session.pk,
@@ -1359,6 +1367,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 }
             )
             total_cartons += session_total
+        session_rows.reverse()
 
         type_total_rows: list[dict[str, Any]] = []
         for egg_type in ORDERED_EGG_TYPES:
