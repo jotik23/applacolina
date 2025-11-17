@@ -6,6 +6,7 @@ from .views import (
     PayrollManagementView,
     ProductManagementView,
     PurchaseConfigurationView,
+    SupplierImportTemplateView,
     SupplierManagementView,
     SupplierQuickCreateView,
 )
@@ -19,5 +20,10 @@ urlpatterns = [
     path('compras/nomina/', PayrollManagementView.as_view(), name='purchases_payroll'),
     path('compras/proveedores/', SupplierManagementView.as_view(), name='purchases_suppliers'),
     path('compras/proveedores/quick-create/', SupplierQuickCreateView.as_view(), name='purchases_supplier_quick_create'),
+    path(
+        'compras/proveedores/import-template/',
+        SupplierImportTemplateView.as_view(),
+        name='purchases_supplier_import_template',
+    ),
     path('compras/configuracion/', PurchaseConfigurationView.as_view(), name='purchases_configuration'),
 ]

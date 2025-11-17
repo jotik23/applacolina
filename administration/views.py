@@ -33,6 +33,7 @@ from .forms import (
     ProductForm,
     PurchasingExpenseTypeForm,
     SupplierForm,
+    SupplierImportForm,
     SupportDocumentTypeForm,
 )
 from .models import (
@@ -82,6 +83,13 @@ from .services.workflows import (
     ExpenseTypeWorkflowRefreshService,
     PurchaseApprovalDecisionError,
     PurchaseApprovalDecisionService,
+)
+from .services.supplier_imports import (
+    SUPPLIER_IMPORT_TEMPLATE_HEADERS,
+    SUPPLIER_IMPORT_TEMPLATE_SAMPLE_ROW,
+    SupplierImportError,
+    SupplierImportRowError,
+    import_suppliers_from_workbook,
 )
 from .services.payroll import (
     PayrollComputationError,
@@ -2385,6 +2393,8 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
 
 class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
     template_name = 'administration/purchases/suppliers.html'
+    IMPORT_ERRORS_SESSION_KEY = 'administration_supplier_import_errors'
+    MAX_DISPLAYED_IMPORT_ERRORS = 25
 
     def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         return super().get(request, *args, **kwargs)
@@ -2395,6 +2405,8 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
             return self._submit_supplier_form()
         if action == 'delete':
             return self._delete_supplier()
+        if action == 'import_suppliers':
+            return self._import_suppliers()
         messages.error(request, 'Acción no soportada.')
         return redirect(self._base_url())
 
@@ -2416,13 +2428,19 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
             supplier_instance = Supplier.objects.filter(pk=supplier_id).first()
 
         supplier_form = kwargs.get('supplier_form') or SupplierForm(instance=supplier_instance)
+        supplier_import_form = kwargs.get('supplier_import_form') or SupplierImportForm()
+        import_errors = kwargs.get('supplier_import_errors')
+        if import_errors is None:
+            import_errors = self.request.session.pop(self.IMPORT_ERRORS_SESSION_KEY, None)
         context.update(
             supplier_search=search,
             suppliers_page=suppliers_page,
             supplier_form=supplier_form,
+            supplier_import_form=supplier_import_form,
             supplier_panel_open=kwargs.get('supplier_panel_force') or panel_code == 'supplier',
             supplier_instance=supplier_instance,
             delete_modal_open=self.request.GET.get('modal') == 'delete' and supplier_instance is not None,
+            supplier_import_errors=import_errors or [],
         )
         return context
 
@@ -2468,6 +2486,70 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
             params['panel'] = self.request.GET.get('panel')
         query = f"?{urlencode(params)}" if params else ""
         return f"{base}{query}"
+
+    def _import_suppliers(self) -> HttpResponse:
+        form = SupplierImportForm(self.request.POST, self.request.FILES)
+        if not form.is_valid():
+            messages.error(self.request, "Selecciona un archivo de Excel válido para importar terceros.")
+            return self.render_to_response(
+                self.get_context_data(
+                    supplier_import_form=form,
+                )
+            )
+        try:
+            result = import_suppliers_from_workbook(form.cleaned_data['file'])
+        except SupplierImportError as exc:
+            messages.error(self.request, str(exc))
+            return self.render_to_response(
+                self.get_context_data(
+                    supplier_import_form=form,
+                )
+            )
+        self._store_import_errors(result.errors)
+        if result.processed_rows == 0:
+            messages.info(self.request, "El archivo no contiene registros para importar.")
+        else:
+            messages.success(
+                self.request,
+                f"Importación completada: {result.created_count} terceros nuevos y {result.updated_count} actualizados.",
+            )
+            if result.errors:
+                messages.warning(
+                    self.request,
+                    f"{len(result.errors)} fila(s) no se importaron por errores. Revisa el detalle debajo.",
+                )
+        return redirect(self._base_url(with_panel=False))
+
+    def _store_import_errors(self, errors: list[SupplierImportRowError]) -> None:
+        if not errors:
+            self.request.session.pop(self.IMPORT_ERRORS_SESSION_KEY, None)
+            return
+        serialized = [
+            {'row_number': error.row_number, 'message': error.message}
+            for error in errors[: self.MAX_DISPLAYED_IMPORT_ERRORS]
+        ]
+        self.request.session[self.IMPORT_ERRORS_SESSION_KEY] = serialized
+
+
+class SupplierImportTemplateView(StaffRequiredMixin, generic.View):
+    http_method_names = ['get']
+    TEMPLATE_FILENAME = 'plantilla_terceros.xlsx'
+
+    def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Terceros'
+        sheet.append(SUPPLIER_IMPORT_TEMPLATE_HEADERS)
+        sheet.append(SUPPLIER_IMPORT_TEMPLATE_SAMPLE_ROW)
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(
+            buffer.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{self.TEMPLATE_FILENAME}"'
+        return response
 
 
 class SupplierQuickCreateView(StaffRequiredMixin, generic.View):

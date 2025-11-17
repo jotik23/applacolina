@@ -35,6 +35,21 @@ class SupplierForm(forms.ModelForm):
         ]
 
 
+class SupplierImportForm(forms.Form):
+    file = forms.FileField(
+        label="Archivo de Excel (.xlsx)",
+        help_text="Debe incluir columnas para Nombre y Número de identificación.",
+        widget=forms.FileInput(attrs={"accept": ".xlsx"}),
+    )
+
+    def clean_file(self):
+        uploaded = self.cleaned_data["file"]
+        filename = uploaded.name.lower()
+        if not filename.endswith(".xlsx"):
+            raise ValidationError("El archivo debe tener extensión .xlsx.")
+        return uploaded
+
+
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
