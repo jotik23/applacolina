@@ -4,7 +4,7 @@
 {% block title %}Despachos de huevo{% endblock %}
 
 {% block content %}
-  {% include "production/_submenu.html" with active=active_submenu %}
+  {% include "administration/_submenu.html" with active=administration_active_submenu %}
 
   <div class="space-y-6">
     <header class="flex flex-wrap items-center justify-between gap-6 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
@@ -67,7 +67,7 @@
         </div>
       </form>
       <a
-        href="{% url 'production:egg-dispatch-create' %}"
+        href="{% url 'administration:egg-dispatch-create' %}"
         class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
       >
         Registrar despacho
@@ -198,13 +198,13 @@
                 </dl>
                 <div class="flex gap-2 text-xs font-semibold text-slate-500 lg:justify-self-end">
                   <a
-                    href="{% url 'production:egg-dispatch-update' dispatch.pk %}"
+                    href="{% url 'administration:egg-dispatch-update' dispatch.pk %}"
                     class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 transition hover:border-emerald-200 hover:text-emerald-700"
                   >
                     Editar
                   </a>
                   <a
-                    href="{% url 'production:egg-dispatch-delete' dispatch.pk %}"
+                    href="{% url 'administration:egg-dispatch-delete' dispatch.pk %}"
                     class="inline-flex items-center rounded-full border border-rose-200 px-3 py-1 text-rose-600 transition hover:border-rose-300 hover:bg-rose-50"
                   >
                     Eliminar

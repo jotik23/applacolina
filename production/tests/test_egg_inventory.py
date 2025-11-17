@@ -376,7 +376,7 @@ class EggDispatchViewsTests(TestCase):
 
     def test_dispatch_creation_consumes_inventory(self) -> None:
         response = self.client.post(
-            reverse("production:egg-dispatch-create"),
+            reverse("administration:egg-dispatch-create"),
             {
                 "date": date.today().isoformat(),
                 "destination": EggDispatchDestination.TIERRALTA,
@@ -387,7 +387,7 @@ class EggDispatchViewsTests(TestCase):
                 "type_aaa": "30",
             },
         )
-        self.assertRedirects(response, reverse("production:egg-dispatch-list"))
+        self.assertRedirects(response, reverse("administration:egg-dispatch-list"))
         dispatch = EggDispatch.objects.get()
         self.assertEqual(dispatch.total_cartons, Decimal("90"))
         self.assertEqual(dispatch.items.count(), 2)
@@ -397,7 +397,7 @@ class EggDispatchViewsTests(TestCase):
 
     def test_dispatch_prevents_exceeding_inventory(self) -> None:
         response = self.client.post(
-            reverse("production:egg-dispatch-create"),
+            reverse("administration:egg-dispatch-create"),
             {
                 "date": date.today().isoformat(),
                 "destination": EggDispatchDestination.MONTERIA,
@@ -422,7 +422,7 @@ class EggDispatchViewsTests(TestCase):
         )
         dispatch.items.create(egg_type=EggType.JUMBO, cartons=Decimal("40"))
         response = self.client.post(
-            reverse("production:egg-dispatch-update", args=[dispatch.pk]),
+            reverse("administration:egg-dispatch-update", args=[dispatch.pk]),
             {
                 "date": date.today().isoformat(),
                 "destination": EggDispatchDestination.BAJO_CAUCA,
@@ -432,7 +432,7 @@ class EggDispatchViewsTests(TestCase):
                 "type_aa": "20",
             },
         )
-        self.assertRedirects(response, reverse("production:egg-dispatch-list"))
+        self.assertRedirects(response, reverse("administration:egg-dispatch-list"))
         dispatch.refresh_from_db()
         self.assertEqual(dispatch.total_cartons, Decimal("40"))
         items = {
@@ -456,7 +456,7 @@ class EggDispatchViewsTests(TestCase):
             total_cartons=Decimal("10"),
             created_by=self.user,
         )
-        response = self.client.get(reverse("production:egg-dispatch-list"))
+        response = self.client.get(reverse("administration:egg-dispatch-list"))
         self.assertEqual(response.status_code, 200)
         self.assertIn("dispatches", response.context)
         self.assertTrue(response.context["dispatches"])
@@ -475,5 +475,5 @@ class EggDispatchViewsTests(TestCase):
         permission = Permission.objects.get(codename="access_egg_inventory")
         regular.user_permissions.add(permission)
         self.client.force_login(regular)
-        response = self.client.get(reverse("production:egg-dispatch-list"))
+        response = self.client.get(reverse("administration:egg-dispatch-list"))
         self.assertRedirects(response, reverse("task_manager:telegram-mini-app"))

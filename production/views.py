@@ -27,7 +27,6 @@ from production.forms import (
     ChickenHouseForm,
     EggBatchClassificationForm,
     EggBatchReceiptForm,
-    EggDispatchForm,
     FarmForm,
     RoomForm,
     RoomProductionSnapshot,
@@ -40,8 +39,6 @@ from production.models import (
     ChickenHouse,
     EggClassificationBatch,
     EggClassificationSession,
-    EggDispatch,
-    EggDispatchDestination,
     EggType,
     Farm,
     ProductionRecord,
@@ -61,7 +58,6 @@ from production.services.egg_classification import (
     build_pending_batches,
     compute_unclassified_total,
     delete_classification_session,
-    get_inventory_balance_by_type,
     reset_batch_progress,
     summarize_classified_inventory,
 )
@@ -1698,188 +1694,6 @@ class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
                 }
             )
         return session_rows
-
-
-class EggDispatchListView(StaffRequiredMixin, TemplateView):
-    template_name = "production/egg_dispatch_list.html"
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        selected_month = self._parse_month(self.request.GET.get("month"))
-        start_date = selected_month
-        _, last_day = monthrange(selected_month.year, selected_month.month)
-        end_date = start_date.replace(day=last_day)
-
-        dispatches_qs = (
-            EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
-            .select_related("driver", "seller")
-            .prefetch_related("items")
-            .order_by("-date", "-id")
-        )
-        dispatches = list(dispatches_qs)
-
-        total_cartons = Decimal("0")
-        destination_totals: defaultdict[str, Decimal] = defaultdict(Decimal)
-        type_totals: defaultdict[str, Decimal] = defaultdict(Decimal)
-        for dispatch in dispatches:
-            dispatch_total = Decimal(dispatch.total_cartons or 0)
-            total_cartons += dispatch_total
-            destination_totals[dispatch.destination] += dispatch_total
-            for item in dispatch.items.all():
-                type_totals[item.egg_type] += Decimal(item.cartons or 0)
-
-        destination_label_map = dict(EggDispatchDestination.choices)
-        destination_summary = [
-            {
-                "code": code,
-                "label": destination_label_map.get(code, code),
-                "cartons": destination_totals.get(code, Decimal("0")),
-            }
-            for code, _ in EggDispatchDestination.choices
-        ]
-
-        type_label_map = dict(EggType.choices)
-        type_summary = [
-            {
-                "code": egg_type,
-                "label": type_label_map.get(egg_type, egg_type),
-                "cartons": type_totals.get(egg_type, Decimal("0")),
-            }
-            for egg_type in ORDERED_EGG_TYPES
-        ]
-
-        inventory_rows = summarize_classified_inventory()
-        inventory_total = sum((row.cartons for row in inventory_rows), Decimal("0"))
-
-        prev_month = self._shift_month(start_date, -1)
-        next_month = self._shift_month(start_date, 1)
-        today_month = timezone.localdate().replace(day=1)
-        has_next_month = next_month <= today_month
-
-        context.update(
-            {
-                "active_submenu": "egg_dispatches",
-                "dispatches": dispatches,
-                "dispatch_total": total_cartons,
-                "inventory_rows": inventory_rows,
-                "inventory_total": inventory_total,
-                "destination_summary": destination_summary,
-                "type_summary": type_summary,
-                "selected_month": start_date,
-                "month_query": start_date.strftime("%Y-%m"),
-                "prev_month_param": prev_month.strftime("%Y-%m"),
-                "next_month_param": next_month.strftime("%Y-%m"),
-                "has_next_month": has_next_month,
-            }
-        )
-        return context
-
-    def _parse_month(self, value: Optional[str]) -> date:
-        today = timezone.localdate().replace(day=1)
-        if not value:
-            return today
-        try:
-            parsed = datetime.strptime(value, "%Y-%m").date().replace(day=1)
-        except ValueError:
-            return today
-        if parsed > today:
-            return today
-        return parsed
-
-    def _shift_month(self, base: date, delta: int) -> date:
-        month = base.month - 1 + delta
-        year = base.year + month // 12
-        month = month % 12 + 1
-        return date(year, month, 1)
-
-
-class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
-    model = EggDispatch
-    form_class = EggDispatchForm
-    template_name = "production/egg_dispatch_form.html"
-
-    def get_success_url(self) -> str:
-        return reverse("production:egg-dispatch-list")
-
-    def get_form_kwargs(self) -> Dict[str, Any]:
-        kwargs = super().get_form_kwargs()
-        exclude_dispatch_id = getattr(getattr(self, "object", None), "pk", None)
-        kwargs["inventory_map"] = get_inventory_balance_by_type(exclude_dispatch_id=exclude_dispatch_id)
-        return kwargs
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        inventory_rows = summarize_classified_inventory()
-        inventory_total = sum((row.cartons for row in inventory_rows), Decimal("0"))
-        form = context.get("form")
-        context.update(
-            {
-                "active_submenu": "egg_dispatches",
-                "inventory_rows": inventory_rows,
-                "inventory_total": inventory_total,
-                "type_rows": form.type_rows if form else [],
-                "cancel_url": reverse("production:egg-dispatch-list"),
-                "dispatch": getattr(self, "object", None),
-            }
-        )
-        return context
-
-    def form_valid(self, form: EggDispatchForm):
-        self.object = form.save(actor_id=getattr(self.request.user, "id", None))
-        messages.success(self.request, self.get_success_message(form.cleaned_data))
-        return redirect(self.get_success_url())
-
-
-class EggDispatchCreateView(EggDispatchFormMixin, CreateView):
-    success_message = "Despacho registrado correctamente."
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context.update(
-            {
-                "page_title": "Registrar despacho",
-                "submit_label": "Guardar despacho",
-            }
-        )
-        return context
-
-
-class EggDispatchUpdateView(EggDispatchFormMixin, UpdateView):
-    success_message = "Despacho actualizado correctamente."
-
-    def get_queryset(self):
-        return super().get_queryset().select_related("driver", "seller").prefetch_related("items")
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context.update(
-            {
-                "page_title": "Actualizar despacho",
-                "submit_label": "Actualizar despacho",
-            }
-        )
-        return context
-
-
-class EggDispatchDeleteView(StaffRequiredMixin, SuccessMessageMixin, DeleteView):
-    model = EggDispatch
-    template_name = "production/egg_dispatch_confirm_delete.html"
-    success_url = reverse_lazy("production:egg-dispatch-list")
-    context_object_name = "dispatch"
-    success_message = "Despacho eliminado correctamente."
-
-    def get_queryset(self):
-        return super().get_queryset().select_related("driver", "seller")
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context.update({"active_submenu": "egg_dispatches"})
-        return context
-
-    def delete(self, request, *args, **kwargs):
-        response = super().delete(request, *args, **kwargs)
-        messages.success(self.request, self.success_message)
-        return response
 
 
 class DailyIndicatorsView(ProductionDashboardContextMixin, TemplateView):
@@ -3653,10 +3467,6 @@ egg_inventory_dashboard_view = EggInventoryDashboardView.as_view()
 egg_inventory_cardex_view = EggInventoryCardexView.as_view()
 egg_classification_shift_summary_view = EggClassificationShiftSummaryView.as_view()
 egg_inventory_batch_detail_view = EggInventoryBatchDetailView.as_view()
-egg_dispatch_list_view = EggDispatchListView.as_view()
-egg_dispatch_create_view = EggDispatchCreateView.as_view()
-egg_dispatch_update_view = EggDispatchUpdateView.as_view()
-egg_dispatch_delete_view = EggDispatchDeleteView.as_view()
 daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
 farm_update_view = FarmUpdateView.as_view()

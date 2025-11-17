@@ -4,7 +4,7 @@
 {% block title %}{{ page_title|default:"Despachos" }}{% endblock %}
 
 {% block content %}
-  {% include "production/_submenu.html" with active=active_submenu %}
+  {% include "administration/_submenu.html" with active=administration_active_submenu %}
 
   <div class="space-y-6">
     <header class="rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">

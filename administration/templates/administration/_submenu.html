@@ -1,6 +1,14 @@
 <nav class="border-b border-slate-200/70" data-app-submenu>
   <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
     <a
+      href="{% url 'administration:egg-dispatch-list' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'dispatches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'dispatches' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'dispatches' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Despachos
+    </a>
+    <a
       href="{% url 'administration:purchases' %}"
       class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'purchases' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'purchases' %}aria-current="page"{% endif %}

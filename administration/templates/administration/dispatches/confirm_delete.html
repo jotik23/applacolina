@@ -4,7 +4,7 @@
 {% block title %}Eliminar despacho{% endblock %}
 
 {% block content %}
-  {% include "production/_submenu.html" with active=active_submenu %}
+  {% include "administration/_submenu.html" with active=administration_active_submenu %}
 
   <div class="space-y-6">
     <header class="rounded-2xl border border-rose-200/70 bg-rose-50 px-5 py-4 shadow-sm">
@@ -59,7 +59,7 @@
       <form method="post" class="mt-6 flex flex-wrap items-center justify-between gap-3">
         {% csrf_token %}
         <a
-          href="{% url 'production:egg-dispatch-list' %}"
+          href="{% url 'administration:egg-dispatch-list' %}"
           class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
         >
           Cancelar
