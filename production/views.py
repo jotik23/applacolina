@@ -1499,8 +1499,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                     if isinstance(production_date, date)
                     else session["classified_at"].strftime("%d %b")
                 )
-                classification_time = session["classified_at"].strftime("%H:%M")
-                timestamp = f"{production_label} · {classification_time}"
+                timestamp = f"Producción del {production_label}"
                 lot_label = session.get("barn_label") or session["lot_label"]
                 location_label = f"{session['farm_name']} · Lote {lot_label}"
                 lines.append(f"• {timestamp}: {location_label}:")
@@ -1511,7 +1510,7 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 else:
                     received_value = Decimal("0")
                 lines.append(f"  ↳ {self._format_cartons_text(received_value)} cart recibidos")
-                classified_value = Decimal(session.get("classified_cartons") or 0)
+                classified_value = Decimal(session.get("total_cartons") or 0)
                 lines.append(f"  ↳ {self._format_cartons_text(classified_value)} cart clasificados")
                 pending_value = Decimal(session.get("pending_cartons") or 0)
                 lines.append(f"  ↳ {self._format_cartons_text(pending_value)} cart por clasificar")
