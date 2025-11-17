@@ -302,12 +302,12 @@
   {% if purchases_panel %}
     <div class="fixed inset-0 z-30 bg-slate-900/40"></div>
     <section
-      class="fixed inset-y-0 right-0 z-40 w-full max-w-4xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl"
+      class="fixed inset-y-0 right-0 z-40 flex h-full w-full max-w-4xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl"
       role="dialog"
       aria-modal="true"
       aria-labelledby="side-panel-title"
     >
-      <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+      <div class="flex flex-shrink-0 items-start justify-between border-b border-slate-200 px-6 py-4">
         <div>
           <p id="side-panel-title" class="text-lg font-semibold text-slate-900">{{ purchases_panel.panel.title }}</p>
           {% if purchases_panel.purchase %}
@@ -321,7 +321,7 @@
           Cerrar
         </a>
       </div>
-      <div class="p-6">
+      <div class="flex-1 overflow-y-auto p-6">
         <form method="post" action="{% url 'administration:purchases' %}" enctype="multipart/form-data">
           {% csrf_token %}
           <input type="hidden" name="scope" value="{{ purchases_scope.code }}">

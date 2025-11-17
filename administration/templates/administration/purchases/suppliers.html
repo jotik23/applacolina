@@ -185,8 +185,8 @@
 
   {% if supplier_panel_open %}
     <div class="fixed inset-0 z-30 bg-slate-900/40"></div>
-    <aside class="fixed inset-y-0 right-0 z-40 w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
-      <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+    <aside class="fixed inset-y-0 right-0 z-40 flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl">
+      <div class="flex flex-shrink-0 items-start justify-between border-b border-slate-200 px-6 py-4">
         <div>
           <p class="text-lg font-semibold text-slate-900">
             {% if supplier_instance %}Editar tercero{% else %}Registrar tercero{% endif %}
@@ -201,7 +201,7 @@
           Cancelar edición
         </a>
       </div>
-      <div class="p-6">
+      <div class="flex-1 overflow-y-auto p-6">
         <form method="post" class="space-y-6">
           {% csrf_token %}
           <input type="hidden" name="form_action" value="supplier">
@@ -289,7 +289,7 @@
             </label>
           </article>
 
-          <div class="flex justify-end gap-3 border-t border-slate-200 pt-4">
+          <div class="sticky bottom-0 left-0 right-0 flex justify-end gap-3 border-t border-slate-200 bg-white pt-4">
             <a href="?{% if supplier_search %}search={{ supplier_search|urlencode }}&{% endif %}" class="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-900">
               Cancelar
             </a>

@@ -1497,7 +1497,14 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
             lines.append("👷 Sesiones recientes:")
             visible_sessions = session_rows[:8]
             for index, session in enumerate(visible_sessions):
-                timestamp = session["classified_at"].strftime("%d %b %H:%M")
+                production_date = session.get("production_date")
+                production_label = (
+                    production_date.strftime("%d %b")
+                    if isinstance(production_date, date)
+                    else session["classified_at"].strftime("%d %b")
+                )
+                classification_time = session["classified_at"].strftime("%H:%M")
+                timestamp = f"{production_label} · {classification_time}"
                 lot_label = session.get("barn_label") or session["lot_label"]
                 location_label = f"{session['farm_name']} · Lote {lot_label}"
                 lines.append(f"• {timestamp}: {location_label}:")
