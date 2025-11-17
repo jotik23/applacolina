@@ -1367,7 +1367,6 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 }
             )
             total_cartons += session_total
-        session_rows.reverse()
 
         type_total_rows: list[dict[str, Any]] = []
         for egg_type in ORDERED_EGG_TYPES:
