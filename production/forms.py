@@ -990,11 +990,15 @@ class EggDispatchForm(forms.ModelForm):
                     }
                 ),
             )
+            field.widget.attrs["data-cartons-input"] = "true"
+            available_cartons = self.inventory_map.setdefault(egg_type, Decimal("0"))
+            field.widget.attrs["data-cartons-available"] = f"{available_cartons:.2f}"
+            if available_cartons > 0:
+                field.widget.attrs["max"] = f"{available_cartons:.2f}"
             if existing_items:
                 field.initial = existing_items.get(egg_type)
             self.fields[field_name] = field
             self.type_field_map[egg_type] = field_name
-            self.inventory_map.setdefault(egg_type, Decimal("0"))
 
     def _configure_base_fields(self) -> None:
         user_model = get_user_model()
@@ -1003,12 +1007,23 @@ class EggDispatchForm(forms.ModelForm):
             field = self.fields[field_name]
             field.queryset = user_qs
             field.widget.attrs.setdefault("class", self.input_classes)
+            field.required = True
+            field.widget.attrs["required"] = "required"
+            if field_name == "driver":
+                field.error_messages.setdefault("required", "Selecciona el conductor.")
+            else:
+                field.error_messages.setdefault("required", "Selecciona el vendedor responsable.")
         date_field = self.fields["date"]
         date_field.widget.attrs.setdefault("class", self.input_classes)
-        if not self.instance.pk and not self.initial.get("date"):
-            date_field.initial = timezone.localdate()
+        if not self.is_bound and not self.instance.pk:
+            default_date = self.initial.get("date") or timezone.localdate()
+            self.initial.setdefault("date", default_date)
+            date_field.initial = default_date
         destination_field = self.fields["destination"]
         destination_field.widget.attrs.setdefault("class", self.input_classes)
+        destination_field.required = True
+        destination_field.widget.attrs["required"] = "required"
+        destination_field.error_messages.setdefault("required", "Selecciona el destino del despacho.")
         notes_field = self.fields["notes"]
         existing = notes_field.widget.attrs.get("class", "")
         notes_field.widget.attrs["class"] = f"{existing} {self.input_classes}".strip()
@@ -1062,7 +1077,7 @@ class EggDispatchForm(forms.ModelForm):
             totals += decimal_value
 
         if totals <= 0:
-            raise forms.ValidationError("Registra al menos un tipo de huevo para despachar.")
+            raise forms.ValidationError("El total de cartones del despacho debe ser mayor a cero.")
 
         self.cleaned_quantities = entries
         self.cleaned_total = totals

@@ -145,8 +145,7 @@
       <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
         <header class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario por bodega</p>
-            <h2 class="text-lg font-semibold text-slate-900">Despachos asignados a vendedores</h2>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario por vendedor</p>
           </div>
           <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {{ warehouse_snapshots|length }} bodeg{{ warehouse_snapshots|length|pluralize:"a,as" }}
@@ -163,23 +162,35 @@
                     </p>
                     <p class="text-xs text-slate-500">{{ snapshot.total_available_cartons|floatformat:0|intcomma }} cartones disponibles</p>
                   </div>
-                  <span class="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-                    Inventario vivo
-                  </span>
                 </div>
-                <dl class="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  {% for egg_type, quantity in snapshot.ordered_available %}
-                    {% if quantity > 0 %}
-                      <div class="rounded-lg border border-slate-100 px-3 py-2 text-slate-600">
-                        <dt class="font-semibold text-slate-900">{{ egg_type_label_map|dict_get:egg_type|default:egg_type }}</dt>
-                        <dd class="mt-1 font-semibold text-slate-800">{{ quantity|floatformat:0|intcomma }} cart</dd>
-                      </div>
-                    {% endif %}
-                  {% endfor %}
-                  {% if snapshot.total_available_cartons == 0 %}
-                    <p class="col-span-2 text-slate-500">Sin inventario disponible.</p>
-                  {% endif %}
-                </dl>
+                <div class="mt-3 overflow-x-auto rounded-lg border border-slate-100">
+                  {% with ordered_quantities=snapshot.ordered_available %}
+                    <table class="min-w-full text-xs text-slate-600">
+                      <thead class="bg-slate-50/60 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        <tr>
+                          {% for egg_type, _ in ordered_quantities %}
+                            <th class="px-3 py-2 text-left">
+                              {{ egg_type_label_map|dict_get:egg_type|default:egg_type }}
+                            </th>
+                          {% endfor %}
+                          <th class="px-3 py-2 text-left">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="text-sm font-semibold text-slate-900">
+                          {% for egg_type, quantity in ordered_quantities %}
+                            <td class="px-3 py-2 text-left">
+                              {{ quantity|floatformat:0|intcomma }}
+                            </td>
+                          {% endfor %}
+                          <td class="px-3 py-2 text-left text-emerald-700">
+                            {{ snapshot.total_available_cartons|floatformat:0|intcomma }} cart
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  {% endwith %}
+                </div>
               </li>
             {% endfor %}
           </ul>

@@ -18,6 +18,7 @@ from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import redirect
+from django.template.response import TemplateResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -3106,12 +3107,30 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         total_cartons = Decimal("0")
         destination_totals: defaultdict[str, Decimal] = defaultdict(Decimal)
         type_totals: defaultdict[str, Decimal] = defaultdict(Decimal)
+        type_label_map = dict(EggType.choices)
+        dispatch_rows: list[Dict[str, Any]] = []
         for dispatch in dispatches:
             dispatch_total = Decimal(dispatch.total_cartons or 0)
             total_cartons += dispatch_total
             destination_totals[dispatch.destination] += dispatch_total
+            type_breakdown = {egg_type: Decimal("0") for egg_type in ORDERED_EGG_TYPES}
             for item in dispatch.items.all():
-                type_totals[item.egg_type] += Decimal(item.cartons or 0)
+                cartons = Decimal(item.cartons or 0)
+                type_totals[item.egg_type] += cartons
+                type_breakdown[item.egg_type] = cartons
+            dispatch_rows.append(
+                {
+                    "dispatch": dispatch,
+                    "type_breakdown": [
+                        {
+                            "code": egg_type,
+                            "label": type_label_map.get(egg_type, egg_type),
+                            "cartons": type_breakdown[egg_type],
+                        }
+                        for egg_type in ORDERED_EGG_TYPES
+                    ],
+                }
+            )
 
         destination_label_map = dict(EggDispatchDestination.choices)
         destination_summary = [
@@ -3123,7 +3142,6 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
             for code, _ in EggDispatchDestination.choices
         ]
 
-        type_label_map = dict(EggType.choices)
         type_summary = [
             {
                 "code": egg_type,
@@ -3131,6 +3149,9 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                 "cartons": type_totals.get(egg_type, Decimal("0")),
             }
             for egg_type in ORDERED_EGG_TYPES
+        ]
+        egg_type_headers = [
+            {"code": egg_type, "label": type_label_map.get(egg_type, egg_type)} for egg_type in ORDERED_EGG_TYPES
         ]
 
         inventory_rows = summarize_classified_inventory()
@@ -3141,20 +3162,33 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         today_month = timezone.localdate().replace(day=1)
         has_next_month = next_month <= today_month
 
+        dispatch_form = EggDispatchForm(inventory_map=get_inventory_balance_by_type())
+        panel_open = self.request.GET.get("panel") == "dispatch-create"
+
         context.update(
             {
                 "administration_active_submenu": "dispatches",
                 "dispatches": dispatches,
+                "dispatch_rows": dispatch_rows,
                 "dispatch_total": total_cartons,
                 "inventory_rows": inventory_rows,
                 "inventory_total": inventory_total,
                 "destination_summary": destination_summary,
                 "type_summary": type_summary,
+                "egg_type_headers": egg_type_headers,
                 "selected_month": start_date,
                 "month_query": start_date.strftime("%Y-%m"),
                 "prev_month_param": prev_month.strftime("%Y-%m"),
                 "next_month_param": next_month.strftime("%Y-%m"),
                 "has_next_month": has_next_month,
+                "dispatch_form": dispatch_form,
+                "dispatch_form_type_rows": dispatch_form.type_rows,
+                "dispatch_panel_open": panel_open,
+                "dispatch_panel_title": EggDispatchFormMixin.embedded_panel_title,
+                "dispatch_panel_subtitle": EggDispatchFormMixin.embedded_panel_subtitle,
+                "dispatch_form_action": reverse("administration:egg-dispatch-create"),
+                "dispatch_panel_submit_label": "Guardar despacho",
+                "dispatch_panel_cancel_url": reverse("administration:egg-dispatch-list"),
             }
         )
         return context
@@ -3183,6 +3217,9 @@ class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
     form_class = EggDispatchForm
     template_name = "administration/dispatches/form.html"
 
+    embedded_panel_title = "Registrar despacho"
+    embedded_panel_subtitle = "Completa el despacho sin perder de vista el resumen mensual."
+
     def get_success_url(self) -> str:
         return reverse("administration:egg-dispatch-list")
 
@@ -3204,10 +3241,37 @@ class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
                 "inventory_total": inventory_total,
                 "type_rows": form.type_rows if form else [],
                 "cancel_url": reverse("administration:egg-dispatch-list"),
+                "form_action": self.request.path,
                 "dispatch": getattr(self, "object", None),
             }
         )
         return context
+
+    def _render_embedded_panel(self, form: EggDispatchForm, *, status: int = 400) -> TemplateResponse:
+        """Render the list view with the panel open to surface errors inline."""
+        list_view = EggDispatchListView()
+        list_view.request = self.request
+        list_view.args = ()
+        list_view.kwargs = {}
+        list_context = list_view.get_context_data()
+        list_context.update(
+            {
+                "dispatch_form": form,
+                "dispatch_form_type_rows": getattr(form, "type_rows", []),
+                "dispatch_panel_open": True,
+                "dispatch_panel_title": self.embedded_panel_title,
+                "dispatch_panel_subtitle": self.embedded_panel_subtitle,
+                "dispatch_form_action": reverse("administration:egg-dispatch-create"),
+                "dispatch_panel_submit_label": "Guardar despacho",
+                "dispatch_panel_cancel_url": reverse("administration:egg-dispatch-list"),
+            }
+        )
+        return TemplateResponse(
+            request=self.request,
+            template=EggDispatchListView.template_name,
+            context=list_context,
+            status=status,
+        )
 
     def form_valid(self, form: EggDispatchForm):
         self.object = form.save(actor_id=getattr(self.request.user, "id", None))
@@ -3217,6 +3281,11 @@ class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
 
 class EggDispatchCreateView(EggDispatchFormMixin, generic.CreateView):
     success_message = "Despacho registrado correctamente."
+
+    def form_invalid(self, form: EggDispatchForm):
+        if self.request.POST.get("embedded_panel") == "1":
+            return self._render_embedded_panel(form, status=400)
+        return super().form_invalid(form)
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)

@@ -1,0 +1,132 @@
+{% load humanize form_extras %}
+{% if form.non_field_errors %}
+  <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+    {% for error in form.non_field_errors %}
+      <p>{{ error }}</p>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="grid gap-4 md:grid-cols-2">
+  <div>
+    <label for="{{ form.date.id_for_label }}" class="text-sm font-semibold text-slate-700">Fecha</label>
+    {{ form.date }}
+    {% for error in form.date.errors %}
+      <p class="text-xs text-rose-600">{{ error }}</p>
+    {% endfor %}
+  </div>
+  <div>
+    <label for="{{ form.destination.id_for_label }}" class="text-sm font-semibold text-slate-700">Destino</label>
+    {{ form.destination }}
+    {% for error in form.destination.errors %}
+      <p class="text-xs text-rose-600">{{ error }}</p>
+    {% endfor %}
+  </div>
+  <div>
+    <label for="{{ form.driver.id_for_label }}" class="text-sm font-semibold text-slate-700">Conductor</label>
+    {{ form.driver }}
+    {% for error in form.driver.errors %}
+      <p class="text-xs text-rose-600">{{ error }}</p>
+    {% endfor %}
+  </div>
+  <div>
+    <label for="{{ form.seller.id_for_label }}" class="text-sm font-semibold text-slate-700">Vendedor responsable</label>
+    {{ form.seller }}
+    {% for error in form.seller.errors %}
+      <p class="text-xs text-rose-600">{{ error }}</p>
+    {% endfor %}
+  </div>
+</div>
+
+<section class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+  <header class="flex items-center justify-between border-b border-slate-200 pb-2">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalle del despacho</p>
+      <h2 class="text-sm font-semibold text-slate-900">Cartones por tipo</h2>
+    </div>
+    <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      Inventario total: {{ inventory_total|cartons }} cart
+    </span>
+  </header>
+  <div class="overflow-x-auto">
+    <table class="mt-3 w-full border-collapse text-sm text-slate-600">
+      <thead>
+        <tr class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <th class="px-3 py-2 text-left">Tipo</th>
+          <th class="px-3 py-2 text-right">Disponible</th>
+          <th class="px-3 py-2 text-right">Cartones a despachar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in type_rows %}
+          <tr class="border-t border-slate-100">
+            <td class="px-3 py-2 font-semibold text-slate-900">{{ row.label }}</td>
+            <td class="px-3 py-2 text-right text-sm text-slate-500">{{ row.available|cartons }} cart</td>
+            <td class="px-3 py-2 text-right">
+              {{ row.field }}
+              {% for error in row.field.errors %}
+                <p class="text-xs text-rose-600">{{ error }}</p>
+              {% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+    <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total cartones diligenciados</div>
+    <div class="text-lg font-semibold text-emerald-600" data-cartons-total>
+      {{ dispatch.total_cartons|default_if_none:0|floatformat:2 }} cartones
+    </div>
+  </div>
+</section>
+
+<div>
+  <label for="{{ form.notes.id_for_label }}" class="text-sm font-semibold text-slate-700">Notas</label>
+  {{ form.notes }}
+  {% for error in form.notes.errors %}
+    <p class="text-xs text-rose-600">{{ error }}</p>
+  {% endfor %}
+</div>
+
+<script>
+  (function () {
+    if (window.__dispatchFormTotalsInitialized) {
+      return;
+    }
+    window.__dispatchFormTotalsInitialized = true;
+    document.addEventListener('DOMContentLoaded', function () {
+      var forms = document.querySelectorAll('[data-dispatch-form]');
+      if (!forms.length) {
+        return;
+      }
+      var formatter = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      forms.forEach(function (form) {
+        var totalTarget = form.querySelector('[data-cartons-total]');
+        var inputs = form.querySelectorAll('[data-cartons-input]');
+        if (!totalTarget || !inputs.length) {
+          return;
+        }
+        var updateTotal = function () {
+          var total = 0;
+          inputs.forEach(function (input) {
+            var value = (input.value || '').trim().replace(',', '.');
+            if (!value) {
+              return;
+            }
+            var parsed = parseFloat(value);
+            if (!isNaN(parsed)) {
+              total += parsed;
+            }
+          });
+          totalTarget.textContent = formatter.format(total) + ' cartones';
+        };
+        inputs.forEach(function (input) {
+          input.addEventListener('input', updateTotal);
+          input.addEventListener('change', updateTotal);
+        });
+        updateTotal();
+      });
+    });
+  })();
+</script>

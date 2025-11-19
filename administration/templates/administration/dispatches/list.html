@@ -69,93 +69,11 @@
       <a
         href="{% url 'administration:egg-dispatch-create' %}"
         class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+        data-dispatch-panel-open-trigger
       >
         Registrar despacho
       </a>
     </div>
-
-    <section class="grid gap-6 lg:grid-cols-12">
-      <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm lg:col-span-5">
-        <header class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Destino</p>
-            <h2 class="text-lg font-semibold text-slate-900">Resumen mensual</h2>
-          </div>
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {{ dispatches|length }} despacho{{ dispatches|length|pluralize }}
-          </span>
-        </header>
-        {% if destination_summary %}
-          <ul class="divide-y divide-slate-100 text-sm text-slate-600">
-            {% for row in destination_summary %}
-              {% if row.cartons > 0 %}
-                <li class="flex items-center justify-between py-3">
-                  <div class="font-semibold text-slate-800">{{ row.label }}</div>
-                  <div class="text-right font-semibold text-emerald-700">{{ row.cartons|cartons }} cart</div>
-                </li>
-              {% endif %}
-            {% empty %}
-              <li class="py-4 text-center text-sm text-slate-500">Sin despachos registrados.</li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="py-4 text-center text-sm text-slate-500">Sin despachos registrados.</p>
-        {% endif %}
-        {% if type_summary %}
-          <footer class="mt-4 rounded-xl bg-slate-50/70 px-4 py-3">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Composición del mes</p>
-            <div class="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-slate-700">
-              {% for row in type_summary %}
-                {% if row.cartons > 0 %}
-                  <span class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 shadow-sm">
-                    {{ row.label }} <span class="text-emerald-700">{{ row.cartons|cartons }} cart</span>
-                  </span>
-                {% endif %}
-              {% endfor %}
-            </div>
-          </footer>
-        {% endif %}
-      </article>
-      <article class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm lg:col-span-7">
-        <header class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario clasificado</p>
-            <h2 class="text-lg font-semibold text-slate-900">Disponibilidad por tipo</h2>
-          </div>
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ inventory_total|cartons }} cart</span>
-        </header>
-        {% if inventory_rows %}
-          <div class="overflow-x-auto">
-            <table class="mt-3 w-full border-collapse text-sm text-slate-600">
-              <thead>
-                <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  <th class="px-3 py-2 text-left">Tipo</th>
-                  <th class="px-3 py-2 text-right">Cartones disponibles</th>
-                  <th class="px-3 py-2 text-right">Última clasificación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in inventory_rows %}
-                  <tr class="border-t border-slate-100">
-                    <td class="px-3 py-2 font-semibold text-slate-900">{{ row.label }}</td>
-                    <td class="px-3 py-2 text-right font-semibold text-slate-800">{{ row.cartons|cartons }}</td>
-                    <td class="px-3 py-2 text-right text-xs text-slate-500">
-                      {% if row.last_classified_at %}
-                        {{ row.last_classified_at|date:"d M" }}
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="py-4 text-center text-sm text-slate-500">Aún no hay inventario clasificado.</p>
-        {% endif %}
-      </article>
-    </section>
 
     <section class="rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm">
       <header class="flex items-center justify-between border-b border-slate-100 px-5 py-3">
@@ -167,65 +85,79 @@
           {{ dispatches|length }} registro{{ dispatches|length|pluralize }}
         </span>
       </header>
-      {% if dispatches %}
-        <ul class="divide-y divide-slate-100">
-          {% for dispatch in dispatches %}
-            <li class="px-5 py-4">
-              <div class="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)_auto] lg:items-start">
-                <div class="space-y-1">
-                  <p class="text-sm font-semibold text-slate-900">
-                    {{ dispatch.date|date:"l d \\d\\e F" }} · {{ dispatch.get_destination_display }}
-                  </p>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Total despachado: {{ dispatch.total_cartons|cartons }} cart
-                  </p>
-                </div>
-                <dl class="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 lg:mt-0">
-                  <div>
-                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Conductor</dt>
-                    <dd class="mt-1 font-semibold text-slate-800">{{ dispatch.driver_name }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Vendedor</dt>
-                    <dd class="mt-1 font-semibold text-slate-800">{{ dispatch.seller_name }}</dd>
-                  </div>
+      {% if dispatch_rows %}
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-collapse text-sm text-slate-600">
+            <thead>
+              <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th class="px-3 py-3 text-left">Fecha</th>
+                <th class="px-3 py-3 text-left">Destino</th>
+                <th class="px-3 py-3 text-right">Total despachado</th>
+                {% for header in egg_type_headers %}
+                  <th class="px-3 py-3 text-right">{{ header.label }}</th>
+                {% endfor %}
+                <th class="px-3 py-3 text-left">Conductor</th>
+                <th class="px-3 py-3 text-left">Vendedor</th>
+                <th class="px-3 py-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dispatch_rows %}
+                {% with dispatch=row.dispatch %}
+                  <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+                    <td class="px-3 py-3 font-semibold text-slate-900">
+                      {{ dispatch.date|date:"d M Y" }}
+                    </td>
+                    <td class="px-3 py-3 font-semibold text-slate-900">
+                      {{ dispatch.get_destination_display }}
+                    </td>
+                    <td class="px-3 py-3 text-right font-semibold text-emerald-700">
+                      {{ dispatch.total_cartons|cartons }} cart
+                    </td>
+                    {% for cell in row.type_breakdown %}
+                      <td class="px-3 py-3 text-right font-semibold text-slate-900">
+                        {% if cell.cartons > 0 %}
+                          {{ cell.cartons|cartons }}
+                        {% else %}
+                          <span class="text-slate-400">—</span>
+                        {% endif %}
+                      </td>
+                    {% endfor %}
+                    <td class="px-3 py-3 font-semibold text-slate-900">
+                      {{ dispatch.driver_name }}
+                    </td>
+                    <td class="px-3 py-3 font-semibold text-slate-900">
+                      {{ dispatch.seller_name }}
+                    </td>
+                    <td class="px-3 py-3">
+                      <div class="flex justify-center gap-2 text-xs font-semibold text-slate-500">
+                        <a
+                          href="{% url 'administration:egg-dispatch-update' dispatch.pk %}"
+                          class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 transition hover:border-emerald-200 hover:text-emerald-700"
+                        >
+                          Editar
+                        </a>
+                        <a
+                          href="{% url 'administration:egg-dispatch-delete' dispatch.pk %}"
+                          class="inline-flex items-center rounded-full border border-rose-200 px-3 py-1 text-rose-600 transition hover:border-rose-300 hover:bg-rose-50"
+                        >
+                          Eliminar
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
                   {% if dispatch.notes %}
-                    <div class="sm:col-span-2">
-                      <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas</dt>
-                      <dd class="mt-1 text-slate-600">{{ dispatch.notes }}</dd>
-                    </div>
+                    <tr class="border-t border-slate-100 bg-slate-50/70">
+                      <td class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500" colspan="{{ egg_type_headers|length|add:'6' }}">
+                        Notas: <span class="ml-1 font-normal normal-case text-slate-600">{{ dispatch.notes }}</span>
+                      </td>
+                    </tr>
                   {% endif %}
-                </dl>
-                <div class="flex gap-2 text-xs font-semibold text-slate-500 lg:justify-self-end">
-                  <a
-                    href="{% url 'administration:egg-dispatch-update' dispatch.pk %}"
-                    class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 transition hover:border-emerald-200 hover:text-emerald-700"
-                  >
-                    Editar
-                  </a>
-                  <a
-                    href="{% url 'administration:egg-dispatch-delete' dispatch.pk %}"
-                    class="inline-flex items-center rounded-full border border-rose-200 px-3 py-1 text-rose-600 transition hover:border-rose-300 hover:bg-rose-50"
-                  >
-                    Eliminar
-                  </a>
-                </div>
-              </div>
-              <div class="mt-3 rounded-xl bg-slate-50/70 px-4 py-3">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalle por tipo</p>
-                <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
-                  {% for item in dispatch.items.all %}
-                    <span class="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 shadow-sm">
-                      {{ item.get_egg_type_display }} · <span class="text-emerald-700">{{ item.cartons|cartons }} cart</span>
-                    </span>
-                  {% empty %}
-                    <span class="text-slate-500">Sin detalle</span>
-                  {% endfor %}
-                </div>
-              </div>
-            </li>
-          {% endfor %}
-        </ul>
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       {% else %}
         <p class="px-5 py-6 text-center text-sm text-slate-500">
           No hay despachos registrados en el mes seleccionado.
@@ -233,4 +165,79 @@
       {% endif %}
     </section>
   </div>
+  {% with panel_open=dispatch_panel_open panel_embedded=True panel_title=dispatch_panel_title panel_subtitle=dispatch_panel_subtitle panel_form_action=dispatch_form_action panel_submit_label=dispatch_panel_submit_label panel_cancel_url=dispatch_panel_cancel_url form=dispatch_form type_rows=dispatch_form_type_rows inventory_total=inventory_total dispatch=dispatch_form.instance %}
+    {% include "administration/dispatches/includes/panel.html" %}
+  {% endwith %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var panel = document.querySelector('[data-dispatch-panel][data-dispatch-panel-embedded="true"]');
+      if (!panel) {
+        return;
+      }
+      var openButtons = document.querySelectorAll('[data-dispatch-panel-open-trigger]');
+      var closeButtons = panel.querySelectorAll('[data-dispatch-panel-close]');
+      var backdrop = panel.querySelector('[data-dispatch-panel-backdrop]');
+      var lastTrigger = null;
+
+      var focusPanel = function () {
+        var target =
+          panel.querySelector('[data-dispatch-panel-focus]') ||
+          panel.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+        if (target && typeof target.focus === 'function') {
+          target.focus();
+        }
+      };
+
+      var openPanel = function (trigger) {
+        if (!panel.classList.contains('hidden')) {
+          focusPanel();
+          return;
+        }
+        panel.classList.remove('hidden');
+        panel.setAttribute('data-dispatch-panel-open', 'true');
+        lastTrigger = trigger || null;
+        focusPanel();
+      };
+
+      var closePanel = function (focusTrigger) {
+        if (panel.classList.contains('hidden')) {
+          return;
+        }
+        panel.classList.add('hidden');
+        panel.setAttribute('data-dispatch-panel-open', 'false');
+        if (focusTrigger && lastTrigger && typeof lastTrigger.focus === 'function') {
+          lastTrigger.focus();
+        }
+      };
+
+      openButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+          event.preventDefault();
+          openPanel(button);
+        });
+      });
+      closeButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+          event.preventDefault();
+          closePanel(true);
+        });
+      });
+      if (backdrop) {
+        backdrop.addEventListener('click', function (event) {
+          if (event.target === backdrop) {
+            closePanel(true);
+          }
+        });
+      }
+      panel.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closePanel(true);
+        }
+      });
+      if (panel.getAttribute('data-dispatch-panel-open') === 'true') {
+        focusPanel();
+      }
+    });
+  </script>
 {% endblock %}
