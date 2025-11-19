@@ -90,6 +90,8 @@ class Role(models.Model):
         CLASIFICADOR = "CLASIFICADOR", "Clasificador"
         ADMINISTRADOR = "ADMINISTRADOR", "Administrador"
         SUPERVISOR = "SUPERVISOR", "Supervisor"
+        TRANSPORTADOR = "TRANSPORTADOR", "Transportador"
+        VENDEDOR = "VENDEDOR", "Vendedor"
 
     name = models.CharField(
         max_length=32,
