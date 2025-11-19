@@ -3097,11 +3097,25 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         last_day = monthrange(selected_month.year, selected_month.month)[1]
         end_date = start_date.replace(day=last_day)
 
+        base_queryset = EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
+        seller_ids = list(
+            base_queryset.exclude(seller__isnull=True).values_list("seller_id", flat=True).distinct()
+        )
+        seller_options = list(
+            UserProfile.objects.filter(id__in=seller_ids)
+            .order_by("apellidos", "nombres", "id")
+        )
+        destination_filter = self._resolve_destination_filter(self.request.GET.get("destination"))
+        seller_filter = self._parse_int(self.request.GET.get("seller"))
+
+        dispatch_queryset = base_queryset
+        if destination_filter:
+            dispatch_queryset = dispatch_queryset.filter(destination=destination_filter)
+        if seller_filter:
+            dispatch_queryset = dispatch_queryset.filter(seller_id=seller_filter)
+
         dispatches = list(
-            EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
-            .select_related("driver", "seller")
-            .prefetch_related("items")
-            .order_by("-date", "-id")
+            dispatch_queryset.select_related("driver", "seller").prefetch_related("items").order_by("-date", "-id")
         )
 
         total_cartons = Decimal("0")
@@ -3189,6 +3203,13 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                 "dispatch_form_action": reverse("administration:egg-dispatch-create"),
                 "dispatch_panel_submit_label": "Guardar despacho",
                 "dispatch_panel_cancel_url": reverse("administration:egg-dispatch-list"),
+                "dispatch_destination_filter": destination_filter,
+                "dispatch_seller_filter": str(seller_filter) if seller_filter else "",
+                "dispatch_destination_choices": EggDispatchDestination.choices,
+                "dispatch_seller_options": [
+                    {"id": str(profile.id), "name": self._format_user_name(profile)}
+                    for profile in seller_options
+                ],
             }
         )
         return context
@@ -3210,6 +3231,41 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         year = base.year + month // 12
         month = month % 12 + 1
         return date(year, month, 1)
+
+    def _parse_int(self, value: Optional[str]) -> Optional[int]:
+        if value in (None, ""):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _resolve_destination_filter(self, value: Optional[str]) -> str:
+        if not value:
+            return ""
+        valid_choices = {code for code, _ in EggDispatchDestination.choices}
+        return value if value in valid_choices else ""
+
+    def _format_user_name(self, profile: UserProfile) -> str:
+        if not profile:
+            return ""
+        full_name = profile.get_full_name()
+        if full_name:
+            return full_name
+        get_username = getattr(profile, "get_username", None)
+        if callable(get_username):
+            username = get_username()
+            if username:
+                return username
+        short_name = getattr(profile, "get_short_name", None)
+        if callable(short_name):
+            name = short_name()
+            if name:
+                return name
+        email = getattr(profile, "email", "")
+        if email:
+            return email
+        return f"Usuario {profile.pk}"
 
 
 class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):

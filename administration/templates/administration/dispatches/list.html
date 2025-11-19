@@ -34,31 +34,67 @@
     </header>
 
     <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
-      <form method="get" class="flex items-center gap-3 text-sm text-slate-600">
-        <label for="month" class="font-semibold text-slate-700">Mes:</label>
-        <input
-          type="month"
-          id="month"
-          name="month"
-          value="{{ month_query }}"
-          class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-        >
+      <form method="get" class="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+        <div class="flex items-center gap-2">
+          <label for="month" class="font-semibold text-slate-700">Mes:</label>
+          <input
+            type="month"
+            id="month"
+            name="month"
+            value="{{ month_query }}"
+            class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          >
+        </div>
+        <div class="flex items-center gap-2">
+          <label for="destination" class="font-semibold text-slate-700">Destino:</label>
+          <select
+            id="destination"
+            name="destination"
+            class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          >
+            <option value="">Todos</option>
+            {% for value, label in dispatch_destination_choices %}
+              <option value="{{ value }}" {% if value == dispatch_destination_filter %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <label for="seller" class="font-semibold text-slate-700">Vendedor:</label>
+          <select
+            id="seller"
+            name="seller"
+            class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          >
+            <option value="">Todos</option>
+            {% for seller in dispatch_seller_options %}
+              <option value="{{ seller.id }}" {% if seller.id == dispatch_seller_filter %}selected{% endif %}>{{ seller.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <button
           type="submit"
           class="inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-100"
         >
           Aplicar
         </button>
+        {% if dispatch_destination_filter or dispatch_seller_filter %}
+          <a
+            href="?month={{ month_query }}"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+          >
+            Limpiar
+          </a>
+        {% endif %}
         <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <a
-            href="?month={{ prev_month_param }}"
+            href="?month={{ prev_month_param }}{% if dispatch_destination_filter %}&destination={{ dispatch_destination_filter }}{% endif %}{% if dispatch_seller_filter %}&seller={{ dispatch_seller_filter }}{% endif %}"
             class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
           >
             ← Mes anterior
           </a>
           {% if has_next_month %}
             <a
-              href="?month={{ next_month_param }}"
+              href="?month={{ next_month_param }}{% if dispatch_destination_filter %}&destination={{ dispatch_destination_filter }}{% endif %}{% if dispatch_seller_filter %}&seller={{ dispatch_seller_filter }}{% endif %}"
               class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
             >
               Próximo mes →
@@ -156,6 +192,22 @@
                 {% endwith %}
               {% endfor %}
             </tbody>
+            <tfoot>
+              <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900">
+                <td class="px-3 py-3" colspan="2">Total del periodo</td>
+                <td class="px-3 py-3 text-right text-emerald-700">{{ dispatch_total|cartons }} cart</td>
+                {% for summary in type_summary %}
+                  <td class="px-3 py-3 text-right">
+                    {% if summary.cartons > 0 %}
+                      {{ summary.cartons|cartons }}
+                    {% else %}
+                      <span class="text-slate-400">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="px-3 py-3 text-center" colspan="3"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       {% else %}
