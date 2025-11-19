@@ -100,7 +100,11 @@ class ChickenHouseForm(BaseInfrastructureForm):
         self.fields["egg_destination_farm"].queryset = Farm.objects.order_by("name")
         self.fields["egg_destination_farm"].required = False
         if not self.initial.get("egg_destination_farm"):
-            default_destination = self.instance.egg_destination_farm or self.instance.farm
+            default_destination = None
+            if getattr(self.instance, "egg_destination_farm_id", None):
+                default_destination = self.instance.egg_destination_farm
+            elif getattr(self.instance, "farm_id", None):
+                default_destination = self.instance.farm
             if default_destination:
                 self.initial["egg_destination_farm"] = default_destination
 
@@ -108,7 +112,9 @@ class ChickenHouseForm(BaseInfrastructureForm):
         destination = self.cleaned_data.get("egg_destination_farm")
         if destination:
             return destination
-        farm = self.cleaned_data.get("farm") or self.instance.farm
+        farm = self.cleaned_data.get("farm")
+        if not farm and getattr(self.instance, "farm_id", None):
+            farm = self.instance.farm
         return farm
 
 
