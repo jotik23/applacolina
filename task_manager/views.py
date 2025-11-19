@@ -107,6 +107,28 @@ class MiniAppClient(Enum):
     WEB = "web"
 
 
+LEGACY_EGG_STAGE_PERMISSION = "task_manager.view_mini_app_egg_stage_cards"
+
+EGG_STAGE_PERMISSION_KEY_BY_STAGE_ID: dict[str, str] = {
+    "transport": "egg_stage_transport",
+    "verification": "egg_stage_verification",
+    "classification": "egg_stage_classification",
+    "inspection": "egg_stage_inspection",
+    "inventory_ready": "egg_stage_inventory",
+    "dispatches": "egg_stage_dispatches",
+}
+
+EGG_STAGE_CARD_PERMISSION_MAP: dict[str, str] = {
+    "egg_stage_transport": "task_manager.view_mini_app_egg_stage_transport_card",
+    "egg_stage_verification": "task_manager.view_mini_app_egg_stage_verification_card",
+    "egg_stage_classification": "task_manager.view_mini_app_egg_stage_classification_card",
+    "egg_stage_inspection": "task_manager.view_mini_app_egg_stage_inspection_card",
+    "egg_stage_inventory": "task_manager.view_mini_app_egg_stage_inventory_card",
+    "egg_stage_dispatches": "task_manager.view_mini_app_egg_stage_dispatches_card",
+}
+
+EGG_STAGE_CARD_PERMISSION_KEYS = frozenset(EGG_STAGE_CARD_PERMISSION_MAP.keys())
+
 MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "goals_selection": "task_manager.view_mini_app_goals_selection_card",
     "goals_overview": "task_manager.view_mini_app_goals_overview_card",
@@ -119,7 +141,6 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "purchase_management": "task_manager.view_mini_app_purchase_management_card",
     "pending_classification": "task_manager.view_mini_app_pending_classification_card",
     "transport_queue": "task_manager.view_mini_app_transport_queue_card",
-    "egg_stage": "task_manager.view_mini_app_egg_stage_cards",
     "dispatch_form": "task_manager.view_mini_app_dispatch_form_card",
     "dispatch_detail": "task_manager.view_mini_app_dispatch_detail_card",
     "daily_roster": "task_manager.view_mini_app_daily_roster_card",
@@ -127,6 +148,7 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "suggestions": "task_manager.view_mini_app_suggestions_card",
     "task": "task_manager.view_mini_app_task_cards",
 }
+MINI_APP_CARD_PERMISSION_MAP.update(EGG_STAGE_CARD_PERMISSION_MAP)
 
 
 def _build_mini_app_pwa_config() -> dict[str, object]:
@@ -733,7 +755,40 @@ def _resolve_mini_app_card_permissions(user, *, force_allow: bool = False) -> di
     if not user or not getattr(user, "is_authenticated", False):
         return flags
 
-    return {key: user.has_perm(permission) for key, permission in MINI_APP_CARD_PERMISSION_MAP.items()}
+    legacy_has_access = user.has_perm(LEGACY_EGG_STAGE_PERMISSION)
+    for key, permission in MINI_APP_CARD_PERMISSION_MAP.items():
+        allowed = user.has_perm(permission)
+        if not allowed and legacy_has_access and key in EGG_STAGE_CARD_PERMISSION_KEYS:
+            allowed = True
+        flags[key] = allowed
+    return flags
+
+
+def _filter_egg_workflow_stages(
+    payload: Optional[dict[str, object]], card_permissions: Mapping[str, bool]
+) -> None:
+    """Filter egg workflow stages according to the granted permissions."""
+
+    if not payload:
+        return
+    egg_workflow = payload.get("egg_workflow")
+    if not isinstance(egg_workflow, dict):
+        return
+    stages = egg_workflow.get("stages")
+    if not isinstance(stages, list):
+        return
+    filtered: list[dict[str, object]] = []
+    for stage in stages:
+        if not isinstance(stage, dict):
+            continue
+        stage_id = stage.get("id")
+        if not stage_id:
+            continue
+        permission_key = EGG_STAGE_PERMISSION_KEY_BY_STAGE_ID.get(stage_id)
+        if permission_key and not card_permissions.get(permission_key, False):
+            continue
+        filtered.append(stage)
+    egg_workflow["stages"] = filtered
 
 
 def _mini_app_json_guard(request) -> Optional[JsonResponse]:
@@ -3044,7 +3099,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if management_payload:
                     purchases_payload = purchases_payload or {}
                     purchases_payload["management"] = management_payload
-            context["telegram_mini_app"] = _build_telegram_mini_app_payload(
+            mini_app_payload = _build_telegram_mini_app_payload(
                 date_label=date_format(today, "DATE_FORMAT"),
                 display_name=display_name,
                 contact_handle=contact_handle,
@@ -3059,6 +3114,8 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 include_weight_registry=bool(card_permissions.get("weight_registry")),
                 purchases=purchases_payload,
             )
+            _filter_egg_workflow_stages(mini_app_payload, card_permissions)
+            context["telegram_mini_app"] = mini_app_payload
             context["mini_app_logout_url"] = reverse("task_manager:telegram-mini-app-logout")
         else:
             context["telegram_mini_app"] = None
@@ -3090,15 +3147,18 @@ class TaskManagerTelegramMiniAppDemoView(generic.TemplateView):
         today = timezone.localdate()
         display_name = "Operario demo"
         initials = "".join(part[0] for part in display_name.split() if part).upper()[:2] or "OP"
-        context["telegram_mini_app"] = _build_telegram_mini_app_payload(
+        card_permissions = _resolve_mini_app_card_permissions(None, force_allow=True)
+        demo_payload = _build_telegram_mini_app_payload(
             date_label=date_format(today, "DATE_FORMAT"),
             display_name=display_name,
             contact_handle="@demo",
             role="Vista previa",
             initials=initials,
         )
+        _filter_egg_workflow_stages(demo_payload, card_permissions)
+        context["telegram_mini_app"] = demo_payload
         context["telegram_integration_enabled"] = False
-        context["mini_app_card_permissions"] = _resolve_mini_app_card_permissions(None, force_allow=True)
+        context["mini_app_card_permissions"] = card_permissions
         context["mini_app_pwa_config"] = _build_mini_app_pwa_config()
         return context
 

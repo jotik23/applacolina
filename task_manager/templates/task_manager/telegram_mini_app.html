@@ -937,7 +937,7 @@
         {% endwith %}
 
         {% with egg_flow=telegram_mini_app.egg_workflow %}
-          {% if egg_flow and mini_app_card_permissions.egg_stage %}
+          {% if egg_flow and egg_flow.stages %}
             <div class="space-y-4" data-egg-stage-list>
               {% for stage in egg_flow.stages %}
                 <article

@@ -260,9 +260,39 @@ class TaskDefinition(models.Model):
             ("view_mini_app_production_card", _("Puede ver el card de producción en la mini app")),
             ("view_mini_app_production_summary_card", _("Puede ver el card de resumen de producción en la mini app")),
             ("view_mini_app_weight_registry_card", _("Puede ver el card de control de pesos en la mini app")),
-            ("view_mini_app_pending_classification_card", _("Puede ver el card de producciones pendientes en la mini app")),
-            ("view_mini_app_transport_queue_card", _("Puede ver el card de cola de transporte en la mini app")),
+            (
+                "view_mini_app_transport_queue_card",
+                _("Secuencia 1 · Lotes listos para transporte (mini app)"),
+            ),
+            (
+                "view_mini_app_egg_stage_transport_card",
+                _("Secuencia 2 · Transporte interno (mini app)"),
+            ),
+            (
+                "view_mini_app_egg_stage_verification_card",
+                _("Secuencia 3 · Verificación en acopio (mini app)"),
+            ),
+            (
+                "view_mini_app_pending_classification_card",
+                _("Secuencia 4 · Producciones pendientes por clasificar (mini app)"),
+            ),
             ("view_mini_app_egg_stage_cards", _("Puede ver los cards de etapas de huevo en la mini app")),
+            (
+                "view_mini_app_egg_stage_classification_card",
+                _("Secuencia 5 · Clasificación por tipos (mini app)"),
+            ),
+            (
+                "view_mini_app_egg_stage_inspection_card",
+                _("Secuencia 6 · Inspección final (mini app)"),
+            ),
+            (
+                "view_mini_app_egg_stage_inventory_card",
+                _("Secuencia 7 · Inventario listo para venta (mini app)"),
+            ),
+            (
+                "view_mini_app_egg_stage_dispatches_card",
+                _("Secuencia 8 · Despachos a ventas (mini app)"),
+            ),
             ("view_mini_app_dispatch_form_card", _("Puede ver el card de formulario de despacho en la mini app")),
             ("view_mini_app_dispatch_detail_card", _("Puede ver el card de detalle de despacho en la mini app")),
             ("view_mini_app_daily_roster_card", _("Puede ver el card de asignaciones diarias en la mini app")),
