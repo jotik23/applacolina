@@ -28,12 +28,10 @@
             {% endif %}
           </dd>
         </div>
-        {% if purchase.scope_area %}
-          <div>
-            <dt class="font-semibold uppercase tracking-wide text-[11px]">Tipo de área</dt>
-            <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_scope_area_display }}</dd>
-          </div>
-        {% endif %}
+        <div>
+          <dt class="font-semibold uppercase tracking-wide text-[11px]">Tipo de área</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900">{{ purchase.get_scope_area_display }}</dd>
+        </div>
         {% if purchase.eta %}
           <div>
             <dt class="font-semibold uppercase tracking-wide text-[11px]">ETA</dt>

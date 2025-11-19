@@ -28,8 +28,8 @@ const purchaseProductCatalog = (() => {
 
 const productSuggestionPanel = (() => {
   const panel = document.createElement('div');
-  panel.className = 'product-suggestions hidden fixed z-50 max-h-64 min-w-[12rem] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl';
-  document.body.appendChild(panel);
+  panel.className =
+    'product-suggestions hidden absolute z-40 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl';
   return panel;
 })();
 
@@ -41,14 +41,10 @@ function hideProductSuggestions() {
   }
   productSuggestionPanel.classList.add('hidden');
   productSuggestionPanel.innerHTML = '';
+  if (productSuggestionPanel.parentNode) {
+    productSuggestionPanel.parentNode.removeChild(productSuggestionPanel);
+  }
   productSuggestionContext = null;
-}
-
-function positionProductSuggestionPanel(input) {
-  const rect = input.getBoundingClientRect();
-  productSuggestionPanel.style.left = `${rect.left + window.scrollX}px`;
-  productSuggestionPanel.style.top = `${rect.bottom + window.scrollY + 4}px`;
-  productSuggestionPanel.style.minWidth = `${rect.width}px`;
 }
 
 function showProductSuggestions(input, { forceQuery = null, allowEmpty = false } = {}) {
@@ -68,6 +64,16 @@ function showProductSuggestions(input, { forceQuery = null, allowEmpty = false }
     }
   }
   const limitedMatches = matches.slice(0, 10);
+  const pickerWrapper = input.closest('[data-product-picker]');
+  if (!pickerWrapper) {
+    return;
+  }
+  if (productSuggestionPanel.parentNode !== pickerWrapper) {
+    if (productSuggestionPanel.parentNode) {
+      productSuggestionPanel.parentNode.removeChild(productSuggestionPanel);
+    }
+    pickerWrapper.appendChild(productSuggestionPanel);
+  }
   productSuggestionPanel.innerHTML = '';
   if (!limitedMatches.length) {
     const emptyMessage = document.createElement('p');
@@ -100,7 +106,7 @@ function showProductSuggestions(input, { forceQuery = null, allowEmpty = false }
       productSuggestionPanel.appendChild(optionButton);
     });
   }
-  positionProductSuggestionPanel(input);
+  productSuggestionPanel.style.width = '100%';
   productSuggestionPanel.classList.remove('hidden');
   productSuggestionContext = { input };
 }
@@ -400,16 +406,6 @@ function appendSelectPickerOption(picker, option) {
   listElement.appendChild(listItem);
 }
 
-function cssEscape(value) {
-  if (window.CSS && typeof window.CSS.escape === 'function') {
-    return window.CSS.escape(value);
-  }
-  return String(value || '').replace(/[^a-zA-Z0-9_-]/g, (char) => {
-    const hex = char.charCodeAt(0).toString(16).toUpperCase();
-    return `\\${hex} `;
-  });
-}
-
 const purchaseForms = document.querySelectorAll('[data-purchase-request-form]');
 
 purchaseForms.forEach((root) => {
@@ -421,11 +417,6 @@ purchaseForms.forEach((root) => {
   const supplierSelect = root.querySelector('[data-supplier-select]');
   const supplierCreateUrl = root.getAttribute('data-supplier-create-url');
   const supportTypeSelect = root.querySelector('[data-support-type-select]');
-  const areaPicker = root.querySelector('[data-area-picker]');
-  const areaSelect =
-    areaPicker?.querySelector('[data-area-select]') || areaPicker?.querySelector('[data-native-select]');
-  const scopeFarmInput = root.querySelector('input[name="scope_farm_id"]');
-  const scopeHouseInput = root.querySelector('input[name="scope_chicken_house_id"]');
   const itemsRoot = root.querySelector('[data-purchase-items-root]');
   const addItemButton = root.querySelector('[data-add-item]');
   const totalDisplay = root.querySelector('[data-purchase-total]');
@@ -909,45 +900,6 @@ purchaseForms.forEach((root) => {
   }
 }
 
-  function syncAreaScopeInputs(value) {
-    if (!areaPicker) {
-      return;
-    }
-    const resolvedValue = value || '';
-    let optionButton = null;
-    if (resolvedValue) {
-      const selector = `[data-select-option][data-value="${cssEscape(resolvedValue)}"]`;
-      optionButton = areaPicker.querySelector(selector);
-    }
-    const kind = optionButton?.dataset.areaKind || 'company';
-    const farmId = optionButton?.dataset.areaFarmId || '';
-    const houseId = optionButton?.dataset.areaHouseId || '';
-    if (scopeFarmInput) {
-      if (kind === 'farm' || kind === 'chicken_house') {
-        scopeFarmInput.value = farmId;
-      } else {
-        scopeFarmInput.value = '';
-      }
-    }
-    if (scopeHouseInput) {
-      scopeHouseInput.value = kind === 'chicken_house' ? houseId : '';
-    }
-  }
-
-  function initAreaPicker() {
-    if (!areaPicker) {
-      return;
-    }
-    if (areaSelect) {
-      areaSelect.addEventListener('change', () => {
-        syncAreaScopeInputs(areaSelect.value || '');
-      });
-      syncAreaScopeInputs(areaSelect.value || '');
-    } else {
-      syncAreaScopeInputs('');
-    }
-  }
-
   function addRow(initialValues = {}) {
     if (!itemsRoot || !template) {
       return;
@@ -1002,7 +954,6 @@ purchaseForms.forEach((root) => {
     setupAddButton();
     initQuickSupplierForm();
     setupSelectPickers(root);
-    initAreaPicker();
   }
 
   init();

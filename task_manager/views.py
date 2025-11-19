@@ -1,6 +1,7 @@
 import json
 import uuid
 from dataclasses import dataclass
+import re
 from decimal import Decimal, InvalidOperation
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -812,6 +813,36 @@ def _normalize_string(value: object) -> str:
     return str(value).strip()
 
 
+def _parse_item_scope_value(raw_value: str) -> dict[str, object]:
+    value = (raw_value or "").strip()
+    kind = PurchaseRequest.AreaScope.COMPANY
+    farm_id: Optional[int] = None
+    house_id: Optional[int] = None
+    error: Optional[str] = None
+    if not value or value == PurchaseRequest.AreaScope.COMPANY:
+        kind = PurchaseRequest.AreaScope.COMPANY
+    else:
+        match = re.match(r"^(farm|chicken_house):(\d+)$", value)
+        if not match:
+            error = _("Selecciona un área válida.")
+        else:
+            target_kind = match.group(1)
+            target_id = int(match.group(2))
+            if target_kind == "farm":
+                kind = PurchaseRequest.AreaScope.FARM
+                farm_id = target_id
+            else:
+                kind = PurchaseRequest.AreaScope.CHICKEN_HOUSE
+                house_id = target_id
+    return {
+        "kind": kind,
+        "farm_id": farm_id,
+        "chicken_house_id": house_id,
+        "error": error,
+        "value": value if value else PurchaseRequest.AreaScope.COMPANY,
+    }
+
+
 def _build_mini_app_purchase_request_payload(
     data: Mapping[str, object],
     *,
@@ -824,13 +855,7 @@ def _build_mini_app_purchase_request_payload(
     assigned_manager_id = _coerce_int(data.get("assigned_manager_id")) or getattr(user, "pk", None)
     support_document_type_id = _coerce_int(data.get("support_document_type_id"))
     purchase_id = _coerce_int(data.get("purchase_id"))
-    area_data = data.get("area") if isinstance(data.get("area"), Mapping) else {}
-    scope_area = _normalize_string(area_data.get("scope")) if isinstance(area_data, Mapping) else ""
-    if scope_area not in PurchaseRequest.AreaScope.values:
-        scope_area = PurchaseRequest.AreaScope.COMPANY
-    scope_farm_id = _coerce_int(area_data.get("farm_id") if isinstance(area_data, Mapping) else None)
-    scope_house_id = _coerce_int(area_data.get("chicken_house_id") if isinstance(area_data, Mapping) else None)
-    scope_batch_code = _normalize_string(area_data.get("batch_code") if isinstance(area_data, Mapping) else "")
+    scope_batch_code = _normalize_string(data.get("scope_batch_code"))
     field_errors: dict[str, list[str]] = {}
     item_errors: dict[int, dict[str, list[str]]] = {}
 
@@ -840,19 +865,6 @@ def _build_mini_app_purchase_request_payload(
         field_errors.setdefault("expense_type_id", []).append(_("Selecciona una categoría."))
     if not supplier_id:
         field_errors.setdefault("supplier_id", []).append(_("Selecciona un tercero."))
-    if scope_area == PurchaseRequest.AreaScope.FARM and not scope_farm_id:
-        field_errors.setdefault("scope_area", []).append(_("Selecciona la granja para el área."))
-    if scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
-        if not scope_house_id:
-            field_errors.setdefault("scope_area", []).append(_("Selecciona el galpón para el área."))
-        elif not scope_farm_id:
-            # Attempt to infer the farm from the selected chicken house.
-            house = ChickenHouse.objects.filter(pk=scope_house_id).only("farm_id").first()
-            if house and house.farm_id:
-                scope_farm_id = house.farm_id
-            else:
-                field_errors.setdefault("scope_area", []).append(_("Selecciona un galpón válido."))
-
     items_raw = data.get("items")
     if not isinstance(items_raw, Sequence):
         items_raw = []
@@ -874,6 +886,8 @@ def _build_mini_app_purchase_request_payload(
         unit_value_input = row.get("unit_value", row.get("estimated_amount"))
         estimated_amount = _coerce_decimal(unit_value_input)
         item_id = _coerce_int(row.get("id"))
+        scope_value_raw = _normalize_string(row.get("scope_value") or row.get("scope"))
+        scope_selection = _parse_item_scope_value(scope_value_raw)
 
         if not description and not product_id:
             row_errors.setdefault("description", []).append(_("Describe el ítem o selecciona un producto."))
@@ -881,10 +895,27 @@ def _build_mini_app_purchase_request_payload(
             row_errors.setdefault("quantity", []).append(_("Ingresa una cantidad válida."))
         if estimated_amount is None or estimated_amount < Decimal("0"):
             row_errors.setdefault("estimated_amount", []).append(_("Ingresa un valor unitario válido."))
+        if scope_selection["error"]:
+            row_errors.setdefault("scope", []).append(str(scope_selection["error"]))
+        if scope_selection["kind"] == PurchaseRequest.AreaScope.FARM and not scope_selection["farm_id"]:
+            row_errors.setdefault("scope", []).append(_("Selecciona la granja para el ítem."))
+        if scope_selection["kind"] == PurchaseRequest.AreaScope.CHICKEN_HOUSE and not scope_selection["chicken_house_id"]:
+            row_errors.setdefault("scope", []).append(_("Selecciona el galpón para el ítem."))
 
         if row_errors:
             item_errors[index] = row_errors
             continue
+
+        farm_id = scope_selection["farm_id"]
+        house_id = scope_selection["chicken_house_id"]
+        if scope_selection["kind"] == PurchaseRequest.AreaScope.CHICKEN_HOUSE and house_id and not farm_id:
+            house = ChickenHouse.objects.select_related("farm").filter(pk=house_id).first()
+            if house and house.farm_id:
+                farm_id = house.farm_id
+            else:
+                row_errors.setdefault("scope", []).append(_("Selecciona un galpón válido."))
+                item_errors[index] = row_errors
+                continue
 
         item_payloads.append(
             PurchaseItemPayload(
@@ -893,6 +924,9 @@ def _build_mini_app_purchase_request_payload(
                 quantity=quantity_value,
                 estimated_amount=estimated_amount,
                 product_id=product_id,
+                scope_area=scope_selection["kind"],
+                scope_farm_id=farm_id,
+                scope_chicken_house_id=house_id if scope_selection["kind"] == PurchaseRequest.AreaScope.CHICKEN_HOUSE else None,
             )
         )
 
@@ -902,9 +936,6 @@ def _build_mini_app_purchase_request_payload(
     if field_errors or item_errors:
         return None, field_errors, item_errors
 
-    farm_value = scope_farm_id if scope_area in {PurchaseRequest.AreaScope.FARM, PurchaseRequest.AreaScope.CHICKEN_HOUSE} else None
-    house_value = scope_house_id if scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE else None
-
     payload = PurchaseRequestPayload(
         purchase_id=purchase_id,
         summary=summary,
@@ -913,10 +944,7 @@ def _build_mini_app_purchase_request_payload(
         support_document_type_id=support_document_type_id,
         supplier_id=supplier_id,
         items=item_payloads,
-        scope_farm_id=farm_value,
-        scope_chicken_house_id=house_value,
         scope_batch_code=scope_batch_code,
-        scope_area=scope_area,
         assigned_manager_id=assigned_manager_id,
     )
     return payload, field_errors, item_errors

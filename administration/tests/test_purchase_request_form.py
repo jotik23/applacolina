@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -26,16 +27,20 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             email='staff@example.com',
             password='test123',
             is_staff=True,
+            cedula='1001',
+            telefono='3000001',
         )
         self.approver = user_model.objects.create_user(
             email='approver@example.com',
             password='test123',
             is_staff=True,
+            cedula='1002',
+            telefono='3000002',
         )
         self.client.force_login(self.user)
         self.supplier = Supplier.objects.create(name='Proveedor Demo', tax_id='900123456')
         self.support_type = SupportDocumentType.objects.create(
-            name='Factura Electrónica',
+            name=f'Factura Electrónica {uuid.uuid4()}',
             kind=SupportDocumentType.Kind.EXTERNAL,
         )
         self.expense_type = PurchasingExpenseType.objects.create(
@@ -55,14 +60,15 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(PurchaseRequest.Status.DRAFT, purchase.status)
         self.assertEqual(self.user, purchase.requester)
         self.assertEqual(Decimal('2400000'), purchase.estimated_total)
-        self.assertEqual(self.farm, purchase.scope_farm)
         self.assertEqual('', purchase.scope_batch_code)
         self.assertEqual(self.support_type, purchase.support_document_type)
-        self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, purchase.scope_area)
         self.assertEqual(1, purchase.items.count())
         item = purchase.items.first()
         assert item is not None
         self.assertEqual(Decimal('2'), item.quantity)
+        self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, item.scope_area)
+        self.assertEqual(self.house, item.scope_chicken_house)
+        self.assertEqual(self.farm, item.scope_farm)
 
     def test_send_purchase_request_runs_workflow(self) -> None:
         ExpenseTypeApprovalRule.objects.create(
@@ -111,9 +117,11 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertTrue(purchase.items.filter(description='Motor actualizado').exists())
         self.assertTrue(purchase.items.filter(description='Sistema eléctrico').exists())
         self.assertEqual(Decimal('3750000'), purchase.estimated_total)
-        self.assertEqual(self.house, purchase.scope_chicken_house)
+        updated_item = purchase.items.filter(description='Motor actualizado').first()
+        assert updated_item is not None
+        self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, updated_item.scope_area)
+        self.assertEqual(self.house, updated_item.scope_chicken_house)
         self.assertEqual(self.support_type, purchase.support_document_type)
-        self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, purchase.scope_area)
 
     def test_reopen_from_submitted_returns_to_draft(self) -> None:
         purchase = PurchaseRequest.objects.create(
@@ -141,18 +149,18 @@ class PurchaseRequestFormSubmissionTests(TestCase):
 
     def test_company_area_selection_clears_scope(self) -> None:
         payload = self._base_payload() | {
-            'scope_area': PurchaseRequest.AreaScope.COMPANY,
-            'scope_farm_id': '',
-            'scope_chicken_house_id': '',
+            'items[0][scope_value]': PurchaseRequest.AreaScope.COMPANY,
         }
         response = self.client.post(self._url(), data=payload)
         expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}"
         self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
 
         purchase = PurchaseRequest.objects.get(name='Compra equipos críticos')
-        self.assertEqual(PurchaseRequest.AreaScope.COMPANY, purchase.scope_area)
-        self.assertIsNone(purchase.scope_farm)
-        self.assertIsNone(purchase.scope_chicken_house)
+        item = purchase.items.first()
+        assert item is not None
+        self.assertEqual(PurchaseRequest.AreaScope.COMPANY, item.scope_area)
+        self.assertIsNone(item.scope_farm)
+        self.assertIsNone(item.scope_chicken_house)
 
     def test_item_can_reference_existing_product(self) -> None:
         payload = self._base_payload() | {
@@ -224,6 +232,8 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             email='finance@example.com',
             password='test123',
             is_staff=True,
+            cedula='2001',
+            telefono='3002001',
         )
         purchase = PurchaseRequest.objects.create(
             timeline_code='SOL-APROBACION-2',
@@ -317,6 +327,8 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             email='requester@example.com',
             password='test123',
             is_staff=True,
+            cedula='2002',
+            telefono='3002002',
         )
         purchase = PurchaseRequest.objects.create(
             timeline_code='SOL-APROBACION-4',
@@ -413,8 +425,6 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             'items[0][description]': 'Motor ventilador',
             'items[0][quantity]': '2',
             'items[0][estimated_amount]': '1200000',
-            'scope_farm_id': str(self.farm.pk),
-            'scope_chicken_house_id': str(self.house.pk),
             'scope_batch_code': '',
-            'scope_area': f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{self.house.pk}',
+            'items[0][scope_value]': f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{self.house.pk}',
         }

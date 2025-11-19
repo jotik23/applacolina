@@ -1122,7 +1122,6 @@ class PurchaseApprovalCardController {
       this.referenceNode = node.querySelector('[data-compose-reference]');
       this.summaryInput = this.form ? this.form.querySelector('[data-compose-field="summary"]') : null;
       this.categorySelect = this.form ? this.form.querySelector('[data-compose-field="expense_type_id"]') : null;
-      this.scopeSelect = this.form ? this.form.querySelector('[data-compose-field="scope"]') : null;
       this.managerSelect = this.form ? this.form.querySelector('[data-compose-field="assigned_manager_id"]') : null;
       this.addItemButton = this.form ? this.form.querySelector('[data-compose-add-item]') : null;
       this.itemsContainer = this.form ? this.form.querySelector('[data-compose-items-container]') : null;
@@ -1130,30 +1129,16 @@ class PurchaseApprovalCardController {
       this.feedbackNode = this.form ? this.form.querySelector('[data-compose-feedback]') : null;
       this.closeButton = node.querySelector('[data-compose-close]');
       this.supplierSelect = this.form ? this.form.querySelector('[data-compose-field="supplier_id"]') : null;
-      this.areaFieldWrappers = this.form
-        ? Array.prototype.slice.call(this.form.querySelectorAll('[data-area-field]'))
-        : [];
-      this.areaFieldNodes = {};
-      this.areaInputs = {};
-      this.areaFieldWrappers.forEach((wrapper) => {
-        const key = wrapper.getAttribute('data-area-field');
-        if (!key) {
-          return;
-        }
-        const field =
-          wrapper.querySelector('[data-area-input]') ||
-          wrapper.querySelector('select') ||
-          wrapper.querySelector('input');
-        this.areaFieldNodes[key] = wrapper;
-        this.areaInputs[key] = field;
-      });
       this.actionButtons = this.form
         ? Array.prototype.slice.call(this.form.querySelectorAll('[data-compose-action]'))
         : [];
       this.submitUrl = this.composer.submit_url || '';
       this.maxItems = Number(this.composer.max_items || 0) || 10;
       this.currentPurchaseId = null;
-      this.boundHandleScopeChange = this.handleScopeChange.bind(this);
+      this.areaOptionGroups = Array.isArray(this.composer.area_option_groups)
+        ? this.composer.area_option_groups
+        : this.buildAreaOptionGroups();
+      this.defaultScopeValue = this.composer.default_scope_value || 'company';
     }
 
     init(initialData) {
@@ -1177,16 +1162,8 @@ class PurchaseApprovalCardController {
     populateStaticOptions() {
       const includePlaceholder = { includePlaceholder: true };
       this.fillSelect(this.categorySelect, this.composer.categories || [], includePlaceholder);
-      this.fillSelect(this.scopeSelect, this.composer.area_scopes || [], includePlaceholder);
       this.fillSelect(this.managerSelect, this.composer.manager_options || [], includePlaceholder);
       this.fillSelect(this.supplierSelect, this.composer.supplier_suggestions || [], includePlaceholder);
-      if (this.areaInputs.farm_id) {
-        this.fillSelect(this.areaInputs.farm_id, this.composer.farms || [], includePlaceholder);
-      }
-      this.renderHouseOptions({
-        scope: this.scopeSelect ? this.scopeSelect.value : '',
-        preserveValue: true,
-      });
     }
 
     fillSelect(select, options, config) {
@@ -1244,17 +1221,6 @@ class PurchaseApprovalCardController {
       if (this.closeButton) {
         this.closeButton.addEventListener('click', () => this.close());
       }
-      if (this.scopeSelect) {
-        this.scopeSelect.addEventListener('change', this.boundHandleScopeChange);
-      }
-      if (this.areaInputs.farm_id) {
-        this.areaInputs.farm_id.addEventListener('change', () =>
-          this.renderHouseOptions({
-            farmId: this.areaInputs.farm_id.value || null,
-            preserveValue: false,
-          })
-        );
-      }
       if (this.addItemButton) {
         this.addItemButton.addEventListener('click', () => this.addItemRow());
       }
@@ -1288,23 +1254,6 @@ class PurchaseApprovalCardController {
       }
       if (this.managerSelect) {
         this.managerSelect.value = (initialData && initialData.assigned_manager_id) || defaults.assigned_manager_id || '';
-      }
-      const areaPayload = (initialData && initialData.area) || defaults.area || {};
-      if (this.scopeSelect) {
-        const defaultScope = defaults.area && defaults.area.scope ? defaults.area.scope : '';
-        this.scopeSelect.value = areaPayload.scope || defaultScope || '';
-        this.handleScopeChange();
-      }
-      if (this.areaInputs.farm_id) {
-        this.areaInputs.farm_id.value = areaPayload.farm_id || '';
-      }
-      this.renderHouseOptions({
-        scope: this.scopeSelect ? this.scopeSelect.value : '',
-        farmId: areaPayload.farm_id || null,
-        preserveValue: false,
-      });
-      if (this.areaInputs.chicken_house_id) {
-        this.areaInputs.chicken_house_id.value = areaPayload.chicken_house_id || '';
       }
       this.setSupplier(initialData && initialData.supplier ? initialData.supplier : null);
       this.resetItems(initialData && initialData.items ? initialData.items : null);
@@ -1346,6 +1295,7 @@ class PurchaseApprovalCardController {
       const descriptionInput = row.querySelector('input[data-item-field="description"]');
       const quantityInput = row.querySelector('input[data-item-field="quantity"]');
       const valueInput = row.querySelector('input[data-item-field="unit_value"]');
+      const areaSelect = row.querySelector('select[data-item-field="scope_value"]');
       const subtotalNode = row.querySelector('[data-item-subtotal]');
       const removeButton = row.querySelector('[data-compose-remove-item]');
       if (initialItem) {
@@ -1365,6 +1315,10 @@ class PurchaseApprovalCardController {
           subtotalNode.textContent = initialItem.subtotal || initialItem.subtotal_label || '$ 0';
         }
       }
+      if (areaSelect) {
+        const defaultScope = initialItem && initialItem.scope_value ? initialItem.scope_value : this.defaultScopeValue || 'company';
+        this.populateAreaSelect(areaSelect, defaultScope);
+      }
       if (removeButton) {
         removeButton.addEventListener('click', () => {
           row.remove();
@@ -1382,88 +1336,82 @@ class PurchaseApprovalCardController {
       this.itemsContainer.appendChild(row);
     }
 
-    toggleAreaFieldVisibility(fieldName, shouldShow) {
-      const wrapper = this.areaFieldNodes[fieldName];
-      if (!wrapper) {
-        return;
+    buildAreaOptionGroups() {
+      if (Array.isArray(this.composer.area_option_groups) && this.composer.area_option_groups.length) {
+        return this.composer.area_option_groups;
       }
-      wrapper.classList.toggle('hidden', !shouldShow);
-      if (typeof wrapper.toggleAttribute === 'function') {
-        wrapper.toggleAttribute('hidden', !shouldShow);
-      } else if (!shouldShow) {
-        wrapper.setAttribute('hidden', 'hidden');
-      } else {
-        wrapper.removeAttribute('hidden');
+      const groups = [];
+      groups.push({
+        label: 'General',
+        options: [
+          {
+            value: 'company',
+            label: 'Empresa',
+            description: 'Gasto corporativo',
+          },
+        ],
+      });
+      if (Array.isArray(this.composer.farms) && this.composer.farms.length) {
+        groups.push({
+          label: 'Granjas',
+          options: this.composer.farms.map((farm) => ({
+            value: `farm:${farm.id}`,
+            label: farm.label || farm.name || '',
+            description: 'Granja',
+          })),
+        });
       }
-      if (!shouldShow && this.areaInputs[fieldName]) {
-        const input = this.areaInputs[fieldName];
-        if (input.tagName && input.tagName.toLowerCase() === 'select') {
-          input.selectedIndex = 0;
-        } else if ('value' in input) {
-          input.value = '';
-        }
+      if (Array.isArray(this.composer.chicken_houses) && this.composer.chicken_houses.length) {
+        groups.push({
+          label: 'Galpones',
+          options: this.composer.chicken_houses.map((house) => {
+            const label = house.full_label || house.label || house.name || '';
+            const description = house.farm_name ? `Galpón · ${house.farm_name}` : 'Galpón';
+            return {
+              value: `chicken_house:${house.id}`,
+              label,
+              description,
+            };
+          }),
+        });
       }
+      return groups;
     }
 
-    handleScopeChange() {
-      const scope = this.scopeSelect ? this.scopeSelect.value : '';
-      const showFarm = scope === 'farm';
-      const showHouse = scope === 'chicken_house';
-      this.toggleAreaFieldVisibility('farm_id', showFarm);
-      this.toggleAreaFieldVisibility('chicken_house_id', showHouse);
-      const farmFilter = showFarm && this.areaInputs.farm_id ? this.areaInputs.farm_id.value || null : null;
-      this.renderHouseOptions({
-        scope,
-        farmId: farmFilter,
-        preserveValue: showHouse,
-      });
-    }
-
-    renderHouseOptions(config) {
-      if (!this.areaInputs.chicken_house_id) {
+    populateAreaSelect(select, selectedValue) {
+      if (!select) {
         return;
       }
-      const settings = config || {};
-      const scopeValue =
-        typeof settings.scope === 'string' && settings.scope
-          ? settings.scope
-          : this.scopeSelect
-            ? this.scopeSelect.value
-            : '';
-      const farmValue =
-        Object.prototype.hasOwnProperty.call(settings, 'farmId') && settings.farmId !== undefined
-          ? settings.farmId
-          : this.areaInputs.farm_id
-            ? this.areaInputs.farm_id.value
-            : null;
-      const houses = this.composer.chicken_houses || [];
-      const shouldFilterByFarm = scopeValue !== 'chicken_house' && farmValue;
-      const filtered = shouldFilterByFarm
-        ? houses.filter((house) => String(house.farm_id) === String(farmValue))
-        : houses;
-      const normalized = filtered.map((house) => ({
-        id: house.id != null ? house.id : house.value || '',
-        label: house.full_label || house.label || house.name || '',
-      }));
-      const preserveValue = Object.prototype.hasOwnProperty.call(settings, 'preserveValue')
-        ? settings.preserveValue
-        : true;
-      this.fillSelect(this.areaInputs.chicken_house_id, normalized, {
-        includePlaceholder: true,
-        preserveValue,
-        resetOnMissing: true,
+      const desiredValue = selectedValue || this.defaultScopeValue || 'company';
+      select.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecciona un área';
+      select.appendChild(placeholder);
+      this.areaOptionGroups.forEach((group) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = group.label || '';
+        (group.options || []).forEach((option) => {
+          const opt = document.createElement('option');
+          opt.value = option.value || '';
+          opt.textContent = option.label || '';
+          if (option.description) {
+            opt.dataset.description = option.description;
+          }
+          optgroup.appendChild(opt);
+        });
+        select.appendChild(optgroup);
       });
+      select.value = desiredValue;
+      if (select.value !== desiredValue) {
+        select.selectedIndex = 0;
+      }
     }
 
     collectPayload(intent) {
       if (!this.form) {
         return null;
       }
-      const areaPayload = {
-        scope: this.scopeSelect ? this.scopeSelect.value : '',
-        farm_id: this.areaInputs.farm_id ? this.areaInputs.farm_id.value : '',
-        chicken_house_id: this.areaInputs.chicken_house_id ? this.areaInputs.chicken_house_id.value : '',
-      };
       const items = [];
       if (this.itemsContainer) {
         Array.prototype.forEach.call(this.itemsContainer.querySelectorAll('[data-compose-item-row]'), (row) => {
@@ -1480,6 +1428,7 @@ class PurchaseApprovalCardController {
             description: getInput('description') ? getInput('description').value.trim() : '',
             quantity: getInput('quantity') ? getInput('quantity').value.trim() : '',
             estimated_amount: getInput('unit_value') ? getInput('unit_value').value.trim() : '',
+            scope_value: getInput('scope_value') ? getInput('scope_value').value || '' : '',
           };
           const quantityNumber = parseFloat(itemPayload.quantity);
           const valueNumber = parseFloat(itemPayload.estimated_amount);
@@ -1499,7 +1448,6 @@ class PurchaseApprovalCardController {
         expense_type_id: this.categorySelect ? this.categorySelect.value : '',
         assigned_manager_id: this.managerSelect ? this.managerSelect.value : '',
         supplier_id: this.supplierSelect ? this.supplierSelect.value : '',
-        area: areaPayload,
         items,
       };
     }

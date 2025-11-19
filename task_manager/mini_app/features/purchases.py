@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 from django.db.models import Count, Prefetch, Sum, Q
 from django.utils import timezone
@@ -152,20 +152,14 @@ class PurchaseRequestCategoryOption:
 
 
 @dataclass(frozen=True)
-class PurchaseRequestAreaScopeOption:
-    id: str
-    label: str
-
-
-@dataclass(frozen=True)
 class PurchaseRequestComposer:
     categories: Tuple[PurchaseRequestCategoryOption, ...]
     manager_options: Tuple[dict[str, object], ...]
-    area_scopes: Tuple[PurchaseRequestAreaScopeOption, ...]
     farms: Tuple[dict[str, object], ...]
     chicken_houses: Tuple[dict[str, object], ...]
     supplier_suggestions: Tuple[dict[str, object], ...]
-    default_scope: dict[str, object]
+    area_option_groups: Tuple[dict[str, object], ...]
+    default_scope_value: str
     default_manager_id: Optional[int]
 
 
@@ -591,7 +585,6 @@ def serialize_purchase_request_composer(card: PurchaseRequestComposer) -> dict[s
             "summary": "",
             "notes": "",
             "assigned_manager_id": card.default_manager_id,
-            "area": card.default_scope,
         },
         "categories": [
             {
@@ -602,16 +595,11 @@ def serialize_purchase_request_composer(card: PurchaseRequestComposer) -> dict[s
             for option in card.categories
         ],
         "manager_options": list(card.manager_options),
-        "area_scopes": [
-            {
-                "id": scope.id,
-                "label": scope.label,
-            }
-            for scope in card.area_scopes
-        ],
         "farms": list(card.farms),
         "chicken_houses": list(card.chicken_houses),
         "supplier_suggestions": list(card.supplier_suggestions),
+        "area_option_groups": list(card.area_option_groups),
+        "default_scope_value": card.default_scope_value,
     }
 
 
@@ -632,10 +620,6 @@ def build_purchase_request_composer(*, user: Optional[UserProfile]) -> Optional[
         return None
 
     manager_options = _build_manager_options()
-    area_scopes = tuple(
-        PurchaseRequestAreaScopeOption(id=value, label=label)
-        for value, label in PurchaseRequest.AreaScope.choices
-    )
     farms = tuple(
         {
             "id": farm["id"],
@@ -649,6 +633,7 @@ def build_purchase_request_composer(*, user: Optional[UserProfile]) -> Optional[
             "label": house["name"],
             "farm_id": house["farm_id"],
             "full_label": f"{house['farm__name']} · {house['name']}",
+            "farm_name": house["farm__name"],
         }
         for house in ChickenHouse.objects.select_related("farm")
         .order_by("farm__name", "name")
@@ -665,20 +650,16 @@ def build_purchase_request_composer(*, user: Optional[UserProfile]) -> Optional[
         .values("id", "name", "tax_id", "city")[:RECENT_SUPPLIER_SUGGESTIONS]
     )
 
-    default_scope = {
-        "scope": PurchaseRequest.AreaScope.COMPANY,
-        "farm_id": None,
-        "chicken_house_id": None,
-    }
+    area_option_groups = tuple(_build_area_option_groups_data(farms=farms, chicken_houses=chicken_houses))
 
     return PurchaseRequestComposer(
         categories=categories,
         manager_options=manager_options,
-        area_scopes=area_scopes,
         farms=farms,
         chicken_houses=chicken_houses,
         supplier_suggestions=supplier_suggestions,
-        default_scope=default_scope,
+        area_option_groups=area_option_groups,
+        default_scope_value=PurchaseRequest.AreaScope.COMPANY,
         default_manager_id=getattr(user, "pk", None),
     )
 
@@ -692,6 +673,50 @@ def _build_manager_options() -> Tuple[dict[str, object], ...]:
         for profile in UserProfile.objects.only("id", "nombres", "apellidos", "cedula")
         .order_by("apellidos", "nombres", "id")
     )
+
+
+def _build_area_option_groups_data(*, farms: Sequence[Mapping[str, object]], chicken_houses: Sequence[Mapping[str, object]]) -> Sequence[dict[str, object]]:
+    groups: list[dict[str, object]] = [
+        {
+            "label": _("General"),
+            "options": [
+                {
+                    "value": PurchaseRequest.AreaScope.COMPANY,
+                    "label": _("Empresa"),
+                    "description": _("Gasto corporativo"),
+                }
+            ],
+        }
+    ]
+    if farms:
+        groups.append(
+            {
+                "label": _("Granjas"),
+                "options": [
+                    {
+                        "value": f"{PurchaseRequest.AreaScope.FARM}:{farm['id']}",
+                        "label": farm.get("label") or "",
+                        "description": _("Granja"),
+                    }
+                    for farm in farms
+                ],
+            }
+        )
+    if chicken_houses:
+        groups.append(
+            {
+                "label": _("Galpones"),
+                "options": [
+                    {
+                        "value": f"{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{house['id']}",
+                        "label": house.get("full_label") or house.get("label") or "",
+                        "description": _("Galpón"),
+                    }
+                    for house in chicken_houses
+                ],
+            }
+        )
+    return groups
 
 
 def _resolve_default_manager_id(*, purchase: PurchaseRequest, fallback_user: Optional[UserProfile]) -> Optional[int]:
@@ -746,6 +771,8 @@ def _serialize_purchase_item(*, item: PurchaseItem, currency: str) -> dict[str, 
         "subtotal_label": subtotal_label,
         "quantity_label": requested_label,
         "amount_label": subtotal_label,
+        "scope_value": item.scope_value(),
+        "scope_label": item.area_label,
     }
 
 
@@ -782,6 +809,8 @@ def _build_purchase_edit_payload(purchase: PurchaseRequest) -> dict[str, object]
                 "quantity": _format_quantity(quantity),
                 "unit_value": _format_decimal_input(unit_value),
                 "subtotal": _format_decimal_input(subtotal),
+                "scope_value": item.scope_value(),
+                "scope_label": item.area_label,
             }
         )
 
@@ -793,12 +822,6 @@ def _build_purchase_edit_payload(purchase: PurchaseRequest) -> dict[str, object]
         "assigned_manager_id": purchase.assigned_manager_id,
         "assigned_manager_label": manager_label,
         "notes": purchase.description or "",
-        "area": {
-            "scope": purchase.scope_area,
-            "farm_id": purchase.scope_farm_id,
-            "chicken_house_id": purchase.scope_chicken_house_id,
-            "batch_code": purchase.scope_batch_code or "",
-        },
         "supplier": supplier_payload,
         "items": items_payload,
         "total_value": _format_decimal_input(total),

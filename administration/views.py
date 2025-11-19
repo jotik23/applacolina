@@ -836,11 +836,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         support_document_type_id = _parse_int(self.request.POST.get('support_document_type'))
         supplier_id = _parse_int(self.request.POST.get('supplier'))
         assigned_manager_id = _parse_int(self.request.POST.get('assigned_manager'))
-        raw_scope = {
-            'farm_id': _parse_int(self.request.POST.get('scope_farm_id')),
-            'chicken_house_id': _parse_int(self.request.POST.get('scope_chicken_house_id')),
-            'batch_code': (self.request.POST.get('scope_batch_code') or '').strip(),
-        }
+        scope_batch_code = (self.request.POST.get('scope_batch_code') or '').strip()
         items_raw = self._enrich_item_rows(self._extract_item_rows())
         overrides = {
             'summary': summary,
@@ -850,25 +846,10 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'supplier_id': supplier_id,
             'assigned_manager_id': assigned_manager_id,
             'items': items_raw,
+            'scope_batch_code': scope_batch_code,
         }
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, dict[str, list[str]]] = {}
-
-        scope_area_raw = (self.request.POST.get('scope_area') or '').strip()
-        area_selection = self._normalize_scope_area_selection(
-            raw_value=scope_area_raw,
-            farm_id=raw_scope['farm_id'],
-            chicken_house_id=raw_scope['chicken_house_id'],
-        )
-        scope_values = {
-            'farm_id': area_selection['farm_id'],
-            'chicken_house_id': area_selection['chicken_house_id'],
-            'batch_code': raw_scope['batch_code'],
-        }
-        overrides['scope_values'] = scope_values
-        overrides['scope_area'] = area_selection['value']
-        if area_selection['error']:
-            field_errors['scope_area'] = [area_selection['error']]
 
         item_payloads: list[PurchaseItemPayload] = []
         for index, row in enumerate(items_raw):
@@ -885,6 +866,11 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             if estimated_amount is None:
                 row_errors.setdefault('estimated_amount', []).append("Ingresa un monto estimado válido.")
 
+            scope_value_raw = (row.get('scope_value') or row.get('scope') or '').strip()
+            area_selection = self._parse_item_scope_value(scope_value_raw)
+            row['scope_value'] = area_selection['value']
+            if area_selection['error']:
+                row_errors.setdefault('scope', []).append(area_selection['error'])
             item_id = _parse_int(row.get('id'))
 
             if row_errors:
@@ -898,6 +884,9 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                     quantity=quantity or Decimal('0'),
                     estimated_amount=estimated_amount or Decimal('0'),
                     product_id=product_id,
+                    scope_area=area_selection['kind'],
+                    scope_farm_id=area_selection['farm_id'],
+                    scope_chicken_house_id=area_selection['chicken_house_id'],
                 )
             )
 
@@ -914,10 +903,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 support_document_type_id=support_document_type_id,
                 supplier_id=supplier_id,
                 items=item_payloads,
-                scope_farm_id=scope_values['farm_id'],
-                scope_chicken_house_id=scope_values['chicken_house_id'],
-                scope_batch_code=scope_values['batch_code'],
-                scope_area=area_selection['kind'],
+                scope_batch_code=scope_batch_code,
                 assigned_manager_id=assigned_manager_id,
             )
         return payload, overrides, field_errors, item_errors
@@ -1255,20 +1241,18 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'bird_batches': self.purchase_form_options['bird_batches'],
                 'items': items,
                 'scope_values': form_initial['scope'],
-                'scope_area_value': form_initial['scope_area_value'],
                 'initial': form_initial['values'],
                 'read_only': form_initial['read_only'],
                 'manager_options': self.purchase_form_options['managers'],
                 'manager_is_editable': (not form_initial['read_only']) or bool(pending_approval),
                 'category_picker': self._build_category_picker(form_initial['values'].get('expense_type_id')),
                 'supplier_picker': self._build_supplier_picker(form_initial['values'].get('supplier_id')),
-                'area_picker': self._build_area_picker(
-                    selected_value=form_initial['scope_area_value'],
-                ),
+                'area_option_groups': self._build_area_picker(selected_value=None)['groups'],
                 'can_reopen': bool(purchase and purchase.status == PurchaseRequest.Status.SUBMITTED),
                 'pending_approval': pending_approval,
                 'approval_note': approval_note_value,
                 'rejection_alert': rejection_alert,
+                'purchase': purchase,
             },
             'purchase_request_field_errors': field_errors,
             'purchase_request_item_errors': item_errors,
@@ -1506,9 +1490,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'estimated_total': overrides.get('estimated_total') or '',
                 'assigned_manager_id': overrides.get('assigned_manager_id'),
             }
-            scope = overrides.get('scope_values') or {'farm_id': None, 'chicken_house_id': None, 'batch_code': ''}
+            scope = {'batch_code': overrides.get('scope_batch_code') or ''}
             items = self._enrich_item_rows(overrides.get('items') or [])
-            scope_area_value = overrides.get('scope_area') or self._scope_area_value_from_scope(scope=scope, area_kind=None)
         else:
             assigned_manager_id = purchase.assigned_manager_id if purchase else None
             if not assigned_manager_id and purchase and purchase.requester_id:
@@ -1526,11 +1509,9 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             }
             scope = self._scope_values_from_purchase(purchase)
             items = self._serialize_items(purchase)
-            scope_area_value = self._scope_area_value_from_purchase(purchase)
         return {
             'values': values,
             'scope': scope,
-            'scope_area_value': scope_area_value,
             'items': items,
             'read_only': read_only,
         }
@@ -1548,97 +1529,50 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                     'estimated_amount': self._format_decimal(item.estimated_amount),
                     'product_id': str(item.product_id) if item.product_id else '',
                     'product_name': item.product.name if item.product else '',
+                    'scope_value': item.scope_value(),
                 }
             )
         return serialized
 
     def _scope_values_from_purchase(self, purchase) -> dict:
         if not purchase:
-            return {'farm_id': None, 'chicken_house_id': None, 'batch_code': ''}
+            return {'batch_code': ''}
         return {
-            'farm_id': purchase.scope_farm_id,
-            'chicken_house_id': purchase.scope_chicken_house_id,
             'batch_code': purchase.scope_batch_code or '',
         }
 
-    def _scope_area_value_from_purchase(self, purchase) -> str:
-        if not purchase:
-            return PurchaseRequest.AreaScope.COMPANY
-        if purchase.scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE and purchase.scope_chicken_house_id:
-            return f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{purchase.scope_chicken_house_id}'
-        if purchase.scope_area == PurchaseRequest.AreaScope.FARM and purchase.scope_farm_id:
-            return f'{PurchaseRequest.AreaScope.FARM}:{purchase.scope_farm_id}'
-        return PurchaseRequest.AreaScope.COMPANY
-
-    def _scope_area_value_from_scope(self, *, scope: dict, area_kind: str | None) -> str:
-        house_id = scope.get('chicken_house_id')
-        farm_id = scope.get('farm_id')
-        if area_kind == PurchaseRequest.AreaScope.CHICKEN_HOUSE and house_id:
-            return f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{house_id}'
-        if area_kind == PurchaseRequest.AreaScope.FARM and farm_id:
-            return f'{PurchaseRequest.AreaScope.FARM}:{farm_id}'
-        if house_id:
-            return f'{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{house_id}'
-        if farm_id:
-            return f'{PurchaseRequest.AreaScope.FARM}:{farm_id}'
-        return PurchaseRequest.AreaScope.COMPANY
-
-    def _normalize_scope_area_selection(
-        self,
-        *,
-        raw_value: str,
-        farm_id: int | None,
-        chicken_house_id: int | None,
-    ) -> dict:
-        normalized_farm = farm_id
-        normalized_house = chicken_house_id
-        raw_value = (raw_value or '').strip()
+    def _parse_item_scope_value(self, raw_value: str) -> dict:
+        value = (raw_value or '').strip()
         kind = PurchaseRequest.AreaScope.COMPANY
+        farm_id: int | None = None
+        house_id: int | None = None
         error = None
-        selection_value = raw_value
-        if not raw_value:
-            if normalized_house:
-                kind = PurchaseRequest.AreaScope.CHICKEN_HOUSE
-                selection_value = f'{kind}:{normalized_house}'
-            elif normalized_farm:
-                kind = PurchaseRequest.AreaScope.FARM
-                selection_value = f'{kind}:{normalized_farm}'
-            else:
-                selection_value = PurchaseRequest.AreaScope.COMPANY
-        elif raw_value == PurchaseRequest.AreaScope.COMPANY:
+        selection_value = value or PurchaseRequest.AreaScope.COMPANY
+        if not value or value == PurchaseRequest.AreaScope.COMPANY:
             kind = PurchaseRequest.AreaScope.COMPANY
-            normalized_farm = None
-            normalized_house = None
             selection_value = PurchaseRequest.AreaScope.COMPANY
         else:
-            match = re.match(r'^(farm|chicken_house):(\d+)$', raw_value)
+            match = re.match(r'^(farm|chicken_house):(\d+)$', value)
             if not match:
                 error = "Selecciona un área válida."
                 kind = PurchaseRequest.AreaScope.COMPANY
-                normalized_farm = None
-                normalized_house = None
                 selection_value = PurchaseRequest.AreaScope.COMPANY
             else:
                 target_kind = match.group(1)
                 target_id = int(match.group(2))
                 if target_kind == 'farm':
                     kind = PurchaseRequest.AreaScope.FARM
-                    normalized_farm = target_id
-                    normalized_house = None
+                    farm_id = target_id
+                    selection_value = f'{kind}:{target_id}'
                 else:
                     kind = PurchaseRequest.AreaScope.CHICKEN_HOUSE
-                    normalized_house = target_id
-        if kind != PurchaseRequest.AreaScope.CHICKEN_HOUSE:
-            normalized_house = None
-        if kind == PurchaseRequest.AreaScope.COMPANY:
-            normalized_farm = None
-        if not selection_value:
-            selection_value = PurchaseRequest.AreaScope.COMPANY
+                    house_id = target_id
+                    selection_value = f'{kind}:{target_id}'
         return {
             'kind': kind,
             'value': selection_value,
-            'farm_id': normalized_farm,
-            'chicken_house_id': normalized_house,
+            'farm_id': farm_id,
+            'chicken_house_id': house_id,
             'error': error,
         }
 
@@ -1650,6 +1584,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'estimated_amount': '',
             'product_id': '',
             'product_name': '',
+            'scope_value': PurchaseRequest.AreaScope.COMPANY,
         }
 
     def _enrich_item_rows(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -1664,6 +1599,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             if product and not row.get('description'):
                 row['description'] = product['name']
             row['product_name'] = product['name'] if product else ''
+            if not row.get('scope_value'):
+                row['scope_value'] = PurchaseRequest.AreaScope.COMPANY
         return rows
 
     def _build_category_picker(self, selected_value):
@@ -1981,10 +1918,14 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         add('request_description', 'Descripción', purchase.description)
         add('category_name', 'Categoría', purchase.expense_type.name if purchase.expense_type else '')
         add('scope_label', 'Ámbito', purchase.scope_label)
-        add('scope_area', 'Tipo de área', purchase.get_scope_area_display() if purchase.scope_area else '')
+        add('scope_area', 'Tipo de área', purchase.get_scope_area_display())
         add('scope_batch', 'Lote asociado', purchase.scope_batch_code)
-        add('farm_name', 'Granja', purchase.scope_farm.name if purchase.scope_farm else '')
-        add('chicken_house_name', 'Galpón', purchase.scope_chicken_house.name if purchase.scope_chicken_house else '')
+        add('farm_name', 'Granja', purchase.primary_scope_farm.name if purchase.primary_scope_farm else '')
+        add(
+            'chicken_house_name',
+            'Galpón',
+            purchase.primary_scope_chicken_house.name if purchase.primary_scope_chicken_house else '',
+        )
         add('support_type_name', 'Tipo de soporte', purchase.support_document_type.name if purchase.support_document_type else '')
         add('status', 'Estado actual', purchase.get_status_display())
 

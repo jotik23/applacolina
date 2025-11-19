@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from decimal import Decimal
 import os
 from typing import ClassVar
@@ -330,12 +331,6 @@ class PurchaseRequest(TimeStampedModel):
         choices=PaymentSource.choices,
         default=PaymentSource.TBD,
     )
-    scope_area = models.CharField(
-        "Área",
-        max_length=20,
-        choices=AreaScope.choices,
-        default=AreaScope.COMPANY,
-    )
     supplier_account_holder_id = models.CharField("Identificación titular (compra)", max_length=50, blank=True)
     supplier_account_holder_name = models.CharField("Nombre titular (compra)", max_length=255, blank=True)
     supplier_account_type = models.CharField(
@@ -347,22 +342,6 @@ class PurchaseRequest(TimeStampedModel):
     supplier_account_number = models.CharField("Número de cuenta (compra)", max_length=60, blank=True)
     supplier_bank_name = models.CharField("Banco (compra)", max_length=120, blank=True)
     approved_at = models.DateTimeField("Aprobado en", blank=True, null=True)
-    scope_farm = models.ForeignKey(
-        Farm,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="purchase_requests",
-        verbose_name="Granja asociada",
-    )
-    scope_chicken_house = models.ForeignKey(
-        ChickenHouse,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name="purchase_requests",
-        verbose_name="Galpón asociado",
-    )
     scope_batch_code = models.CharField("Lote asociado", max_length=60, blank=True)
     support_document_type = models.ForeignKey(
         SupportDocumentType,
@@ -419,11 +398,7 @@ class PurchaseRequest(TimeStampedModel):
     @property
     def scope_label(self) -> str:
         base = self.expense_type.name
-        location_bits: list[str] = []
-        if self.scope_farm:
-            location_bits.append(self.scope_farm.name)
-        if self.scope_chicken_house:
-            location_bits.append(self.scope_chicken_house.name)
+        location_bits = self._area_location_bits()
         batch_label = self._scope_batch_label()
         if batch_label:
             location_bits.append(batch_label)
@@ -441,19 +416,89 @@ class PurchaseRequest(TimeStampedModel):
         return f"Lote {code}"
 
     @property
+    def primary_scope_area(self) -> str:
+        summary = self._primary_area_summary()
+        if summary:
+            return summary['kind']
+        return self.AreaScope.COMPANY
+
+    @property
+    def primary_scope_farm(self) -> Farm | None:
+        summary = self._primary_area_summary()
+        return summary.get('farm') if summary else None
+
+    @property
+    def primary_scope_chicken_house(self) -> ChickenHouse | None:
+        summary = self._primary_area_summary()
+        return summary.get('chicken_house') if summary else None
+
+    def get_scope_area_display(self) -> str:
+        return self.AreaScope(self.primary_scope_area).label
+
+    def _primary_area_summary(self) -> dict | None:
+        summaries = self._area_summaries()
+        if summaries:
+            return summaries[0]
+        return None
+
+    def _area_location_bits(self) -> list[str]:
+        summaries = self._area_summaries()
+        labels: list[str] = []
+        for summary in summaries:
+            label = summary.get('label')
+            if label:
+                labels.append(label)
+            if len(labels) == 2:
+                break
+        return labels
+
+    def _area_summaries(self) -> list[dict]:
+        cached = getattr(self, '_cached_area_summaries', None)
+        if cached is not None:
+            return cached
+        seen: OrderedDict[tuple, dict] = OrderedDict()
+        for item in self._iter_scope_items():
+            kind = item.scope_area or self.AreaScope.COMPANY
+            farm = item.scope_farm
+            house = item.scope_chicken_house
+            key = (kind, getattr(farm, 'id', None), getattr(house, 'id', None))
+            if key in seen:
+                continue
+            seen[key] = {
+                'kind': kind,
+                'farm': farm,
+                'chicken_house': house,
+                'label': item.area_label,
+            }
+        summaries = list(seen.values())
+        self._cached_area_summaries = summaries
+        return summaries
+
+    def _iter_scope_items(self) -> list['PurchaseItem']:
+        if hasattr(self, '_cached_scope_items'):
+            return self._cached_scope_items
+        items_qs = self.items.all()
+        prefetched = getattr(self, '_prefetched_objects_cache', None)
+        if not prefetched or 'items' not in prefetched:
+            items_qs = items_qs.select_related('scope_farm', 'scope_chicken_house__farm')
+        items = list(items_qs)
+        self._cached_scope_items = items
+        return items
+
+    @property
     def area_label(self) -> str:
-        if self.scope_area == self.AreaScope.CHICKEN_HOUSE:
-            if self.scope_chicken_house:
-                farm_name = self.scope_chicken_house.farm.name if self.scope_chicken_house.farm else ''
-                if farm_name:
-                    return f"{farm_name} · {self.scope_chicken_house.name}"
-                return self.scope_chicken_house.name
-            return self.AreaScope.CHICKEN_HOUSE.label
-        if self.scope_area == self.AreaScope.FARM:
-            if self.scope_farm:
-                return self.scope_farm.name
-            return self.AreaScope.FARM.label
-        return self.AreaScope.COMPANY.label
+        summaries = self._area_summaries()
+        if not summaries:
+            return self.AreaScope.COMPANY.label
+        labels = [summary['label'] for summary in summaries if summary['label']]
+        if not labels:
+            return self.AreaScope.COMPANY.label
+        if len(labels) == 1:
+            return labels[0]
+        if len(labels) == 2:
+            return " / ".join(labels)
+        remaining = len(labels) - 2
+        return f"{labels[0]} / {labels[1]} + {remaining} más"
 
     @property
     def latest_approval_note(self) -> str:
@@ -510,6 +555,28 @@ class PurchaseItem(TimeStampedModel):
         default=Decimal("0.00"),
         validators=[MinValueValidator(0)],
     )
+    scope_area = models.CharField(
+        "Área",
+        max_length=20,
+        choices=PurchaseRequest.AreaScope.choices,
+        default=PurchaseRequest.AreaScope.COMPANY,
+    )
+    scope_farm = models.ForeignKey(
+        Farm,
+        on_delete=models.SET_NULL,
+        related_name="purchase_items",
+        verbose_name="Granja",
+        blank=True,
+        null=True,
+    )
+    scope_chicken_house = models.ForeignKey(
+        ChickenHouse,
+        on_delete=models.SET_NULL,
+        related_name="purchase_items",
+        verbose_name="Galpón",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         verbose_name = "Item de compra"
@@ -517,6 +584,28 @@ class PurchaseItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.description
+
+    @property
+    def area_label(self) -> str:
+        if self.scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
+            if self.scope_chicken_house:
+                farm_name = self.scope_chicken_house.farm.name if self.scope_chicken_house.farm else ''
+                if farm_name:
+                    return f"{farm_name} · {self.scope_chicken_house.name}"
+                return self.scope_chicken_house.name
+            return PurchaseRequest.AreaScope.CHICKEN_HOUSE.label
+        if self.scope_area == PurchaseRequest.AreaScope.FARM:
+            if self.scope_farm:
+                return self.scope_farm.name
+            return PurchaseRequest.AreaScope.FARM.label
+        return PurchaseRequest.AreaScope.COMPANY.label
+
+    def scope_value(self) -> str:
+        if self.scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE and self.scope_chicken_house_id:
+            return f"{PurchaseRequest.AreaScope.CHICKEN_HOUSE}:{self.scope_chicken_house_id}"
+        if self.scope_area == PurchaseRequest.AreaScope.FARM and self.scope_farm_id:
+            return f"{PurchaseRequest.AreaScope.FARM}:{self.scope_farm_id}"
+        return PurchaseRequest.AreaScope.COMPANY
 
 
 class PurchaseReceptionAttachment(TimeStampedModel):

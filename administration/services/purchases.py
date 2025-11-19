@@ -312,10 +312,8 @@ def _query_purchases(
             'requester',
             'expense_type',
             'support_document_type',
-            'scope_farm',
-            'scope_chicken_house__farm',
         )
-        .prefetch_related('approvals__approver')
+        .prefetch_related('approvals__approver', 'items__scope_farm', 'items__scope_chicken_house__farm')
     )
     if scope_code == WAITING_SCOPE_CODE:
         queryset = queryset.filter(
@@ -334,8 +332,8 @@ def _query_purchases(
             | Q(invoice_number__icontains=search_value)
             | Q(supplier__name__icontains=search_value)
             | Q(expense_type__name__icontains=search_value)
-            | Q(scope_farm__name__icontains=search_value)
-            | Q(scope_chicken_house__name__icontains=search_value)
+            | Q(items__scope_farm__name__icontains=search_value)
+            | Q(items__scope_chicken_house__name__icontains=search_value)
             | Q(scope_batch_code__icontains=search_value)
         )
     if start_date:
@@ -461,7 +459,7 @@ def _resolve_panel(panel_code: str | None, purchase_pk: int | None) -> PurchaseP
         return None
     purchase = None
     if purchase_pk:
-        queryset = PurchaseRequest.objects.all()
+        queryset = PurchaseRequest.objects.prefetch_related('items__scope_farm', 'items__scope_chicken_house__farm')
         if panel.code == 'reception':
             queryset = queryset.prefetch_related('items', 'reception_attachments', 'support_attachments')
         if panel.code in {'invoice', 'accounting'}:
@@ -470,8 +468,6 @@ def _resolve_panel(panel_code: str | None, purchase_pk: int | None) -> PurchaseP
                 'expense_type',
                 'requester',
                 'support_document_type',
-                'scope_farm',
-                'scope_chicken_house__farm',
             ).prefetch_related('items', 'support_attachments')
         if panel.code == 'accounting':
             queryset = queryset.prefetch_related('reception_attachments', 'approvals__approver')

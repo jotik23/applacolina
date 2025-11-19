@@ -52,6 +52,13 @@
     </div>
   {% endif %}
 
+  {% if form.purchase and form.purchase.latest_approval_note and form.purchase.status != 'borrador' %}
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Nota de aprobación</p>
+      <p class="mt-1 text-sm">{{ form.purchase.latest_approval_note }}</p>
+    </div>
+  {% endif %}
+
   {% if form.pending_approval %}
     <div class="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-5 text-emerald-900">
       <div class="flex flex-col gap-1">
@@ -237,105 +244,6 @@
           </div>
         </div>
         <div class="grid gap-4 lg:grid-cols-2 items-stretch">
-          <div class="text-xs font-semibold text-slate-500 flex flex-col h-full">
-          <span>Área</span>
-          {% with picker=form.area_picker %}
-            {% if picker.groups %}
-              <div class="relative mt-1 flex-1" data-select-picker data-select-placeholder="{{ picker.placeholder }}" data-area-picker>
-                <input type="hidden" value="{{ picker.selected_value }}" data-select-input>
-                <div class="flex items-stretch gap-2">
-                  <button
-                    type="button"
-                    class="flex h-full min-h-[3rem] w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-600 shadow-sm focus:border-slate-400 focus:outline-none"
-                    data-select-trigger
-                    aria-haspopup="listbox"
-                    aria-expanded="false"
-                  >
-                    <span class="flex flex-wrap items-center gap-2 text-left">
-                      <span class="text-sm font-semibold text-slate-800" data-select-label>{{ picker.selected_label }}</span>
-                      <span class="text-[11px] font-normal text-slate-500 {% if not picker.selected_description %}hidden{% endif %}" data-select-description>{{ picker.selected_description }}</span>
-                    </span>
-                    <svg class="h-4 w-4 text-slate-400 transition-transform duration-150" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-select-chevron>
-                      <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.21l3.71-3.98a.75.75 0 111.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0L5.21 9.31a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    class="inline-flex items-center justify-center rounded-full border border-slate-200 px-2 text-xs font-semibold text-slate-500 hover:border-slate-300 hover:text-slate-900 {% if not picker.selected_value %}hidden{% endif %}"
-                    data-select-clear
-                    aria-label="Limpiar selección"
-                  >
-                    &times;
-                  </button>
-                </div>
-                <div class="absolute left-0 right-0 z-30 mt-2 hidden rounded-2xl border border-slate-200 bg-white shadow-xl" data-select-panel>
-                  {% if picker.search_enabled %}
-                    <div class="border-b border-slate-100 p-2">
-                      <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-500 focus-within:border-slate-400">
-                        <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 014.384 8.776l3.17 3.17a.75.75 0 11-1.06 1.06l-3.17-3.17A5.5 5.5 0 119 3.5zm0 1.5a4 4 0 100 8 4 4 0 000-8z" clip-rule="evenodd" /></svg>
-                        <input type="search" class="w-full border-none bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none" placeholder="Buscar área" data-select-search>
-                      </label>
-                    </div>
-                  {% endif %}
-                  <div class="max-h-64 overflow-y-auto py-2" data-select-list>
-                    {% for group in picker.groups %}
-                      <div class="py-1" data-select-group data-group-label="{{ group.label }}">
-                        <p class="px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ group.label }}</p>
-                        <ul class="mt-1 space-y-1">
-                          {% for option in group.options %}
-                            <li>
-                              <button
-                                type="button"
-                                class="select-option-button flex w-full flex-col rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                                data-select-option
-                                data-value="{{ option.value }}"
-                                data-label="{{ option.label }}"
-                                data-description="{{ option.description }}"
-                                data-search-text="{{ option.search_text }}"
-                                {% if option.data_attrs %}
-                                  {% for attr_key, attr_value in option.data_attrs.items %}
-                                    data-{{ attr_key }}="{{ attr_value }}"
-                                  {% endfor %}
-                                {% endif %}
-                                {% if option.value == picker.selected_value %}data-selected="true"{% endif %}
-                              >
-                                <span>{{ option.label }}</span>
-                                {% if option.description %}
-                                  <span class="text-[11px] font-normal text-slate-500">{{ option.description }}</span>
-                                {% endif %}
-                              </button>
-                            </li>
-                          {% endfor %}
-                        </ul>
-                      </div>
-                    {% endfor %}
-                    <div class="px-3 py-2 text-[11px] font-semibold text-slate-500 hidden" data-select-empty>Sin coincidencias.</div>
-                  </div>
-                </div>
-                <select
-                  name="{{ picker.name }}"
-                  class="hidden"
-                  data-native-select
-                  data-area-select
-                  aria-hidden="true"
-                  tabindex="-1"
-                >
-                  <option value="">{{ picker.placeholder }}</option>
-                  {% for group in picker.groups %}
-                    {% for option in group.options %}
-                      <option value="{{ option.value }}" {% if option.value == picker.selected_value %}selected{% endif %}>{{ option.label }}</option>
-                    {% endfor %}
-                  {% endfor %}
-                </select>
-              </div>
-            {% else %}
-              <div class="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">Registra granjas y galpones para habilitar este listado.</div>
-            {% endif %}
-          {% endwith %}
-          {% if field_errors.scope_area %}
-            <p class="mt-1 text-[11px] font-semibold text-red-600">{{ field_errors.scope_area.0 }}</p>
-          {% endif %}
-          </div>
           <div class="text-xs font-semibold text-slate-500 flex flex-col h-full">
             <span>Proveedor</span>
             {% with picker=form.supplier_picker %}
@@ -643,9 +551,7 @@
             </details>
           {% endif %}
         </div>
-        <input type="hidden" name="scope_farm_id" value="{{ scope.farm_id|default:'' }}">
         <input type="hidden" name="scope_batch_code" value="{{ scope.batch_code|default:'' }}">
-        <input type="hidden" name="scope_chicken_house_id" value="{{ scope.chicken_house_id|default:'' }}">
 
     </article>
     {% endwith %}
@@ -671,10 +577,19 @@
         <p class="text-[11px] font-semibold text-red-600">{{ field_errors.items.0 }}</p>
       {% endif %}
       <div class="overflow-x-auto rounded-2xl border border-slate-200" data-purchase-items-table>
-        <table class="min-w-full divide-y divide-slate-200 text-xs">
+        <table class="min-w-full divide-y divide-slate-200 text-xs table-fixed">
+          <colgroup>
+            <col style="width:42%;">
+            <col style="width:18%;">
+            <col style="width:14%;">
+            <col style="width:12%;">
+            <col style="width:10%;">
+            <col style="width:4%;">
+          </colgroup>
           <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             <tr>
               <th scope="col" class="px-3 py-2 text-left font-semibold">Item</th>
+              <th scope="col" class="px-3 py-2 text-left font-semibold">Área</th>
               <th scope="col" class="px-3 py-2 text-center font-semibold">Cantidad</th>
               <th scope="col" class="px-3 py-2 text-right font-semibold align-middle w-32">Valor</th>
               <th scope="col" class="px-3 py-2 text-right font-semibold">Subtotal</th>
@@ -715,6 +630,28 @@
                     <input type="hidden" name="items[{{ forloop.counter0 }}][product_id]" data-field="product_id" data-product-id-input value="{{ item.product_id|default:'' }}">
                     {% if row_errors.description %}
                       <p class="mt-1 text-[11px] font-semibold text-red-600">{{ row_errors.description.0 }}</p>
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="px-3 py-2 align-middle">
+                  <div class="flex flex-col gap-1">
+                    <select
+                      name="items[{{ forloop.counter0 }}][scope_value]"
+                      data-field="scope_value"
+                      class="h-11 w-full rounded-lg border border-slate-200 px-3 text-xs shadow-sm focus:border-slate-400 focus:outline-none"
+                    >
+                      {% for group in form.area_option_groups %}
+                        <optgroup label="{{ group.label }}">
+                          {% for option in group.options %}
+                            <option value="{{ option.value }}" {% if option.value == item.scope_value %}selected{% endif %}>
+                              {{ option.label }}{% if option.description %} · {{ option.description }}{% endif %}
+                            </option>
+                          {% endfor %}
+                        </optgroup>
+                      {% endfor %}
+                    </select>
+                    {% if row_errors.scope %}
+                      <p class="mt-1 text-[11px] font-semibold text-red-600">{{ row_errors.scope.0 }}</p>
                     {% endif %}
                   </div>
                 </td>
@@ -776,7 +713,6 @@
           </tbody>
         </table>
       </div>
-      <p class="text-xs text-slate-500">Los valores y subtotales se recalculan automáticamente al editar los items.</p>
       <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
         <span>Total estimado</span>
         <span data-purchase-total>{{ form.initial.estimated_total|default:"0" }}</span>
@@ -813,8 +749,8 @@
 
 <template id="purchase-item-row-template">
   <tr data-item-row>
-                <td class="px-3 py-2 text-right align-middle w-32">
-                  <div class="ml-auto flex w-full flex-col gap-1">
+    <td class="px-3 py-2 align-middle">
+      <div class="flex flex-col gap-1">
         <div class="relative" data-product-picker>
           <input
             type="text"
@@ -839,6 +775,23 @@
         </div>
         <input type="hidden" name="" data-field="id" value="">
         <input type="hidden" name="" data-field="product_id" data-product-id-input value="">
+      </div>
+    </td>
+    <td class="px-3 py-2 align-middle">
+      <div class="flex flex-col gap-1">
+        <select
+          name=""
+          data-field="scope_value"
+          class="h-11 min-w-[9rem] rounded-lg border border-slate-200 px-3 text-xs shadow-sm focus:border-slate-400 focus:outline-none"
+        >
+          {% for group in form.area_option_groups %}
+            <optgroup label="{{ group.label }}">
+              {% for option in group.options %}
+                <option value="{{ option.value }}">{{ option.label }}{% if option.description %} · {{ option.description }}{% endif %}</option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
       </div>
     </td>
     <td class="px-3 py-2 align-middle">

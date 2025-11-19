@@ -29,7 +29,7 @@
     <div class="space-y-4" data-purchase-compose-container></div>
     <template data-purchase-compose-template>
       <article
-        class="rounded-3xl border border-brand/20 bg-gradient-to-br from-white via-brand/5 to-indigo-50/40 p-5 shadow-xl shadow-brand/10"
+        class="w-full max-w-5xl rounded-3xl border border-brand/20 bg-gradient-to-br from-white via-brand/5 to-indigo-50/40 p-5 shadow-xl shadow-brand/10"
         data-purchase-compose-card
         data-compose-purchase-id=""
       >
@@ -77,47 +77,21 @@
             </label>
           </div>
           <div class="grid gap-3 lg:grid-cols-2">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Área
-                <select
-                  class="mt-1 w-full rounded-2xl border border-white/60 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-brand/40 focus:outline-none"
-                  data-compose-field="scope"
-                >
-                  <option value="">Selecciona el alcance</option>
-                </select>
-                <span class="mt-1 hidden text-[11px] font-semibold text-rose-600" data-compose-error="scope_area"></span>
-              </label>
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Gestor asignado
-                <select
-                  class="mt-1 w-full rounded-2xl border border-white/60 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-brand/40 focus:outline-none"
-                  data-compose-field="assigned_manager_id"
-                >
-                  <option value="">Selecciona un gestor</option>
-                </select>
-              </label>
+            <div class="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 text-xs text-amber-900 shadow-inner shadow-amber-100/40">
+              <p class="text-sm font-semibold text-amber-900">Áreas por ítem</p>
+              <p class="mt-1 leading-relaxed text-amber-800">
+                Define el destino (empresa, granja o galpón) directamente en cada ítem del detalle para reflejar el uso real del gasto.
+              </p>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2" data-compose-area-fields>
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-area-field="farm_id">
-                Granja
-                <select
-                  class="mt-1 w-full rounded-2xl border border-white/60 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-brand/40 focus:outline-none"
-                  data-area-input
-                >
-                  <option value="">Selecciona la granja</option>
-                </select>
-              </label>
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-area-field="chicken_house_id">
-                Galpón
-                <select
-                  class="mt-1 w-full rounded-2xl border border-white/60 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-brand/40 focus:outline-none"
-                  data-area-input
-                >
-                  <option value="">Selecciona el galpón</option>
-                </select>
-              </label>
-            </div>
+            <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Gestor asignado
+              <select
+                class="mt-1 w-full rounded-2xl border border-white/60 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-brand/40 focus:outline-none"
+                data-compose-field="assigned_manager_id"
+              >
+                <option value="">Selecciona un gestor</option>
+              </select>
+            </label>
           </div>
           <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Proveedor
@@ -195,7 +169,15 @@
             Quitar
           </button>
         </div>
-        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+        <div class="mt-3 grid gap-3 md:grid-cols-4">
+          <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Área
+            <select
+              class="mt-1 w-full rounded-xl border border-slate-100 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-slate-50 focus:border-brand/40 focus:outline-none md:max-w-[14rem]"
+              data-item-field="scope_value"
+            ></select>
+            <span class="mt-1 hidden text-[11px] font-semibold text-rose-600" data-item-error="scope"></span>
+          </label>
           <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Cantidad
             <input

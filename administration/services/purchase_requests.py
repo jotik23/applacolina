@@ -28,6 +28,9 @@ class PurchaseItemPayload:
     quantity: Decimal
     estimated_amount: Decimal
     product_id: int | None = None
+    scope_area: str = PurchaseRequest.AreaScope.COMPANY
+    scope_farm_id: int | None = None
+    scope_chicken_house_id: int | None = None
 
 
 @dataclass
@@ -39,10 +42,7 @@ class PurchaseRequestPayload:
     support_document_type_id: int | None
     supplier_id: int | None
     items: Sequence[PurchaseItemPayload]
-    scope_farm_id: int | None
-    scope_chicken_house_id: int | None
     scope_batch_code: str
-    scope_area: str
     assigned_manager_id: int | None = None
 
 
@@ -79,6 +79,8 @@ class PurchaseRequestSubmissionService:
     def __init__(self, *, actor):
         self.actor = actor
         self._product_cache: dict[int, Product] = {}
+        self._farm_cache: dict[int, Farm] = {}
+        self._house_cache: dict[int, ChickenHouse] = {}
 
     def submit(self, *, payload: PurchaseRequestPayload, intent: str) -> PurchaseRequest:
         intent = intent or "save_draft"
@@ -130,22 +132,6 @@ class PurchaseRequestSubmissionService:
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, dict[str, list[str]]] = {}
 
-        area_kind = payload.scope_area or PurchaseRequest.AreaScope.COMPANY
-        if area_kind not in PurchaseRequest.AreaScope.values:
-            field_errors["scope_area"] = ["Selecciona un área válida."]
-            area_kind = PurchaseRequest.AreaScope.COMPANY
-        if area_kind == PurchaseRequest.AreaScope.COMPANY:
-            payload.scope_farm_id = None
-            payload.scope_chicken_house_id = None
-        elif area_kind == PurchaseRequest.AreaScope.FARM:
-            payload.scope_chicken_house_id = None
-            if not payload.scope_farm_id:
-                field_errors["scope_area"] = ["Selecciona una granja para el área."]
-        elif area_kind == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
-            if not payload.scope_chicken_house_id:
-                field_errors["scope_area"] = ["Selecciona un galpón para el área."]
-        payload.scope_area = area_kind
-
         expense_type = None
         if not payload.summary:
             field_errors["summary"] = ["Ingresa un nombre para la solicitud."]
@@ -180,32 +166,6 @@ class PurchaseRequestSubmissionService:
             elif getattr(self.actor, "is_authenticated", False):
                 payload.assigned_manager_id = getattr(self.actor, "pk", None)
 
-        farm = None
-        if payload.scope_farm_id:
-            farm = Farm.objects.filter(pk=payload.scope_farm_id).first()
-            if not farm:
-                field_errors["scope_farm_id"] = ["Selecciona una granja válida."]
-
-        house = None
-        if payload.scope_chicken_house_id:
-            house = (
-                ChickenHouse.objects.select_related("farm")
-                .filter(pk=payload.scope_chicken_house_id)
-                .first()
-            )
-            if not house:
-                field_errors["scope_chicken_house_id"] = ["Selecciona un galpón válido."]
-            else:
-                if farm and house.farm_id != farm.id:
-                    field_errors["scope_chicken_house_id"] = ["El galpón debe pertenecer a la granja seleccionada."]
-                elif not farm and house.farm:
-                    payload.scope_farm_id = house.farm_id
-                    farm = house.farm
-                payload.scope_area = PurchaseRequest.AreaScope.CHICKEN_HOUSE
-        elif payload.scope_area == PurchaseRequest.AreaScope.COMPANY:
-            payload.scope_farm_id = None
-            payload.scope_chicken_house_id = None
-
         if payload.support_document_type_id:
             if not SupportDocumentType.objects.filter(pk=payload.support_document_type_id).only("id").exists():
                 field_errors["support_document_type"] = ["Selecciona un tipo de soporte válido."]
@@ -222,7 +182,15 @@ class PurchaseRequestSubmissionService:
             field_errors["items"] = ["Agrega al menos un item a la solicitud."]
         else:
             self._product_cache = self._load_products(payload.items)
-            self._validate_items(payload.items, item_errors, self._product_cache)
+            self._farm_cache = self._load_farms(payload.items)
+            self._house_cache = self._load_houses(payload.items)
+            self._validate_items(
+                payload.items,
+                item_errors,
+                self._product_cache,
+                self._farm_cache,
+                self._house_cache,
+            )
 
         if field_errors or item_errors:
             raise PurchaseRequestValidationError(
@@ -237,11 +205,27 @@ class PurchaseRequestSubmissionService:
         products = Product.objects.filter(pk__in=product_ids)
         return {product.id: product for product in products}
 
+    def _load_farms(self, items: Sequence[PurchaseItemPayload]) -> dict[int, Farm]:
+        farm_ids = {item.scope_farm_id for item in items if item.scope_farm_id}
+        if not farm_ids:
+            return {}
+        farms = Farm.objects.filter(pk__in=farm_ids)
+        return {farm.id: farm for farm in farms}
+
+    def _load_houses(self, items: Sequence[PurchaseItemPayload]) -> dict[int, ChickenHouse]:
+        house_ids = {item.scope_chicken_house_id for item in items if item.scope_chicken_house_id}
+        if not house_ids:
+            return {}
+        houses = ChickenHouse.objects.select_related('farm').filter(pk__in=house_ids)
+        return {house.id: house for house in houses}
+
     def _validate_items(
         self,
         items: Sequence[PurchaseItemPayload],
         item_errors: dict[int, dict[str, list[str]]],
         products: dict[int, Product],
+        farms: dict[int, Farm],
+        houses: dict[int, ChickenHouse],
     ) -> None:
         for index, item in enumerate(items):
             errors_for_row: dict[str, list[str]] = {}
@@ -258,6 +242,31 @@ class PurchaseRequestSubmissionService:
                 errors_for_row["quantity"] = ["La cantidad debe ser mayor que cero."]
             if item.estimated_amount < 0:
                 errors_for_row["estimated_amount"] = ["El monto estimado no puede ser negativo."]
+            area_kind = item.scope_area or PurchaseRequest.AreaScope.COMPANY
+            if area_kind not in PurchaseRequest.AreaScope.values:
+                errors_for_row.setdefault("scope", []).append("Selecciona un área válida.")
+                area_kind = PurchaseRequest.AreaScope.COMPANY
+            if area_kind == PurchaseRequest.AreaScope.COMPANY:
+                item.scope_farm_id = None
+                item.scope_chicken_house_id = None
+            elif area_kind == PurchaseRequest.AreaScope.FARM:
+                if not item.scope_farm_id:
+                    errors_for_row.setdefault("scope", []).append("Selecciona la granja para el ítem.")
+                elif item.scope_farm_id not in farms:
+                    errors_for_row.setdefault("scope", []).append("Selecciona una granja válida.")
+                item.scope_chicken_house_id = None
+            elif area_kind == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
+                if not item.scope_chicken_house_id:
+                    errors_for_row.setdefault("scope", []).append("Selecciona el galpón para el ítem.")
+                elif item.scope_chicken_house_id not in houses:
+                    errors_for_row.setdefault("scope", []).append("Selecciona un galpón válido.")
+                else:
+                    house = houses[item.scope_chicken_house_id]
+                    if house.farm_id:
+                        item.scope_farm_id = house.farm_id
+                if errors_for_row.get("scope"):
+                    item.scope_chicken_house_id = None
+            item.scope_area = area_kind
             if errors_for_row:
                 item_errors[index] = errors_for_row
 
@@ -273,10 +282,7 @@ class PurchaseRequestSubmissionService:
         purchase.expense_type_id = payload.expense_type_id
         purchase.supplier_id = payload.supplier_id
         purchase.support_document_type_id = payload.support_document_type_id
-        purchase.scope_farm_id = payload.scope_farm_id
-        purchase.scope_chicken_house_id = payload.scope_chicken_house_id
         purchase.scope_batch_code = payload.scope_batch_code
-        purchase.scope_area = payload.scope_area
         if not purchase.requester_id and getattr(self.actor, "is_authenticated", False):
             purchase.requester = self.actor
         manager_id = payload.assigned_manager_id
@@ -325,6 +331,16 @@ class PurchaseRequestSubmissionService:
             item.description = item_payload.description or (product.name if product else "")
             item.quantity = item_payload.quantity
             item.estimated_amount = item_payload.estimated_amount
+            item.scope_area = item_payload.scope_area or PurchaseRequest.AreaScope.COMPANY
+            if item.scope_area == PurchaseRequest.AreaScope.CHICKEN_HOUSE:
+                item.scope_chicken_house_id = item_payload.scope_chicken_house_id
+                item.scope_farm_id = item_payload.scope_farm_id
+            elif item.scope_area == PurchaseRequest.AreaScope.FARM:
+                item.scope_farm_id = item_payload.scope_farm_id
+                item.scope_chicken_house = None
+            else:
+                item.scope_farm = None
+                item.scope_chicken_house = None
             item.save()
             if item.id:
                 seen_ids.add(item.id)

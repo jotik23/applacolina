@@ -13,6 +13,7 @@ from .models import (
     Supplier,
     SupportDocumentType,
 )
+from production.models import ChickenHouse, Farm
 
 
 @admin.register(Supplier)
@@ -79,8 +80,17 @@ class PurchasingExpenseTypeAdmin(admin.ModelAdmin):
 class PurchaseItemInline(admin.TabularInline):
     model = PurchaseItem
     extra = 0
-    fields = ("product", "description", "quantity", "estimated_amount", "received_quantity")
-    autocomplete_fields = ("product",)
+    fields = (
+        "product",
+        "description",
+        "quantity",
+        "estimated_amount",
+        "received_quantity",
+        "scope_area",
+        "scope_farm",
+        "scope_chicken_house",
+    )
+    autocomplete_fields = ("product", "scope_farm", "scope_chicken_house")
 
 
 class PurchaseReceptionAttachmentInline(admin.TabularInline):
@@ -106,6 +116,51 @@ class PurchaseApprovalInline(admin.TabularInline):
     ordering = ("sequence",)
 
 
+class PurchaseAreaFilter(admin.SimpleListFilter):
+    title = "Área"
+    parameter_name = "item_scope_area"
+
+    def lookups(self, request, model_admin):
+        return PurchaseRequest.AreaScope.choices
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value:
+            return queryset.filter(items__scope_area=value).distinct()
+        return queryset
+
+
+class PurchaseFarmFilter(admin.SimpleListFilter):
+    title = "Granja"
+    parameter_name = "item_scope_farm"
+
+    def lookups(self, request, model_admin):
+        return [(str(farm.id), farm.name) for farm in Farm.objects.order_by("name")]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value:
+            return queryset.filter(items__scope_farm_id=value).distinct()
+        return queryset
+
+
+class PurchaseHouseFilter(admin.SimpleListFilter):
+    title = "Galpón"
+    parameter_name = "item_scope_house"
+
+    def lookups(self, request, model_admin):
+        return [
+            (str(house.id), f"{house.farm.name if house.farm else ''} · {house.name}".strip(" ·"))
+            for house in ChickenHouse.objects.select_related("farm").order_by("farm__name", "name")
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value:
+            return queryset.filter(items__scope_chicken_house_id=value).distinct()
+        return queryset
+
+
 @admin.register(PurchaseRequest)
 class PurchaseRequestAdmin(admin.ModelAdmin):
     list_display = (
@@ -120,11 +175,11 @@ class PurchaseRequestAdmin(admin.ModelAdmin):
     )
     list_filter = (
         "status",
-        "scope_area",
+        PurchaseAreaFilter,
         "expense_type",
         "supplier",
-        "scope_farm",
-        "scope_chicken_house",
+        PurchaseFarmFilter,
+        PurchaseHouseFilter,
         "payment_method",
         "payment_source",
     )
@@ -134,8 +189,6 @@ class PurchaseRequestAdmin(admin.ModelAdmin):
         "description",
         "supplier__name",
         "scope_batch_code",
-        "scope_farm__name",
-        "scope_chicken_house__name",
         "order_number",
         "invoice_number",
     )
@@ -144,8 +197,6 @@ class PurchaseRequestAdmin(admin.ModelAdmin):
         "expense_type",
         "requester",
         "assigned_manager",
-        "scope_farm",
-        "scope_chicken_house",
         "support_document_type",
     )
     readonly_fields = (
@@ -177,9 +228,6 @@ class PurchaseRequestAdmin(admin.ModelAdmin):
             "Alcance y logística",
             {
                 "fields": (
-                    "scope_area",
-                    "scope_farm",
-                    "scope_chicken_house",
                     "scope_batch_code",
                     "scope_preview",
                     "eta",

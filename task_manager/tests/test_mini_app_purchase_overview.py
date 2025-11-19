@@ -87,16 +87,16 @@ class MiniAppPurchaseOverviewTests(TestCase):
             status=PurchaseRequest.Status.DRAFT,
             estimated_total=Decimal("0.00"),
         )
-        purchase.scope_area = PurchaseRequest.AreaScope.FARM
-        purchase.scope_farm = farm
         purchase.description = "Prioridad mensual"
         purchase.shipping_notes = "Nota 1\n\nNota 2"
-        purchase.save(update_fields=["scope_area", "scope_farm", "description", "shipping_notes"])
+        purchase.save(update_fields=["description", "shipping_notes"])
         PurchaseItem.objects.create(
             purchase=purchase,
             description="Malla",
             quantity=Decimal("2.0"),
             estimated_amount=Decimal("15000.00"),
+            scope_area=PurchaseRequest.AreaScope.FARM,
+            scope_farm=farm,
         )
 
         overview = build_purchase_requests_overview(user=self.requester)
@@ -106,12 +106,12 @@ class MiniAppPurchaseOverviewTests(TestCase):
         self.assertIsInstance(entry.edit_payload, dict)
         payload = entry.edit_payload or {}
         self.assertEqual(payload.get("purchase_id"), purchase.pk)
-        self.assertEqual(payload.get("area", {}).get("farm_id"), farm.pk)
         self.assertEqual(payload.get("assigned_manager_id"), self.manager.pk)
         self.assertEqual(payload.get("assigned_manager_label"), self.manager.get_full_name())
         items = payload.get("items") or []
         self.assertGreater(len(items), 0)
         self.assertEqual(items[0].get("description"), "Malla")
+        self.assertEqual(items[0].get("scope_value"), f"{PurchaseRequest.AreaScope.FARM}:{farm.pk}")
         self.assertEqual(payload.get("revision_notes"), ["Nota 1", "Nota 2"])
 
     def test_non_draft_entry_has_no_edit_payload(self):
