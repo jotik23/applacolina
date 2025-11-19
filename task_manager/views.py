@@ -66,6 +66,7 @@ from task_manager.mini_app.features import (
     build_purchase_management_card,
     build_purchase_approval_card,
     build_purchase_request_composer,
+    build_transport_queue_payload,
     persist_production_records,
     persist_weight_registry,
     serialize_shift_confirmation_card,
@@ -2092,61 +2093,7 @@ def _build_telegram_mini_app_payload(
         "dispatch_summary": dispatch_summary,
     }
 
-    transport_lot_backlog = [
-        {
-            "id": "GS-2024-11",
-            "label": "Lote GS-2024-11",
-            "farm": "Granja San Lucas",
-            "barn": "Galpón 3",
-            "rooms": ["Sala 1", "Sala 2"],
-            "cartons": 420,
-            "production_date_iso": day_minus_1.isoformat(),
-            "production_date_label": date_format(day_minus_1, "DATE_FORMAT"),
-            "status": _("Prioridad alta"),
-        },
-        {
-            "id": "PR-2024-08",
-            "label": "Lote PR-2024-08",
-            "farm": "Granja Providencia",
-            "barn": "Galpón 5",
-            "rooms": ["Sala 2"],
-            "cartons": 310,
-            "production_date_iso": day_minus_2.isoformat(),
-            "production_date_label": date_format(day_minus_2, "DATE_FORMAT"),
-            "status": _("Listo para cargar"),
-        },
-        {
-            "id": "LP-2024-03",
-            "label": "Lote LP-2024-03",
-            "farm": "Granja La Primavera",
-            "barn": "Galpón 1",
-            "rooms": [],
-            "cartons": 280,
-            "production_date_iso": day_minus_3.isoformat(),
-            "production_date_label": date_format(day_minus_3, "DATE_FORMAT"),
-            "status": _("Alerta: revisar humedad"),
-        },
-    ]
-
-    transport_total_cartons = sum(lot["cartons"] for lot in transport_lot_backlog)
-
-    transport_queue = {
-        "title": _("Lotes listos para transporte"),
-        "pending_count": len(transport_lot_backlog),
-        "total_cartons": transport_total_cartons,
-        "lots": transport_lot_backlog,
-        "transporters": [
-            {"id": "transcolina", "label": "Transcolina logística (4 camiones)", "contact": "+57 316 555 0101"},
-            {"id": "coopverde", "label": "Cooperativa Ruta Verde - Línea 2", "contact": "+57 310 889 4477"},
-            {"id": "flota-propia", "label": "Flota interna La Colina", "contact": "+57 300 111 2233"},
-        ],
-        "default_transporter_id": "transcolina",
-        "default_expected_date_iso": tomorrow.isoformat(),
-        "default_expected_date_label": date_format(tomorrow, "DATE_FORMAT"),
-        "instructions": _(
-            "Selecciona los lotes y asigna el transportador para autorizar el traslado interno."
-        ),
-    }
+    transport_queue = build_transport_queue_payload()
 
     pending_classification_sources = [
         {

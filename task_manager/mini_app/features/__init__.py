@@ -35,6 +35,7 @@ from .purchases import (
     serialize_purchase_request_composer,
     serialize_purchase_requests_overview,
 )
+from .transport_queue import build_transport_queue_payload
 
 __all__ = [
     "ShiftConfirmationCard",
@@ -64,4 +65,5 @@ __all__ = [
     "serialize_purchase_management_empty_state",
     "serialize_purchase_approval_card",
     "serialize_purchase_request_composer",
+    "build_transport_queue_payload",
 ]

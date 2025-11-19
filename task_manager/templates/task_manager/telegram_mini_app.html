@@ -798,74 +798,63 @@
                     Transporte interno pendiente
                   </p>
                   <h3 class="text-base font-semibold text-slate-900">
-                    {{ queue.title|default:"Lotes listos para transporte" }}
+                    {{ queue.title|default:"Producciones listas para transporte" }}
                   </h3>
-                  <p class="mt-1 text-sm text-slate-600">
-                    Autoriza y agenda el traslado de los lotes listos para despacho.
-                  </p>
                 </div>
                 <div class="flex flex-col items-end gap-2 text-right">
                   <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm shadow-slate-200/70">
-                    {{ queue.pending_count }} lotes pendientes
+                    {{ queue.pending_count }} producciones /
+                    {{ queue.total_cartons|intcomma }} cartones
                   </span>
-                  <span class="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm shadow-slate-200/60">
-                    {{ queue.total_cartons|intcomma }} cartones en fila
-                  </span>
-                  <p class="text-xs text-slate-500">Fecha sugerida: {{ queue.default_expected_date_label }}</p>
                 </div>
               </header>
               <p class="mt-3 text-xs text-slate-500">
                 {{ queue.instructions }}
               </p>
               <form class="mt-4 space-y-4" data-transport-form>
-                <div class="space-y-3" data-transport-lot-list>
-                  {% for lot in queue.lots %}
+                <div class="space-y-3" data-transport-production-list>
+                  {% for production in queue.productions %}
                     <label
                       class="relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/85 p-4 pl-12 shadow-sm shadow-slate-100/40 transition hover:border-slate-300 data-[state=authorized]:border-emerald-200 data-[state=authorized]:bg-emerald-50 data-[state=authorized]:shadow-emerald-100/60"
-                      data-transport-lot-row
-                      data-lot-id="{{ lot.id }}"
+                      data-transport-production-row
+                      data-production-id="{{ production.id }}"
                     >
                       <input
                         type="checkbox"
                         class="absolute left-4 top-4 h-5 w-5 rounded border-slate-300 text-slate-600 focus:ring-slate-400"
-                        value="{{ lot.id }}"
-                        data-transport-lot-input
-                        data-cartons="{{ lot.cartons }}"
-                        data-lot-label="{{ lot.label }}"
-                        data-production-date="{{ lot.production_date_iso }}"
-                        data-production-date-label="{{ lot.production_date_label }}"
+                        value="{{ production.id }}"
+                        data-transport-production-input
+                        data-cartons="{{ production.cartons }}"
+                        data-production-label="{{ production.label }}"
+                        data-production-date="{{ production.production_date_iso }}"
+                        data-production-date-label="{{ production.production_date_label }}"
                       />
                       <div class="flex items-start justify-between gap-3">
                         <div>
-                          <h4 class="text-sm font-semibold text-slate-900">{{ lot.label }}</h4>
-                          <p class="text-xs text-slate-500">{{ lot.farm }}{% if lot.barn %} · {{ lot.barn }}{% endif %}</p>
+                          <h4 class="text-sm font-semibold text-slate-900">{{ production.label }}</h4>
+                          <p class="text-xs text-slate-500">{{ production.farm }}</p>
                         </div>
                         <div class="flex flex-col items-end gap-2">
-                          {% if lot.status %}
-                            <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                              {{ lot.status }}
-                            </span>
-                          {% endif %}
                           <span class="hidden items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
-                                data-transport-lot-status>
-                            Autorizado
+                                data-transport-production-status>
+                            Autorizada
                           </span>
                         </div>
                       </div>
                       <dl class="grid gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
                         <div>
                           <dt class="uppercase tracking-wide text-slate-500">Producción</dt>
-                          <dd class="mt-0.5 font-semibold text-slate-900">{{ lot.production_date_label }}</dd>
+                          <dd class="mt-0.5 font-semibold text-slate-900">{{ production.production_date_label }}</dd>
                         </div>
                         <div>
                           <dt class="uppercase tracking-wide text-slate-500">Cartones</dt>
-                          <dd class="mt-0.5 font-semibold text-slate-900">{{ lot.cartons|intcomma }}</dd>
+                          <dd class="mt-0.5 font-semibold text-slate-900">{{ production.cartons|intcomma }}</dd>
                         </div>
                         <div>
                           <dt class="uppercase tracking-wide text-slate-500">Salas</dt>
                           <dd class="mt-0.5 font-semibold text-slate-900">
-                            {% if lot.rooms %}
-                              {{ lot.rooms|join:", " }}
+                            {% if production.rooms %}
+                              {{ production.rooms|join:", " }}
                             {% else %}
                               —
                             {% endif %}
@@ -875,14 +864,14 @@
                     </label>
                   {% empty %}
                     <p class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
-                      No tienes lotes pendientes por transportar. ¡Buen trabajo!
+                      No tienes producciones pendientes por transportar. ¡Buen trabajo!
                     </p>
                   {% endfor %}
                 </div>
-                {% if queue.lots %}
+                {% if queue.productions %}
                   <div class="rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-inner shadow-slate-100/60">
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-transport-selection-summary>
-                      Selecciona los lotes que deseas autorizar para transporte.
+                      Selecciona las producciones que deseas autorizar para transporte.
                     </p>
                   </div>
                   <div class="grid gap-3 sm:grid-cols-2">
@@ -4645,8 +4634,8 @@
 
         const transportCard = document.querySelector('[data-transport-queue-card]');
         const transportForm = transportCard ? transportCard.querySelector('[data-transport-form]') : null;
-        const transportLotInputs = transportCard
-          ? Array.prototype.slice.call(transportCard.querySelectorAll('[data-transport-lot-input]'))
+        const transportProductionInputs = transportCard
+          ? Array.prototype.slice.call(transportCard.querySelectorAll('[data-transport-production-input]'))
           : [];
         const transportAuthorizeButton = transportCard
           ? transportCard.querySelector('[data-transport-authorize]')
@@ -5149,16 +5138,16 @@
           }
         }
 
-        function getSelectedTransportLots() {
-          return transportLotInputs.filter(function (input) {
+        function getSelectedTransportProductions() {
+          return transportProductionInputs.filter(function (input) {
             return !input.disabled && input.checked;
           });
         }
 
         function computeTransportTotals() {
-          const selected = getSelectedTransportLots();
+          const selected = getSelectedTransportProductions();
           let totalCartons = 0;
-          const lots = selected.map(function (input) {
+          const productions = selected.map(function (input) {
             const rawCartons = normalizeNumber(input.getAttribute('data-cartons'));
             const cartons = Number.isFinite(rawCartons) && rawCartons > 0 ? rawCartons : 0;
             if (cartons > 0) {
@@ -5166,13 +5155,13 @@
             }
             return {
               id: input.value,
-              label: input.getAttribute('data-lot-label') || input.value,
+              label: input.getAttribute('data-production-label') || input.value,
               cartons: cartons,
               productionDate: input.getAttribute('data-production-date') || null,
               productionDateLabel: input.getAttribute('data-production-date-label') || null,
             };
           });
-          return { inputs: selected, lots: lots, totalCartons: totalCartons };
+          return { inputs: selected, productions: productions, totalCartons: totalCartons };
         }
 
         function updateTransportSelectionSummary() {
@@ -5180,20 +5169,23 @@
             return;
           }
           const totals = computeTransportTotals();
-          if (totals.lots.length) {
-            const lotLabel = totals.lots.length === 1 ? '1 lote' : totals.lots.length + ' lotes';
+          if (totals.productions.length) {
+            const productionLabel =
+              totals.productions.length === 1
+                ? '1 producción'
+                : totals.productions.length + ' producciones';
             const cartonLabel = formatNumber(Math.max(totals.totalCartons, 0)) + ' cartones';
-            transportSelectionSummary.textContent = 'Seleccionados: ' + lotLabel + ' · ' + cartonLabel;
+            transportSelectionSummary.textContent = 'Seleccionados: ' + productionLabel + ' · ' + cartonLabel;
             transportSelectionSummary.classList.remove('text-rose-600');
           } else {
             transportSelectionSummary.textContent =
-              'Selecciona los lotes que deseas autorizar para transporte.';
+              'Selecciona las producciones que deseas autorizar para transporte.';
             transportSelectionSummary.classList.remove('text-rose-600');
           }
           if (transportAuthorizeButton) {
             const transporterReady = transporterField && transporterField.value;
             const hasDate = expectedDateField && expectedDateField.value;
-            transportAuthorizeButton.disabled = !(totals.lots.length && transporterReady && hasDate);
+            transportAuthorizeButton.disabled = !(totals.productions.length && transporterReady && hasDate);
           }
         }
 
@@ -7549,7 +7541,7 @@
             expectedDateField.value = transportDefaultDate;
           }
 
-          transportLotInputs.forEach(function (input) {
+          transportProductionInputs.forEach(function (input) {
             input.addEventListener('change', function () {
               hideTransportMessages();
               updateTransportSelectionSummary();
@@ -7574,8 +7566,8 @@
             event.preventDefault();
             hideTransportMessages();
             const totals = computeTransportTotals();
-            if (!totals.lots.length) {
-              showTransportFeedback('Selecciona al menos un lote para autorizar.');
+            if (!totals.productions.length) {
+              showTransportFeedback('Selecciona al menos una producción para autorizar.');
               return;
             }
             if (!transporterField || !transporterField.value) {
@@ -7591,34 +7583,36 @@
             const transporterLabel = transporterOption ? transporterOption.textContent.trim() : transporterField.value;
             const expectedDateValue = expectedDateField.value;
             const expectedDateLabel = formatDateLabel(expectedDateValue);
-            const lotsPayload = totals.lots.map(function (lot) {
+            const productionsPayload = totals.productions.map(function (production) {
               return {
-                id: lot.id,
-                label: lot.label,
-                cartons: lot.cartons,
-                production_date: lot.productionDate,
-                production_date_label: lot.productionDateLabel,
+                id: production.id,
+                label: production.label,
+                cartons: production.cartons,
+                production_date: production.productionDate,
+                production_date_label: production.productionDateLabel,
               };
             });
 
             totals.inputs.forEach(function (input) {
               input.checked = false;
               input.disabled = true;
-              const row = input.closest('[data-transport-lot-row]');
+              const row = input.closest('[data-transport-production-row]');
               if (row) {
                 row.dataset.state = 'authorized';
-                const statusBadge = row.querySelector('[data-transport-lot-status]');
+                const statusBadge = row.querySelector('[data-transport-production-status]');
                 if (statusBadge) {
                   statusBadge.classList.remove('hidden');
                 }
               }
             });
 
-            const lotNames = totals.lots.map(function (lot) {
-              return lot.label;
+            const productionNames = totals.productions.map(function (production) {
+              return production.label;
             });
             const successMessage =
-              (lotNames.length === 1 ? 'Lote ' + lotNames[0] : lotNames.length + ' lotes autorizados') +
+              (productionNames.length === 1
+                ? 'Producción ' + productionNames[0]
+                : productionNames.length + ' producciones autorizadas') +
               ' · Transporte: ' +
               transporterLabel +
               ' · Salida estimada: ' +
@@ -7642,7 +7636,7 @@
                     transporter_id: transporterField.value,
                     transporter_label: transporterLabel,
                     expected_date: expectedDateValue,
-                    lots: lotsPayload,
+                    productions: productionsPayload,
                   })
                 );
               } catch (error) {
@@ -7652,7 +7646,7 @@
               console.info('Transporte autorizado:', {
                 transporter: transporterField.value,
                 expected_date: expectedDateValue,
-                lots: lotsPayload,
+                productions: productionsPayload,
               });
             }
           });

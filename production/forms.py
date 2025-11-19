@@ -87,15 +87,29 @@ class FarmForm(BaseInfrastructureForm):
 class ChickenHouseForm(BaseInfrastructureForm):
     class Meta:
         model = ChickenHouse
-        fields = ["farm", "name"]
+        fields = ["farm", "name", "egg_destination_farm"]
         labels = {
             "farm": "Granja",
             "name": "Nombre del galpón",
+            "egg_destination_farm": "Granja destino del huevo",
         }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["farm"].queryset = Farm.objects.order_by("name")
+        self.fields["egg_destination_farm"].queryset = Farm.objects.order_by("name")
+        self.fields["egg_destination_farm"].required = False
+        if not self.initial.get("egg_destination_farm"):
+            default_destination = self.instance.egg_destination_farm or self.instance.farm
+            if default_destination:
+                self.initial["egg_destination_farm"] = default_destination
+
+    def clean_egg_destination_farm(self):
+        destination = self.cleaned_data.get("egg_destination_farm")
+        if destination:
+            return destination
+        farm = self.cleaned_data.get("farm") or self.instance.farm
+        return farm
 
 
 class RoomForm(BaseInfrastructureForm):

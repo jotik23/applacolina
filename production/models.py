@@ -41,6 +41,15 @@ class ChickenHouse(models.Model):
         verbose_name="Granja",
     )
     name = models.CharField("Nombre", max_length=150)
+    egg_destination_farm = models.ForeignKey(
+        Farm,
+        on_delete=models.PROTECT,
+        related_name="egg_destination_chicken_houses",
+        verbose_name="Granja destino del huevo",
+        blank=True,
+        null=True,
+        help_text="Selecciona la granja a la que se debe enviar la producción de este galpón.",
+    )
 
     class Meta:
         verbose_name = "Galpon"
@@ -50,6 +59,21 @@ class ChickenHouse(models.Model):
 
     def __str__(self) -> str:
         return f"{self.farm.name} - {self.name}"
+
+    def save(self, *args, **kwargs) -> None:
+        if self.egg_destination_farm_id is None and self.farm_id:
+            self.egg_destination_farm_id = self.farm_id
+            update_fields = kwargs.get("update_fields")
+            if update_fields:
+                fields = list(update_fields)
+                if "egg_destination_farm" not in fields:
+                    fields.append("egg_destination_farm")
+                kwargs["update_fields"] = fields
+        super().save(*args, **kwargs)
+
+    @property
+    def destination_farm(self) -> Farm:
+        return self.egg_destination_farm or self.farm
 
     @property
     def area_m2(self) -> Decimal:

@@ -22,6 +22,7 @@ from .models import (
 class ChickenHouseInline(admin.TabularInline):
     model = ChickenHouse
     extra = 1
+    fk_name = "farm"
 
 
 class RoomInline(admin.TabularInline):
@@ -119,9 +120,9 @@ class FarmAdmin(admin.ModelAdmin):
 @admin.register(ChickenHouse)
 class ChickenHouseAdmin(admin.ModelAdmin):
     inlines = (RoomInline,)
-    list_display = ("name", "farm", "calculated_area")
-    search_fields = ("name", "farm__name")
-    list_filter = ("farm",)
+    list_display = ("name", "farm", "egg_destination_farm", "calculated_area")
+    search_fields = ("name", "farm__name", "egg_destination_farm__name")
+    list_filter = ("farm", "egg_destination_farm")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
