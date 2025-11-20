@@ -34,6 +34,11 @@ class PendingBatch:
     status: str
     status_label: str
     difference: Decimal
+    transport_status: str
+    transport_status_label: str
+    transport_destination: str
+    transport_expected_date: Optional[date]
+    transport_confirmed_cartons: Optional[Decimal]
 
 
 @dataclass(frozen=True)
@@ -347,6 +352,7 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
         EggClassificationBatch.objects.select_related(
             "bird_batch",
             "bird_batch__farm",
+            "transport_destination_farm",
         )
         .prefetch_related(
             Prefetch(
@@ -378,6 +384,9 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
         if pending <= Decimal("1"):
             continue
         chicken_houses = _collect_chicken_house_names(batch)
+        destination_name = (
+            batch.transport_destination_farm.name if batch.transport_destination_farm else batch.farm.name
+        )
         batches.append(
             PendingBatch(
                 id=batch.pk,
@@ -391,6 +400,13 @@ def build_pending_batches(limit: int = 50) -> list[PendingBatch]:
                 status=batch.status,
                 status_label=batch.get_status_display(),
                 difference=Decimal(batch.received_difference),
+                transport_status=batch.transport_status,
+                transport_status_label=batch.get_transport_status_display(),
+                transport_destination=destination_name,
+                transport_expected_date=batch.transport_expected_date,
+                transport_confirmed_cartons=Decimal(batch.transport_confirmed_cartons)
+                if batch.transport_confirmed_cartons is not None
+                else None,
             )
         )
     return batches

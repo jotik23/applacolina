@@ -1624,6 +1624,34 @@ class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
             "received_cartons": self.batch.received_cartons,
             "pending_cartons": self.batch.pending_cartons,
         }
+        origin_farm = self.batch.bird_batch.farm
+        destination_farm = self.batch.transport_destination_farm or origin_farm
+        destination_farm_id = destination_farm.pk if destination_farm else None
+        has_external_route = (
+            origin_farm
+            and destination_farm_id is not None
+            and destination_farm_id != origin_farm.pk
+        )
+        transport_snapshot = None
+        if has_external_route:
+            transporter = self.batch.transport_transporter
+            transporter_label = None
+            if transporter:
+                transporter_label = (
+                    transporter.get_full_name()
+                    or transporter.cedula
+                    or str(transporter.pk)
+                )
+            transport_snapshot = {
+                "cartons": self.batch.transport_confirmed_cartons,
+                "transporter": transporter_label,
+                "transporter_contact": transporter.telefono if transporter else None,
+                "confirmed_at": self.batch.transport_confirmed_at,
+                "expected_date": self.batch.transport_expected_date,
+                "destination": destination_farm.name if destination_farm else None,
+                "origin": origin_farm.name if origin_farm else None,
+            }
+        batch_snapshot["transport"] = transport_snapshot
         context.update(
             {
                 "active_submenu": "egg_inventory",
@@ -1634,6 +1662,7 @@ class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
                 "entry_rows": entry_rows,
                 "session_rows": session_rows,
                 "batch_snapshot": batch_snapshot,
+                "transport_snapshot": transport_snapshot,
                 "pending_for_form": pending_value,
                 "can_submit_classification": can_submit,
                 "can_confirm_receipt": can_confirm_receipt,

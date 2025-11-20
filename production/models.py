@@ -7,7 +7,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q, Sum
 from django.utils import timezone
-
+from django.utils.translation import gettext_lazy as _
 
 class Farm(models.Model):
     name = models.CharField("Nombre", max_length=150)
@@ -441,6 +441,13 @@ class EggClassificationBatch(models.Model):
         CONFIRMED = "confirmed", "Recibido"
         CLASSIFIED = "classified", "Clasificado"
 
+    class TransportStatus(models.TextChoices):
+        PENDING = "pending", _("Pendiente de transporte")
+        AUTHORIZED = "authorized", _("Autorizado")
+        IN_TRANSIT = "in_transit", _("En transporte")
+        VERIFICATION = "verification", _("En verificación")
+        VERIFIED = "verified", _("Verificado")
+
     production_record = models.OneToOneField(
         ProductionRecord,
         on_delete=models.CASCADE,
@@ -492,6 +499,71 @@ class EggClassificationBatch(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    transport_status = models.CharField(
+        "Estado de transporte",
+        max_length=16,
+        choices=TransportStatus.choices,
+        default=TransportStatus.PENDING,
+    )
+    transport_destination_farm = models.ForeignKey(
+        Farm,
+        on_delete=models.PROTECT,
+        related_name="egg_transport_batches",
+        verbose_name="Granja destino",
+        null=True,
+        blank=True,
+    )
+    transport_transporter = models.ForeignKey(
+        "personal.UserProfile",
+        on_delete=models.SET_NULL,
+        related_name="egg_transport_assignments",
+        verbose_name="Transportador",
+        null=True,
+        blank=True,
+    )
+    transport_expected_date = models.DateField("Fecha estimada de transporte", null=True, blank=True)
+    transport_authorized_at = models.DateTimeField("Autorizado en", null=True, blank=True)
+    transport_authorized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_transport_authorizations",
+        verbose_name="Autorizado por",
+        null=True,
+        blank=True,
+    )
+    transport_progress_step = models.CharField("Paso de transporte", max_length=32, blank=True)
+    transport_verified_cartons = models.DecimalField(
+        "Cartones verificados",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    transport_verified_at = models.DateTimeField("Verificado en", null=True, blank=True)
+    transport_verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_transport_verifications",
+        verbose_name="Verificado por",
+        null=True,
+        blank=True,
+    )
+    transport_confirmed_cartons = models.DecimalField(
+        "Cartones confirmados por transportador",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    transport_confirmed_at = models.DateTimeField("Confirmado por transportador en", null=True, blank=True)
+    transport_confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="egg_transport_confirmations",
+        verbose_name="Confirmado por transportador",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "Lote de clasificación de huevo"

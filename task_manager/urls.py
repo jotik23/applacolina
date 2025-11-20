@@ -16,6 +16,10 @@ from .views import (
     mini_app_task_complete_view,
     mini_app_task_evidence_upload_view,
     mini_app_task_reset_view,
+    mini_app_transport_authorize_view,
+    mini_app_transport_confirmation_view,
+    mini_app_transport_progress_view,
+    mini_app_transport_verification_view,
     mini_app_weight_registry_view,
     telegram_mini_app_demo_view,
     telegram_mini_app_view,
@@ -94,6 +98,26 @@ urlpatterns = [
         "telegram/mini-app/weight-registry/",
         mini_app_weight_registry_view,
         name="mini-app-weight-registry",
+    ),
+    path(
+        "telegram/mini-app/transport/authorize/",
+        mini_app_transport_authorize_view,
+        name="mini-app-transport-authorize",
+    ),
+    path(
+        "telegram/mini-app/transport/progress/",
+        mini_app_transport_progress_view,
+        name="mini-app-transport-progress",
+    ),
+    path(
+        "telegram/mini-app/transport/verification/",
+        mini_app_transport_verification_view,
+        name="mini-app-transport-verification",
+    ),
+    path(
+        "telegram/mini-app/transport/confirmation/",
+        mini_app_transport_confirmation_view,
+        name="mini-app-transport-confirmation",
     ),
     path(
         "api/pwa/subscriptions/",

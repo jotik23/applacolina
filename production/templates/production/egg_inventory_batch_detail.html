@@ -35,15 +35,42 @@
           <span class="text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-500">Producción del día</span>
           <span class="text-sm text-emerald-900">{{ batch.production_date|date:"l d \\d\\e F" }}</span>
         </p>
-        <dl class="grid gap-4 text-sm text-slate-600 sm:grid-cols-4">
+        {% with has_transport=transport_snapshot %}
+          <dl class="grid gap-4 text-sm text-slate-600 {% if has_transport %}sm:grid-cols-5{% else %}sm:grid-cols-4{% endif %}">
           <div class="rounded-xl bg-slate-50 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Reportado</dt>
             <dd class="text-lg font-semibold text-slate-900">
               {{ batch_snapshot.reported_cartons|cartons }} cart
             </dd>
           </div>
+          {% if has_transport %}
+            <div class="rounded-xl bg-slate-50 px-3 py-2">
+              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Transportado a {{ transport_snapshot.destination }}
+              </dt>
+              <dd class="text-lg font-semibold text-slate-900">
+                {% if transport_snapshot.cartons %}
+                  {{ transport_snapshot.cartons|cartons }} cart
+                {% else %}
+                  —
+                {% endif %}
+              </dd>
+              <p class="text-xs text-slate-500">
+                {% if transport_snapshot.transporter %}
+                  Por {{ transport_snapshot.transporter }}
+                {% else %}
+                  Transportador por confirmar
+                {% endif %}
+                {% if transport_snapshot.confirmed_at %}
+                  · {{ transport_snapshot.confirmed_at|date:"d M H:i" }}
+                {% elif transport_snapshot.expected_date %}
+                  · ETA {{ transport_snapshot.expected_date|date:"d M" }}
+                {% endif %}
+              </p>
+            </div>
+          {% endif %}
           <div class="rounded-xl bg-slate-50 px-3 py-2">
-            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Recibido</dt>
+            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Confirmado en clasificación</dt>
             <dd class="text-lg font-semibold text-slate-900">
               {% if batch_snapshot.received_cartons is not None %}
                 {{ batch_snapshot.received_cartons|cartons }} cart
@@ -51,6 +78,16 @@
                 —
               {% endif %}
             </dd>
+            {% if batch.confirmed_by or batch.confirmed_at %}
+              <p class="text-xs text-slate-500">
+                {% if batch.confirmed_by %}
+                  Por {{ batch.confirmed_by.get_full_name|default:batch.confirmed_by }}
+                {% endif %}
+                {% if batch.confirmed_at %}
+                  {% if batch.confirmed_by %}·{% endif %} {{ batch.confirmed_at|date:"d M H:i" }}
+                {% endif %}
+              </p>
+            {% endif %}
           </div>
           <div class="rounded-xl bg-slate-50 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendiente</dt>
@@ -69,6 +106,7 @@
             </dd>
           </div>
         </dl>
+        {% endwith %}
         {% if batch.notes %}
           <p class="text-sm text-amber-700">Notas: {{ batch.notes }}</p>
         {% endif %}

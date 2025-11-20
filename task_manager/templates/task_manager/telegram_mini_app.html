@@ -811,14 +811,19 @@
               <p class="mt-3 text-xs text-slate-500">
                 {{ queue.instructions }}
               </p>
-              <form class="mt-4 space-y-4" data-transport-form>
+              <form
+                class="mt-4 space-y-4"
+                data-transport-form
+                {% if queue.submit_url %}data-transport-submit-url="{{ queue.submit_url }}"{% endif %}
+              >
                 <div class="space-y-3" data-transport-production-list>
                   {% for production in queue.productions %}
-                    <label
-                      class="relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/85 p-4 pl-12 shadow-sm shadow-slate-100/40 transition hover:border-slate-300 data-[state=authorized]:border-emerald-200 data-[state=authorized]:bg-emerald-50 data-[state=authorized]:shadow-emerald-100/60"
-                      data-transport-production-row
-                      data-production-id="{{ production.id }}"
-                    >
+                      <label
+                        class="relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/85 p-4 pl-12 shadow-sm shadow-slate-100/40 transition hover:border-slate-300 data-[state=authorized]:border-emerald-200 data-[state=authorized]:bg-emerald-50 data-[state=authorized]:shadow-emerald-100/60 data-[state=in_transit]:border-sky-200 data-[state=in_transit]:bg-sky-50 data-[state=in_transit]:shadow-sky-100/60"
+                        data-transport-production-row
+                        data-production-id="{{ production.id }}"
+                        {% if production.state %}data-state="{{ production.state }}"{% endif %}
+                      >
                       <input
                         type="checkbox"
                         class="absolute left-4 top-4 h-5 w-5 rounded border-slate-300 text-slate-600 focus:ring-slate-400"
@@ -833,11 +838,25 @@
                         <div>
                           <h4 class="text-sm font-semibold text-slate-900">{{ production.label }}</h4>
                           <p class="text-xs text-slate-500">{{ production.farm }}</p>
+                          <p class="text-xs text-slate-500">
+                            Destino: {{ production.destination|default:"—" }}
+                          </p>
+                          {% if production.transporter_label or production.expected_date_label %}
+                            <p class="text-[11px] text-slate-500">
+                              {% if production.transporter_label %}
+                                Transportador: {{ production.transporter_label }}
+                              {% endif %}
+                              {% if production.expected_date_label %}
+                                {% if production.transporter_label %} · {% endif %}
+                                Salida estimada: {{ production.expected_date_label }}
+                              {% endif %}
+                            </p>
+                          {% endif %}
                         </div>
                         <div class="flex flex-col items-end gap-2">
-                          <span class="hidden items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+                          <span class="{% if production.state %}inline-flex{% else %}hidden{% endif %} items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {% if production.state == 'in_transit' %}border-sky-200 bg-sky-50 text-sky-700{% else %}border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}"
                                 data-transport-production-status>
-                            Autorizada
+                            {{ production.state_label|default:"Autorizada" }}
                           </span>
                         </div>
                       </div>
@@ -869,11 +888,6 @@
                   {% endfor %}
                 </div>
                 {% if queue.productions %}
-                  <div class="rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-inner shadow-slate-100/60">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-transport-selection-summary>
-                      Selecciona las producciones que deseas autorizar para transporte.
-                    </p>
-                  </div>
                   <div class="grid gap-3 sm:grid-cols-2">
                     <label class="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/90 p-4 text-xs text-slate-600">
                       <span class="text-xs font-semibold text-slate-700">Transportador</span>
@@ -883,7 +897,10 @@
                       >
                         <option value="">Selecciona el transportador</option>
                         {% for transporter in queue.transporters %}
-                          <option value="{{ transporter.id }}"{% if queue.default_transporter_id and transporter.id == queue.default_transporter_id %} selected{% endif %}>
+                          <option
+                            value="{{ transporter.id }}"
+                            {% if queue.default_transporter_id and transporter.id == queue.default_transporter_id %}selected{% endif %}
+                          >
                             {{ transporter.label }}
                           </option>
                         {% endfor %}
@@ -897,7 +914,6 @@
                         value="{{ queue.default_expected_date_iso }}"
                         data-transport-date
                       />
-                      <span class="text-[10px] text-slate-500">Sugerencia: {{ queue.default_expected_date_label }}</span>
                     </label>
                   </div>
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -933,6 +949,11 @@
                   class="rounded-3xl border bg-white p-5 shadow-lg shadow-slate-200/60{% if stage.tone == 'brand' %} border-amber-200 shadow-amber-200/60{% elif stage.tone == 'emerald' %} border-emerald-200 shadow-emerald-200/60{% elif stage.tone == 'sky' %} border-sky-200 shadow-sky-200/60{% elif stage.tone == 'slate' %} border-slate-200 shadow-slate-200/50{% endif %}"
                   data-egg-stage-card
                   data-egg-stage="{{ stage.id }}"
+                  {% if stage.progress_url %}data-egg-stage-progress-url="{{ stage.progress_url }}"{% endif %}
+                  {% if stage.progress %}
+                    data-egg-stage-progress-index="{{ stage.progress.step_index }}"
+                    data-egg-stage-progress-id="{{ stage.progress.step_id }}"
+                  {% endif %}
                 >
                   <header class="flex flex-wrap items-start justify-between gap-3">
                     <div class="flex items-start gap-3">
@@ -959,46 +980,72 @@
                     </p>
                   {% endif %}
 
-                  {% if stage.id == 'verification' and stage.lot %}
-                    <div
-                      class="mt-4 grid gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-3 text-xs text-slate-600 sm:grid-cols-2"
-                    >
-                      <div class="space-y-1">
-                        <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Granja</p>
-                        <p class="text-sm font-semibold text-slate-900">{{ stage.lot.farm }}</p>
-                        {% if stage.lot.rooms %}
-                          <p class="text-[11px] text-slate-600">
-                            Salas: {{ stage.lot.rooms|join:", " }}
-                          </p>
-                        {% endif %}
-                      </div>
-                      <div class="space-y-1 rounded-2xl border border-white/60 bg-white/80 p-3">
-                        <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Galpón</p>
-                        <p class="text-sm font-semibold text-slate-900">{{ stage.lot.barn }}</p>
-                        <p class="text-[11px] text-slate-500">
-                          {{ stage.lot.cartons|intcomma }} cartones · {{ stage.lot.production_date_label }}
+                  {% if stage.id == 'verification' %}
+                    {% if stage.entries %}
+                      <form
+                        class="mt-4 space-y-3"
+                        data-egg-verification-form
+                        {% if stage.submit_url %}data-egg-verification-submit-url="{{ stage.submit_url }}"{% endif %}
+                      >
+                        <p class="text-xs text-slate-600">
+                          Confirma los cartones que sube cada transportador antes de cerrar el manifiesto.
                         </p>
-                      </div>
-                    </div>
+                        <ul class="space-y-2">
+                          {% for entry in stage.entries %}
+                            <li class="rounded-2xl border border-sky-100 bg-white/80 p-3 shadow-sm shadow-sky-100/40">
+                              <div class="flex items-start justify-between gap-2">
+                                <div>
+                                  <p class="text-sm font-semibold text-slate-900">{{ entry.label }}</p>
+                                  <p class="text-[11px] text-slate-500">
+                                    {{ entry.production_date_label }} · {{ entry.destination|default:"Centro" }}
+                                  </p>
+                                </div>
+                                <span class="text-xs font-semibold text-slate-500">{{ entry.cartons|intcomma }} cart</span>
+                              </div>
+                              <label class="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                Cartones a transportar
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  inputmode="numeric"
+                                  value="{{ entry.verified_cartons|default:entry.cartons }}"
+                                  class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200/60"
+                                  data-egg-stage-input
+                                  data-egg-verification-input
+                                  data-entry-id="{{ entry.id }}"
+                                />
+                              </label>
+                            </li>
+                          {% endfor %}
+                        </ul>
+                        <p class="hidden text-xs text-rose-600" data-egg-verification-feedback></p>
+                        <div class="flex justify-end">
+                          <button
+                            type="submit"
+                            class="inline-flex items-center gap-2 rounded-full bg-sky-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-sky-200/60 transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+                            data-egg-verification-submit
+                          >
+                            <span aria-hidden="true">📦</span>
+                            Registrar verificación
+                          </button>
+                        </div>
+                      </form>
+                    {% else %}
+                      <p class="mt-4 text-xs text-slate-500">No hay producciones esperando verificación.</p>
+                    {% endif %}
                   {% endif %}
-
-                  {% if stage.id == 'transport' and stage.route %}
-                    <dl class="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
-                      <div class="rounded-2xl border border-amber-100 bg-white/80 p-3 shadow-inner shadow-amber-100/40">
-                        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Origen</dt>
-                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ stage.route.origin }}</dd>
-                      </div>
-                      <div class="rounded-2xl border border-amber-100 bg-white/80 p-3 shadow-inner shadow-amber-100/40">
-                        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Destino</dt>
-                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ stage.route.destination }}</dd>
-                      </div>
-                    </dl>
-                  {% endif %}
-
+                    
                   {% if stage.id == 'transport' and stage.manifest %}
-                    <div class="mt-4 space-y-2">
+                    <form
+                      class="mt-4 space-y-2"
+                      data-transport-manifest-form
+                      {% if stage.manifest.has_confirmable and stage.confirmation_url %}
+                        data-transport-confirm-form
+                        data-transport-confirm-url="{{ stage.confirmation_url }}"
+                      {% endif %}
+                    >
                       <div class="flex flex-wrap items-center justify-between gap-2">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Manifiesto de carga</p>
                         <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                           {{ stage.manifest.entries|length }} lotes · {{ stage.manifest.total_cartons|intcomma }} cartones
                         </span>
@@ -1011,11 +1058,6 @@
                                 <p class="text-sm font-semibold text-slate-900">{{ entry.label }}</p>
                                 <p class="text-[11px] uppercase tracking-wide text-slate-500">{{ entry.production_date_label }}</p>
                               </div>
-                              {% if entry.tag %}
-                                <span class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
-                                  {{ entry.tag }}
-                                </span>
-                              {% endif %}
                             </div>
                             <dl class="mt-3 grid gap-2 text-[11px] uppercase tracking-wide text-slate-500">
                               <div>
@@ -1024,11 +1066,79 @@
                                   {{ entry.cartons|intcomma }}
                                 </dd>
                               </div>
+                              <div>
+                                <dt>Destino</dt>
+                                <dd class="mt-0.5 text-sm font-semibold normal-case text-slate-800">
+                                  {{ entry.destination|default:"—" }}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>Salas</dt>
+                                <dd class="mt-0.5 text-sm font-semibold normal-case text-slate-800">
+                                  {% if entry.rooms %}
+                                    {{ entry.rooms|join:", " }}
+                                  {% else %}
+                                    —
+                                  {% endif %}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>Transportador</dt>
+                                <dd class="mt-0.5 text-sm font-semibold normal-case text-slate-800">
+                                  {{ entry.transporter|default:"Pendiente" }}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>Salida estimada</dt>
+                                <dd class="mt-0.5 text-sm font-semibold normal-case text-slate-800">
+                                  {{ entry.expected_date_label|default:"—" }}
+                                </dd>
+                              </div>
+                              {% if entry.confirmed_cartons %}
+                                <div>
+                                  <dt>Confirmado</dt>
+                                  <dd class="mt-0.5 text-sm font-semibold text-emerald-700">
+                                    {{ entry.confirmed_cartons|intcomma }} cartones
+                                  </dd>
+                                </div>
+                              {% endif %}
                             </dl>
+                            {% if entry.can_confirm %}
+                              <div class="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                                <label class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                  Cartones cargados por el transportador
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    inputmode="numeric"
+                                    value="{{ entry.confirmed_cartons|default:entry.cartons }}"
+                                    class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/40"
+                                    data-transport-confirm-input
+                                    data-entry-id="{{ entry.id }}"
+                                  />
+                                </label>
+                                <p class="mt-1 text-[11px] text-slate-500">Asignado: {{ entry.cartons|intcomma }} cartones.</p>
+                              </div>
+                            {% endif %}
                           </li>
                         {% endfor %}
                       </ul>
-                    </div>
+                      {% if stage.manifest.has_confirmable %}
+                        <div class="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p class="hidden text-xs text-rose-600" data-transport-confirm-feedback></p>
+                          <button
+                            type="submit"
+                            class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-200/60 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                            data-transport-confirm-submit
+                            disabled
+                          >
+                            <span aria-hidden="true">📦</span>
+                            Registrar cargue
+                          </button>
+                        </div>
+                      {% endif %}
+                    </form>
                   {% endif %}
 
                   {% if stage.id == 'inspection' and stage.overview %}
@@ -1567,7 +1677,6 @@
                           {% endfor %}
                         </div>
                       {% endif %}
-                      <p class="text-[11px] text-slate-500" data-egg-stage-progress-help>Avanza en orden: verificado → cargado → en destino → completado.</p>
                     </div>
                   {% else %}
                     {% if stage.id == 'verification' %}
@@ -4637,6 +4746,9 @@
         const transportProductionInputs = transportCard
           ? Array.prototype.slice.call(transportCard.querySelectorAll('[data-transport-production-input]'))
           : [];
+        const transportSubmitUrl = transportForm
+          ? transportForm.getAttribute('data-transport-submit-url') || ''
+          : '';
         const transportAuthorizeButton = transportCard
           ? transportCard.querySelector('[data-transport-authorize]')
           : null;
@@ -4650,6 +4762,19 @@
         const expectedDateField = transportCard ? transportCard.querySelector('[data-transport-date]') : null;
         const transportDefaultDate = transportCard
           ? transportCard.getAttribute('data-default-expected-date') || ''
+          : '';
+        const transportConfirmForm = document.querySelector('[data-transport-confirm-form]');
+        const transportConfirmInputs = transportConfirmForm
+          ? Array.prototype.slice.call(transportConfirmForm.querySelectorAll('[data-transport-confirm-input]'))
+          : [];
+        const transportConfirmButton = transportConfirmForm
+          ? transportConfirmForm.querySelector('[data-transport-confirm-submit]')
+          : null;
+        const transportConfirmFeedback = transportConfirmForm
+          ? transportConfirmForm.querySelector('[data-transport-confirm-feedback]')
+          : null;
+        const transportConfirmUrl = transportConfirmForm
+          ? transportConfirmForm.getAttribute('data-transport-confirm-url') || ''
           : '';
 
         const eggStageCards = Array.prototype.slice.call(document.querySelectorAll('[data-egg-stage-card]'));
@@ -4778,6 +4903,17 @@
         const eggStageState = {};
         let highlightedStageId = null;
         let stageHighlightResetTimer = null;
+
+        const verificationForm = document.querySelector('[data-egg-verification-form]');
+        const verificationInputs = verificationForm
+          ? Array.prototype.slice.call(verificationForm.querySelectorAll('[data-egg-verification-input]'))
+          : [];
+        const verificationSubmitUrl = verificationForm
+          ? verificationForm.getAttribute('data-egg-verification-submit-url') || ''
+          : '';
+        const verificationFeedback = verificationForm
+          ? verificationForm.querySelector('[data-egg-verification-feedback]')
+          : null;
 
         const appTimeZone = document.body.getAttribute('data-app-timezone') || 'America/Bogota';
         const hasIntl = typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function';
@@ -5177,10 +5313,6 @@
             const cartonLabel = formatNumber(Math.max(totals.totalCartons, 0)) + ' cartones';
             transportSelectionSummary.textContent = 'Seleccionados: ' + productionLabel + ' · ' + cartonLabel;
             transportSelectionSummary.classList.remove('text-rose-600');
-          } else {
-            transportSelectionSummary.textContent =
-              'Selecciona las producciones que deseas autorizar para transporte.';
-            transportSelectionSummary.classList.remove('text-rose-600');
           }
           if (transportAuthorizeButton) {
             const transporterReady = transporterField && transporterField.value;
@@ -5293,6 +5425,7 @@
         function setTransportProgress(stageId, stepIndex, stepId) {
           const state = ensureStageState(stageId);
           state.data = state.data || {};
+          const card = getStageCard(stageId);
           const definition = getStageDefinition(stageId);
           const steps = definition && Array.isArray(definition.progress_steps) ? definition.progress_steps : [];
           if (!steps.length) {
@@ -5317,6 +5450,20 @@
 
           updateTransportButtons(stageId);
           updateTransportStatusLabel(stageId);
+
+          const progressUrl = card ? card.getAttribute('data-egg-stage-progress-url') || '' : '';
+          if (progressUrl && state.data.progress && state.data.progress.stepId && csrfToken) {
+            fetch(progressUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+              },
+              body: JSON.stringify({ step: state.data.progress.stepId }),
+            }).catch(function (error) {
+              console.info('No se pudo actualizar el estado del transporte:', error);
+            });
+          }
 
           if (telegram && typeof telegram.sendData === 'function') {
             try {
@@ -7578,6 +7725,10 @@
               showTransportFeedback('Define la fecha estimada de transporte.');
               return;
             }
+            if (!transportSubmitUrl) {
+              showTransportFeedback('No podemos autorizar el transporte en este momento.');
+              return;
+            }
 
             const transporterOption = transporterField.options[transporterField.selectedIndex];
             const transporterLabel = transporterOption ? transporterOption.textContent.trim() : transporterField.value;
@@ -7593,65 +7744,223 @@
               };
             });
 
-            totals.inputs.forEach(function (input) {
-              input.checked = false;
-              input.disabled = true;
-              const row = input.closest('[data-transport-production-row]');
-              if (row) {
-                row.dataset.state = 'authorized';
-                const statusBadge = row.querySelector('[data-transport-production-status]');
-                if (statusBadge) {
-                  statusBadge.classList.remove('hidden');
-                }
-              }
-            });
-
-            const productionNames = totals.productions.map(function (production) {
-              return production.label;
-            });
-            const successMessage =
-              (productionNames.length === 1
-                ? 'Producción ' + productionNames[0]
-                : productionNames.length + ' producciones autorizadas') +
-              ' · Transporte: ' +
-              transporterLabel +
-              ' · Salida estimada: ' +
-              expectedDateLabel +
-              '.';
-
-            showTransportSuccess(successMessage);
-            updateTransportSelectionSummary();
             if (transportAuthorizeButton) {
-              transportAuthorizeButton.blur();
+              transportAuthorizeButton.disabled = true;
             }
 
-            if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
-              telegram.HapticFeedback.notificationOccurred('success');
-            }
-            if (telegram && typeof telegram.sendData === 'function') {
-              try {
-                telegram.sendData(
-                  JSON.stringify({
-                    action: 'authorize-transport',
-                    transporter_id: transporterField.value,
-                    transporter_label: transporterLabel,
+            const requestPayload = {
+              production_ids: totals.productions.map(function (production) {
+                return production.id;
+              }),
+              transporter_id: transporterField.value,
+              expected_date: expectedDateValue,
+            };
+
+            fetch(transportSubmitUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken || '',
+              },
+              body: JSON.stringify(requestPayload),
+            })
+              .then(function (response) {
+                return response.json().then(function (data) {
+                  if (!response.ok || (data && data.error)) {
+                    const message = data && data.error ? data.error : 'No se pudo autorizar el transporte.';
+                    throw new Error(message);
+                  }
+                  return data;
+                });
+              })
+              .then(function () {
+                totals.inputs.forEach(function (input) {
+                  input.checked = false;
+                  input.disabled = false;
+                  input.removeAttribute('disabled');
+                  const row = input.closest('[data-transport-production-row]');
+                  if (row) {
+                    row.dataset.state = 'authorized';
+                    const statusBadge = row.querySelector('[data-transport-production-status]');
+                    if (statusBadge) {
+                      statusBadge.classList.remove('hidden');
+                      statusBadge.textContent = 'Autorizada';
+                    }
+                  }
+                });
+
+                const productionNames = totals.productions.map(function (production) {
+                  return production.label;
+                });
+                const successMessage =
+                  (productionNames.length === 1
+                    ? 'Producción ' + productionNames[0]
+                    : productionNames.length + ' producciones autorizadas') +
+                  ' · Transporte: ' +
+                  transporterLabel +
+                  ' · Salida estimada: ' +
+                  expectedDateLabel +
+                  '.';
+
+                showTransportSuccess(successMessage);
+                updateTransportSelectionSummary();
+                if (transportAuthorizeButton) {
+                  transportAuthorizeButton.blur();
+                }
+
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('success');
+                }
+                if (telegram && typeof telegram.sendData === 'function') {
+                  try {
+                    telegram.sendData(
+                      JSON.stringify({
+                        action: 'authorize-transport',
+                        transporter_id: transporterField.value,
+                        transporter_label: transporterLabel,
+                        expected_date: expectedDateValue,
+                        productions: productionsPayload,
+                      })
+                    );
+                  } catch (error) {
+                    console.info('No se pudo enviar la autorización de transporte a Telegram:', error);
+                  }
+                } else {
+                  console.info('Transporte autorizado:', {
+                    transporter: transporterField.value,
                     expected_date: expectedDateValue,
                     productions: productionsPayload,
-                  })
-                );
-              } catch (error) {
-                console.info('No se pudo enviar la autorización de transporte a Telegram:', error);
-              }
-            } else {
-              console.info('Transporte autorizado:', {
-                transporter: transporterField.value,
-                expected_date: expectedDateValue,
-                productions: productionsPayload,
+                  });
+                }
+              })
+              .catch(function (error) {
+                showTransportFeedback(error.message || 'Ocurrió un error al autorizar el transporte.');
+              })
+              .finally(function () {
+                if (transportAuthorizeButton) {
+                  transportAuthorizeButton.disabled = false;
+                }
               });
-            }
           });
 
           updateTransportSelectionSummary();
+        }
+
+        if (transportConfirmForm && transportConfirmInputs.length) {
+          const hideTransportConfirmFeedback = function () {
+            if (!transportConfirmFeedback) {
+              return;
+            }
+            transportConfirmFeedback.classList.add('hidden');
+            transportConfirmFeedback.classList.remove('text-rose-600', 'text-emerald-600');
+            transportConfirmFeedback.textContent = '';
+          };
+
+          const showTransportConfirmFeedback = function (message, tone) {
+            if (!transportConfirmFeedback) {
+              return;
+            }
+            transportConfirmFeedback.textContent = message || '';
+            transportConfirmFeedback.classList.remove('hidden');
+            if (tone === 'success') {
+              transportConfirmFeedback.classList.add('text-emerald-600');
+              transportConfirmFeedback.classList.remove('text-rose-600');
+            } else {
+              transportConfirmFeedback.classList.add('text-rose-600');
+              transportConfirmFeedback.classList.remove('text-emerald-600');
+            }
+          };
+
+          const updateTransportConfirmButton = function () {
+            if (!transportConfirmButton) {
+              return;
+            }
+            const ready = transportConfirmInputs.every(function (input) {
+              return input && input.value !== '';
+            });
+            transportConfirmButton.disabled = !ready;
+          };
+
+          transportConfirmInputs.forEach(function (input) {
+            input.addEventListener('input', function () {
+              hideTransportConfirmFeedback();
+              updateTransportConfirmButton();
+            });
+          });
+          updateTransportConfirmButton();
+
+          transportConfirmForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            hideTransportConfirmFeedback();
+            if (!transportConfirmUrl) {
+              showTransportConfirmFeedback('No podemos registrar la confirmación en este momento.', 'error');
+              return;
+            }
+            const entries = [];
+            let hasError = false;
+            transportConfirmInputs.forEach(function (input) {
+              const entryId = input.getAttribute('data-entry-id');
+              if (!entryId) {
+                return;
+              }
+              const value = input.value;
+              if (value === '') {
+                hasError = true;
+                return;
+              }
+              const cartons = Number(value);
+              if (Number.isNaN(cartons) || cartons < 0) {
+                hasError = true;
+                return;
+              }
+              entries.push({ id: Number(entryId), cartons: cartons });
+            });
+            if (hasError) {
+              showTransportConfirmFeedback('Revisa que los cartones sean números válidos.', 'error');
+              return;
+            }
+            if (!entries.length) {
+              showTransportConfirmFeedback('No hay lotes seleccionados para confirmar.', 'error');
+              return;
+            }
+
+            if (transportConfirmButton) {
+              transportConfirmButton.disabled = true;
+            }
+
+            fetch(transportConfirmUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken || '',
+              },
+              body: JSON.stringify({ entries: entries }),
+            })
+              .then(function (response) {
+                return response.json().then(function (data) {
+                  if (!response.ok || (data && data.error)) {
+                    const message = data && data.error ? data.error : 'No se pudo registrar el cargue.';
+                    throw new Error(message);
+                  }
+                  return data;
+                });
+              })
+              .then(function () {
+                showTransportConfirmFeedback('Cargue registrado correctamente.', 'success');
+                if (transportConfirmButton) {
+                  transportConfirmButton.blur();
+                }
+                if (telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred) {
+                  telegram.HapticFeedback.notificationOccurred('success');
+                }
+              })
+              .catch(function (error) {
+                showTransportConfirmFeedback(error.message || 'No se pudo registrar el cargue.', 'error');
+              })
+              .finally(function () {
+                updateTransportConfirmButton();
+              });
+          });
         }
 
         if (pendingClassificationStageButtons.length) {
@@ -7675,7 +7984,24 @@
             if (!stageId) {
               return;
             }
-            ensureStageState(stageId);
+            const defaultProgressIndexAttr = card.getAttribute('data-egg-stage-progress-index');
+            const defaultProgressIdAttr = card.getAttribute('data-egg-stage-progress-id');
+            const state = ensureStageState(stageId);
+            if (
+              stageId === 'transport' &&
+              state.data &&
+              state.data.progress &&
+              typeof state.data.progress.stepIndex === 'number' &&
+              state.data.progress.stepIndex < 0
+            ) {
+              const parsedIndex = Number(defaultProgressIndexAttr);
+              if (!Number.isNaN(parsedIndex) && parsedIndex >= 0) {
+                state.data.progress.stepIndex = parsedIndex;
+              }
+              if (defaultProgressIdAttr) {
+                state.data.progress.stepId = defaultProgressIdAttr;
+              }
+            }
             const completeButton = card.querySelector('[data-egg-stage-complete]');
             if (completeButton && !completeButton.dataset.defaultLabel) {
               completeButton.dataset.defaultLabel = completeButton.textContent.trim();
@@ -7848,6 +8174,106 @@
                 console.info('Etapa completada:', stageId, payload);
               }
             });
+          });
+        }
+
+        if (verificationForm) {
+          const toggleVerificationFeedback = function (message, tone) {
+            if (!verificationFeedback) {
+              return;
+            }
+            verificationFeedback.textContent = message || '';
+            if (message) {
+              verificationFeedback.classList.remove('hidden');
+              if (tone === 'success') {
+                verificationFeedback.classList.add('text-emerald-600');
+                verificationFeedback.classList.remove('text-rose-600');
+              } else {
+                verificationFeedback.classList.add('text-rose-600');
+                verificationFeedback.classList.remove('text-emerald-600');
+              }
+            } else {
+              verificationFeedback.classList.add('hidden');
+              verificationFeedback.classList.remove('text-emerald-600', 'text-rose-600');
+            }
+          };
+
+          verificationInputs.forEach(function (input) {
+            input.addEventListener('input', function () {
+              toggleVerificationFeedback('', null);
+            });
+          });
+
+          verificationForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            toggleVerificationFeedback('', null);
+            if (!verificationSubmitUrl) {
+              toggleVerificationFeedback('No podemos registrar la verificación en este momento.', 'error');
+              return;
+            }
+
+            const entries = [];
+            let hasError = false;
+            verificationInputs.forEach(function (input) {
+              const entryId = input.getAttribute('data-entry-id');
+              if (!entryId) {
+                return;
+              }
+              const value = input.value;
+              const cartons = Number(value);
+              if (Number.isNaN(cartons) || cartons < 0) {
+                hasError = true;
+                return;
+              }
+              entries.push({ id: Number(entryId), cartons: cartons });
+            });
+
+            if (hasError) {
+              toggleVerificationFeedback('Verifica que los cartones sean números válidos.', 'error');
+              return;
+            }
+
+            if (!entries.length) {
+              toggleVerificationFeedback('No hay producciones para verificar.', 'error');
+              return;
+            }
+
+            const submitButton = verificationForm.querySelector('[data-egg-verification-submit]');
+            if (submitButton) {
+              submitButton.disabled = true;
+            }
+
+            fetch(verificationSubmitUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken || '',
+              },
+              body: JSON.stringify({ entries: entries }),
+            })
+              .then(function (response) {
+                return response.json().then(function (data) {
+                  if (!response.ok || (data && data.error)) {
+                    const message = data && data.error ? data.error : 'No se pudo registrar la verificación.';
+                    throw new Error(message);
+                  }
+                  return data;
+                });
+              })
+              .then(function () {
+                toggleVerificationFeedback('Verificación registrada.', 'success');
+                verificationInputs.forEach(function (input) {
+                  input.disabled = true;
+                });
+              })
+              .catch(function (error) {
+                toggleVerificationFeedback(error.message || 'No se pudo registrar la verificación.', 'error');
+              })
+              .finally(function () {
+                if (submitButton) {
+                  submitButton.disabled = false;
+                }
+              });
           });
         }
         const taskCards = Array.prototype.slice.call(document.querySelectorAll('[data-task-card]'));

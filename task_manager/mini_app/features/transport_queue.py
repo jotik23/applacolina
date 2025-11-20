@@ -13,6 +13,7 @@ from django.utils.translation import gettext as _
 
 from personal.models import UserProfile
 from production.models import EggClassificationBatch, ProductionRecord, ProductionRoomRecord
+from production.services.internal_transport import collect_chicken_house_names, collect_room_names
 
 TRANSPORT_WINDOW_DAYS = 14
 _ROOM_DESTINATION_FILTER = Q(room__chicken_house__egg_destination_farm__isnull=False) & ~Q(
@@ -35,30 +36,20 @@ def _build_transporters() -> list[dict[str, str]]:
         contact = (collaborator.telefono or "").strip()
         options.append({"id": str(collaborator.pk), "label": label, "contact": contact})
     return options
-
-
-def _collect_chicken_house_names(room_records: Iterable[ProductionRoomRecord]) -> list[str]:
-    names: dict[str, None] = OrderedDict()
-    for entry in room_records:
-        house = entry.room.chicken_house
-        if house.name not in names:
-            names[house.name] = None
-    return list(names.keys())
-
-
-def _collect_room_names(room_records: Iterable[ProductionRoomRecord]) -> list[str]:
-    names: dict[str, None] = OrderedDict()
-    for entry in room_records:
-        if entry.room.name not in names:
-            names[entry.room.name] = None
-    return list(names.keys())
-
-
 def _load_classification_map(record_ids: list[int]) -> dict[int, dict[str, Decimal]]:
     queryset = (
         EggClassificationBatch.objects.filter(production_record_id__in=record_ids)
         .annotate(classified_cartons=Coalesce(Sum("classification_entries__cartons"), Decimal("0")))
-        .values("production_record_id", "reported_cartons", "received_cartons", "classified_cartons")
+        .values(
+            "production_record_id",
+            "reported_cartons",
+            "received_cartons",
+            "classified_cartons",
+            "transport_status",
+            "transport_destination_farm__name",
+            "transport_transporter_id",
+            "transport_expected_date",
+        )
     )
     data: dict[int, dict[str, Decimal]] = {}
     for row in queryset:
@@ -67,6 +58,10 @@ def _load_classification_map(record_ids: list[int]) -> dict[int, dict[str, Decim
             "confirmed_cartons": source,
             "reported_cartons": Decimal(row["reported_cartons"]),
             "classified_cartons": Decimal(row["classified_cartons"]),
+            "transport_status": row["transport_status"],
+            "transport_destination": row["transport_destination_farm__name"],
+            "transport_transporter_id": row["transport_transporter_id"],
+            "transport_expected_date": row["transport_expected_date"],
         }
     return data
 
@@ -99,6 +94,13 @@ def build_transport_queue_payload() -> dict[str, object]:
     productions: list[dict[str, object]] = []
     total_cartons = Decimal("0")
     transporters = _build_transporters()
+    transporter_lookup: dict[object, str] = {}
+    for transporter in transporters:
+        transporter_lookup[transporter["id"]] = transporter["label"]
+        try:
+            transporter_lookup[int(transporter["id"])] = transporter["label"]
+        except (TypeError, ValueError):
+            continue
     for record in records:
         room_records = getattr(record, "transfer_room_records", None) or []
         if not room_records:
@@ -106,16 +108,22 @@ def build_transport_queue_payload() -> dict[str, object]:
         batch = classification_map.get(record.pk)
         if not batch:
             continue
+        transport_status = batch.get("transport_status") if isinstance(batch, dict) else None
+        if transport_status in (
+            EggClassificationBatch.TransportStatus.VERIFIED,
+            EggClassificationBatch.TransportStatus.VERIFICATION,
+        ):
+            continue
         confirmed_cartons = batch["confirmed_cartons"]
         classified_cartons = batch["classified_cartons"]
         if confirmed_cartons <= Decimal("0"):
             continue
         if classified_cartons >= confirmed_cartons:
             continue
-        chicken_houses = _collect_chicken_house_names(room_records)
+        chicken_houses = collect_chicken_house_names(room_records)
         if not chicken_houses:
             continue
-        room_names = _collect_room_names(room_records)
+        room_names = collect_room_names(room_records)
         farm_names = OrderedDict()
         destination_names = OrderedDict()
         for entry in room_records:
@@ -125,6 +133,24 @@ def build_transport_queue_payload() -> dict[str, object]:
             if destination:
                 destination_names[destination.name] = None
         farms_label = ", ".join(farm_names.keys())
+        destination_label = batch.get("transport_destination") or ", ".join(destination_names.keys())
+        transporter_id = batch.get("transport_transporter_id")
+        transporter_label = None
+        if transporter_id is not None:
+            transporter_label = transporter_lookup.get(str(transporter_id))
+            if not transporter_label:
+                transporter_label = str(transporter_id)
+        expected_date = batch.get("transport_expected_date")
+        expected_date_iso = expected_date.isoformat() if expected_date else None
+        expected_date_label = date_format(expected_date, "DATE_FORMAT") if expected_date else None
+        state = None
+        state_label = None
+        if transport_status == EggClassificationBatch.TransportStatus.AUTHORIZED:
+            state = "authorized"
+            state_label = _("Autorizada")
+        elif transport_status == EggClassificationBatch.TransportStatus.IN_TRANSIT:
+            state = "in_transit"
+            state_label = _("En tránsito")
         label = _("Lote %(houses)s, día %(date)s") % {
             "houses": ", ".join(chicken_houses),
             "date": record.date.strftime("%d/%m"),
@@ -133,11 +159,17 @@ def build_transport_queue_payload() -> dict[str, object]:
             "id": record.pk,
             "label": label,
             "farm": farms_label,
-            "destination": ", ".join(destination_names.keys()),
+            "destination": destination_label,
             "cartons": confirmed_cartons,
             "rooms": room_names,
             "production_date_iso": record.date.isoformat(),
             "production_date_label": date_format(record.date, "DATE_FORMAT"),
+            "transporter_label": transporter_label,
+            "transporter_id": transporter_id,
+            "expected_date_iso": expected_date_iso,
+            "expected_date_label": expected_date_label,
+            "state": state,
+            "state_label": state_label,
         }
         total_cartons += confirmed_cartons
         productions.append(production_payload)

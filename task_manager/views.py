@@ -57,6 +57,12 @@ from personal.models import (
     UserProfile,
 )
 from production.models import ChickenHouse, Farm, Room
+from production.services.internal_transport import (
+    authorize_internal_transport,
+    record_transporter_confirmation,
+    record_transport_verification,
+    update_transport_progress,
+)
 from task_manager.mini_app.features import (
     build_shift_confirmation_card,
     build_shift_confirmation_empty_card,
@@ -78,6 +84,10 @@ from task_manager.mini_app.features import (
     serialize_purchase_management_empty_state,
     serialize_purchase_approval_card,
     serialize_purchase_request_composer,
+)
+from task_manager.mini_app.features.internal_transport import (
+    build_transport_stage_payload,
+    build_transport_verification_payload,
 )
 from task_manager.mini_app.features.purchases import (
     PURCHASE_STATUS_THEME as MINI_APP_PURCHASE_STATUS_THEME,
@@ -1515,75 +1525,29 @@ def _build_telegram_mini_app_payload(
     day_minus_3 = today - timedelta(days=3)
     day_plus_2 = today + timedelta(days=2)
 
-    transport_manifest_entries = [
-        {
-            "id": "GS-2024-11-G3",
-            "label": "Granja San Lucas · Galpón 3",
-            "farm": "Granja San Lucas",
-            "barn": "Galpón 3",
-            "rooms": ["Sala 1", "Sala 2"],
-            "cartons": 240,
-            "production_date_iso": day_minus_1.isoformat(),
-            "production_date_label": date_format(day_minus_1, "DATE_FORMAT"),
-            "tag": _("Día reciente"),
-        },
-        {
-            "id": "GS-2024-11-G4",
-            "label": "Granja San Lucas · Galpón 4",
-            "farm": "Granja San Lucas",
-            "barn": "Galpón 4",
-            "rooms": ["Sala 1"],
-            "cartons": 200,
-            "production_date_iso": day_minus_1.isoformat(),
-            "production_date_label": date_format(day_minus_1, "DATE_FORMAT"),
-            "tag": _("Compartido"),
-        },
-        {
-            "id": "PR-2024-08-G5",
-            "label": "Granja Providencia · Galpón 5",
-            "farm": "Granja Providencia",
-            "barn": "Galpón 5",
-            "rooms": ["Sala 2"],
-            "cartons": 195,
-            "production_date_iso": day_minus_2.isoformat(),
-            "production_date_label": date_format(day_minus_2, "DATE_FORMAT"),
-            "tag": _("Día anterior"),
-        },
-        {
-            "id": "LP-2024-03-G1",
-            "label": "Granja La Primavera · Galpón 1",
-            "farm": "Granja La Primavera",
-            "barn": "Galpón 1",
-            "rooms": [],
-            "cartons": 185,
-            "production_date_iso": day_minus_3.isoformat(),
-            "production_date_label": date_format(day_minus_3, "DATE_FORMAT"),
-            "tag": _("Revisión"),
-        },
-    ]
-    transport_manifest_total_cartons = sum(entry["cartons"] for entry in transport_manifest_entries)
-    transport_manifest_count = len(transport_manifest_entries)
-    transport_manifest_origin = _("%(count)s lotes · múltiples granjas") % {"count": transport_manifest_count}
-    verification_reference_entry = transport_manifest_entries[0] if transport_manifest_entries else None
-    verification_lot = None
-    if verification_reference_entry:
-        verification_lot = {
-            "id": verification_reference_entry["id"],
-            "label": verification_reference_entry["label"],
-            "farm": verification_reference_entry["farm"],
-            "barn": verification_reference_entry["barn"],
-            "production_date_label": verification_reference_entry["production_date_label"],
-            "cartons": verification_reference_entry["cartons"],
-            "rooms": verification_reference_entry.get("rooms", []),
-        }
+    transport_stage = build_transport_stage_payload(user=user)
+    verification_stage = build_transport_verification_payload()
+    transport_manifest_entries = transport_stage.get("manifest", {}).get("entries", []) if transport_stage else []
+    transport_manifest_total_cartons = (
+        transport_stage.get("manifest", {}).get("total_cartons") if transport_stage else Decimal("0")
+    )
+    transport_manifest_origin = transport_stage.get("route", {}).get("origin") if transport_stage else None
 
     cartons_per_pack = 30
     daily_cartons = transport_manifest_total_cartons
     daily_eggs = daily_cartons * cartons_per_pack
-    inspection_reference_entry = transport_manifest_entries[0]
-    inspection_production_date_label = inspection_reference_entry["production_date_label"]
-    inspection_farm = inspection_reference_entry["farm"]
-    inspection_barn = inspection_reference_entry["barn"]
+    inspection_reference_entry = transport_manifest_entries[0] if transport_manifest_entries else None
+    inspection_production_date_label = (
+        inspection_reference_entry["production_date_label"]
+        if inspection_reference_entry
+        else date_format(today, "DATE_FORMAT")
+    )
+    inspection_farm = inspection_reference_entry["farm"] if inspection_reference_entry else _("Sin asignar")
+    inspection_barn = (
+        " · ".join(inspection_reference_entry.get("houses", []))
+        if inspection_reference_entry and inspection_reference_entry.get("houses")
+        else _("Galpón no definido")
+    )
     inspection_initial_cartons = daily_cartons
     inspection_transported_cartons = max(daily_cartons - 12, 0)
     inspection_classified_cartons = max(daily_cartons - 18, 0)
@@ -1934,6 +1898,12 @@ def _build_telegram_mini_app_payload(
 
     weight_registry_payload = weight_registry if include_weight_registry else None
 
+    transport_stage["progress_url"] = reverse("task_manager:mini-app-transport-progress")
+    transport_stage["confirmation_url"] = reverse("task_manager:mini-app-transport-confirmation")
+    verification_stage["submit_url"] = reverse("task_manager:mini-app-transport-verification")
+
+    workflow_stages: list[dict[str, object]] = [transport_stage, verification_stage]
+
     egg_workflow = {
         "cartons_per_pack": cartons_per_pack,
         "batch": {
@@ -1944,71 +1914,7 @@ def _build_telegram_mini_app_payload(
             "produced_eggs": daily_eggs,
             "recorded_at": date_format(today, "d M Y"),
         },
-        "stages": [
-            {
-                "id": "transport",
-                "icon": "🚚",
-                "title": "Transporte interno",
-                "tone": "brand",
-                "status": "pending",
-                "summary": _(
-                    "Consolida las cargas de distintos galpones y fechas en un solo despacho hacia el centro de acopio."
-                ),
-                "metrics": [
-                    {"label": _("Cartones en manifiesto"), "value": daily_cartons, "unit": "cartones"},
-                ],
-                "route": {
-                    "origin": transport_manifest_origin,
-                    "destination": _("Centro de clasificación & inspección"),
-                },
-                "manifest": {
-                    "entries": transport_manifest_entries,
-                    "total_cartons": daily_cartons,
-                },
-                "progress_steps": [
-                    {"id": "verified", "label": "Verificado"},
-                    {"id": "loaded", "label": "Cargado"},
-                    {"id": "departed", "label": "Iniciar transporte"},
-                    {"id": "arrival", "label": "En destino"},
-                    {"id": "unloading", "label": "Descargando"},
-                    {"id": "completed", "label": "Completado"},
-                ],
-                "checkpoints": [
-                    "Confirma estado de guacales y temperatura.",
-                    "Toma foto rápida del cargue si hay novedades.",
-                ],
-            },
-            {
-                "id": "verification",
-                "icon": "📦",
-                "title": "Verificación en acopio",
-                "tone": "sky",
-                "status": "pending",
-                "summary": "Valida que lo recibido coincide con lo transportado y reporta ajustes en línea.",
-                "metrics": [
-                    {"label": "Cartones esperados", "value": daily_cartons, "unit": "cartones"},
-                    {"label": "Huevos esperados", "value": daily_eggs, "unit": "huevos"},
-                ],
-                "lot": verification_lot,
-                "fields": [
-                    {
-                        "id": "cartons_received",
-                        "label": "Cartones recibidos",
-                        "placeholder": str(daily_cartons),
-                        "input_type": "number",
-                    },
-                    {
-                        "id": "eggs_damaged",
-                        "label": "Huevos fisurados",
-                        "placeholder": "0",
-                        "input_type": "number",
-                    },
-                ],
-                "checkpoints": [
-                    "Anota diferencias en cartones o unidades.",
-                    "Escanea QR de trazabilidad antes de firmar.",
-                ],
-            },
+        "stages": workflow_stages + [
             {
                 "id": "classification",
                 "icon": "🥚",
@@ -2094,6 +2000,7 @@ def _build_telegram_mini_app_payload(
     }
 
     transport_queue = build_transport_queue_payload()
+    transport_queue["submit_url"] = reverse("task_manager:mini-app-transport-authorize")
 
     pending_classification_sources = [
         {
@@ -4005,6 +3912,168 @@ def mini_app_weight_registry_view(request):
             "weight_registry": payload_response,
         }
     )
+
+
+@require_POST
+def mini_app_transport_authorize_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_transport_queue_card"):
+        return JsonResponse({"error": _("No tienes permisos para autorizar transporte.")}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    production_ids = payload.get("production_ids")
+    transporter_id = payload.get("transporter_id")
+    expected_date_str = payload.get("expected_date")
+
+    if not isinstance(production_ids, list) or not production_ids:
+        return JsonResponse({"error": _("Selecciona al menos una producción.")}, status=400)
+    try:
+        production_ids = [int(value) for value in production_ids]
+    except (TypeError, ValueError):
+        return JsonResponse({"error": _("Los identificadores enviados no son válidos.")}, status=400)
+
+    try:
+        transporter = UserProfile.objects.get(pk=int(transporter_id))
+    except (UserProfile.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({"error": _("El transportador enviado no existe.")}, status=404)
+
+    if not expected_date_str:
+        return JsonResponse({"error": _("Debes indicar la fecha estimada de transporte.")}, status=400)
+    try:
+        expected_date = date.fromisoformat(str(expected_date_str))
+    except ValueError:
+        return JsonResponse({"error": _("La fecha estimada no es válida.")}, status=400)
+
+    try:
+        authorize_internal_transport(
+            batch_ids=production_ids,
+            transporter=transporter,
+            expected_date=expected_date,
+            actor=user,
+        )
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    transport_queue = build_transport_queue_payload()
+    transport_queue["submit_url"] = reverse("task_manager:mini-app-transport-authorize")
+    transport_stage = build_transport_stage_payload(user=user)
+    transport_stage["progress_url"] = reverse("task_manager:mini-app-transport-progress")
+    transport_stage["confirmation_url"] = reverse("task_manager:mini-app-transport-confirmation")
+    verification_stage = build_transport_verification_payload()
+    verification_stage["submit_url"] = reverse("task_manager:mini-app-transport-verification")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "transport_queue": transport_queue,
+            "transport_stage": transport_stage,
+            "verification_stage": verification_stage,
+        }
+    )
+
+
+@require_POST
+def mini_app_transport_progress_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_egg_stage_transport_card"):
+        return JsonResponse({"error": _("No tienes permisos para actualizar el transporte interno.")}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    step = payload.get("step")
+    if not isinstance(step, str):
+        return JsonResponse({"error": _("Debes indicar el estado del transporte.")}, status=400)
+
+    try:
+        update_transport_progress(step=step, actor=user)
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    transport_stage = build_transport_stage_payload(user=user)
+    transport_stage["progress_url"] = reverse("task_manager:mini-app-transport-progress")
+    transport_stage["confirmation_url"] = reverse("task_manager:mini-app-transport-confirmation")
+
+    return JsonResponse({"status": "ok", "transport_stage": transport_stage})
+
+
+@require_POST
+def mini_app_transport_verification_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_egg_stage_verification_card"):
+        return JsonResponse({"error": _("No tienes permisos para verificar el transporte.")}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return JsonResponse({"error": _("Debes enviar las producciones a verificar.")}, status=400)
+
+    try:
+        record_transport_verification(entries=entries, actor=user)
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    verification_stage = build_transport_verification_payload()
+    verification_stage["submit_url"] = reverse("task_manager:mini-app-transport-verification")
+
+    return JsonResponse({"status": "ok", "verification_stage": verification_stage})
+
+
+@require_POST
+def mini_app_transport_confirmation_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_egg_stage_transport_card"):
+        return JsonResponse({"error": _("No tienes permisos para confirmar el transporte.")}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return JsonResponse({"error": _("Debes enviar las producciones a confirmar.")}, status=400)
+
+    try:
+        record_transporter_confirmation(entries=entries, actor=user)
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    transport_stage = build_transport_stage_payload(user=user)
+    transport_stage["progress_url"] = reverse("task_manager:mini-app-transport-progress")
+    transport_stage["confirmation_url"] = reverse("task_manager:mini-app-transport-confirmation")
+
+    return JsonResponse({"status": "ok", "transport_stage": transport_stage})
 
 
 def mini_app_logout_view(request):

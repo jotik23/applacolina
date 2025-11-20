@@ -8,6 +8,7 @@ from production.models import (
     BirdBatch,
     BreedReference,
     ChickenHouse,
+    EggClassificationBatch,
     EggClassificationEntry,
     EggClassificationSession,
     EggType,
@@ -153,6 +154,23 @@ class MiniAppTransportQueueTests(TestCase):
 
         queue = build_transport_queue_payload()
         self.assertEqual(queue["pending_count"], 0)
+
+    def test_authorized_transport_is_still_listed(self) -> None:
+        record = self._create_production_record(
+            house=self.remote_house,
+            room=self.remote_room,
+            date=timezone.localdate() - timedelta(days=1),
+            reported_cartons=Decimal("35"),
+            received_cartons=Decimal("35"),
+            classified_cartons=Decimal("5"),
+        )
+        batch = record.egg_classification
+        batch.transport_status = EggClassificationBatch.TransportStatus.AUTHORIZED
+        batch.save(update_fields=["transport_status"])
+
+        queue = build_transport_queue_payload()
+        self.assertEqual(queue["pending_count"], 1)
+        self.assertEqual(queue["productions"][0]["id"], record.pk)
 
     def test_transporter_options_include_active_users(self) -> None:
         queue = build_transport_queue_payload()
