@@ -48,11 +48,13 @@ from production.models import (
 )
 from production.services.daily_board import save_daily_room_entries
 from production.services.egg_classification import (
+    DispatchDayFlow,
     InventoryFlow,
     InventoryRow,
     PendingBatch,
     ORDERED_EGG_TYPES,
     build_classification_session_flow_range,
+    build_dispatch_flow_range,
     build_inventory_flow,
     build_inventory_flow_range,
     build_pending_batches,
@@ -1158,8 +1160,14 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
         selected_farm_id = self._resolve_farm_id(valid_ids)
         cardex_view = self._resolve_view()
 
-        flows = []
-        flow_cumulative_totals: dict[date, dict[str, Decimal]] = {}
+        flows = build_inventory_flow_range(
+            start_date=month_start,
+            end_date=month_end,
+            farm_id=selected_farm_id,
+        )
+        flow_cumulative_totals = self._build_flow_cumulative_totals(flows)
+        flows.sort(key=lambda flow: flow.day, reverse=True)
+
         session_flows = []
         if cardex_view == "sessions":
             session_flows = build_classification_session_flow_range(
@@ -1167,14 +1175,20 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
                 end_date=month_end,
                 farm_id=selected_farm_id,
             )
-        else:
-            flows = build_inventory_flow_range(
-                start_date=month_start,
-                end_date=month_end,
-                farm_id=selected_farm_id,
-            )
-            flow_cumulative_totals = self._build_flow_cumulative_totals(flows)
-            flows.sort(key=lambda flow: flow.day, reverse=True)
+
+        dispatch_days = build_dispatch_flow_range(start_date=month_start, end_date=month_end)
+        dispatch_day_map = {dispatch.day: dispatch for dispatch in dispatch_days}
+        classification_type_totals = self._build_type_totals(flows)
+        dispatch_type_totals = self._build_dispatch_type_totals(dispatch_days)
+        inventory_argument_rows = self._build_inventory_argument_rows(
+            classification_totals=classification_type_totals,
+            dispatch_totals=dispatch_type_totals,
+        )
+        inventory_argument_totals = self._build_argument_totals(
+            classification_totals=classification_type_totals,
+            dispatch_totals=dispatch_type_totals,
+        )
+        dispatch_overview_url = self._build_dispatch_overview_url(month_start)
 
         prev_month = self._add_months(month_start, -1)
         next_month = self._add_months(month_start, 1)
@@ -1197,6 +1211,11 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
                 "cardex_view": cardex_view,
                 "session_flows": session_flows,
                 "flow_cumulative_totals": flow_cumulative_totals,
+                "dispatch_day_map": dispatch_day_map,
+                "inventory_argument_rows": inventory_argument_rows,
+                "inventory_argument_totals": inventory_argument_totals,
+                "dispatch_day_count": len(dispatch_days),
+                "dispatch_overview_url": dispatch_overview_url,
             }
         )
         return context
@@ -1271,6 +1290,65 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             running["delta_inventory"] += flow.delta_inventory
             totals_by_day[flow.day] = dict(running)
         return totals_by_day
+
+    def _build_type_totals(self, flows: list[InventoryFlow]) -> dict[str, Decimal]:
+        totals: dict[str, Decimal] = defaultdict(Decimal)
+        for flow in flows:
+            for egg_type, qty in flow.type_breakdown.items():
+                totals[egg_type] += Decimal(qty or 0)
+        return totals
+
+    def _build_dispatch_type_totals(self, dispatch_days: list[DispatchDayFlow]) -> dict[str, Decimal]:
+        totals: dict[str, Decimal] = defaultdict(Decimal)
+        for day in dispatch_days:
+            for egg_type, qty in day.type_breakdown.items():
+                totals[egg_type] += Decimal(qty or 0)
+        return totals
+
+    def _build_inventory_argument_rows(
+        self,
+        *,
+        classification_totals: Mapping[str, Decimal],
+        dispatch_totals: Mapping[str, Decimal],
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for egg_type in ORDERED_EGG_TYPES:
+            classified = classification_totals.get(egg_type, Decimal("0"))
+            dispatched = dispatch_totals.get(egg_type, Decimal("0"))
+            balance = classified - dispatched
+            if balance < Decimal("0"):
+                balance = Decimal("0")
+            rows.append(
+                {
+                    "egg_type": egg_type,
+                    "label": self.egg_type_labels.get(egg_type, egg_type),
+                    "classified": classified,
+                    "dispatched": dispatched,
+                    "balance": balance,
+                }
+            )
+        return rows
+
+    def _build_argument_totals(
+        self,
+        *,
+        classification_totals: Mapping[str, Decimal],
+        dispatch_totals: Mapping[str, Decimal],
+    ) -> dict[str, Decimal]:
+        classified_total = sum(classification_totals.values(), Decimal("0"))
+        dispatched_total = sum(dispatch_totals.values(), Decimal("0"))
+        balance_total = classified_total - dispatched_total
+        if balance_total < Decimal("0"):
+            balance_total = Decimal("0")
+        return {
+            "classified": classified_total,
+            "dispatched": dispatched_total,
+            "balance": balance_total,
+        }
+
+    def _build_dispatch_overview_url(self, month_start: date) -> str:
+        base_url = reverse("administration:egg-dispatch-list")
+        return f"{base_url}?month={self._month_slug(month_start)}"
 
 
 class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateView):

@@ -15,6 +15,7 @@ from production.models import (
     EggClassificationBatch,
     EggClassificationSession,
     EggClassificationEntry,
+    EggDispatch,
     EggDispatchItem,
     EggType,
     ProductionRecord,
@@ -101,6 +102,25 @@ class ClassificationSessionDay:
     day: date
     total_cartons: Decimal
     sessions: list[ClassificationSessionFlowRecord]
+
+
+@dataclass(frozen=True)
+class DispatchFlowRecord:
+    id: int
+    destination: str
+    destination_label: str
+    total_cartons: Decimal
+    type_breakdown: Dict[str, Decimal]
+    seller_name: Optional[str]
+    driver_name: Optional[str]
+
+
+@dataclass(frozen=True)
+class DispatchDayFlow:
+    day: date
+    total_cartons: Decimal
+    type_breakdown: Dict[str, Decimal]
+    dispatches: list[DispatchFlowRecord]
 
 
 ORDERED_EGG_TYPES = [
@@ -502,6 +522,55 @@ def build_classification_session_flow_range(
     if start_date > end_date:
         return []
     return _build_classification_session_flow(start_date=start_date, end_date=end_date, farm_id=farm_id)
+
+
+def build_dispatch_flow_range(*, start_date: date, end_date: date) -> list[DispatchDayFlow]:
+    if start_date > end_date:
+        return []
+    dispatches = list(
+        EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
+        .select_related("driver", "seller")
+        .prefetch_related("items")
+        .order_by("date", "-id")
+    )
+    records_by_day: dict[date, list[DispatchFlowRecord]] = defaultdict(list)
+    for dispatch in dispatches:
+        daily_breakdown: Dict[str, Decimal] = defaultdict(Decimal)
+        for item in dispatch.items.all():
+            qty = Decimal(item.cartons or 0)
+            daily_breakdown[item.egg_type] += qty
+        records_by_day[dispatch.date].append(
+            DispatchFlowRecord(
+                id=dispatch.pk,
+                destination=dispatch.destination,
+                destination_label=dispatch.get_destination_display(),
+                total_cartons=Decimal(dispatch.total_cartons or 0),
+                type_breakdown=dict(daily_breakdown),
+                seller_name=dispatch.seller_name,
+                driver_name=dispatch.driver_name,
+            )
+        )
+
+    day_flows: list[DispatchDayFlow] = []
+    for day, dispatch_records in records_by_day.items():
+        day_type_totals: Dict[str, Decimal] = defaultdict(Decimal)
+        total_cartons = Decimal("0")
+        for record in dispatch_records:
+            total_cartons += record.total_cartons
+            for egg_type, qty in record.type_breakdown.items():
+                day_type_totals[egg_type] += qty
+        dispatch_records.sort(key=lambda record: record.id, reverse=True)
+        day_flows.append(
+            DispatchDayFlow(
+                day=day,
+                total_cartons=total_cartons,
+                type_breakdown=dict(day_type_totals),
+                dispatches=dispatch_records,
+            )
+        )
+
+    day_flows.sort(key=lambda flow: flow.day)
+    return day_flows
 
 
 def _build_inventory_flow(

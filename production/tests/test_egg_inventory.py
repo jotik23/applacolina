@@ -14,6 +14,7 @@ from production.models import (
     EggClassificationEntry,
     EggDispatch,
     EggDispatchDestination,
+    EggDispatchItem,
     EggType,
     Farm,
     ProductionRecord,
@@ -226,6 +227,15 @@ class EggInventoryDashboardTests(TestCase):
             actor_id=self.user.id,
         )
 
+        dispatch = EggDispatch.objects.create(
+            date=date.today(),
+            destination=EggDispatchDestination.TIERRALTA,
+            driver=self.user,
+            seller=self.user,
+            total_cartons=Decimal("40"),
+        )
+        EggDispatchItem.objects.create(dispatch=dispatch, egg_type=EggType.JUMBO, cartons=Decimal("40"))
+
         url = reverse("production:egg-inventory-cardex")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -234,6 +244,16 @@ class EggInventoryDashboardTests(TestCase):
         self.assertTrue(flows)
         self.assertLessEqual(flows[0].day, date.today())
         self.assertTrue(any(record.last_classified_at for flow in flows for record in flow.records))
+
+        dispatch_day_map = response.context["dispatch_day_map"]
+        self.assertIn(dispatch.date, dispatch_day_map)
+        dispatch_summary = dispatch_day_map[dispatch.date]
+        self.assertEqual(dispatch_summary.dispatches[0].total_cartons, Decimal("40"))
+        self.assertTrue(response.context["inventory_argument_rows"])
+        self.assertEqual(
+            response.context["inventory_argument_totals"]["dispatched"],
+            Decimal("40"),
+        )
 
         filtered_response = self.client.get(url, {"farm": other_farm.pk})
         self.assertEqual(filtered_response.status_code, 200)
