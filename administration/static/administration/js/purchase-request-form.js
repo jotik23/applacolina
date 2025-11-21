@@ -26,14 +26,31 @@ const purchaseProductCatalog = (() => {
   }
 })();
 
+const PRODUCT_SUGGESTION_OFFSET_PX = 4;
 const productSuggestionPanel = (() => {
   const panel = document.createElement('div');
   panel.className =
-    'product-suggestions hidden absolute z-40 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl';
+    'product-suggestions hidden fixed z-50 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl';
   return panel;
 })();
 
 let productSuggestionContext = null;
+
+function mountProductSuggestionPanel() {
+  if (!document.body.contains(productSuggestionPanel)) {
+    document.body.appendChild(productSuggestionPanel);
+  }
+}
+
+function positionProductSuggestionPanel(anchor) {
+  if (!anchor) {
+    return;
+  }
+  const bounds = anchor.getBoundingClientRect();
+  productSuggestionPanel.style.width = `${bounds.width}px`;
+  productSuggestionPanel.style.left = `${bounds.left}px`;
+  productSuggestionPanel.style.top = `${bounds.bottom + PRODUCT_SUGGESTION_OFFSET_PX}px`;
+}
 
 function hideProductSuggestions() {
   if (!productSuggestionContext) {
@@ -41,6 +58,9 @@ function hideProductSuggestions() {
   }
   productSuggestionPanel.classList.add('hidden');
   productSuggestionPanel.innerHTML = '';
+  productSuggestionPanel.style.left = '';
+  productSuggestionPanel.style.top = '';
+  productSuggestionPanel.style.width = '';
   if (productSuggestionPanel.parentNode) {
     productSuggestionPanel.parentNode.removeChild(productSuggestionPanel);
   }
@@ -68,12 +88,7 @@ function showProductSuggestions(input, { forceQuery = null, allowEmpty = false }
   if (!pickerWrapper) {
     return;
   }
-  if (productSuggestionPanel.parentNode !== pickerWrapper) {
-    if (productSuggestionPanel.parentNode) {
-      productSuggestionPanel.parentNode.removeChild(productSuggestionPanel);
-    }
-    pickerWrapper.appendChild(productSuggestionPanel);
-  }
+  mountProductSuggestionPanel();
   productSuggestionPanel.innerHTML = '';
   if (!limitedMatches.length) {
     const emptyMessage = document.createElement('p');
@@ -106,7 +121,7 @@ function showProductSuggestions(input, { forceQuery = null, allowEmpty = false }
       productSuggestionPanel.appendChild(optionButton);
     });
   }
-  productSuggestionPanel.style.width = '100%';
+  positionProductSuggestionPanel(pickerWrapper);
   productSuggestionPanel.classList.remove('hidden');
   productSuggestionContext = { input };
 }
@@ -140,6 +155,13 @@ window.addEventListener('scroll', () => {
   }
   hideProductSuggestions();
 }, true);
+
+window.addEventListener('resize', () => {
+  if (!productSuggestionContext) {
+    return;
+  }
+  hideProductSuggestions();
+});
 
 function bindSelectPickerGlobals() {
   if (selectPickerGlobalsBound) {
