@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 import re
 from typing import Iterable, Sequence
@@ -44,6 +45,7 @@ class PurchaseRequestPayload:
     items: Sequence[PurchaseItemPayload]
     scope_batch_code: str
     assigned_manager_id: int | None = None
+    requested_date: date | None = None
 
 
 class PurchaseRequestValidationError(Exception):
@@ -172,6 +174,12 @@ class PurchaseRequestSubmissionService:
         elif expense_type and expense_type.default_support_document_type_id:
             payload.support_document_type_id = expense_type.default_support_document_type_id
 
+        if not payload.requested_date:
+            if purchase and purchase.created_at:
+                payload.requested_date = timezone.localtime(purchase.created_at).date()
+            else:
+                payload.requested_date = timezone.localdate()
+
         if purchase and purchase.status != PurchaseRequest.Status.DRAFT:
             field_errors.setdefault(
                 "non_field",
@@ -296,6 +304,15 @@ class PurchaseRequestSubmissionService:
         purchase.assigned_manager_id = manager_id
         purchase.status = PurchaseRequest.Status.DRAFT
         purchase.currency = purchase.currency or "COP"
+        if payload.requested_date:
+            tz = timezone.get_current_timezone()
+            if purchase.created_at:
+                current_local = timezone.localtime(purchase.created_at, tz)
+            else:
+                current_local = timezone.localtime(timezone.now(), tz)
+            base_time = current_local.time().replace(tzinfo=None)
+            naive_target = datetime.combine(payload.requested_date, base_time)
+            purchase.created_at = timezone.make_aware(naive_target, tz)
         self._save_with_code(purchase, force_code=is_new)
         return purchase
 

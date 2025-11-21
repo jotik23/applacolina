@@ -839,6 +839,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         supplier_id = _parse_int(self.request.POST.get('supplier'))
         assigned_manager_id = _parse_int(self.request.POST.get('assigned_manager'))
         scope_batch_code = (self.request.POST.get('scope_batch_code') or '').strip()
+        requested_date_raw = (self.request.POST.get('requested_date') or '').strip()
+        requested_date = self._parse_date(requested_date_raw)
         items_raw = self._enrich_item_rows(self._extract_item_rows())
         overrides = {
             'summary': summary,
@@ -849,9 +851,14 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'assigned_manager_id': assigned_manager_id,
             'items': items_raw,
             'scope_batch_code': scope_batch_code,
+            'requested_date': requested_date_raw,
         }
         field_errors: dict[str, list[str]] = {}
         item_errors: dict[int, dict[str, list[str]]] = {}
+        if not requested_date_raw:
+            field_errors.setdefault('requested_date', []).append("Selecciona la fecha de la solicitud.")
+        elif requested_date is None:
+            field_errors.setdefault('requested_date', []).append("Ingresa una fecha válida (AAAA-MM-DD).")
 
         item_payloads: list[PurchaseItemPayload] = []
         for index, row in enumerate(items_raw):
@@ -907,6 +914,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 items=item_payloads,
                 scope_batch_code=scope_batch_code,
                 assigned_manager_id=assigned_manager_id,
+                requested_date=requested_date,
             )
         return payload, overrides, field_errors, item_errors
 
@@ -1521,6 +1529,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'supplier_id': overrides.get('supplier_id'),
                 'estimated_total': overrides.get('estimated_total') or '',
                 'assigned_manager_id': overrides.get('assigned_manager_id'),
+                'requested_date': overrides.get('requested_date') or '',
             }
             scope = {'batch_code': overrides.get('scope_batch_code') or ''}
             items = self._enrich_item_rows(overrides.get('items') or [])
@@ -1530,6 +1539,11 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 assigned_manager_id = purchase.requester_id
             if not assigned_manager_id and self.request.user.is_authenticated:
                 assigned_manager_id = self.request.user.pk
+            requested_date_value = ''
+            if purchase and purchase.created_at:
+                requested_date_value = timezone.localtime(purchase.created_at).date().isoformat()
+            else:
+                requested_date_value = timezone.localdate().isoformat()
             values = {
                 'summary': purchase.name if purchase else '',
                 'notes': purchase.description if purchase else '',
@@ -1538,6 +1552,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'supplier_id': purchase.supplier_id if purchase else None,
                 'estimated_total': self._format_decimal(purchase.estimated_total) if purchase else '',
                 'assigned_manager_id': assigned_manager_id,
+                'requested_date': requested_date_value,
             }
             scope = self._scope_values_from_purchase(purchase)
             items = self._serialize_items(purchase)

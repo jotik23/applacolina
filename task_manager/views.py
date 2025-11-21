@@ -922,6 +922,7 @@ def _build_mini_app_purchase_request_payload(
     support_document_type_id = _coerce_int(data.get("support_document_type_id"))
     purchase_id = _coerce_int(data.get("purchase_id"))
     scope_batch_code = _normalize_string(data.get("scope_batch_code"))
+    requested_date = _parse_iso_date(data.get("requested_date")) or timezone.localdate()
     field_errors: dict[str, list[str]] = {}
     item_errors: dict[int, dict[str, list[str]]] = {}
 
@@ -1012,6 +1013,7 @@ def _build_mini_app_purchase_request_payload(
         items=item_payloads,
         scope_batch_code=scope_batch_code,
         assigned_manager_id=assigned_manager_id,
+        requested_date=requested_date,
     )
     return payload, field_errors, item_errors
 
