@@ -459,6 +459,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             return self._handle_payment_panel_post()
         if panel == 'accounting':
             return self._handle_accounting_panel_post()
+        if panel == 'delete':
+            return self._handle_delete_purchase()
         messages.error(request, "El formulario enviado no está disponible todavía.")
         return redirect(self._build_base_url(scope=request.POST.get('scope')))
 
@@ -1258,6 +1260,36 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'purchase_request_item_errors': item_errors,
         }
         return context
+
+    def _handle_delete_purchase(self) -> HttpResponse:
+        scope = self.request.POST.get('scope')
+        purchase_id = _parse_int(self.request.POST.get('purchase'))
+        if not purchase_id:
+            messages.error(self.request, "No se pudo identificar la compra a eliminar.")
+            return redirect(self._build_base_url(scope=scope))
+        purchase = (
+            PurchaseRequest.objects.filter(pk=purchase_id)
+            .only('id', 'status', 'timeline_code', 'name')
+            .first()
+        )
+        if not purchase:
+            messages.info(self.request, "La compra seleccionada ya fue eliminada previamente.")
+            return redirect(self._build_base_url(scope=scope))
+        timeline_code = purchase.timeline_code
+        try:
+            purchase.delete()
+        except ProtectedError:
+            messages.error(
+                self.request,
+                "No es posible eliminar esta compra porque tiene registros protegidos asociados.",
+            )
+            return redirect(self._build_base_url(scope=scope or purchase.status))
+        messages.success(
+            self.request,
+            f"Compra {timeline_code} eliminada correctamente.",
+        )
+        redirect_scope = scope or purchase.status or PurchaseRequest.Status.DRAFT
+        return redirect(self._build_base_url(scope=redirect_scope))
 
     def _build_purchase_order_form_context(
         self,
