@@ -72,6 +72,7 @@ class MiniAppTaskCardWindowTests(TestCase):
         is_accumulative: bool = False,
         position: PositionDefinition | None = None,
         name: str = "Tarea base",
+        evidence_requirement: str = TaskDefinition.EvidenceRequirement.NONE,
     ) -> TaskAssignment:
         position = position or self.day_position
         with suppress_task_assignment_sync():
@@ -86,6 +87,7 @@ class MiniAppTaskCardWindowTests(TestCase):
                 task_type=None,
                 weekly_days=[DayOfWeek.MONDAY],
                 position=position,
+                evidence_requirement=evidence_requirement,
             )
         return TaskAssignment.objects.create(
             task_definition=task,
@@ -138,6 +140,7 @@ class MiniAppTaskCardWindowTests(TestCase):
 
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["assignment_id"], assignment.pk)
+        self.assertNotIn("Retraso", cards[0]["status"]["details"])
 
     def test_night_shift_after_cutoff_switches_to_current_day(self):
         self._create_assignment(
@@ -159,3 +162,46 @@ class MiniAppTaskCardWindowTests(TestCase):
 
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["assignment_id"], assignment_today.pk)
+
+    def test_optional_task_does_not_render_empty_evidence_badge(self):
+        assignment = self._create_assignment(
+            due_date=self.reference_date,
+            position=self.day_position,
+        )
+
+        cards = _resolve_daily_task_cards(
+            user=self.user,
+            reference_date=self.reference_date,
+            current_time=self._aware_datetime(self.reference_date, 9, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        badge_labels = [badge["label"] for badge in card.get("badges", [])]
+        self.assertNotIn("Sin evidencia adjunta", badge_labels)
+        evidence_actions = [action for action in card.get("actions", []) if action.get("action") == "evidence"]
+        self.assertTrue(evidence_actions)
+        self.assertFalse(evidence_actions[0].get("disabled"))
+        self.assertEqual(card["assignment_id"], assignment.pk)
+
+    def test_required_evidence_displays_missing_badge(self):
+        assignment = self._create_assignment(
+            due_date=self.reference_date,
+            position=self.day_position,
+            evidence_requirement=TaskDefinition.EvidenceRequirement.PHOTO,
+        )
+
+        cards = _resolve_daily_task_cards(
+            user=self.user,
+            reference_date=self.reference_date,
+            current_time=self._aware_datetime(self.reference_date, 9, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        first_badge = card["badges"][0]
+        self.assertEqual(first_badge["label"], "Sin evidencia")
+        evidence_actions = [action for action in card.get("actions", []) if action.get("action") == "evidence"]
+        self.assertTrue(evidence_actions)
+        self.assertFalse(evidence_actions[0].get("disabled"))
+        self.assertEqual(card["assignment_id"], assignment.pk)

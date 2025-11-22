@@ -609,8 +609,6 @@ def _serialize_task_assignment(
         badges.insert(0, {"label": evidence_label, "theme": "emerald"})
     elif requires_evidence:
         badges.insert(0, {"label": _("Sin evidencia"), "theme": "critical"})
-    else:
-        badges.insert(0, {"label": _("Sin evidencia adjunta"), "theme": "neutral"})
     if task_type_label:
         badges.append({"label": task_type_label, "theme": task_type_theme})
     if priority_label:
@@ -633,12 +631,12 @@ def _serialize_task_assignment(
     if is_completed_today:
         actions: list[dict[str, object]] = [
             {"label": _("Desmarcar"), "action": "reset", "disabled": False},
-            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": True},
+            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": False},
         ]
     else:
         actions = [
             {"label": _("Marcar como completada"), "action": "complete", "disabled": False},
-            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": True},
+            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": False},
         ]
 
     return {
@@ -719,6 +717,24 @@ def _resolve_shift_window_reference_date(
     return reference_date
 
 
+def _resolve_assignment_reference_date(
+    assignment: TaskAssignment,
+    *,
+    reference_date: date,
+    current_time: datetime,
+) -> date:
+    """Return the reference date that should be used to evaluate the assignment."""
+
+    definition = assignment.task_definition
+    if getattr(definition, "is_accumulative", False):
+        return reference_date
+    return _resolve_shift_window_reference_date(
+        definition,
+        reference_date=reference_date,
+        current_time=current_time,
+    )
+
+
 def _assignment_matches_active_window(
     assignment: TaskAssignment,
     *,
@@ -738,8 +754,8 @@ def _assignment_matches_active_window(
     if not due_date:
         return True
 
-    target_date = _resolve_shift_window_reference_date(
-        definition,
+    target_date = _resolve_assignment_reference_date(
+        assignment,
         reference_date=reference_date,
         current_time=current_time,
     )
@@ -780,7 +796,15 @@ def _resolve_daily_task_cards(
                 current_time=normalized_now,
             ):
                 continue
-            status_info = _build_assignment_status_info(assignment, reference_date=reference_date)
+            status_reference_date = _resolve_assignment_reference_date(
+                assignment,
+                reference_date=reference_date,
+                current_time=normalized_now,
+            )
+            status_info = _build_assignment_status_info(
+                assignment,
+                reference_date=status_reference_date,
+            )
             if not status_info:
                 continue
             prefetched = assignment._prefetched_objects_cache.get("evidences") if hasattr(assignment, "_prefetched_objects_cache") else None
