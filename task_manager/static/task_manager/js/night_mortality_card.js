@@ -2,6 +2,11 @@
   'use strict';
 
   const INTEGER_PATTERN = /^[0-9]+$/;
+  const ROOM_FIELDS = ['mortality', 'discard'];
+  const ROOM_FIELD_LABELS = {
+    mortality: 'la mortalidad',
+    discard: 'el descarte',
+  };
 
   class NightMortalityCardController {
     constructor(card, helpers) {
@@ -44,9 +49,7 @@
 
     bindInputs() {
       this.lotNodes.forEach((lotNode) => {
-        const inputs = Array.prototype.slice.call(
-          lotNode.querySelectorAll('[data-night-mortality-room-field="mortality"]')
-        );
+        const inputs = Array.prototype.slice.call(lotNode.querySelectorAll('[data-night-mortality-room-field]'));
         inputs.forEach((input) => {
           input.addEventListener('input', () => {
             input.classList.remove('border-rose-300');
@@ -124,25 +127,23 @@
           return null;
         }
 
-        const input = roomNode.querySelector('[data-night-mortality-room-field="mortality"]');
-        const value = input && typeof input.value === 'string' ? input.value.trim() : '';
-        if (value && !INTEGER_PATTERN.test(value)) {
-          this.showFeedback(
-            roomLabel ? `Usa números enteros para la mortalidad de ${roomLabel}.` : 'Usa números enteros.',
-            'error'
-          );
-          if (input) {
-            input.classList.add('border-rose-300');
-            if (typeof input.focus === 'function') {
-              input.focus();
-            }
+        const fieldValues = {};
+        for (let fieldIndex = 0; fieldIndex < ROOM_FIELDS.length; fieldIndex += 1) {
+          const field = ROOM_FIELDS[fieldIndex];
+          const result = this.readNumericField(roomNode, field, roomLabel);
+          if (!result.valid) {
+            return null;
           }
-          return null;
+          fieldValues[field] = result.value;
         }
-        entry.rooms.push({
-          room_id: parsedRoomId,
-          mortality: value,
-        });
+        entry.rooms.push(
+          Object.assign(
+            {
+              room_id: parsedRoomId,
+            },
+            fieldValues
+          )
+        );
       }
       return entry;
     }
@@ -233,11 +234,14 @@
           if (!roomNode) {
             return;
           }
-          const input = roomNode.querySelector('[data-night-mortality-room-field="mortality"]');
-          if (input) {
-            const value = roomPayload.mortality;
+          ROOM_FIELDS.forEach((field) => {
+            const input = roomNode.querySelector('[data-night-mortality-room-field="' + field + '"]');
+            if (!input) {
+              return;
+            }
+            const value = roomPayload[field];
             input.value = value === null || value === undefined ? '' : String(value);
-          }
+          });
         });
       });
     }
@@ -320,3 +324,22 @@
     boot();
   }
 })();
+    readNumericField(roomNode, field, roomLabel) {
+      const input = roomNode.querySelector('[data-night-mortality-room-field="' + field + '"]');
+      const value = input && typeof input.value === 'string' ? input.value.trim() : '';
+      if (value && !INTEGER_PATTERN.test(value)) {
+        const label = ROOM_FIELD_LABELS[field] || 'este campo';
+        this.showFeedback(
+          roomLabel ? `Usa números enteros para ${label} de ${roomLabel}.` : 'Usa números enteros.',
+          'error'
+        );
+        if (input) {
+          input.classList.add('border-rose-300');
+          if (typeof input.focus === 'function') {
+            input.focus();
+          }
+        }
+        return { valid: false, value: '' };
+      }
+      return { valid: true, value };
+    }

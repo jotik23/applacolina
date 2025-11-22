@@ -88,7 +88,7 @@ class TaskDefinitionDuplicateViewTests(TestCase):
                 position=self.position,
                 collaborator=self.collaborator,
                 evidence_requirement=TaskDefinition.EvidenceRequirement.PHOTO_OR_VIDEO,
-                record_format=TaskDefinition.RecordFormat.PRODUCTION_RECORD,
+                record_format=TaskDefinition.RecordFormat.SUPPER_RECORD,
             )
             self.task.rooms.set([self.room_a, self.room_b])
         self.known_task_ids.add(self.task.pk)
