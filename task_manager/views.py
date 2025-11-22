@@ -4096,6 +4096,57 @@ def _task_definition_redirect_url(task_id: int) -> str:
     return f"{base_url}?tm_task={task_id}#tm-tareas"
 
 
+def _build_duplicate_task_name(original_name: str) -> str:
+    """Return a human-friendly name for a duplicated task."""
+
+    base_name = (original_name or "").strip() or _("Tarea sin nombre")
+    name_field = TaskDefinition._meta.get_field("name")
+    max_length = getattr(name_field, "max_length", 200) or 200
+    counter = 1
+
+    while True:
+        if counter == 1:
+            suffix = _(" (copia)")
+        else:
+            suffix = _(" (copia %(number)s)") % {"number": counter}
+
+        available = max(max_length - len(suffix), 0)
+        truncated_base = base_name[:available] if available else ""
+        candidate = f"{truncated_base}{suffix}" if truncated_base else suffix[:max_length]
+
+        if not TaskDefinition.objects.filter(name=candidate).exists():
+            return candidate
+
+        counter += 1
+
+
+def _duplicate_task_definition(task: TaskDefinition) -> TaskDefinition:
+    """Persist a cloned version of the provided task definition."""
+
+    duplicate = TaskDefinition.objects.create(
+        name=_build_duplicate_task_name(task.name),
+        description=task.description,
+        status=task.status,
+        category=task.category,
+        is_mandatory=task.is_mandatory,
+        criticality_level=task.criticality_level,
+        task_type=task.task_type,
+        scheduled_for=task.scheduled_for,
+        weekly_days=list(task.weekly_days or []),
+        fortnight_days=list(task.fortnight_days or []),
+        month_days=list(task.month_days or []),
+        monthly_week_days=list(task.monthly_week_days or []),
+        position=task.position,
+        collaborator=task.collaborator,
+        evidence_requirement=task.evidence_requirement,
+        record_format=task.record_format,
+    )
+    room_ids = list(task.rooms.values_list("pk", flat=True))
+    if room_ids:
+        duplicate.rooms.set(room_ids)
+    return duplicate
+
+
 def serialize_task_definition(task: TaskDefinition) -> dict[str, object]:
     return {
         "id": task.pk,
@@ -4185,6 +4236,30 @@ class TaskDefinitionUpdateView(StaffRequiredMixin, View):
 
 
 task_definition_update_view = TaskDefinitionUpdateView.as_view()
+
+
+class TaskDefinitionDuplicateView(StaffRequiredMixin, View):
+    """Create a copy of an existing task definition."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, pk: int, *args, **kwargs):
+        task_definition = get_object_or_404(
+            TaskDefinition.objects.prefetch_related("rooms"),
+            pk=pk,
+        )
+        with transaction.atomic():
+            duplicate = _duplicate_task_definition(task_definition)
+        messages.success(
+            request,
+            _('Se creó una copia de "%(source)s" llamada "%(target)s".')
+            % {"source": task_definition.name, "target": duplicate.name},
+        )
+        redirect_url = _task_definition_redirect_url(duplicate.pk)
+        return redirect(redirect_url)
+
+
+task_definition_duplicate_view = TaskDefinitionDuplicateView.as_view()
 
 
 class TaskDefinitionDeleteView(StaffRequiredMixin, View):
@@ -4327,6 +4402,7 @@ class TaskDefinitionRow:
     id: int
     detail_url: str
     update_url: str
+    duplicate_url: str
     name: str
     description: str
     category_label: str
@@ -4792,6 +4868,7 @@ def build_task_definition_rows(tasks: Optional[Iterable[TaskDefinition]] = None)
                 id=task.pk,
                 detail_url=reverse("task_manager:definition-detail", args=[task.pk]),
                 update_url=reverse("task_manager:definition-update", args=[task.pk]),
+                duplicate_url=reverse("task_manager:definition-duplicate", args=[task.pk]),
                 name=task.name,
                 description=task.description,
                 category_label=category_label,

@@ -141,6 +141,19 @@
             <path d="M13.586 2.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM12.172 4l-8.01 8.01a2 2 0 00-.533.96l-.611 2.922a.5.5 0 00.588.588l2.922-.611a2 2 0 00.96-.533L14 7.828 12.172 6l-.707.707 1.414 1.414-6.647 6.647a1 1 0 01-.48.267l-1.987.416.416-1.987a1 1 0 01.267-.48l6.647-6.647 1.414 1.414.707-.707L12.172 4z" />
           </svg>
         </button>
+        <form method="post" action="{{ row.duplicate_url }}" class="contents">
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+            aria-label="Duplicar {{ row.name }}"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path d="M7 4a3 3 0 00-3 3v7a3 3 0 003 3h7a3 3 0 003-3V7a3 3 0 00-3-3H7zm0 1.5h7A1.5 1.5 0 0115.5 7v7a1.5 1.5 0 01-1.5 1.5H7A1.5 1.5 0 015.5 14V7A1.5 1.5 0 017 5.5z" />
+              <path d="M5 2.5A2.5 2.5 0 002.5 5v8A2.5 2.5 0 005 15.5h1.25a.75.75 0 000-1.5H5A1 1 0 014 13V5a1 1 0 011-1h8a1 1 0 011 1v1.25a.75.75 0 001.5 0V5A2.5 2.5 0 0013 2.5H5z" />
+            </svg>
+          </button>
+        </form>
         <form method="post" action="{% url 'task_manager:definition-delete' row.id %}" class="contents" data-confirmation>
           {% csrf_token %}
           <button
