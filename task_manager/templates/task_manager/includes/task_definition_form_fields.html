@@ -233,6 +233,22 @@
               </p>
             {% endwith %}
           </div>
+          <div class="flex flex-col">
+            <span class="text-sm font-medium text-slate-700">{{ task_form.is_accumulative.label }}</span>
+            <label for="{{ task_form.is_accumulative.id_for_label }}"
+                   class="mt-2 inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand focus-within:border-brand focus-within:text-brand focus-within:ring-2 focus-within:ring-brand/20">
+              {{ task_form.is_accumulative }}
+              <span>{% trans "Permitir acumulación" %}</span>
+            </label>
+            {% if task_form.is_accumulative.help_text %}
+              <p class="mt-1 text-xs text-slate-500">{{ task_form.is_accumulative.help_text }}</p>
+            {% endif %}
+            {% with field_errors=task_form.is_accumulative.errors %}
+              <p class="mt-1 text-xs text-rose-600{% if not field_errors %} hidden{% endif %}" data-task-field-error="is_accumulative">
+                {% if field_errors %}{{ field_errors|join:" " }}{% endif %}
+              </p>
+            {% endwith %}
+          </div>
         </div>
 
         <div class="{{ footer_margin }} sticky bottom-0 left-0 right-0 z-10 flex flex-col gap-4 border-t border-slate-100 bg-white pt-4 text-sm">

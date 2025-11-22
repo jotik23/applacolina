@@ -145,6 +145,13 @@ class TaskDefinition(models.Model):
         default=False,
         help_text=_("Indica si la ejecución de la tarea es obligatoria."),
     )
+    is_accumulative = models.BooleanField(
+        _("Acumulable en mini app"),
+        default=False,
+        help_text=_(
+            "Cuando está activo, las tareas pendientes permanecen visibles en la mini app hasta ser completadas."
+        ),
+    )
     criticality_level = models.CharField(
         _("Nivel de criticidad"),
         max_length=16,

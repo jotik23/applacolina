@@ -57,6 +57,7 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
         "status",
         "category",
         "is_mandatory",
+        "is_accumulative",
         "criticality_level",
         "position",
         "collaborator",
@@ -69,6 +70,7 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
         "category",
         "position__farm",
         "is_mandatory",
+        "is_accumulative",
         "criticality_level",
         "evidence_requirement",
         "record_format",
@@ -87,6 +89,7 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
                     "status",
                     "category",
                     "is_mandatory",
+                    "is_accumulative",
                     "criticality_level",
                     "task_type",
                 )

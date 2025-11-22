@@ -78,6 +78,7 @@ class TaskDefinitionDuplicateViewTests(TestCase):
                 status=self.status,
                 category=self.category,
                 is_mandatory=True,
+                is_accumulative=True,
                 criticality_level=TaskDefinition.CriticalityLevel.HIGH,
                 task_type=TaskDefinition.TaskType.RECURRING,
                 weekly_days=[DayOfWeek.MONDAY, DayOfWeek.FRIDAY],
@@ -113,6 +114,7 @@ class TaskDefinitionDuplicateViewTests(TestCase):
         self.assertEqual(duplicated_task.status, self.task.status)
         self.assertEqual(duplicated_task.category, self.task.category)
         self.assertEqual(duplicated_task.is_mandatory, self.task.is_mandatory)
+        self.assertEqual(duplicated_task.is_accumulative, self.task.is_accumulative)
         self.assertEqual(
             duplicated_task.criticality_level,
             self.task.criticality_level,

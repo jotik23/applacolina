@@ -58,6 +58,7 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "status",
             "category",
             "is_mandatory",
+            "is_accumulative",
             "criticality_level",
             "task_type",
             "scheduled_for",
@@ -88,6 +89,11 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "status": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
             "category": forms.Select(attrs={"class": FIELD_INPUT_CLASSES}),
             "is_mandatory": forms.CheckboxInput(
+                attrs={
+                    "class": CHECKBOX_CLASSES,
+                }
+            ),
+            "is_accumulative": forms.CheckboxInput(
                 attrs={
                     "class": CHECKBOX_CLASSES,
                 }
@@ -125,6 +131,7 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
             "status": _("Estado"),
             "category": _("Categoría"),
             "is_mandatory": _("Obligatoriedad"),
+            "is_accumulative": _("Acumulable en mini app"),
             "criticality_level": _("Nivel de criticidad"),
             "task_type": _("Recurrencia"),
             "scheduled_for": _("Fecha puntual"),
@@ -145,6 +152,9 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
                 "Selecciona un colaborador sugerido opcional; se validará su vigencia."
             ),
             "is_mandatory": _(""),
+            "is_accumulative": _(
+                "Al activarse, la tarea se mostrará en la mini app aunque existan turnos nuevos sin completarse."
+            ),
             "criticality_level": _(
                 "Indica la severidad del impacto operativo si la tarea se omite."
             ),

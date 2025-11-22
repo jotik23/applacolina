@@ -17,6 +17,7 @@ ARRAY_COLUMNS = (
 COLUMN_DEFINITIONS = (
     ("is_mandatory", "boolean NOT NULL DEFAULT FALSE"),
     ("criticality_level", "varchar(16) NOT NULL DEFAULT 'medium'"),
+    ("is_accumulative", "boolean NOT NULL DEFAULT FALSE"),
 )
 
 FIXTURE_FILENAME = "task_manager_data.json"

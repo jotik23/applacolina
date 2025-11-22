@@ -3,7 +3,7 @@ import uuid
 from dataclasses import dataclass
 import re
 from decimal import Decimal, InvalidOperation
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional, Sequence, cast
 
@@ -54,6 +54,7 @@ from personal.models import (
     PositionDefinition,
     RestPeriodStatus,
     ShiftAssignment,
+    ShiftType,
     UserProfile,
 )
 from production.models import ChickenHouse, Farm, Room
@@ -582,7 +583,7 @@ def _serialize_task_assignment(
 
     description = (definition.description or "").strip()
     if not description:
-        description = _("Sin descripción registrada.")
+        description = _("")
 
     is_completed_today = assignment.completed_on is not None and assignment.completed_on == reference_date
 
@@ -670,14 +671,91 @@ def _serialize_task_assignment(
     }
 
 
+NIGHT_SHIFT_CUTOFF = time(hour=13, minute=0)
+
+
+def _normalize_current_time(current_time: Optional[datetime]) -> datetime:
+    """Ensure we operate with a timezone-aware datetime in the local timezone."""
+
+    if current_time is None:
+        return timezone.localtime()
+
+    if timezone.is_naive(current_time):
+        current_time = timezone.make_aware(current_time, timezone=timezone.get_current_timezone())
+    else:
+        current_time = timezone.localtime(current_time)
+
+    return current_time
+
+
+def _resolve_task_definition_shift_type(task_definition: TaskDefinition) -> str:
+    """Infer the shift type associated with the task definition."""
+
+    position = getattr(task_definition, "position", None)
+    if position:
+        category = getattr(position, "category", None)
+        if category and category.shift_type:
+            return category.shift_type
+        if position.category_id and not category:
+            # Accessing attribute to trigger select_related fallback when missing.
+            category = position.category  # pragma: no cover - relies on ORM caching.
+            if category and category.shift_type:
+                return category.shift_type
+    return ShiftType.DAY
+
+
+def _resolve_shift_window_reference_date(
+    task_definition: TaskDefinition,
+    *,
+    reference_date: date,
+    current_time: datetime,
+) -> date:
+    """Return the due date that corresponds to the active shift window."""
+
+    shift_type = _resolve_task_definition_shift_type(task_definition)
+    if shift_type == ShiftType.NIGHT:
+        if current_time.time() < NIGHT_SHIFT_CUTOFF:
+            return reference_date - timedelta(days=1)
+    return reference_date
+
+
+def _assignment_matches_active_window(
+    assignment: TaskAssignment,
+    *,
+    reference_date: date,
+    current_time: datetime,
+) -> bool:
+    """Return True when the assignment should show up in the mini app for the current shift."""
+
+    definition = assignment.task_definition
+    if assignment.completed_on and assignment.completed_on == reference_date:
+        return True
+
+    if getattr(definition, "is_accumulative", False):
+        return True
+
+    due_date = assignment.due_date
+    if not due_date:
+        return True
+
+    target_date = _resolve_shift_window_reference_date(
+        definition,
+        reference_date=reference_date,
+        current_time=current_time,
+    )
+    return due_date == target_date
+
+
 def _resolve_daily_task_cards(
     *,
     user: Optional[UserProfile],
     reference_date: date,
+    current_time: Optional[datetime] = None,
 ) -> list[dict[str, object]]:
     """Return the task cards to display in the mini app feed."""
 
     cards: list[dict[str, object]] = []
+    normalized_now = _normalize_current_time(current_time)
 
     if user and getattr(user, "is_authenticated", False):
         assignments = (
@@ -687,6 +765,7 @@ def _resolve_daily_task_cards(
                 "task_definition",
                 "task_definition__category",
                 "task_definition__position",
+                "task_definition__position__category",
                 "task_definition__status",
                 "previous_collaborator",
             )
@@ -695,6 +774,12 @@ def _resolve_daily_task_cards(
         )
         serialized_cards: list[tuple[tuple[int, date, int, int], dict[str, object]]] = []
         for assignment in assignments:
+            if not _assignment_matches_active_window(
+                assignment,
+                reference_date=reference_date,
+                current_time=normalized_now,
+            ):
+                continue
             status_info = _build_assignment_status_info(assignment, reference_date=reference_date)
             if not status_info:
                 continue
@@ -4129,6 +4214,7 @@ def _duplicate_task_definition(task: TaskDefinition) -> TaskDefinition:
         status=task.status,
         category=task.category,
         is_mandatory=task.is_mandatory,
+        is_accumulative=task.is_accumulative,
         criticality_level=task.criticality_level,
         task_type=task.task_type,
         scheduled_for=task.scheduled_for,
@@ -4155,6 +4241,7 @@ def serialize_task_definition(task: TaskDefinition) -> dict[str, object]:
         "status": task.status_id,
         "category": task.category_id,
         "is_mandatory": task.is_mandatory,
+        "is_accumulative": task.is_accumulative,
         "criticality_level": task.criticality_level,
         "task_type": task.task_type,
         "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
