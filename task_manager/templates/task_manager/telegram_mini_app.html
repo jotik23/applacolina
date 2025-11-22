@@ -657,7 +657,6 @@
 
         <div class="space-y-4">
           {% include "task_manager/includes/mini_app_production_card.html" %}
-          {% include "task_manager/includes/mini_app_night_mortality_card.html" %}
 
           {% with pending=telegram_mini_app.pending_classification %}
           {% if pending and mini_app_card_permissions.pending_classification %}
@@ -2356,6 +2355,8 @@
             </article>
           {% endfor %}
         {% endif %}
+
+        {% include "task_manager/includes/mini_app_night_mortality_card.html" %}
 
         {% if mini_app_card_permissions.weight_registry %}
         {% with weight_registry=telegram_mini_app.weight_registry %}
