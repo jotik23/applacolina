@@ -149,6 +149,26 @@
       return entry;
     }
 
+    readNumericField(roomNode, field, roomLabel) {
+      const input = roomNode.querySelector('[data-night-mortality-room-field="' + field + '"]');
+      const value = input && typeof input.value === 'string' ? input.value.trim() : '';
+      if (value && !INTEGER_PATTERN.test(value)) {
+        const label = ROOM_FIELD_LABELS[field] || 'este campo';
+        this.showFeedback(
+          roomLabel ? `Usa números enteros para ${label} de ${roomLabel}.` : 'Usa números enteros.',
+          'error'
+        );
+        if (input) {
+          input.classList.add('border-rose-300');
+          if (typeof input.focus === 'function') {
+            input.focus();
+          }
+        }
+        return { valid: false, value: '' };
+      }
+      return { valid: true, value };
+    }
+
     async persist(payload) {
       if (!this.submitButton) {
         return;
@@ -325,22 +345,3 @@
     boot();
   }
 })();
-    readNumericField(roomNode, field, roomLabel) {
-      const input = roomNode.querySelector('[data-night-mortality-room-field="' + field + '"]');
-      const value = input && typeof input.value === 'string' ? input.value.trim() : '';
-      if (value && !INTEGER_PATTERN.test(value)) {
-        const label = ROOM_FIELD_LABELS[field] || 'este campo';
-        this.showFeedback(
-          roomLabel ? `Usa números enteros para ${label} de ${roomLabel}.` : 'Usa números enteros.',
-          'error'
-        );
-        if (input) {
-          input.classList.add('border-rose-300');
-          if (typeof input.focus === 'function') {
-            input.focus();
-          }
-        }
-        return { valid: false, value: '' };
-      }
-      return { valid: true, value };
-    }
