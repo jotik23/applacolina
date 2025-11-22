@@ -20,6 +20,12 @@ from .weight_registry import (
     persist_weight_registry,
     serialize_weight_registry,
 )
+from .night_mortality import (
+    NightMortalityRegistry,
+    build_night_mortality_registry,
+    persist_night_mortality_entries,
+    serialize_night_mortality_registry,
+)
 from .purchases import (
     PurchaseManagementCard,
     PurchaseApprovalCard,
@@ -52,6 +58,10 @@ __all__ = [
     "build_weight_registry",
     "persist_weight_registry",
     "serialize_weight_registry",
+    "NightMortalityRegistry",
+    "build_night_mortality_registry",
+    "persist_night_mortality_entries",
+    "serialize_night_mortality_registry",
     "PurchaseRequestsOverview",
     "PurchaseManagementCard",
     "PurchaseApprovalCard",

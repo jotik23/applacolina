@@ -70,6 +70,7 @@ from task_manager.mini_app.features import (
     build_shift_confirmation_card,
     build_shift_confirmation_empty_card,
     build_production_registry,
+    build_night_mortality_registry,
     build_weight_registry,
     build_purchase_requests_overview,
     build_purchase_management_card,
@@ -77,10 +78,12 @@ from task_manager.mini_app.features import (
     build_purchase_request_composer,
     build_transport_queue_payload,
     persist_production_records,
+    persist_night_mortality_entries,
     persist_weight_registry,
     serialize_shift_confirmation_card,
     serialize_shift_confirmation_empty_card,
     serialize_production_registry,
+    serialize_night_mortality_registry,
     serialize_weight_registry,
     serialize_purchase_requests_overview,
     serialize_purchase_management_card,
@@ -161,6 +164,7 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "leader_review": "task_manager.view_mini_app_leader_review_card",
     "suggestions": "task_manager.view_mini_app_suggestions_card",
     "task": "task_manager.view_mini_app_task_cards",
+    "night_mortality": "task_manager.view_mini_app_task_cards",
 }
 MINI_APP_CARD_PERMISSION_MAP.update(EGG_STAGE_CARD_PERMISSION_MAP)
 
@@ -1893,6 +1897,7 @@ def _build_telegram_mini_app_payload(
     include_shift_confirmation_stub: bool = True,
     user: Optional[UserProfile] = None,
     production: Optional[dict[str, object]] = None,
+    night_mortality: Optional[dict[str, object]] = None,
     weight_registry: Optional[dict[str, object]] = None,
     include_weight_registry: bool = True,
     purchases: Optional[dict[str, object]] = None,
@@ -3114,6 +3119,7 @@ def _build_telegram_mini_app_payload(
         },
         "production_reference": production_reference,
         "production": production,
+        "night_mortality": night_mortality,
         "weight_registry": weight_registry_payload,
         "purchases": purchases or {},
         "pending_classification": pending_classification_summary,
@@ -3298,6 +3304,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                     if shift_empty:
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             production_payload: Optional[dict[str, object]] = None
+            night_mortality_payload: Optional[dict[str, object]] = None
             weight_registry_payload: Optional[dict[str, object]] = None
             purchases_payload: Optional[dict[str, object]] = None
             session_token = _resolve_mini_app_session_token(self.request)
@@ -3306,6 +3313,11 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if registry:
                     production_payload = serialize_production_registry(registry)
                     production_payload["submit_url"] = reverse("task_manager:mini-app-production-records")
+            if card_permissions.get("night_mortality"):
+                mortality_registry = build_night_mortality_registry(user=user, reference_date=today)
+                if mortality_registry:
+                    night_mortality_payload = serialize_night_mortality_registry(mortality_registry)
+                    night_mortality_payload["submit_url"] = reverse("task_manager:mini-app-night-mortality")
             if card_permissions.get("weight_registry"):
                 weight_submit_url = reverse("task_manager:mini-app-weight-registry")
                 registry = build_weight_registry(
@@ -3346,6 +3358,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 include_shift_confirmation_stub=False,
                 user=user,
                 production=production_payload,
+                night_mortality=night_mortality_payload,
                 weight_registry=weight_registry_payload,
                 include_weight_registry=bool(card_permissions.get("weight_registry")),
                 purchases=purchases_payload,
@@ -4227,6 +4240,73 @@ def mini_app_production_record_view(request):
         {
             "status": "ok",
             "production": response_payload,
+        }
+    )
+
+
+@require_POST
+def mini_app_night_mortality_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+    if not user.has_perm("task_manager.view_mini_app_task_cards"):
+        return JsonResponse(
+            {"error": _("No tienes permisos para registrar la mortalidad nocturna.")},
+            status=403,
+        )
+
+    try:
+        payload = json.loads(request.body.decode() or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
+
+    date_str = payload.get("date")
+    target_date = timezone.localdate()
+    if date_str:
+        try:
+            target_date = date.fromisoformat(str(date_str))
+        except ValueError:
+            return JsonResponse({"error": _("La fecha del registro no es válida.")}, status=400)
+
+    registry = build_night_mortality_registry(user=user, reference_date=target_date)
+    if not registry:
+        return JsonResponse(
+            {"error": _("No encontramos lotes o galpones activos en tu turno nocturno.")},
+            status=404,
+        )
+
+    if registry.date != target_date:
+        return JsonResponse(
+            {"error": _("La fecha enviada no coincide con el turno nocturno activo.")},
+            status=400,
+        )
+
+    entries = payload.get("lots")
+    if not isinstance(entries, list):
+        return JsonResponse({"error": _("Debes enviar los registros por lote.")}, status=400)
+
+    try:
+        persist_night_mortality_entries(
+            registry=registry,
+            entries=entries,
+            user=user,
+        )
+    except ValidationError as exc:
+        message = _extract_validation_message(exc)
+        return JsonResponse({"error": message}, status=400)
+
+    refreshed = build_night_mortality_registry(user=user, reference_date=registry.date)
+    response_payload = None
+    if refreshed:
+        response_payload = serialize_night_mortality_registry(refreshed)
+        response_payload["submit_url"] = reverse("task_manager:mini-app-night-mortality")
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "night_mortality": response_payload,
         }
     )
 

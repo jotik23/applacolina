@@ -291,24 +291,26 @@ class TaskAssignmentSynchronizer:
                         )
                     continue
 
-                overlapping_snapshots = [
-                    snapshot
-                    for snapshot in snapshots
-                    if snapshot.operator_id is not None and rule.overlaps_rooms(snapshot)
-                ]
-                if overlapping_snapshots:
-                    seen_operator_ids: set[int] = set()
-                    for snapshot in overlapping_snapshots:
-                        if snapshot.operator_id in seen_operator_ids:
-                            continue
-                        seen_operator_ids.add(snapshot.operator_id)
-                        key = (rule.task.pk, due_date, snapshot.operator_id)
-                        targets[key] = AssignmentTarget(
-                            task_definition_id=rule.task.pk,
-                            due_date=due_date,
-                            collaborator_id=snapshot.operator_id,
-                        )
-                    continue
+                allow_room_overlap = rule.position_id is None
+                if allow_room_overlap:
+                    overlapping_snapshots = [
+                        snapshot
+                        for snapshot in snapshots
+                        if snapshot.operator_id is not None and rule.overlaps_rooms(snapshot)
+                    ]
+                    if overlapping_snapshots:
+                        seen_operator_ids: set[int] = set()
+                        for snapshot in overlapping_snapshots:
+                            if snapshot.operator_id in seen_operator_ids:
+                                continue
+                            seen_operator_ids.add(snapshot.operator_id)
+                            key = (rule.task.pk, due_date, snapshot.operator_id)
+                            targets[key] = AssignmentTarget(
+                                task_definition_id=rule.task.pk,
+                                due_date=due_date,
+                                collaborator_id=snapshot.operator_id,
+                            )
+                        continue
 
                 fallback_collaborator_id = rule.fallback_collaborator_id(due_date)
                 key = (rule.task.pk, due_date, fallback_collaborator_id)

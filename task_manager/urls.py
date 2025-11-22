@@ -21,6 +21,7 @@ from .views import (
     mini_app_transport_progress_view,
     mini_app_transport_verification_view,
     mini_app_weight_registry_view,
+    mini_app_night_mortality_view,
     telegram_mini_app_demo_view,
     telegram_mini_app_view,
     task_definition_create_view,
@@ -59,6 +60,11 @@ urlpatterns = [
         "telegram/mini-app/production-records/",
         mini_app_production_record_view,
         name="mini-app-production-records",
+    ),
+    path(
+        "telegram/mini-app/night-mortality/",
+        mini_app_night_mortality_view,
+        name="mini-app-night-mortality",
     ),
     path(
         "telegram/mini-app/purchases/<int:pk>/request-modification/",

@@ -205,6 +205,29 @@ class TaskAssignmentSynchronizationTests(TestCase):
         self.assertIsNone(assignment.collaborator)
         self.assertIsNone(assignment.previous_collaborator)
 
+    def test_sync_does_not_use_room_overlap_when_position_defined(self):
+        due_date = date(2024, 1, 9)  # Tuesday
+        with suppress_task_assignment_sync():
+            ShiftAssignment.objects.create(
+                calendar=self.calendar,
+                position=self.second_position,
+                date=due_date,
+                operator=self.backup_operator,
+            )
+
+        task = self._create_task_definition(
+            name="Control de inventario diario",
+            weekly_days=[DayOfWeek.TUESDAY],
+            position=self.position,
+        )
+        with suppress_task_assignment_sync():
+            task.rooms.set([self.room])
+
+        sync_task_assignments(start_date=due_date, end_date=due_date)
+
+        assignment = TaskAssignment.objects.get(task_definition=task, due_date=due_date)
+        self.assertIsNone(assignment.collaborator)
+
     def test_sync_uses_collaborator_fallback_when_scope_allows(self):
         due_date = date(2024, 1, 20)
 
