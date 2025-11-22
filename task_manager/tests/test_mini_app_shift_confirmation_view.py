@@ -103,8 +103,11 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         self.assertIn(user.get_short_name(), shift_payload["greeting_label"])
         expected_summary = f"{self.category.display_name} · {self.position.name}"
         self.assertEqual(shift_payload["summary_label"], expected_summary)
+        self.assertEqual(shift_payload["shift_type"], self.category.shift_type)
+        self.assertFalse(payload["can_share_whatsapp_report"])
         self.assertContains(response, "data-shift-confirmation-card")
         self.assertContains(response, expected_summary)
+        self.assertNotContains(response, "Compartir reporte por WhatsApp")
 
     def test_authorized_user_without_assignment_gets_empty_card(self):
         user = self._create_user(grant_shift_permission=True)
@@ -138,3 +141,20 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         self.assertIsNotNone(payload)
         self.assertIsNone(payload["shift_confirmation"])
         self.assertIsNone(payload["shift_confirmation_empty"])
+
+    def test_whatsapp_share_button_only_for_night_shift(self):
+        self.category.shift_type = ShiftType.NIGHT
+        self.category.save(update_fields=["shift_type"])
+        user = self._create_user(grant_shift_permission=True)
+        self._create_assignment(operator=user)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("task_manager:telegram-mini-app"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.context["telegram_mini_app"]
+        self.assertIsNotNone(payload)
+        shift_payload = payload["shift_confirmation"]
+        self.assertIsNotNone(shift_payload)
+        self.assertEqual(shift_payload["shift_type"], ShiftType.NIGHT)
+        self.assertTrue(payload["can_share_whatsapp_report"])
+        self.assertContains(response, "Compartir reporte por WhatsApp")

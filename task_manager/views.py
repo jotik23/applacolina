@@ -2545,6 +2545,7 @@ def _build_telegram_mini_app_payload(
             "requires_confirmation": True,
             "confirmed": False,
             "storage_key": f"miniapp-shift-confirm::{today.isoformat()}",
+            "shift_type": ShiftType.NIGHT,
         }
 
     tasks = _resolve_daily_task_cards(user=user, reference_date=today)
@@ -3042,8 +3043,16 @@ def _build_telegram_mini_app_payload(
         _("Prioriza las tareas vencidas o sin evidencia antes del relevo."),
     ]
 
+    shift_type_value = None
+    if isinstance(shift_confirmation_payload, dict):
+        shift_type_value = shift_confirmation_payload.get("shift_type")
+
+    can_share_whatsapp_report = shift_type_value == ShiftType.NIGHT
+
     return {
         "date_label": date_label,
+        "active_shift_type": shift_type_value,
+        "can_share_whatsapp_report": can_share_whatsapp_report,
         "user": {
             "display_name": display_name,
             "contact_handle": contact_handle,

@@ -7,7 +7,7 @@ from typing import Optional
 from django.db.models import Case, IntegerField, Value, When
 from django.utils.formats import date_format
 
-from personal.models import CalendarStatus, ShiftAssignment, UserProfile
+from personal.models import CalendarStatus, ShiftAssignment, ShiftType, UserProfile
 
 
 _STATUS_PRIORITY = Case(
@@ -38,6 +38,7 @@ class ShiftConfirmationCard:
     requires_confirmation: bool
     confirmed: bool
     storage_key: str
+    shift_type: str
 
 
 @dataclass(frozen=True)
@@ -120,6 +121,8 @@ def build_shift_confirmation_card(
     summary_label = f"{category_label} · {position_label}"
     storage_key = f"miniapp-shift-confirm::{assignment.pk}:{target_date.isoformat()}"
 
+    shift_type = category.shift_type if category and category.shift_type else ShiftType.DAY
+
     card = ShiftConfirmationCard(
         assignment_id=assignment.pk,
         calendar_id=assignment.calendar_id,
@@ -136,6 +139,7 @@ def build_shift_confirmation_card(
         requires_confirmation=True,
         confirmed=False,
         storage_key=storage_key,
+        shift_type=shift_type,
     )
     return card
 
