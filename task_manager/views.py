@@ -1601,7 +1601,6 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.setdefault("task_manager_active_submenu", "tasks")
         context.setdefault("task_definition_form", TaskDefinitionQuickCreateForm())
         categories = TaskCategory.objects.filter(is_active=True).order_by("name")
         statuses = TaskStatus.objects.filter(is_active=True).order_by("name")
@@ -1612,6 +1611,7 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
         if active_tab not in allowed_tabs:
             active_tab = "tareas"
         context["task_manager_active_tab"] = active_tab
+        context["task_manager_active_submenu"] = "tasks" if active_tab == "tareas" else "daily-report"
 
         filters = build_task_definition_filters(self.request.GET)
         defaults = TaskDefinitionFilters()

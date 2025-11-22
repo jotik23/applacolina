@@ -544,30 +544,10 @@
     }
   </style>
 
-  {% include "task_manager/_submenu.html" with active=task_manager_active_submenu %}
+  {% include "task_manager/_submenu.html" with active=task_manager_active_submenu tab_urls=task_manager_tab_urls %}
   <div class="space-y-10">
-    <section data-tm-tabs class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      {% with active_tab=task_manager_active_tab|default:"tareas" tab_urls=task_manager_tab_urls %}
-      <nav class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500" role="tablist">
-        <a
-          href="{{ tab_urls.tareas }}"
-          data-tm-tab="tareas"
-          class="tab-button rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if active_tab == 'tareas' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100{% endif %}"
-          aria-selected="{% if active_tab == 'tareas' %}true{% else %}false{% endif %}"
-          role="tab"
-        >Tareas</a>
-        <a
-          href="{{ tab_urls.reporte }}"
-          data-tm-tab="reporte"
-          class="tab-button rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if active_tab == 'reporte' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100{% endif %}"
-          aria-selected="{% if active_tab == 'reporte' %}true{% else %}false{% endif %}"
-          role="tab"
-        >Reporte del día</a>
-        <button data-tm-tab="asignaciones" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Asignaciones diarias</button>
-        <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Seguimiento &amp; análisis</button>
-        <a href="{% url 'task_manager:telegram-mini-app' %}" target="_blank" rel="noopener noreferrer" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Vista operario</a>
-      </nav>
-
+    <section class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      {% with active_tab=task_manager_active_tab|default:"tareas" %}
       <div class="space-y-12">
         <article id="tm-tareas" data-tm-panel="tareas" class="{% if active_tab != 'tareas' %}hidden {% endif %}space-y-10">
           <section class="space-y-6">
@@ -1516,10 +1496,6 @@
   </div>
 
   <style>
-    [data-tm-tabs] .tab-button[aria-selected="true"] {
-      background-color: rgb(15 23 42);
-      color: #fff;
-    }
     .alignment-cell {
       min-width: 180px;
       padding: 0.75rem 1rem;
@@ -3749,79 +3725,5 @@
         }
       });
     });
-  </script>
-  <script>
-    (function () {
-      var tabContainer = document.querySelector('[data-tm-tabs]');
-      if (!tabContainer) {
-        return;
-      }
-      var buttons = Array.prototype.slice.call(tabContainer.querySelectorAll('.tab-button[data-tm-tab]'));
-      var panels = Array.prototype.slice.call(tabContainer.querySelectorAll('[data-tm-panel]'));
-      function findButton(tabId) {
-        return buttons.find(function (button) {
-          return button.getAttribute('data-tm-tab') === tabId;
-        });
-      }
-      function isDisabled(button) {
-        return !!(button && (button.disabled || button.getAttribute('aria-disabled') === 'true'));
-      }
-      function activate(tabId, options) {
-        var shouldFocus = true;
-        if (options && Object.prototype.hasOwnProperty.call(options, 'focus')) {
-          shouldFocus = !!options.focus;
-        }
-        panels.forEach(function (panel) {
-          var isActive = panel.getAttribute('data-tm-panel') === tabId;
-          panel.classList.toggle('hidden', !isActive);
-        });
-        buttons.forEach(function (button) {
-          var isActive = button.getAttribute('data-tm-tab') === tabId;
-          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-          button.classList.toggle('bg-slate-900', isActive);
-          button.classList.toggle('text-white', isActive);
-        });
-        var target = tabContainer.querySelector('[data-tm-panel="' + tabId + '"]');
-        if (shouldFocus && target) {
-          target.setAttribute('tabindex', '-1');
-          target.focus();
-          target.removeAttribute('tabindex');
-        }
-      }
-      function tryActivate(tabId, options) {
-        if (!tabId) {
-          return false;
-        }
-        var targetButton = findButton(tabId);
-        if (!targetButton || isDisabled(targetButton)) {
-          return false;
-        }
-        activate(tabId, options);
-        return true;
-      }
-      buttons.forEach(function (button) {
-        if (isDisabled(button)) {
-          button.setAttribute('aria-disabled', 'true');
-          button.setAttribute('tabindex', '-1');
-          return;
-        }
-        button.addEventListener('click', function () {
-          activate(button.getAttribute('data-tm-tab'));
-        });
-      });
-      var params = new URLSearchParams(window.location.search);
-      var tabFromQuery = params.get('tm_tab');
-      if (tryActivate(tabFromQuery, { focus: false })) {
-        return;
-      }
-      var hash = window.location.hash;
-      if (hash && hash.indexOf('#tm-') === 0) {
-        var tabId = hash.slice(4);
-        if (tryActivate(tabId, { focus: false })) {
-          return;
-        }
-      }
-      activate('tareas', { focus: false });
-    })();
   </script>
 {% endblock %}
