@@ -547,16 +547,29 @@
   {% include "task_manager/_submenu.html" with active=task_manager_active_submenu %}
   <div class="space-y-10">
     <section data-tm-tabs class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <nav class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
-        <button data-tm-tab="tareas" class="tab-button rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="true">Tareas</button>
-        <button data-tm-tab="reporte" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Reporte del día</button>
+      {% with active_tab=task_manager_active_tab|default:"tareas" tab_urls=task_manager_tab_urls %}
+      <nav class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500" role="tablist">
+        <a
+          href="{{ tab_urls.tareas }}"
+          data-tm-tab="tareas"
+          class="tab-button rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if active_tab == 'tareas' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100{% endif %}"
+          aria-selected="{{ active_tab == 'tareas'|yesno:'true,false' }}"
+          role="tab"
+        >Tareas</a>
+        <a
+          href="{{ tab_urls.reporte }}"
+          data-tm-tab="reporte"
+          class="tab-button rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if active_tab == 'reporte' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100{% endif %}"
+          aria-selected="{{ active_tab == 'reporte'|yesno:'true,false' }}"
+          role="tab"
+        >Reporte del día</a>
         <button data-tm-tab="asignaciones" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Asignaciones diarias</button>
         <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Seguimiento &amp; análisis</button>
         <a href="{% url 'task_manager:telegram-mini-app' %}" target="_blank" rel="noopener noreferrer" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Vista operario</a>
       </nav>
 
       <div class="space-y-12">
-        <article id="tm-tareas" data-tm-panel="tareas" class="space-y-10">
+        <article id="tm-tareas" data-tm-panel="tareas" class="{% if active_tab != 'tareas' %}hidden {% endif %}space-y-10">
           <section class="space-y-6">
             <header class="flex flex-wrap items-center justify-between gap-4">
             </header>
@@ -856,7 +869,7 @@
           </div>
         </article>
 
-        <article id="tm-reporte" data-tm-panel="reporte" class="hidden space-y-8">
+        <article id="tm-reporte" data-tm-panel="reporte" class="{% if active_tab != 'reporte' %}hidden {% endif %}space-y-8">
           {% with report=task_manager_daily_report %}
             <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -942,7 +955,7 @@
                               <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">{{ collaborator.initials }}</div>
                               <div>
                                 <p class="text-sm font-semibold text-slate-900">{{ collaborator.name }}</p>
-                                <p class="text-xs text-slate-500">{{ collaborator.metrics.completed }} completadas · {{ collaborator.metrics.pending }} pendientes{% if collaborator.metrics.overdue %} · {{ collaborator.metrics.overdue }} vencidas{% endif %}</p>
+                                <p class="text-xs text-slate-500">{{ collaborator.metrics.completed }} completadas · {{ collaborator.metrics.pending }} pendientes{% if collaborator.metrics.overdue %} · {{ collaborator.metrics.overdue }} vencidas{% endif %} · <span class="font-semibold text-slate-700">{{ collaborator.role_label }}</span></p>
                               </div>
                             </div>
                             <span class="tm-chip text-xs" data-theme="{{ collaborator.metrics.progress_theme }}">{{ collaborator.metrics.progress_percent }}% avance</span>
@@ -1498,6 +1511,7 @@
         </article>
 
       </div>
+      {% endwith %}
     </section>
   </div>
 

@@ -1493,6 +1493,7 @@ def build_daily_assignment_report(
                 "id": collaborator.pk,
                 "name": collaborator.get_full_name(),
                 "initials": _build_user_initials(collaborator),
+                "role_label": role_label,
                 "metrics": {"total": 0, "completed": 0, "pending": 0, "overdue": 0},
                 "tasks": [],
             }
@@ -1507,6 +1508,7 @@ def build_daily_assignment_report(
             "id": assignment.pk,
             "name": definition.name,
             "category_label": getattr(definition.category, "name", ""),
+            "display_order": definition.display_order or 0,
             "status_label": status_info.get("label") or "",
             "status_details": status_info.get("details") or "",
             "status_state": state,
@@ -1524,6 +1526,7 @@ def build_daily_assignment_report(
         for collaborator_entry in collaborators:
             collaborator_entry["tasks"].sort(
                 key=lambda task: (
+                    task.get("display_order", 0),
                     state_priority.get(task.get("status_state"), 99),
                     str(task.get("name") or "").lower(),
                 )
@@ -1604,6 +1607,11 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
         statuses = TaskStatus.objects.filter(is_active=True).order_by("name")
         context["task_manager_categories"] = categories
         context["task_manager_statuses"] = statuses
+        allowed_tabs = {"tareas", "reporte"}
+        active_tab = self.request.GET.get("tm_tab") or "tareas"
+        if active_tab not in allowed_tabs:
+            active_tab = "tareas"
+        context["task_manager_active_tab"] = active_tab
 
         filters = build_task_definition_filters(self.request.GET)
         defaults = TaskDefinitionFilters()
@@ -1875,6 +1883,18 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
             groups=build_today_view_filter_groups(),
         )
         report_date = _parse_iso_date(self.request.GET.get("tm_report_date")) or timezone.localdate()
+        context["task_manager_tab_urls"] = {
+            "tareas": build_task_manager_tab_url(
+                self.request,
+                tab="tareas",
+                params={"tm_report_date": None},
+            ),
+            "reporte": build_task_manager_tab_url(
+                self.request,
+                tab="reporte",
+                params={"tm_report_date": report_date.isoformat()},
+            ),
+        }
         context["task_manager_daily_report"] = build_daily_assignment_report(
             self.request,
             target_date=report_date,
