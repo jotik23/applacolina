@@ -14,7 +14,13 @@ from django.utils.translation import gettext as _
 from personal.models import ShiftType, UserProfile
 from production.models import BirdBatch, BirdBatchRoomAllocation, ProductionRecord, ProductionRoomRecord
 
-from .production_registry import resolve_assignment_for_date, _coerce_int
+from .production_registry import (
+    resolve_assignment_for_date,
+    _coerce_int,
+    _coerce_decimal,
+    _quantize_to_int,
+    _format_decimal,
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +31,7 @@ class NightMortalityRoomSnapshot:
     allocated_birds: int
     mortality: Optional[int]
     discard: Optional[int]
+    consumption: Optional[Decimal]
 
 
 @dataclass(frozen=True)
@@ -43,7 +50,7 @@ class NightMortalityLotSnapshot:
     @property
     def has_entries(self) -> bool:
         return any(
-            (room.mortality not in (None, "")) or (room.discard not in (None, ""))
+            (room.mortality not in (None, "")) or (room.discard not in (None, "")) or (room.consumption not in (None, ""))
             for room in self.rooms
         )
 
@@ -158,6 +165,7 @@ def build_night_mortality_registry(
                     allocated_birds=allocation.quantity or 0,
                     mortality=room_record.mortality if room_record else None,
                     discard=room_record.discard if room_record else None,
+                    consumption=_quantize_to_int(room_record.consumption) if room_record else None,
                 )
             )
 
@@ -219,6 +227,7 @@ def serialize_night_mortality_registry(registry: NightMortalityRegistry) -> dict
                     "birds": room.allocated_birds,
                     "mortality": room.mortality,
                     "discard": room.discard,
+                    "consumption": _format_decimal(room.consumption) if room.consumption is not None else None,
                 }
             )
         payload["lots"].append(lot_payload)
@@ -262,7 +271,7 @@ def persist_night_mortality_entries(
                     params={"batch": batch_id},
                 )
 
-            parsed_rooms: dict[int, dict[str, int]] = {}
+            parsed_rooms: dict[int, dict[str, object]] = {}
             for room_payload in rooms_payload:
                 if not isinstance(room_payload, Mapping):
                     raise ValidationError(_("Formato de salón inválido."))
@@ -281,9 +290,16 @@ def persist_night_mortality_entries(
 
                 mortality = _coerce_int(room_payload.get("mortality"), field="mortality", allow_empty=True)
                 discard = _coerce_int(room_payload.get("discard"), field="discard", allow_empty=True)
+                consumption = _coerce_decimal(
+                    room_payload.get("consumption"),
+                    field="consumption",
+                    allow_decimals=True,
+                    allow_empty=True,
+                )
                 parsed_rooms[room_id] = {
                     "mortality": mortality,
                     "discard": discard,
+                    "consumption": consumption,
                 }
 
             missing_rooms = lot.room_ids - set(parsed_rooms.keys())
@@ -295,12 +311,14 @@ def persist_night_mortality_entries(
 
             total_mortality = sum(values["mortality"] for values in parsed_rooms.values())
             total_discard = sum(values["discard"] for values in parsed_rooms.values())
+            total_consumption = sum(values["consumption"] for values in parsed_rooms.values())
             record = _persist_mortality_for_lot(
                 lot=lot,
                 registry=registry,
                 room_values=parsed_rooms,
                 total_mortality=total_mortality,
                 total_discard=total_discard,
+                total_consumption=total_consumption,
                 user=user,
             )
             saved_records.append(record)
@@ -311,14 +329,15 @@ def _persist_mortality_for_lot(
     *,
     lot: NightMortalityLotSnapshot,
     registry: NightMortalityRegistry,
-    room_values: Mapping[int, Mapping[str, int]],
+    room_values: Mapping[int, Mapping[str, object]],
     total_mortality: int,
     total_discard: int,
+    total_consumption: Decimal,
     user: UserProfile,
 ) -> ProductionRecord:
     record_defaults = {
         "production": Decimal("0"),
-        "consumption": Decimal("0"),
+        "consumption": total_consumption,
         "mortality": total_mortality,
         "discard": total_discard,
         "created_by": user,
@@ -333,6 +352,7 @@ def _persist_mortality_for_lot(
     if not created:
         record.mortality = total_mortality
         record.discard = total_discard
+        record.consumption = total_consumption
         if record.created_by_id is None:
             record.created_by = user
         record.updated_by = user
@@ -357,6 +377,7 @@ def _persist_mortality_for_lot(
             )
         room_record.mortality = values["mortality"]
         room_record.discard = values["discard"]
+        room_record.consumption = values["consumption"]
         if room_record.production is None:
             room_record.production = Decimal("0")
         if room_record.consumption is None:

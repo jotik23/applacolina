@@ -144,7 +144,7 @@ class MiniAppNightMortalityViewTests(TestCase):
             bird_batch=self.batch,
             date=today,
             production=Decimal("150.0"),
-            consumption=400,
+            consumption=Decimal("3"),
             mortality=5,
             discard=3,
         )
@@ -152,7 +152,7 @@ class MiniAppNightMortalityViewTests(TestCase):
             production_record=record,
             room=self.room_a,
             production=Decimal("70.0"),
-            consumption=200,
+            consumption=Decimal("1"),
             mortality=2,
             discard=1,
         )
@@ -160,7 +160,7 @@ class MiniAppNightMortalityViewTests(TestCase):
             production_record=record,
             room=self.room_b,
             production=Decimal("80.0"),
-            consumption=200,
+            consumption=Decimal("2"),
             mortality=3,
             discard=2,
         )
@@ -172,10 +172,13 @@ class MiniAppNightMortalityViewTests(TestCase):
         lot_payload = payload["lots"][0]
         mortalities = [room["mortality"] for room in lot_payload["rooms"]]
         discards = [room["discard"] for room in lot_payload["rooms"]]
+        consumptions = [room["consumption"] for room in lot_payload["rooms"]]
         self.assertIn(2, mortalities)
         self.assertIn(3, mortalities)
         self.assertIn(1, discards)
         self.assertIn(2, discards)
+        self.assertIn("1", consumptions)
+        self.assertIn("2", consumptions)
 
     def test_view_requires_permission(self):
         task_perm = Permission.objects.get(codename="view_mini_app_task_cards")
@@ -197,8 +200,8 @@ class MiniAppNightMortalityViewTests(TestCase):
                 {
                     "bird_batch": self.batch.pk,
                     "rooms": [
-                        {"room_id": self.room_a.pk, "mortality": "4", "discard": "1"},
-                        {"room_id": self.room_b.pk, "mortality": "", "discard": "2"},
+                        {"room_id": self.room_a.pk, "mortality": "4", "discard": "1", "consumption": "1"},
+                        {"room_id": self.room_b.pk, "mortality": "", "discard": "2", "consumption": "2"},
                     ],
                 }
             ],
@@ -208,12 +211,15 @@ class MiniAppNightMortalityViewTests(TestCase):
         record = ProductionRecord.objects.get(bird_batch=self.batch, date=today)
         self.assertEqual(record.mortality, 4)
         self.assertEqual(record.discard, 3)
+        self.assertEqual(record.consumption, Decimal("3"))
         room_a_record = ProductionRoomRecord.objects.get(production_record=record, room=self.room_a)
         room_b_record = ProductionRoomRecord.objects.get(production_record=record, room=self.room_b)
         self.assertEqual(room_a_record.mortality, 4)
         self.assertEqual(room_b_record.mortality, 0)
         self.assertEqual(room_a_record.discard, 1)
         self.assertEqual(room_b_record.discard, 2)
+        self.assertEqual(room_a_record.consumption, Decimal("1"))
+        self.assertEqual(room_b_record.consumption, Decimal("2"))
         data = response.json()
         self.assertIn("night_mortality", data)
         self.assertEqual(data["status"], "ok")
