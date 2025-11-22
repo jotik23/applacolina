@@ -484,13 +484,11 @@ def _build_assignment_status_info(
 ) -> Optional[dict[str, object]]:
     definition = assignment.task_definition
     if assignment.completed_on:
-        if assignment.completed_on != reference_date:
-            return None
         state = "completed"
         status_label = _("Completada")
         theme = _TASK_STATE_THEME_MAP.get(state, "emerald")
         due_label = date_format(assignment.due_date, "DATE_FORMAT") if assignment.due_date else ""
-        details = _("Marcada %(date)s") % {"date": date_format(reference_date, "DATE_FORMAT")}
+        details = _("Marcada %(date)s") % {"date": date_format(assignment.completed_on, "DATE_FORMAT")}
         return {
             "state": state,
             "label": status_label,
@@ -552,9 +550,6 @@ def _build_assignment_status_info(
             ) % {"count": overdue_days}
         elif due_date:
             details = _("Venció %(date)s") % {"date": due_label}
-    else:
-        if due_date:
-            details = _("Programada para %(date)s") % {"date": due_label}
 
     return {
         "state": state,
@@ -733,8 +728,16 @@ def _assignment_matches_active_window(
     """Return True when the assignment should show up in the mini app for the current shift."""
 
     definition = assignment.task_definition
-    if assignment.completed_on and assignment.completed_on == reference_date:
-        return True
+    target_date = _resolve_assignment_reference_date(
+        assignment,
+        reference_date=reference_date,
+        current_time=current_time,
+    )
+
+    if assignment.completed_on:
+        if assignment.due_date:
+            return assignment.due_date == target_date
+        return assignment.completed_on == target_date
 
     if getattr(definition, "is_accumulative", False):
         return True
@@ -743,11 +746,6 @@ def _assignment_matches_active_window(
     if not due_date:
         return True
 
-    target_date = _resolve_assignment_reference_date(
-        assignment,
-        reference_date=reference_date,
-        current_time=current_time,
-    )
     return due_date == target_date
 
 
@@ -765,7 +763,10 @@ def _resolve_daily_task_cards(
     if user and getattr(user, "is_authenticated", False):
         assignments = (
             TaskAssignment.objects.filter(collaborator=user)
-            .filter(Q(completed_on__isnull=True) | Q(completed_on=reference_date))
+            .filter(
+                Q(completed_on__isnull=True)
+                | Q(completed_on__gte=reference_date - timedelta(days=1))
+            )
             .select_related(
                 "task_definition",
                 "task_definition__category",

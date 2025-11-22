@@ -226,6 +226,42 @@ class MiniAppTaskCardWindowTests(TestCase):
         self.assertEqual(card["completion_note"], "")
         self.assertEqual(card["assignment_id"], assignment.pk)
 
+    def test_completed_task_persists_after_reload(self):
+        assignment = self._create_assignment(
+            due_date=self.reference_date,
+            position=self.day_position,
+        )
+        assignment.completed_on = self.reference_date
+        assignment.save(update_fields=["completed_on"])
+
+        cards = _resolve_daily_task_cards(
+            user=self.user,
+            reference_date=self.reference_date,
+            current_time=self._aware_datetime(self.reference_date, 12, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card["status"]["state"], "completed")
+
+    def test_completed_night_shift_task_visible_next_day(self):
+        night_due = self.reference_date - timedelta(days=1)
+        assignment = self._create_assignment(
+            due_date=night_due,
+            position=self.night_position,
+        )
+        assignment.completed_on = night_due
+        assignment.save(update_fields=["completed_on"])
+
+        cards = _resolve_daily_task_cards(
+            user=self.user,
+            reference_date=self.reference_date,
+            current_time=self._aware_datetime(self.reference_date, 6, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card["status"]["state"], "completed")
     def test_task_badges_exclude_recurrence_and_priority(self):
         assignment = self._create_assignment(
             due_date=self.reference_date,
