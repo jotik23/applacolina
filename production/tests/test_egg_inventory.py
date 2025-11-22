@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from production.models import (
     BirdBatch,
@@ -265,6 +266,72 @@ class EggInventoryDashboardTests(TestCase):
             )
         )
 
+    def test_cardex_argument_includes_previous_balance(self) -> None:
+        target_month = self.record.date.replace(day=1)
+        previous_day = target_month - timedelta(days=1)
+
+        # Classification recorded before the current month to seed the starting balance.
+        previous_farm = Farm.objects.create(name="Histórica")
+        previous_batch = BirdBatch.objects.create(
+            farm=previous_farm,
+            status=BirdBatch.Status.ACTIVE,
+            birth_date=date.today(),
+            initial_quantity=900,
+            breed=self.breed,
+        )
+        previous_record = ProductionRecord.objects.create(
+            bird_batch=previous_batch,
+            date=previous_day,
+            production=Decimal("120"),
+            consumption=Decimal("100"),
+            mortality=2,
+            discard=0,
+        )
+        previous_classification = previous_record.egg_classification
+        previous_classification.received_cartons = Decimal("100")
+        previous_classification.save(update_fields=["received_cartons"])
+        record_classification_results(
+            batch=previous_classification,
+            entries={"jumbo": Decimal("100")},
+            actor_id=self.user.id,
+        )
+        session = previous_classification.classification_sessions.first()
+        if session:
+            session.classified_at = timezone.make_aware(datetime.combine(previous_day, datetime.min.time()))
+            session.save(update_fields=["classified_at"])
+
+        previous_dispatch = EggDispatch.objects.create(
+            date=previous_day,
+            destination=EggDispatchDestination.TIERRALTA,
+            driver=self.user,
+            seller=self.user,
+            total_cartons=Decimal("20"),
+        )
+        EggDispatchItem.objects.create(
+            dispatch=previous_dispatch,
+            egg_type=EggType.JUMBO,
+            cartons=Decimal("20"),
+        )
+
+        # Current month classification to keep the flow active.
+        batch = self.record.egg_classification
+        batch.received_cartons = Decimal("150")
+        batch.save(update_fields=["received_cartons"])
+        record_classification_results(
+            batch=batch,
+            entries={"jumbo": Decimal("80"), "aaa": Decimal("70")},
+            actor_id=self.user.id,
+        )
+
+        url = reverse("production:egg-inventory-cardex")
+        response = self.client.get(url, {"month": target_month.strftime("%Y-%m")})
+        self.assertEqual(response.status_code, 200)
+        rows = response.context["inventory_argument_rows"]
+        jumbo_row = next(row for row in rows if row["egg_type"] == EggType.JUMBO)
+        # The previous month balance is 100 classified - 20 dispatched = 80 cartones.
+        self.assertEqual(jumbo_row["starting"], Decimal("80"))
+        totals = response.context["inventory_argument_totals"]
+        self.assertEqual(totals["starting"], Decimal("80"))
     def test_cardex_sessions_view_lists_partial_rows(self) -> None:
         batch = self.record.egg_classification
         batch.received_cartons = Decimal("150")

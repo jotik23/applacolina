@@ -60,6 +60,7 @@ from production.services.egg_classification import (
     build_pending_batches,
     compute_unclassified_total,
     delete_classification_session,
+    get_inventory_balance_until,
     reset_batch_progress,
     summarize_classified_inventory,
 )
@@ -1180,11 +1181,18 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
         dispatch_day_map = {dispatch.day: dispatch for dispatch in dispatch_days}
         classification_type_totals = self._build_type_totals(flows)
         dispatch_type_totals = self._build_dispatch_type_totals(dispatch_days)
+        previous_day = month_start - timedelta(days=1)
+        starting_inventory_totals = get_inventory_balance_until(
+            until=previous_day,
+            farm_id=selected_farm_id,
+        )
         inventory_argument_rows = self._build_inventory_argument_rows(
+            starting_totals=starting_inventory_totals,
             classification_totals=classification_type_totals,
             dispatch_totals=dispatch_type_totals,
         )
         inventory_argument_totals = self._build_argument_totals(
+            starting_totals=starting_inventory_totals,
             classification_totals=classification_type_totals,
             dispatch_totals=dispatch_type_totals,
         )
@@ -1308,20 +1316,23 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
     def _build_inventory_argument_rows(
         self,
         *,
+        starting_totals: Mapping[str, Decimal],
         classification_totals: Mapping[str, Decimal],
         dispatch_totals: Mapping[str, Decimal],
     ) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for egg_type in ORDERED_EGG_TYPES:
+            starting = starting_totals.get(egg_type, Decimal("0"))
             classified = classification_totals.get(egg_type, Decimal("0"))
             dispatched = dispatch_totals.get(egg_type, Decimal("0"))
-            balance = classified - dispatched
+            balance = starting + classified - dispatched
             if balance < Decimal("0"):
                 balance = Decimal("0")
             rows.append(
                 {
                     "egg_type": egg_type,
                     "label": self.egg_type_labels.get(egg_type, egg_type),
+                    "starting": starting,
                     "classified": classified,
                     "dispatched": dispatched,
                     "balance": balance,
@@ -1332,15 +1343,18 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
     def _build_argument_totals(
         self,
         *,
+        starting_totals: Mapping[str, Decimal],
         classification_totals: Mapping[str, Decimal],
         dispatch_totals: Mapping[str, Decimal],
     ) -> dict[str, Decimal]:
+        starting_total = sum(starting_totals.values(), Decimal("0"))
         classified_total = sum(classification_totals.values(), Decimal("0"))
         dispatched_total = sum(dispatch_totals.values(), Decimal("0"))
-        balance_total = classified_total - dispatched_total
+        balance_total = starting_total + classified_total - dispatched_total
         if balance_total < Decimal("0"):
             balance_total = Decimal("0")
         return {
+            "starting": starting_total,
             "classified": classified_total,
             "dispatched": dispatched_total,
             "balance": balance_total,

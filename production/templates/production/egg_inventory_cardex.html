@@ -110,9 +110,9 @@
       <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm lg:col-span-2">
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Argumento de inventario</p>
-          <h2 class="text-lg font-semibold text-slate-900">Clasificado vs despachado ({{ month_start|date:"F" }})</h2>
+          <h2 class="text-lg font-semibold text-slate-900">Saldo inicial + movimientos del mes ({{ month_start|date:"F" }})</h2>
           <p class="text-sm text-slate-500">
-            Los totales clasificados respetan los filtros aplicados; los despachos son el consolidado mensual de todas las granjas.
+            El saldo parte del acumulado histórico filtrado por granja (si aplica); los despachos siguen siendo el consolidado mensual de todas las granjas.
           </p>
         </div>
         <div class="overflow-x-auto rounded-xl border border-slate-100">
@@ -120,15 +120,17 @@
             <thead>
               <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                 <th class="px-3 py-3 text-left">Tipo</th>
-                <th class="px-3 py-3 text-right">Clasificado</th>
-                <th class="px-3 py-3 text-right">Despachado</th>
-                <th class="px-3 py-3 text-right">Inventario</th>
+                <th class="px-3 py-3 text-right">Saldo inicial</th>
+                <th class="px-3 py-3 text-right">Clasificado mes</th>
+                <th class="px-3 py-3 text-right">Despachado mes</th>
+                <th class="px-3 py-3 text-right">Inventario final</th>
               </tr>
             </thead>
             <tbody>
               {% for row in inventory_argument_rows %}
                 <tr class="border-t border-slate-100">
                   <td class="px-3 py-3 font-semibold text-slate-900">{{ row.label }}</td>
+                  <td class="px-3 py-3 text-right">{{ row.starting|cartons_dash_zero }}</td>
                   <td class="px-3 py-3 text-right">{{ row.classified|cartons_dash_zero }}</td>
                   <td class="px-3 py-3 text-right">{{ row.dispatched|cartons_dash_zero }}</td>
                   <td class="px-3 py-3 text-right font-semibold text-slate-900">{{ row.balance|cartons_dash_zero }}</td>
@@ -138,6 +140,7 @@
             <tfoot>
               <tr class="border-t-4 border-slate-900 bg-slate-50 font-semibold text-slate-900">
                 <td class="px-3 py-3 text-left uppercase tracking-wide text-[11px]">Totales</td>
+                <td class="px-3 py-3 text-right">{{ inventory_argument_totals.starting|cartons_dash_zero }}</td>
                 <td class="px-3 py-3 text-right">{{ inventory_argument_totals.classified|cartons_dash_zero }}</td>
                 <td class="px-3 py-3 text-right">{{ inventory_argument_totals.dispatched|cartons_dash_zero }}</td>
                 <td class="px-3 py-3 text-right">{{ inventory_argument_totals.balance|cartons_dash_zero }}</td>
@@ -154,8 +157,12 @@
         </div>
         <ul class="space-y-2 text-xs text-slate-600">
           <li class="flex items-center justify-between rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-sm">
-            <span class="font-semibold uppercase tracking-wide text-slate-500">Clasificado</span>
-            <span class="text-base font-semibold text-emerald-700">{{ inventory_argument_totals.classified|cartons_dash_zero }}</span>
+            <span class="font-semibold uppercase tracking-wide text-slate-500">Saldo inicial</span>
+            <span class="text-base font-semibold text-emerald-700">{{ inventory_argument_totals.starting|cartons_dash_zero }}</span>
+          </li>
+          <li class="flex items-center justify-between rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-sm">
+            <span class="font-semibold uppercase tracking-wide text-slate-500">Clasificado mes</span>
+            <span class="text-base font-semibold text-slate-900">{{ inventory_argument_totals.classified|cartons_dash_zero }}</span>
           </li>
           <li class="flex items-center justify-between rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-sm">
             <span class="font-semibold uppercase tracking-wide text-slate-500">Inventario final</span>

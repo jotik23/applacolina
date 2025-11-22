@@ -463,6 +463,38 @@ def get_inventory_balance_by_type(*, exclude_dispatch_id: Optional[int] = None) 
     return balances
 
 
+def get_inventory_balance_until(*, until: date, farm_id: Optional[int] = None) -> dict[str, Decimal]:
+    """Return classified inventory by type up to a given day, optionally filtered by farm."""
+
+    entry_queryset = EggClassificationEntry.objects.filter(session__classified_at__date__lte=until)
+    if farm_id:
+        entry_queryset = entry_queryset.filter(batch__bird_batch__farm_id=farm_id)
+    classification_totals = (
+        entry_queryset.values("egg_type")
+        .annotate(total=Sum("cartons"))
+        .order_by("egg_type")
+    )
+    classification_map: dict[str, Decimal] = {
+        row["egg_type"]: Decimal(row["total"] or 0) for row in classification_totals if row["egg_type"]
+    }
+
+    dispatch_queryset = EggDispatchItem.objects.filter(dispatch__date__lte=until)
+    dispatch_totals = dispatch_queryset.values("egg_type").annotate(total=Sum("cartons"))
+    dispatch_map: dict[str, Decimal] = {
+        row["egg_type"]: Decimal(row["total"] or 0) for row in dispatch_totals if row["egg_type"]
+    }
+
+    balances: dict[str, Decimal] = {}
+    for egg_type in ORDERED_EGG_TYPES:
+        classified_total = classification_map.get(egg_type, Decimal("0"))
+        dispatched_total = dispatch_map.get(egg_type, Decimal("0"))
+        balance = classified_total - dispatched_total
+        if balance < Decimal("0"):
+            balance = Decimal("0")
+        balances[egg_type] = balance
+    return balances
+
+
 def summarize_classified_inventory() -> list[InventoryRow]:
     aggregates = (
         EggClassificationEntry.objects.values("egg_type")
