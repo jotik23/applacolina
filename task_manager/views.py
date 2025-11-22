@@ -70,6 +70,7 @@ from task_manager.mini_app.features import (
     build_shift_confirmation_card,
     build_shift_confirmation_empty_card,
     build_production_registry,
+    build_feed_plan_card,
     build_night_mortality_registry,
     build_weight_registry,
     build_purchase_requests_overview,
@@ -83,6 +84,7 @@ from task_manager.mini_app.features import (
     serialize_shift_confirmation_card,
     serialize_shift_confirmation_empty_card,
     serialize_production_registry,
+    serialize_feed_plan_card,
     serialize_night_mortality_registry,
     serialize_weight_registry,
     serialize_purchase_requests_overview,
@@ -151,6 +153,7 @@ MINI_APP_CARD_PERMISSION_MAP: dict[str, str] = {
     "goals_overview": "task_manager.view_mini_app_goals_overview_card",
     "shift_confirmation": "task_manager.view_mini_app_shift_confirmation_card",
     "production": "task_manager.view_mini_app_production_card",
+    "feed_plan": "task_manager.view_mini_app_feed_card",
     "production_summary": "task_manager.view_mini_app_production_summary_card",
     "weight_registry": "task_manager.view_mini_app_weight_registry_card",
     "purchase_overview": "task_manager.view_mini_app_purchase_overview_card",
@@ -1917,6 +1920,7 @@ def _build_telegram_mini_app_payload(
     include_shift_confirmation_stub: bool = True,
     user: Optional[UserProfile] = None,
     production: Optional[dict[str, object]] = None,
+    feed_plan: Optional[dict[str, object]] = None,
     night_mortality: Optional[dict[str, object]] = None,
     weight_registry: Optional[dict[str, object]] = None,
     include_weight_registry: bool = True,
@@ -3148,6 +3152,7 @@ def _build_telegram_mini_app_payload(
         },
         "production_reference": production_reference,
         "production": production,
+        "feed_plan": feed_plan,
         "night_mortality": night_mortality,
         "weight_registry": weight_registry_payload,
         "purchases": purchases or {},
@@ -3333,6 +3338,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                     if shift_empty:
                         shift_empty_payload = serialize_shift_confirmation_empty_card(shift_empty)
             production_payload: Optional[dict[str, object]] = None
+            feed_plan_payload: Optional[dict[str, object]] = None
             night_mortality_payload: Optional[dict[str, object]] = None
             weight_registry_payload: Optional[dict[str, object]] = None
             purchases_payload: Optional[dict[str, object]] = None
@@ -3342,6 +3348,10 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 if registry:
                     production_payload = serialize_production_registry(registry)
                     production_payload["submit_url"] = reverse("task_manager:mini-app-production-records")
+            if card_permissions.get("feed_plan"):
+                feed_plan = build_feed_plan_card(user=user, reference_date=today)
+                if feed_plan:
+                    feed_plan_payload = serialize_feed_plan_card(feed_plan)
             if card_permissions.get("night_mortality"):
                 mortality_registry = build_night_mortality_registry(user=user)
                 if mortality_registry:
@@ -3387,6 +3397,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                 include_shift_confirmation_stub=False,
                 user=user,
                 production=production_payload,
+                feed_plan=feed_plan_payload,
                 night_mortality=night_mortality_payload,
                 weight_registry=weight_registry_payload,
                 include_weight_registry=bool(card_permissions.get("weight_registry")),

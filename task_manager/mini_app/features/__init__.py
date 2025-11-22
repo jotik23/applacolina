@@ -14,6 +14,7 @@ from .production_registry import (
     persist_production_records,
     serialize_production_registry,
 )
+from .feed_plan import build_feed_plan_card, serialize_feed_plan_card
 from .weight_registry import (
     WeightRegistry,
     build_weight_registry,
@@ -54,6 +55,8 @@ __all__ = [
     "build_production_registry",
     "persist_production_records",
     "serialize_production_registry",
+    "build_feed_plan_card",
+    "serialize_feed_plan_card",
     "WeightRegistry",
     "build_weight_registry",
     "persist_weight_registry",

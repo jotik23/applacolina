@@ -265,6 +265,7 @@ class TaskDefinition(models.Model):
             ("view_mini_app_goals_overview_card", _("Puede ver el card de metas activas en la mini app")),
             ("view_mini_app_shift_confirmation_card", _("Puede ver el card de confirmación de turno en la mini app")),
             ("view_mini_app_production_card", _("Puede ver el card de producción en la mini app")),
+            ("view_mini_app_feed_card", _("Puede ver el card de dosificación de alimento en la mini app")),
             ("view_mini_app_production_summary_card", _("Puede ver el card de resumen de producción en la mini app")),
             ("view_mini_app_weight_registry_card", _("Puede ver el card de control de pesos en la mini app")),
             (

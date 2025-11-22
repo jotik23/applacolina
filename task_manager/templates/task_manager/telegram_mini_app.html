@@ -858,6 +858,7 @@
 
         <div class="space-y-4">
           {% include "task_manager/includes/mini_app_production_card.html" %}
+          {% include "task_manager/includes/mini_app_feed_plan_card.html" %}
 
           {% with pending=telegram_mini_app.pending_classification %}
           {% if pending and mini_app_card_permissions.pending_classification %}
