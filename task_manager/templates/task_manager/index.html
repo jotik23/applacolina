@@ -553,14 +553,14 @@
           href="{{ tab_urls.tareas }}"
           data-tm-tab="tareas"
           class="tab-button rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if active_tab == 'tareas' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100{% endif %}"
-          aria-selected="{{ active_tab == 'tareas'|yesno:'true,false' }}"
+          aria-selected="{% if active_tab == 'tareas' %}true{% else %}false{% endif %}"
           role="tab"
         >Tareas</a>
         <a
           href="{{ tab_urls.reporte }}"
           data-tm-tab="reporte"
           class="tab-button rounded-full px-4 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if active_tab == 'reporte' %}bg-slate-900 text-white shadow-sm{% else %}text-slate-500 hover:bg-slate-100{% endif %}"
-          aria-selected="{{ active_tab == 'reporte'|yesno:'true,false' }}"
+          aria-selected="{% if active_tab == 'reporte' %}true{% else %}false{% endif %}"
           role="tab"
         >Reporte del día</a>
         <button data-tm-tab="asignaciones" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Asignaciones diarias</button>
