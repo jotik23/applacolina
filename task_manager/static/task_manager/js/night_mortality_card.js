@@ -2,7 +2,6 @@
   'use strict';
 
   const INTEGER_PATTERN = /^[0-9]+$/;
-  const DECIMAL_PATTERN = /^[0-9]+(?:\.[0-9]+)?$/;
   const ROOM_FIELDS = ['mortality', 'discard', 'consumption'];
   const ROOM_FIELD_LABELS = {
     mortality: 'la mortalidad',
@@ -329,8 +328,7 @@
     readNumericField(roomNode, field, roomLabel) {
       const input = roomNode.querySelector('[data-night-mortality-room-field="' + field + '"]');
       const value = input && typeof input.value === 'string' ? input.value.trim() : '';
-      const pattern = field === 'consumption' ? DECIMAL_PATTERN : INTEGER_PATTERN;
-      if (value && !pattern.test(value)) {
+      if (value && !INTEGER_PATTERN.test(value)) {
         const label = ROOM_FIELD_LABELS[field] || 'este campo';
         this.showFeedback(
           roomLabel ? `Usa números enteros para ${label} de ${roomLabel}.` : 'Usa números enteros.',

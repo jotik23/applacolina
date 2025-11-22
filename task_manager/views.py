@@ -3334,7 +3334,7 @@ class TaskManagerMiniAppView(generic.TemplateView):
                     production_payload = serialize_production_registry(registry)
                     production_payload["submit_url"] = reverse("task_manager:mini-app-production-records")
             if card_permissions.get("night_mortality"):
-                mortality_registry = build_night_mortality_registry(user=user, reference_date=today)
+                mortality_registry = build_night_mortality_registry(user=user)
                 if mortality_registry:
                     night_mortality_payload = serialize_night_mortality_registry(mortality_registry)
                     night_mortality_payload["submit_url"] = reverse("task_manager:mini-app-night-mortality")
@@ -4283,21 +4283,24 @@ def mini_app_night_mortality_view(request):
         return JsonResponse({"error": _("Formato de solicitud inválido.")}, status=400)
 
     date_str = payload.get("date")
-    target_date = timezone.localdate()
+    target_date: Optional[date] = None
     if date_str:
         try:
             target_date = date.fromisoformat(str(date_str))
         except ValueError:
             return JsonResponse({"error": _("La fecha del registro no es válida.")}, status=400)
 
-    registry = build_night_mortality_registry(user=user, reference_date=target_date)
+    if target_date is not None:
+        registry = build_night_mortality_registry(user=user, registry_date=target_date)
+    else:
+        registry = build_night_mortality_registry(user=user)
     if not registry:
         return JsonResponse(
             {"error": _("No encontramos lotes o galpones activos en tu turno nocturno.")},
             status=404,
         )
 
-    if registry.date != target_date:
+    if target_date is not None and registry.date != target_date:
         return JsonResponse(
             {"error": _("La fecha enviada no coincide con el turno nocturno activo.")},
             status=400,
@@ -4317,7 +4320,7 @@ def mini_app_night_mortality_view(request):
         message = _extract_validation_message(exc)
         return JsonResponse({"error": message}, status=400)
 
-    refreshed = build_night_mortality_registry(user=user, reference_date=registry.date)
+    refreshed = build_night_mortality_registry(user=user, registry_date=registry.date)
     response_payload = None
     if refreshed:
         response_payload = serialize_night_mortality_registry(refreshed)

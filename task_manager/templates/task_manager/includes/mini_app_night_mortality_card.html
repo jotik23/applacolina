@@ -113,10 +113,10 @@
                             <span class="text-[11px] uppercase tracking-wide text-slate-400">Consumo (kg)</span>
                             <input
                               type="number"
-                              step="0.1"
+                              step="1"
                               min="0"
                               inputmode="numeric"
-                              pattern="[0-9]+(\.[0-9]+)?"
+                              pattern="[0-9]*"
                               class="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200/60"
                               data-night-mortality-room-field="consumption"
                               value="{{ room.consumption|default:'' }}"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import Permission
@@ -165,7 +165,7 @@ class MiniAppNightMortalityViewTests(TestCase):
             discard=2,
         )
 
-        registry = build_night_mortality_registry(user=self.user, reference_date=today)
+        registry = build_night_mortality_registry(user=self.user, registry_date=today)
         self.assertIsNotNone(registry)
         payload = serialize_night_mortality_registry(registry)
         self.assertEqual(payload["total_birds"], 1180)
@@ -179,6 +179,24 @@ class MiniAppNightMortalityViewTests(TestCase):
         self.assertIn(2, discards)
         self.assertIn("1", consumptions)
         self.assertIn("2", consumptions)
+
+    def test_registry_date_before_cutoff_uses_today(self):
+        today = timezone.localdate()
+        tz = timezone.get_current_timezone()
+        morning = timezone.make_aware(datetime.combine(today, time(hour=10, minute=0)), timezone=tz)
+        registry = build_night_mortality_registry(user=self.user, current_time=morning)
+        self.assertIsNotNone(registry)
+        assert registry
+        self.assertEqual(registry.date, today)
+
+    def test_registry_date_after_cutoff_uses_next_day(self):
+        today = timezone.localdate()
+        tz = timezone.get_current_timezone()
+        afternoon = timezone.make_aware(datetime.combine(today, time(hour=14, minute=0)), timezone=tz)
+        registry = build_night_mortality_registry(user=self.user, current_time=afternoon)
+        self.assertIsNotNone(registry)
+        assert registry
+        self.assertEqual(registry.date, today + timedelta(days=1))
 
     def test_view_requires_permission(self):
         task_perm = Permission.objects.get(codename="view_mini_app_task_cards")

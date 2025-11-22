@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Iterable, Mapping, Optional
 
@@ -21,6 +21,9 @@ from .production_registry import (
     _quantize_to_int,
     _format_decimal,
 )
+
+
+NIGHT_SHIFT_CUTOFF = time(hour=13, minute=0)
 
 
 @dataclass(frozen=True)
@@ -84,14 +87,28 @@ def build_night_mortality_registry(
     *,
     user: Optional[UserProfile],
     reference_date: Optional[date] = None,
+    registry_date: Optional[date] = None,
+    current_time: Optional[datetime] = None,
 ) -> Optional[NightMortalityRegistry]:
     if not user or not getattr(user, "is_authenticated", False):
         return None
     if not user.has_perm("task_manager.view_mini_app_task_cards"):
         return None
 
-    target_date = reference_date or UserProfile.colombia_today()
-    assignment = resolve_assignment_for_date(user=user, target_date=target_date)
+    normalized_now = current_time or timezone.localtime()
+    today = normalized_now.date()
+    assignment_reference = reference_date or today
+
+    if registry_date is not None:
+        target_date = registry_date
+    else:
+        target_date = assignment_reference
+        if assignment_reference == today and normalized_now.time() >= NIGHT_SHIFT_CUTOFF:
+            target_date = assignment_reference + timedelta(days=1)
+
+    assignment_date = target_date if target_date <= today else target_date - timedelta(days=1)
+
+    assignment = resolve_assignment_for_date(user=user, target_date=assignment_date)
     if not assignment or not assignment.position:
         return None
 
@@ -293,7 +310,7 @@ def persist_night_mortality_entries(
                 consumption = _coerce_decimal(
                     room_payload.get("consumption"),
                     field="consumption",
-                    allow_decimals=True,
+                    allow_decimals=False,
                     allow_empty=True,
                 )
                 parsed_rooms[room_id] = {
@@ -311,7 +328,10 @@ def persist_night_mortality_entries(
 
             total_mortality = sum(values["mortality"] for values in parsed_rooms.values())
             total_discard = sum(values["discard"] for values in parsed_rooms.values())
-            total_consumption = sum(values["consumption"] for values in parsed_rooms.values())
+            total_consumption = sum(
+                (values["consumption"] for values in parsed_rooms.values()),
+                Decimal("0"),
+            )
             record = _persist_mortality_for_lot(
                 lot=lot,
                 registry=registry,
