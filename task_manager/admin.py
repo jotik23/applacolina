@@ -177,7 +177,7 @@ class TaskAssignmentAdmin(admin.ModelAdmin):
         ),
         (
             "Ejecución",
-            {"fields": ("completed_on", "production_record")},
+            {"fields": ("completed_on", "completion_note", "production_record")},
         ),
         (
             "Trazabilidad",

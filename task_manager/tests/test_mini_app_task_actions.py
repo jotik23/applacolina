@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import json
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -71,3 +72,29 @@ class MiniAppTaskActionViewTests(TestCase):
         self.assertEqual(payload.get("reset_url"), expected_reset_url)
         self.assignment.refresh_from_db()
         self.assertIsNotNone(self.assignment.completed_on)
+
+    def test_complete_view_persists_note(self):
+        url = reverse("task_manager:mini-app-task-complete", args=[self.assignment.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"note": "Hallazgo leve"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get("completion_note"), "Hallazgo leve")
+        self.assignment.refresh_from_db()
+        self.assertEqual(self.assignment.completion_note, "Hallazgo leve")
+
+    def test_reset_view_clears_note(self):
+        self.assignment.completed_on = timezone.localdate()
+        self.assignment.completion_note = "Listo"
+        self.assignment.save(update_fields=["completed_on", "completion_note"])
+        url = reverse("task_manager:mini-app-task-reset", args=[self.assignment.pk])
+        response = self.client.post(url, data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get("completion_note"), "")
+        self.assignment.refresh_from_db()
+        self.assertIsNone(self.assignment.completed_on)
+        self.assertEqual(self.assignment.completion_note, "")

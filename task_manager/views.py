@@ -590,7 +590,7 @@ def _serialize_task_assignment(
     tone = _TASK_CRITICALITY_TONE_MAP.get(definition.criticality_level, "neutral")
 
     badges: list[dict[str, str]] = [
-        {"label": str(status_info.get("label") or ""), "theme": status_info.get("theme") or "neutral"}
+        {"label": str(status_info.get("label") or ""), "theme": status_info.get("theme") or "neutral", "kind": "status"}
     ]
     if evidence_count:
         evidence_label = ngettext(
@@ -598,16 +598,18 @@ def _serialize_task_assignment(
             "%(count)s evidencias",
             evidence_count,
         ) % {"count": evidence_count}
-        badges.insert(0, {"label": evidence_label, "theme": "emerald"})
+        badges.insert(0, {"label": evidence_label, "theme": "emerald", "kind": "evidence"})
     elif requires_evidence:
-        badges.insert(0, {"label": _("Sin evidencia"), "theme": "critical"})
+        badges.insert(0, {"label": _("Sin evidencia"), "theme": "critical", "kind": "evidence"})
     due_label = _("Hoy")
     if assignment.due_date and assignment.due_date != reference_date:
         due_label = date_format(assignment.due_date, "DATE_FORMAT")
 
+    due_compact_label = _("Hoy")
+    if assignment.due_date:
+        due_compact_label = _("Hoy") if assignment.due_date == reference_date else _format_compact_date_label(assignment.due_date)
+
     meta: list[str] = []
-    if definition.category_id:
-        meta.append(_("Categoría: %(category)s") % {"category": definition.category.name})
 
     previous_label: Optional[str] = None
     previous_collaborator = getattr(assignment, "previous_collaborator", None)
@@ -620,7 +622,7 @@ def _serialize_task_assignment(
         evidence_action = [{"label": _("Agregar evidencia"), "action": "evidence", "disabled": False}]
 
     if is_completed_today:
-        actions: list[dict[str, object]] = [{"label": _("Desmarcar"), "action": "reset", "disabled": False}] + evidence_action
+        actions: list[dict[str, object]] = [{"label": _("Marcar como No Completada"), "action": "reset", "disabled": False}] + evidence_action
     else:
         actions = [{"label": _("Marcar como completada"), "action": "complete", "disabled": False}] + evidence_action
 
@@ -632,6 +634,7 @@ def _serialize_task_assignment(
         "badges": badges,
         "description": description,
         "meta": meta,
+        "due_compact_label": due_compact_label,
         "reward_points": None,
         "status": {
             "state": status_info.get("state"),
@@ -646,6 +649,7 @@ def _serialize_task_assignment(
         "is_completed_today": is_completed_today,
         "completed_on_iso": assignment.completed_on.isoformat() if is_completed_today else None,
         "due_date_iso": assignment.due_date.isoformat() if assignment.due_date else None,
+        "completion_note": assignment.completion_note or "",
         "reassigned_from": previous_label,
         "complete_url": reverse("task_manager:mini-app-task-complete", kwargs={"pk": assignment.pk}),
         "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}),
@@ -3250,6 +3254,7 @@ def mini_app_task_complete_view(request, pk: int):
                     or TaskDefinition.EvidenceRequirement.NONE
                 )
                 != TaskDefinition.EvidenceRequirement.NONE,
+                "completion_note": assignment.completion_note,
                 "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}),
                 "removed": False,
             }
@@ -3266,6 +3271,7 @@ def mini_app_task_complete_view(request, pk: int):
         )
 
     completion_date = timezone.localdate()
+    completion_note = ""
     if request.body:
         try:
             payload = json.loads(request.body.decode("utf-8") or "{}")
@@ -3278,9 +3284,13 @@ def mini_app_task_complete_view(request, pk: int):
                     completion_date = datetime.fromisoformat(raw_completed_on).date()
                 except ValueError:
                     completion_date = timezone.localdate()
+            raw_note = payload.get("note")
+            if isinstance(raw_note, str):
+                completion_note = raw_note.strip()[:280]
 
     assignment.completed_on = completion_date
-    assignment.save(update_fields=["completed_on", "updated_at"])
+    assignment.completion_note = completion_note
+    assignment.save(update_fields=["completed_on", "completion_note", "updated_at"])
 
     return JsonResponse(
         {
@@ -3289,6 +3299,7 @@ def mini_app_task_complete_view(request, pk: int):
             "completed_on": assignment.completed_on.isoformat(),
             "requires_evidence": requires_evidence,
             "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}),
+            "completion_note": assignment.completion_note,
             "removed": False,
         }
     )
@@ -3366,13 +3377,15 @@ def mini_app_task_reset_view(request, pk: int):
         )
 
     assignment.completed_on = None
-    assignment.save(update_fields=["completed_on", "updated_at"])
+    assignment.completion_note = ""
+    assignment.save(update_fields=["completed_on", "completion_note", "updated_at"])
 
     return JsonResponse(
         {
             "status": "reset",
             "assignment_id": assignment.pk,
             "completed_on": None,
+            "completion_note": "",
         }
     )
 

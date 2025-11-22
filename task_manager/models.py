@@ -480,6 +480,13 @@ class TaskAssignment(models.Model):
         null=True,
         blank=True,
     )
+    completion_note = models.CharField(
+        _("Nota de finalización"),
+        max_length=280,
+        blank=True,
+        default="",
+        help_text=_("Comentario breve registrado al cerrar la tarea desde la mini app."),
+    )
     created_at = models.DateTimeField(_("Creado en"), auto_now_add=True)
     updated_at = models.DateTimeField(_("Actualizado en"), auto_now=True)
 

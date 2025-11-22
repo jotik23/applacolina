@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from personal.models import DayOfWeek, PositionCategory, PositionCategoryCode, PositionDefinition, ShiftType
 from production.models import ChickenHouse, Farm, Room
@@ -204,6 +205,25 @@ class MiniAppTaskCardWindowTests(TestCase):
         evidence_actions = [action for action in card.get("actions", []) if action.get("action") == "evidence"]
         self.assertTrue(evidence_actions)
         self.assertFalse(evidence_actions[0].get("disabled"))
+        self.assertEqual(card["assignment_id"], assignment.pk)
+
+    def test_card_includes_compact_due_label_and_note(self):
+        assignment = self._create_assignment(
+            due_date=self.reference_date,
+            position=self.day_position,
+        )
+
+        cards = _resolve_daily_task_cards(
+            user=self.user,
+            reference_date=self.reference_date,
+            current_time=self._aware_datetime(self.reference_date, 6, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        expected_label = _("Hoy")
+        self.assertEqual(card["due_compact_label"], expected_label)
+        self.assertEqual(card["completion_note"], "")
         self.assertEqual(card["assignment_id"], assignment.pk)
 
     def test_task_badges_exclude_recurrence_and_priority(self):
