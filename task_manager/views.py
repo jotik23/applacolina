@@ -587,14 +587,6 @@ def _serialize_task_assignment(
 
     is_completed_today = assignment.completed_on is not None and assignment.completed_on == reference_date
 
-    task_type_label: Optional[str] = None
-    task_type_theme = "neutral"
-    if definition.task_type:
-        task_type_label = definition.get_task_type_display()
-        task_type_theme = _TASK_TYPE_BADGE_THEME_MAP.get(definition.task_type, "neutral")
-
-    priority_label = definition.get_criticality_level_display()
-    priority_theme = _TASK_CRITICALITY_BADGE_THEME_MAP.get(definition.criticality_level, "neutral")
     tone = _TASK_CRITICALITY_TONE_MAP.get(definition.criticality_level, "neutral")
 
     badges: list[dict[str, str]] = [
@@ -609,11 +601,6 @@ def _serialize_task_assignment(
         badges.insert(0, {"label": evidence_label, "theme": "emerald"})
     elif requires_evidence:
         badges.insert(0, {"label": _("Sin evidencia"), "theme": "critical"})
-    if task_type_label:
-        badges.append({"label": task_type_label, "theme": task_type_theme})
-    if priority_label:
-        badges.append({"label": _("Prioridad %(level)s") % {"level": priority_label}, "theme": priority_theme})
-
     due_label = _("Hoy")
     if assignment.due_date and assignment.due_date != reference_date:
         due_label = date_format(assignment.due_date, "DATE_FORMAT")
@@ -628,16 +615,14 @@ def _serialize_task_assignment(
         previous_label = previous_collaborator.get_full_name()
         meta.append(_("Asignada inicialmente a %(name)s") % {"name": previous_label})
 
+    evidence_action: list[dict[str, object]] = []
+    if requires_evidence:
+        evidence_action = [{"label": _("Agregar evidencia"), "action": "evidence", "disabled": False}]
+
     if is_completed_today:
-        actions: list[dict[str, object]] = [
-            {"label": _("Desmarcar"), "action": "reset", "disabled": False},
-            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": False},
-        ]
+        actions: list[dict[str, object]] = [{"label": _("Desmarcar"), "action": "reset", "disabled": False}] + evidence_action
     else:
-        actions = [
-            {"label": _("Marcar como completada"), "action": "complete", "disabled": False},
-            {"label": _("Agregar evidencia"), "action": "evidence", "disabled": False},
-        ]
+        actions = [{"label": _("Marcar como completada"), "action": "complete", "disabled": False}] + evidence_action
 
     return {
         "assignment_id": assignment.pk,
@@ -663,7 +648,7 @@ def _serialize_task_assignment(
         "due_date_iso": assignment.due_date.isoformat() if assignment.due_date else None,
         "reassigned_from": previous_label,
         "complete_url": reverse("task_manager:mini-app-task-complete", kwargs={"pk": assignment.pk}),
-        "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}) if is_completed_today else None,
+        "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}),
         "evidence_upload_url": reverse("task_manager:mini-app-task-evidence", kwargs={"pk": assignment.pk}),
         "actions": actions,
     }
@@ -3265,6 +3250,8 @@ def mini_app_task_complete_view(request, pk: int):
                     or TaskDefinition.EvidenceRequirement.NONE
                 )
                 != TaskDefinition.EvidenceRequirement.NONE,
+                "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}),
+                "removed": False,
             }
         )
 
@@ -3301,7 +3288,8 @@ def mini_app_task_complete_view(request, pk: int):
             "assignment_id": assignment.pk,
             "completed_on": assignment.completed_on.isoformat(),
             "requires_evidence": requires_evidence,
-            "removed": True,
+            "reset_url": reverse("task_manager:mini-app-task-reset", kwargs={"pk": assignment.pk}),
+            "removed": False,
         }
     )
 

@@ -73,6 +73,7 @@ class MiniAppTaskCardWindowTests(TestCase):
         position: PositionDefinition | None = None,
         name: str = "Tarea base",
         evidence_requirement: str = TaskDefinition.EvidenceRequirement.NONE,
+        task_type: TaskDefinition.TaskType | None = None,
     ) -> TaskAssignment:
         position = position or self.day_position
         with suppress_task_assignment_sync():
@@ -84,7 +85,7 @@ class MiniAppTaskCardWindowTests(TestCase):
                 is_mandatory=True,
                 is_accumulative=is_accumulative,
                 criticality_level=TaskDefinition.CriticalityLevel.MEDIUM,
-                task_type=None,
+                task_type=task_type,
                 weekly_days=[DayOfWeek.MONDAY],
                 position=position,
                 evidence_requirement=evidence_requirement,
@@ -180,8 +181,7 @@ class MiniAppTaskCardWindowTests(TestCase):
         badge_labels = [badge["label"] for badge in card.get("badges", [])]
         self.assertNotIn("Sin evidencia adjunta", badge_labels)
         evidence_actions = [action for action in card.get("actions", []) if action.get("action") == "evidence"]
-        self.assertTrue(evidence_actions)
-        self.assertFalse(evidence_actions[0].get("disabled"))
+        self.assertEqual(evidence_actions, [])
         self.assertEqual(card["assignment_id"], assignment.pk)
 
     def test_required_evidence_displays_missing_badge(self):
@@ -204,4 +204,24 @@ class MiniAppTaskCardWindowTests(TestCase):
         evidence_actions = [action for action in card.get("actions", []) if action.get("action") == "evidence"]
         self.assertTrue(evidence_actions)
         self.assertFalse(evidence_actions[0].get("disabled"))
+        self.assertEqual(card["assignment_id"], assignment.pk)
+
+    def test_task_badges_exclude_recurrence_and_priority(self):
+        assignment = self._create_assignment(
+            due_date=self.reference_date,
+            position=self.day_position,
+            task_type=TaskDefinition.TaskType.RECURRING,
+        )
+
+        cards = _resolve_daily_task_cards(
+            user=self.user,
+            reference_date=self.reference_date,
+            current_time=self._aware_datetime(self.reference_date, 9, 0),
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        badge_labels = [badge["label"] for badge in card.get("badges", [])]
+        self.assertNotIn(TaskDefinition.TaskType.RECURRING.label, badge_labels)
+        self.assertTrue(all("Prioridad" not in label for label in badge_labels))
         self.assertEqual(card["assignment_id"], assignment.pk)

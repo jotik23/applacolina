@@ -2273,6 +2273,7 @@
             data-task-evidence-count="{{ task.evidence_count|default:0 }}"
             data-task-status="{{ task.status.state|default:'' }}"
             data-task-completed-on="{{ task.completed_on_iso|default:'' }}"
+            data-task-reset-label="{% trans 'Desmarcar' %}"
           >
               <header class="flex flex-col gap-2">
                 <div class="flex items-start justify-between gap-3">
@@ -2329,7 +2330,7 @@
                 data-task-evidence-input
                 multiple
               />
-              <div class="mt-4 flex flex-wrap gap-2">
+              <div class="mt-4 flex flex-wrap gap-2" data-task-action-list>
                 {% for action in task.actions %}
                   <button
                     type="button"
@@ -8344,6 +8345,32 @@
           }
         }
 
+        function ensureResetButton(card) {
+          if (!card) {
+            return null;
+          }
+          let resetButton = card.querySelector('[data-task-action="reset"]');
+          if (resetButton) {
+            resetButton.removeAttribute('disabled');
+            resetButton.setAttribute('data-task-disabled', 'false');
+            return resetButton;
+          }
+          const actionList = card.querySelector('[data-task-action-list]');
+          if (!actionList) {
+            return null;
+          }
+          resetButton = document.createElement('button');
+          resetButton.type = 'button';
+          resetButton.className =
+            'rounded-full px-3 py-1 text-xs font-semibold transition bg-brand text-slate-900 shadow shadow-amber-200/70 hover:bg-brand-dark';
+          resetButton.setAttribute('data-task-action', 'reset');
+          resetButton.setAttribute('data-task-disabled', 'false');
+          resetButton.textContent = card.getAttribute('data-task-reset-label') || 'Desmarcar';
+          actionList.prepend(resetButton);
+          bindTaskActionButton(resetButton);
+          return resetButton;
+        }
+
         function sendTaskAction(action, title, extra) {
           const payload = Object.assign({ action: action, title: title || '' }, extra || {});
           if (telegram && typeof telegram.sendData === 'function') {
@@ -8535,10 +8562,16 @@
               if (assignmentId) {
                 extra.assignmentId = assignmentId;
               }
+              card.setAttribute('data-task-status', 'completed');
+              if (completedOn) {
+                card.setAttribute('data-task-completed-on', completedOn);
+              }
+              if (typeof data.reset_url === 'string') {
+                card.setAttribute('data-task-reset-url', data.reset_url);
+              }
+              applyCompletedCardStyles(card, completedOn);
+              ensureResetButton(card);
               sendTaskAction('complete', title, extra);
-              window.setTimeout(function () {
-                window.location.reload();
-              }, 300);
             })
             .catch(function (error) {
               console.warn('No se pudo completar la tarea:', error);
@@ -8692,8 +8725,11 @@
           }
         });
 
-        const buttons = document.querySelectorAll('[data-task-action]');
-        buttons.forEach(function (button) {
+        function bindTaskActionButton(button) {
+          if (!button || button.__tmMiniAppActionBound) {
+            return;
+          }
+          button.__tmMiniAppActionBound = true;
           button.addEventListener('click', function (event) {
             const action = event.currentTarget.getAttribute('data-task-action');
             const card = event.currentTarget.closest('[data-task-card]');
@@ -8743,7 +8779,8 @@
             const extra = section ? { section: section } : undefined;
             sendTaskAction(action, title, extra);
           });
-        });
+        }
+        document.querySelectorAll('[data-task-action]').forEach(bindTaskActionButton);
 
         function clearShiftConfirmationState() {
           if (
