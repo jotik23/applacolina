@@ -302,14 +302,15 @@ class MiniAppProductionViewTests(TestCase):
         self.assertEqual(room_record.mortality, 1)
         self.assertEqual(room_record.discard, 6)
 
-    def test_production_record_validation_error(self):
+    def test_production_record_allows_empty_production_and_consumption(self):
         user = self._create_user(grant_permission=True)
         self._create_assignment(operator=user)
         self.client.force_login(user)
 
         url = reverse("task_manager:mini-app-production-records")
+        today = timezone.localdate()
         payload = {
-            "date": timezone.localdate().isoformat(),
+            "date": today.isoformat(),
             "lots": [
                 {
                     "bird_batch": self.bird_batch.pk,
@@ -317,7 +318,7 @@ class MiniAppProductionViewTests(TestCase):
                         {
                             "room_id": self.room.pk,
                             "production": "",
-                            "consumption": "500",
+                            "consumption": "",
                             "mortality": 0,
                             "discard": 0,
                         }
@@ -326,10 +327,13 @@ class MiniAppProductionViewTests(TestCase):
             ],
         }
         response = self.client.post(url, payload, content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        data = response.json()
-        self.assertIn("error", data)
-        self.assertTrue(ProductionRecord.objects.filter(bird_batch=self.bird_batch).count() == 0)
+        self.assertEqual(response.status_code, 200)
+        record = ProductionRecord.objects.get(bird_batch=self.bird_batch, date=today)
+        self.assertEqual(record.production, Decimal("0"))
+        self.assertEqual(record.consumption, Decimal("0"))
+        room_record = ProductionRoomRecord.objects.get(production_record=record, room=self.room)
+        self.assertEqual(room_record.production, Decimal("0"))
+        self.assertEqual(room_record.consumption, Decimal("0"))
 
     def test_average_weight_exceeds_allowed_digits_returns_validation_error(self):
         user = self._create_user(grant_permission=True)

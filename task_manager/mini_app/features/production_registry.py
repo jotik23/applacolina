@@ -389,12 +389,14 @@ def _persist_single_record(
         production = _coerce_decimal(
             room_payload.get("production"),
             field="production",
+            allow_empty=True,
         )
         production = _quantize_production(production)
         consumption = _coerce_decimal(
             room_payload.get("consumption"),
             field="consumption",
             allow_decimals=False,
+            allow_empty=True,
         )
         mortality = _coerce_int(room_payload.get("mortality"), field="mortality", allow_empty=True)
         discard = _coerce_int(room_payload.get("discard"), field="discard", allow_empty=True)
@@ -490,8 +492,11 @@ def _coerce_decimal(
     field: str,
     max_value: Optional[Decimal] = None,
     allow_decimals: bool = True,
+    allow_empty: bool = False,
 ) -> Decimal:
     if value in (None, "", "null"):
+        if allow_empty:
+            return Decimal("0")
         raise ValidationError(_("El campo %(field)s es obligatorio."), params={"field": field})
     try:
         decimal_value = Decimal(str(value))

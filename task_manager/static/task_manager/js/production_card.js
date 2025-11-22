@@ -2,7 +2,8 @@
   'use strict';
 
   const ROOM_FIELDS = ['production', 'consumption', 'mortality', 'discard'];
-  const REQUIRED_ROOM_FIELDS = new Set(['production', 'consumption']);
+  // These fields are optional in the mini app; keep the set for future required fields.
+  const REQUIRED_ROOM_FIELDS = new Set();
   const INTEGER_PATTERN = /^[0-9]+$/;
 
   const ROOM_FIELD_LABELS = {
