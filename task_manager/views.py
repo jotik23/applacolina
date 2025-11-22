@@ -1,5 +1,6 @@
 import json
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass
 import re
 from decimal import Decimal, InvalidOperation
@@ -14,7 +15,7 @@ from django.contrib.auth import login, logout
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Prefetch, Q, QuerySet
 from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
@@ -55,6 +56,7 @@ from personal.models import (
     RestPeriodStatus,
     ShiftAssignment,
     ShiftType,
+    Role,
     UserProfile,
 )
 from production.models import ChickenHouse, Farm, Room
@@ -1311,6 +1313,280 @@ def _resolve_primary_group_label(user: UserProfile) -> Optional[str]:
     return group.name if group else None
 
 
+def _build_user_initials(user: UserProfile) -> str:
+    """Return a short set of initials suitable for compact avatars."""
+
+    initials: list[str] = []
+    first_name = (user.nombres or "").strip().split()
+    last_name = (user.apellidos or "").strip().split()
+    if first_name:
+        initials.append(first_name[0][:1])
+    if last_name:
+        initials.append(last_name[0][:1])
+    if not initials and user.nombres:
+        initials.append(user.nombres[:1])
+    if not initials and user.apellidos:
+        initials.append(user.apellidos[:1])
+    if not initials and user.cedula:
+        initials.append(user.cedula[:2])
+    normalized = "".join(initials).upper()
+    return normalized or "?"
+
+
+_ROLE_PRIORITY_MAP = {choice: index for index, (choice, _label) in enumerate(Role.RoleName.choices)}
+
+
+def _resolve_primary_role_label(user: UserProfile) -> tuple[str, str]:
+    """Return the primary role key and label associated with the collaborator."""
+
+    try:
+        role = user.roles.order_by("name").first()
+    except Exception:
+        role = None
+    if role:
+        return role.name, role.get_name_display()
+    group_label = _resolve_primary_group_label(user)
+    if group_label:
+        slug = slugify(group_label) or "grupo"
+        return f"group:{slug}", group_label
+    return "unassigned", _("Sin rol asignado")
+
+
+def build_task_manager_tab_url(
+    request,
+    *,
+    tab: str,
+    params: Optional[Mapping[str, object]] = None,
+    anchor: Optional[str] = None,
+) -> str:
+    """Return a URL pointing to the requested tab while preserving query params."""
+
+    query = request.GET.copy()
+    query._mutable = True
+    query["tm_tab"] = tab
+    if params:
+        for key, value in params.items():
+            if value is None:
+                query.pop(key, None)
+                continue
+            query[key] = str(value)
+    querystring = query.urlencode()
+    base_url = request.path
+    fragment = anchor or f"#tm-{tab}"
+    return f"{base_url}?{querystring}{fragment}" if querystring else f"{base_url}{fragment}"
+
+
+def _build_daily_report_retained_params(request) -> list[dict[str, str]]:
+    """Return GET parameters that should survive report form submissions."""
+
+    retained: list[dict[str, str]] = []
+    excluded = {"tm_tab", "tm_report_date"}
+    for key, values in request.GET.lists():
+        if key in excluded:
+            continue
+        for value in values:
+            retained.append({"key": key, "value": value})
+    return retained
+
+
+def _compute_completion_percent(metrics: Mapping[str, int]) -> int:
+    total = metrics.get("total") or 0
+    if not total:
+        return 0
+    completed = metrics.get("completed") or 0
+    return int(round((completed / total) * 100))
+
+
+def _resolve_progress_theme(metrics: Mapping[str, int]) -> str:
+    if metrics.get("overdue"):
+        return "critical"
+    if metrics.get("pending"):
+        return "brand"
+    if metrics.get("completed"):
+        return "emerald"
+    return "neutral"
+
+
+def build_daily_assignment_report(
+    request,
+    *,
+    target_date: date,
+) -> dict[str, object]:
+    """Return aggregated assignment information for the selected day."""
+
+    normalized_date = target_date or timezone.localdate()
+    roles_prefetch = Prefetch(
+        "collaborator__roles",
+        queryset=Role.objects.only("id", "name").order_by("name"),
+    )
+    assignments = (
+        TaskAssignment.objects.filter(due_date=normalized_date, collaborator__isnull=False)
+        .select_related(
+            "task_definition",
+            "task_definition__status",
+            "task_definition__category",
+            "collaborator",
+        )
+        .prefetch_related(roles_prefetch)
+        .order_by(
+            "collaborator__apellidos",
+            "collaborator__nombres",
+            "task_definition__display_order",
+            "task_definition__name",
+        )
+    )
+
+    totals = {"total": 0, "completed": 0, "pending": 0, "overdue": 0}
+    role_groups: OrderedDict[str, dict[str, object]] = OrderedDict()
+    state_priority = {
+        "overdue": 0,
+        "pending": 1,
+        "in_progress": 1,
+        "reopened": 1,
+        "rejected": 2,
+        "completed": 3,
+    }
+
+    for assignment in assignments:
+        collaborator = assignment.collaborator
+        definition = assignment.task_definition
+        if not collaborator or not definition:
+            continue
+        status_info = _build_assignment_status_info(assignment, reference_date=normalized_date)
+        if status_info is None:
+            status_info = {
+                "state": "pending",
+                "label": _("Pendiente"),
+                "theme": "brand",
+                "details": "",
+                "due_label": date_format(assignment.due_date, "DATE_FORMAT") if assignment.due_date else "",
+            }
+        state = str(status_info.get("state") or "pending")
+        theme = str(status_info.get("theme") or "brand")
+        bucket = "pending"
+        if state == "completed":
+            bucket = "completed"
+        elif state == "overdue":
+            bucket = "overdue"
+
+        role_key, role_label = _resolve_primary_role_label(collaborator)
+        role_entry = role_groups.get(role_key)
+        if not role_entry:
+            role_entry = {
+                "key": role_key,
+                "label": role_label,
+                "priority": _ROLE_PRIORITY_MAP.get(role_key, 99),
+                "metrics": {"total": 0, "completed": 0, "pending": 0, "overdue": 0},
+                "collaborators": [],
+                "_collaborator_map": OrderedDict(),
+            }
+            role_groups[role_key] = role_entry
+
+        collaborator_map: OrderedDict[int, dict[str, object]] = role_entry["_collaborator_map"]  # type: ignore[index]
+        collaborator_entry = collaborator_map.get(collaborator.pk)
+        if not collaborator_entry:
+            collaborator_entry = {
+                "id": collaborator.pk,
+                "name": collaborator.get_full_name(),
+                "initials": _build_user_initials(collaborator),
+                "metrics": {"total": 0, "completed": 0, "pending": 0, "overdue": 0},
+                "tasks": [],
+            }
+            collaborator_map[collaborator.pk] = collaborator_entry
+            role_entry["collaborators"].append(collaborator_entry)
+
+        for metrics in (totals, role_entry["metrics"], collaborator_entry["metrics"]):
+            metrics["total"] += 1
+            metrics[bucket] += 1
+
+        task_payload = {
+            "id": assignment.pk,
+            "name": definition.name,
+            "category_label": getattr(definition.category, "name", ""),
+            "status_label": status_info.get("label") or "",
+            "status_details": status_info.get("details") or "",
+            "status_state": state,
+            "status_theme": theme,
+            "requires_evidence": (
+                definition.evidence_requirement != TaskDefinition.EvidenceRequirement.NONE
+            ),
+        }
+        collaborator_entry["tasks"].append(task_payload)
+
+    role_list: list[dict[str, object]] = []
+    for role_entry in role_groups.values():
+        role_entry.pop("_collaborator_map", None)
+        collaborators: list[dict[str, object]] = role_entry["collaborators"]
+        for collaborator_entry in collaborators:
+            collaborator_entry["tasks"].sort(
+                key=lambda task: (
+                    state_priority.get(task.get("status_state"), 99),
+                    str(task.get("name") or "").lower(),
+                )
+            )
+            collaborator_entry["metrics"]["progress_percent"] = _compute_completion_percent(
+                collaborator_entry["metrics"]
+            )
+            collaborator_entry["metrics"]["progress_theme"] = _resolve_progress_theme(collaborator_entry["metrics"])
+        collaborators.sort(key=lambda collaborator: collaborator["name"])
+        role_entry["metrics"]["progress_percent"] = _compute_completion_percent(role_entry["metrics"])
+        role_entry["metrics"]["progress_theme"] = _resolve_progress_theme(role_entry["metrics"])
+        role_list.append(role_entry)
+
+    role_list.sort(key=lambda entry: (entry.get("priority", 99), entry.get("label", "")))
+    totals["progress_percent"] = _compute_completion_percent(totals)
+    totals["progress_theme"] = _resolve_progress_theme(totals)
+
+    prev_date = normalized_date - timedelta(days=1)
+    next_date = normalized_date + timedelta(days=1)
+    today = timezone.localdate()
+    nav_anchor = "#tm-reporte"
+    nav = {
+        "previous": {
+            "date_iso": prev_date.isoformat(),
+            "label": date_format(prev_date, "DATE_FORMAT"),
+            "url": build_task_manager_tab_url(
+                request,
+                tab="reporte",
+                params={"tm_report_date": prev_date.isoformat()},
+                anchor=nav_anchor,
+            ),
+        },
+        "next": {
+            "date_iso": next_date.isoformat(),
+            "label": date_format(next_date, "DATE_FORMAT"),
+            "url": build_task_manager_tab_url(
+                request,
+                tab="reporte",
+                params={"tm_report_date": next_date.isoformat()},
+                anchor=nav_anchor,
+            ),
+        },
+        "today": {
+            "date_iso": today.isoformat(),
+            "label": date_format(today, "DATE_FORMAT"),
+            "url": build_task_manager_tab_url(
+                request,
+                tab="reporte",
+                params={"tm_report_date": today.isoformat()},
+                anchor=nav_anchor,
+            ),
+        },
+    }
+
+    return {
+        "date": normalized_date,
+        "date_iso": normalized_date.isoformat(),
+        "date_label": date_format(normalized_date, "DATE_FORMAT"),
+        "weekday_label": date_format(normalized_date, "l").capitalize(),
+        "nav": nav,
+        "totals": totals,
+        "role_groups": role_list,
+        "has_data": bool(role_list),
+        "retained_params": _build_daily_report_retained_params(request),
+    }
+
+
 class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
     """Render a placeholder landing page for the task manager module."""
 
@@ -1593,6 +1869,11 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
             default_value="priority",
             default_label=_("Prioridad"),
             groups=build_today_view_filter_groups(),
+        )
+        report_date = _parse_iso_date(self.request.GET.get("tm_report_date")) or timezone.localdate()
+        context["task_manager_daily_report"] = build_daily_assignment_report(
+            self.request,
+            target_date=report_date,
         )
         return context
 

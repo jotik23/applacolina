@@ -549,6 +549,7 @@
     <section data-tm-tabs class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <nav class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
         <button data-tm-tab="tareas" class="tab-button rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="true">Tareas</button>
+        <button data-tm-tab="reporte" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-selected="false">Reporte del día</button>
         <button data-tm-tab="asignaciones" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Asignaciones diarias</button>
         <button data-tm-tab="seguimiento" class="tab-button rounded-full px-4 py-2 text-slate-400 bg-slate-100 opacity-60 cursor-not-allowed pointer-events-none" aria-selected="false" disabled aria-disabled="true">Seguimiento &amp; análisis</button>
         <a href="{% url 'task_manager:telegram-mini-app' %}" target="_blank" rel="noopener noreferrer" class="tab-button rounded-full px-4 py-2 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Vista operario</a>
@@ -853,6 +854,118 @@
               </div>
             </section>
           </div>
+        </article>
+
+        <article id="tm-reporte" data-tm-panel="reporte" class="hidden space-y-8">
+          {% with report=task_manager_daily_report %}
+            <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900">Reporte del día</h2>
+                <p class="text-sm text-slate-500">Visualiza cómo avanza cada colaborador según su rol y resuelve bloqueos en minutos.</p>
+              </div>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <div class="flex items-center gap-4 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-sm">
+                  <a href="{{ report.nav.previous.url }}" class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-lg font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="Ver día anterior ({{ report.nav.previous.label }})">
+                    <span aria-hidden="true">&larr;</span>
+                  </a>
+                  <div class="text-center">
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ report.weekday_label }}</p>
+                    <p class="text-xl font-semibold text-slate-900">{{ report.date_label }}</p>
+                  </div>
+                  <a href="{{ report.nav.next.url }}" class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-lg font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="Ver día siguiente ({{ report.nav.next.label }})">
+                    <span aria-hidden="true">&rarr;</span>
+                  </a>
+                </div>
+                <form method="get" class="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                  {% for param in report.retained_params %}
+                    <input type="hidden" name="{{ param.key }}" value="{{ param.value }}">
+                  {% endfor %}
+                  <input type="hidden" name="tm_tab" value="reporte">
+                  <label class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Ir a</span>
+                    <input type="date" name="tm_report_date" value="{{ report.date_iso }}" class="border-0 bg-transparent p-0 text-sm text-slate-900 focus:outline-none focus:ring-0">
+                  </label>
+                  <button type="submit" class="rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">Ver</button>
+                  <a href="{{ report.nav.today.url }}" class="rounded-full border border-slate-200 px-3 py-1 font-semibold transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand {% if report.date_iso == report.nav.today.date_iso %}pointer-events-none opacity-60{% endif %}" {% if report.date_iso == report.nav.today.date_iso %}aria-disabled="true"{% endif %}>Hoy</a>
+                </form>
+              </div>
+            </header>
+
+            <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Tareas asignadas</p>
+                <p class="mt-2 text-3xl font-semibold text-slate-900">{{ report.totals.total }}</p>
+                <p class="mt-1 text-xs text-slate-500">Avance general</p>
+                <span class="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <span class="tm-chip" data-theme="{{ report.totals.progress_theme }}">{{ report.totals.progress_percent }}%</span>
+                  completado
+                </span>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Completadas</p>
+                <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ report.totals.completed }}</p>
+                <p class="mt-1 text-xs text-slate-500">Cerradas en el día</p>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pendientes</p>
+                <p class="mt-2 text-3xl font-semibold text-amber-600">{{ report.totals.pending }}</p>
+                <p class="mt-1 text-xs text-slate-500">En curso o sin iniciar</p>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Vencidas</p>
+                <p class="mt-2 text-3xl font-semibold text-rose-600">{{ report.totals.overdue }}</p>
+                <p class="mt-1 text-xs text-slate-500">Requieren seguimiento hoy</p>
+              </article>
+            </section>
+
+            {% if not report.has_data %}
+              <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-10 text-center">
+                <p class="text-base font-semibold text-slate-700">Sin tareas programadas</p>
+                <p class="mt-1 text-sm text-slate-500">No hay tareas asignadas para {{ report.date_label }}.</p>
+              </div>
+            {% else %}
+              <div class="space-y-6">
+                {% for role in report.role_groups %}
+                  <section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <header class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p class="text-base font-semibold text-slate-900">{{ role.label }}</p>
+                        <p class="text-xs text-slate-500">{{ role.metrics.completed }} completadas · {{ role.metrics.pending }} pendientes{% if role.metrics.overdue %} · {{ role.metrics.overdue }} vencidas{% endif %}</p>
+                      </div>
+                      <span class="tm-chip" data-theme="{{ role.metrics.progress_theme }}">{{ role.metrics.progress_percent }}% completado</span>
+                    </header>
+                    <div class="space-y-4">
+                      {% for collaborator in role.collaborators %}
+                        <article class="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                          <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">{{ collaborator.initials }}</div>
+                              <div>
+                                <p class="text-sm font-semibold text-slate-900">{{ collaborator.name }}</p>
+                                <p class="text-xs text-slate-500">{{ collaborator.metrics.completed }} completadas · {{ collaborator.metrics.pending }} pendientes{% if collaborator.metrics.overdue %} · {{ collaborator.metrics.overdue }} vencidas{% endif %}</p>
+                              </div>
+                            </div>
+                            <span class="tm-chip text-xs" data-theme="{{ collaborator.metrics.progress_theme }}">{{ collaborator.metrics.progress_percent }}% avance</span>
+                          </div>
+                          <div class="flex flex-wrap gap-2">
+                            {% for task in collaborator.tasks %}
+                              <div class="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs text-slate-600 shadow-sm">
+                                <span class="tm-chip" data-theme="{{ task.status_theme }}">{{ task.status_label }}</span>
+                                <span class="font-semibold text-slate-900">{{ task.name }}</span>
+                                {% if task.category_label %}
+                                  <span class="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400">{{ task.category_label }}</span>
+                                {% endif %}
+                              </div>
+                            {% endfor %}
+                          </div>
+                        </article>
+                      {% endfor %}
+                    </div>
+                  </section>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endwith %}
         </article>
 
         <article id="tm-asignaciones" data-tm-panel="asignaciones" class="hidden space-y-8">
@@ -1480,6 +1593,56 @@
     .tm-badge-success {
       background-color: rgba(134, 239, 172, 0.2);
       color: rgb(22, 101, 52);
+    }
+    .tm-badge-amber {
+      background-color: rgba(253, 230, 138, 0.4);
+      color: rgb(146, 64, 14);
+    }
+    .tm-badge-sky {
+      background-color: rgba(125, 211, 252, 0.25);
+      color: rgb(3, 105, 161);
+    }
+    .tm-badge-rose {
+      background-color: rgba(253, 164, 175, 0.25);
+      color: rgb(190, 18, 60);
+    }
+    .tm-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 9999px;
+      padding: 0.2rem 0.8rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .tm-chip[data-theme='brand'] {
+      background-color: rgba(245, 158, 11, 0.15);
+      color: rgb(180, 83, 9);
+    }
+    .tm-chip[data-theme='critical'] {
+      background-color: rgba(248, 113, 113, 0.2);
+      color: rgb(185, 28, 28);
+    }
+    .tm-chip[data-theme='emerald'] {
+      background-color: rgba(16, 185, 129, 0.18);
+      color: rgb(4, 120, 87);
+    }
+    .tm-chip[data-theme='neutral'],
+    .tm-chip:not([data-theme]) {
+      background-color: rgba(148, 163, 184, 0.2);
+      color: rgb(71, 85, 105);
+    }
+    .tm-chip[data-theme='sky'] {
+      background-color: rgba(190, 227, 248, 0.35);
+      color: rgb(7, 89, 133);
+    }
+    .tm-chip[data-theme='amber'] {
+      background-color: rgba(253, 230, 138, 0.45);
+      color: rgb(120, 53, 15);
+    }
+    .tm-chip[data-theme='rose'] {
+      background-color: rgba(251, 207, 232, 0.35);
+      color: rgb(159, 18, 57);
     }
     .tm-task-row-highlight {
       animation: tm-task-row-glow 3s ease-out forwards;
