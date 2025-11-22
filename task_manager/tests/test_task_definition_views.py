@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
 
@@ -14,7 +15,7 @@ from personal.models import (
     ShiftType,
 )
 from production.models import ChickenHouse, Farm, Room
-from task_manager.models import TaskCategory, TaskDefinition, TaskStatus
+from task_manager.models import TaskAssignment, TaskCategory, TaskDefinition, TaskStatus
 from task_manager.services import suppress_task_assignment_sync
 
 
@@ -176,3 +177,65 @@ class TaskDefinitionDuplicateViewTests(TestCase):
             second_response["Location"],
             f"{reverse('task_manager:index')}?tm_task={latest_copy.pk}#tm-tareas",
         )
+
+
+class TaskDefinitionDeleteViewTests(TestCase):
+    def setUp(self):
+        self.user_model = get_user_model()
+        self.staff_user = self.user_model.objects.create_user(
+            "901000",
+            password="secret-pass",
+            nombres="Gestor",
+            apellidos="Tareas",
+            telefono="3119990000",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff_user)
+        self.status = TaskStatus.objects.create(name="Activa")
+        self.category = TaskCategory.objects.create(name="Sanidad")
+
+    def _create_task_definition(self, name: str = "Tarea para eliminar") -> TaskDefinition:
+        with suppress_task_assignment_sync():
+            return TaskDefinition.objects.create(
+                name=name,
+                status=self.status,
+                category=self.category,
+            )
+
+    def test_delete_task_removes_assignments(self):
+        task = self._create_task_definition()
+        collaborator = self.user_model.objects.create_user(
+            "901100",
+            password=None,
+            nombres="Operario",
+            apellidos="Demo",
+            telefono="3200000000",
+        )
+        TaskAssignment.objects.create(
+            task_definition=task,
+            collaborator=collaborator,
+            due_date=date(2025, 1, 10),
+        )
+        TaskAssignment.objects.create(
+            task_definition=task,
+            due_date=date(2025, 1, 11),
+        )
+
+        response = self.client.post(reverse("task_manager:definition-delete", args=[task.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TaskDefinition.objects.filter(pk=task.pk).exists())
+        self.assertFalse(TaskAssignment.objects.filter(task_definition=task).exists())
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(any("asignac" in str(message).lower() for message in messages))
+
+    def test_delete_task_without_assignments_shows_simple_message(self):
+        task = self._create_task_definition(name="Sin asignaciones")
+
+        response = self.client.post(reverse("task_manager:definition-delete", args=[task.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TaskDefinition.objects.filter(pk=task.pk).exists())
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(messages)
+        self.assertNotIn("asignación", str(messages[0]).lower())

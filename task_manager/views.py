@@ -4268,13 +4268,30 @@ class TaskDefinitionDeleteView(StaffRequiredMixin, View):
     http_method_names = ["post"]
 
     def post(self, request, pk: int, *args, **kwargs):
-        task_definition = get_object_or_404(TaskDefinition, pk=pk)
-        task_name = task_definition.name
-        task_definition.delete()
-        messages.success(
-            request,
-            _('La tarea "%(name)s" se eliminó correctamente.') % {"name": task_name},
+        task_definition = get_object_or_404(
+            TaskDefinition.objects.prefetch_related("assignments"),
+            pk=pk,
         )
+        task_name = task_definition.name
+        assignments_qs = task_definition.assignments.all()
+        assignment_count = assignments_qs.count()
+        with transaction.atomic():
+            if assignment_count:
+                assignments_qs.delete()
+            task_definition.delete()
+        if assignment_count:
+            detail = ngettext(
+                "Se eliminó %(count)s asignación asociada.",
+                "Se eliminaron %(count)s asignaciones asociadas.",
+                assignment_count,
+            ) % {"count": assignment_count}
+            message = _('La tarea "%(name)s" se eliminó correctamente. %(detail)s') % {
+                "name": task_name,
+                "detail": detail,
+            }
+        else:
+            message = _('La tarea "%(name)s" se eliminó correctamente.') % {"name": task_name}
+        messages.success(request, message)
         redirect_url = f"{reverse('task_manager:index')}#tm-tareas"
         return redirect(redirect_url)
 
