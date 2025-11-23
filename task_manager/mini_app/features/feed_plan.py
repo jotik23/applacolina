@@ -387,6 +387,7 @@ def serialize_feed_plan_card(plan: FeedPlan) -> dict[str, object]:
                         "feed_kg": float(room.feed_kg),
                         "feed_bags": float(room.feed_bags),
                         "grams_per_bird": float(room.grams_per_bird),
+                        "dosing": _build_room_dosing(room, bag_weight=plan.bag_weight_kg),
                     }
                     for room in house.rooms
                 ],
@@ -434,6 +435,53 @@ def _serialize_option(option: Optional[FeedDistributionOption]) -> Optional[dict
         "afternoon_kg": float(option.afternoon_kg),
         "afternoon_ratio": float(option.afternoon_ratio),
         "afternoon_percentage": float(option.afternoon_ratio * Decimal("100")),
+    }
+
+
+def _build_room_dosing(room: FeedRoomPlan, bag_weight: Decimal) -> dict[str, dict[str, dict[str, float]]]:
+    return {
+        "ideal": _serialize_decimal_dosing(room.feed_kg, bag_weight),
+        "min": _serialize_integer_dosing(room.feed_bags, bag_weight, rounding=ROUND_DOWN),
+        "max": _serialize_integer_dosing(room.feed_bags, bag_weight, rounding=ROUND_UP),
+    }
+
+
+def _serialize_decimal_dosing(feed_kg: Decimal, bag_weight: Decimal) -> dict[str, dict[str, float]]:
+    if feed_kg <= 0:
+        return {
+            "am": {"bags": 0.0, "kg": 0.0},
+            "pm": {"bags": 0.0, "kg": 0.0},
+        }
+
+    morning_kg = (feed_kg * MORNING_RATIO).quantize(KG_QUANTIZER, rounding=ROUND_HALF_UP)
+    afternoon_kg = (feed_kg - morning_kg).quantize(KG_QUANTIZER, rounding=ROUND_HALF_UP)
+    morning_bags = (morning_kg / bag_weight).quantize(BAG_QUANTIZER, rounding=ROUND_HALF_UP)
+    afternoon_bags = (afternoon_kg / bag_weight).quantize(BAG_QUANTIZER, rounding=ROUND_HALF_UP)
+    return {
+        "am": {"bags": float(morning_bags), "kg": float(morning_kg)},
+        "pm": {"bags": float(afternoon_bags), "kg": float(afternoon_kg)},
+    }
+
+
+def _serialize_integer_dosing(feed_bags: Decimal, bag_weight: Decimal, *, rounding: str) -> dict[str, dict[str, float]]:
+    bag_count = int(feed_bags.to_integral_value(rounding=rounding))
+    return _serialize_split_integer_bags(bag_count, bag_weight)
+
+
+def _serialize_split_integer_bags(bag_total: int, bag_weight: Decimal) -> dict[str, dict[str, float]]:
+    if bag_total <= 0:
+        return {
+            "am": {"bags": 0.0, "kg": 0.0},
+            "pm": {"bags": 0.0, "kg": 0.0},
+        }
+
+    morning_bags = _split_bags(bag_total)
+    afternoon_bags = bag_total - morning_bags
+    morning_kg = (bag_weight * morning_bags).quantize(KG_QUANTIZER, rounding=ROUND_HALF_UP)
+    afternoon_kg = (bag_weight * afternoon_bags).quantize(KG_QUANTIZER, rounding=ROUND_HALF_UP)
+    return {
+        "am": {"bags": float(morning_bags), "kg": float(morning_kg)},
+        "pm": {"bags": float(afternoon_bags), "kg": float(afternoon_kg)},
     }
 
 

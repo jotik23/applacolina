@@ -6,150 +6,115 @@
       class="rounded-3xl border border-amber-200 bg-gradient-to-br from-white via-amber-50/70 to-emerald-50/60 p-5 shadow-xl shadow-amber-200/50"
       data-feed-plan-card
     >
-      <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="space-y-1">
           <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-600">
             <span aria-hidden="true">🥣</span>
             Dosificación de alimento
           </p>
-          <h3 class="text-lg font-semibold text-slate-900">{{ feed_plan.weekday_label }} · {{ feed_plan.position_label|default:"Posición sin nombre" }}{% if feed_plan.chicken_house %} · {{ feed_plan.chicken_house }}{% endif %}{% if feed_plan.farm %} · {{ feed_plan.farm }}{% endif %}</h3>
+          <h3 class="text-lg font-semibold text-slate-900">
+                {{ feed_plan.weekday_label }}. {{ feed_plan.date_label }}
+          </h3>
         </div>
       </header>
 
-      {% with distribution=feed_plan.distribution %}
-          <section class="mt-4 grid gap-4 lg:grid-cols-2">
-            <div class="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-amber-50/80">
-              <div class="flex items-center justify-between gap-3">
-                <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Consumo exacto</h4>
-                <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                  {{ distribution.exact.total_bags|floatformat:2 }} bultos
-                </span>
+      <section class="mt-5 space-y-4">
+        {% for house in feed_plan.houses %}
+          <section class="rounded-2xl border border-emerald-100 bg-white/95 p-4 shadow-sm shadow-emerald-50/80">
+            <header class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                  {{ house.label }}{% if house.farm %} · {{ house.farm }}{% endif %}
+                </p>
               </div>
-              <p class="mt-2 text-base font-semibold text-slate-900">
-                {{ distribution.exact.total_kg|floatformat:1 }} kg ({{ distribution.exact.total_bags|floatformat:2 }} bultos de {{ feed_plan.reference.bag_weight_kg|floatformat:0 }} kg)
-              </p>
-              <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
-                <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                  <dt class="font-semibold uppercase tracking-wide text-slate-500">Mañana · {{ distribution.exact.morning_percentage|floatformat:0 }}%</dt>
-                  <dd class="mt-1 text-sm font-semibold text-slate-900">
-                    {{ distribution.exact.morning_kg|floatformat:1 }} kg
-                    <span class="text-[11px] font-semibold text-slate-500">({{ distribution.exact.morning_bags|floatformat:2 }} bultos)</span>
-                  </dd>
-                </div>
-                <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                  <dt class="font-semibold uppercase tracking-wide text-slate-500">Tarde · {{ distribution.exact.afternoon_percentage|floatformat:0 }}%</dt>
-                  <dd class="mt-1 text-sm font-semibold text-slate-900">
-                    {{ distribution.exact.afternoon_kg|floatformat:1 }} kg
-                    <span class="text-[11px] font-semibold text-slate-500">({{ distribution.exact.afternoon_bags|floatformat:2 }} bultos)</span>
-                  </dd>
-                </div>
-              </dl>
+            </header>
+            <div class="mt-3 overflow-x-auto">
+              <table class="min-w-full border-separate border-spacing-0 text-xs text-slate-600">
+                <thead>
+                  <tr class="text-[11px] uppercase tracking-wide text-slate-600">
+                    <th class="rounded-tl-2xl bg-emerald-50/80 px-2 py-2 text-left align-bottom font-semibold text-emerald-700">
+                      Salón
+                    </th>
+                    <th
+                      class="bg-gradient-to-r from-emerald-50 to-emerald-100 px-2 py-2 text-center font-semibold text-emerald-700"
+                      colspan="3"
+                    >
+                      <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold">
+                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                        AM
+                      </span>
+                    </th>
+                    <th
+                      class="rounded-tr-2xl bg-gradient-to-r from-sky-50 to-sky-100 px-2 py-2 text-center font-semibold text-sky-700"
+                      colspan="3"
+                    >
+                      <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold">
+                        <span class="h-2 w-2 rounded-full bg-sky-500"></span>
+                        PM
+                      </span>
+                    </th>
+                  </tr>
+                  <tr class="text-[11px] uppercase tracking-wide text-slate-500">
+                    <th class="bg-emerald-50/40 px-2 py-1 text-left font-medium text-emerald-700"> </th>
+                    <th class="bg-emerald-50/50 px-2 py-1 text-center font-medium text-emerald-600">Mín.</th>
+                    <th class="bg-amber-50/90 px-2 py-1 text-center font-semibold text-amber-700">Ideal</th>
+                    <th class="bg-emerald-50/50 px-2 py-1 text-center font-medium text-emerald-600">Máx.</th>
+                    <th class="bg-sky-50/50 px-2 py-1 text-center font-medium text-sky-600">Mín.</th>
+                    <th class="bg-amber-50/90 px-2 py-1 text-center font-semibold text-amber-700">Ideal</th>
+                    <th class="bg-sky-50/50 px-2 py-1 text-center font-medium text-sky-600">Máx.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for room in house.rooms %}
+                    {% with dosing=room.dosing %}
+                      <tr class="border-t border-slate-100 text-slate-600 transition hover:bg-amber-50/30">
+                        <td class="rounded-l-2xl border-y border-l border-emerald-100/70 bg-emerald-50/60 px-3 py-3 align-top shadow-inner">
+                          <p class="text-sm font-semibold text-emerald-900">{{ room.label }}</p>
+                          <p class="text-[11px] text-emerald-700/80">{{ room.birds|intcomma }} aves</p>
+                        </td>
+                        <td class="border-y border-slate-100/70 bg-emerald-50/40 px-2 py-3 text-center">
+                          <p class="text-sm font-semibold text-slate-900">{{ dosing.min.am.bags|floatformat:0 }} bl</p>
+                          <p class="text-[11px] text-slate-500">{{ dosing.min.am.kg|floatformat:1 }} kg</p>
+                        </td>
+                        <td class="border-y border-slate-100/70 bg-gradient-to-br from-amber-50 via-amber-50 to-amber-100 px-2 py-3 text-center ring-1 ring-inset ring-amber-200 shadow-sm">
+                          <p class="text-sm font-semibold text-amber-900">{{ dosing.ideal.am.bags|floatformat:2 }} bl</p>
+                          <p class="text-[11px] text-amber-700">{{ dosing.ideal.am.kg|floatformat:1 }} kg</p>
+                        </td>
+                        <td class="border-y border-slate-100/70 bg-emerald-50/40 px-2 py-3 text-center">
+                          <p class="text-sm font-semibold text-slate-900">{{ dosing.max.am.bags|floatformat:0 }} bl</p>
+                          <p class="text-[11px] text-slate-500">{{ dosing.max.am.kg|floatformat:1 }} kg</p>
+                        </td>
+                        <td class="border-y border-slate-100/70 bg-sky-50/40 px-2 py-3 text-center">
+                          <p class="text-sm font-semibold text-slate-900">{{ dosing.min.pm.bags|floatformat:0 }} bl</p>
+                          <p class="text-[11px] text-slate-500">{{ dosing.min.pm.kg|floatformat:1 }} kg</p>
+                        </td>
+                        <td class="border-y border-slate-100/70 bg-gradient-to-br from-amber-50 via-amber-50 to-amber-100 px-2 py-3 text-center ring-1 ring-inset ring-amber-200 shadow-sm">
+                          <p class="text-sm font-semibold text-amber-900">{{ dosing.ideal.pm.bags|floatformat:2 }} bl</p>
+                          <p class="text-[11px] text-amber-700">{{ dosing.ideal.pm.kg|floatformat:1 }} kg</p>
+                        </td>
+                        <td class="rounded-r-2xl border-y border-r border-slate-100/70 bg-sky-50/40 px-2 py-3 text-center shadow-inner">
+                          <p class="text-sm font-semibold text-slate-900">{{ dosing.max.pm.bags|floatformat:0 }} bl</p>
+                          <p class="text-[11px] text-slate-500">{{ dosing.max.pm.kg|floatformat:1 }} kg</p>
+                        </td>
+                      </tr>
+                    {% endwith %}
+                  {% empty %}
+                    <tr>
+                      <td class="px-2 py-3 text-center text-xs text-slate-500" colspan="7">
+                        Sin salones asignados en este galpón.
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
           </section>
+        {% endfor %}
+      </section>
 
-          {% if distribution.options %}
-            <div class="mt-3 space-y-2 rounded-2xl border border-white/50 bg-white/80 p-4 text-xs text-slate-600 shadow-inner shadow-slate-100/60">
-              <p class="font-semibold uppercase tracking-wide text-slate-500">Escenarios alternos</p>
-              <div class="flex flex-wrap gap-2">
-                {% for option in distribution.options %}
-                  <div class="space-y-1 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      {% if option.direction == "up" %}Hacia arriba{% else %}Hacia abajo{% endif %}
-                    </p>
-                    <p class="text-sm font-semibold text-slate-900">{{ option.total_bags }} bultos · {{ option.total_kg|floatformat:1 }} kg</p>
-                    <p class="text-[11px] {% if option.delta_kg >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">
-                      {% if option.delta_kg >= 0 %}+{% endif %}{{ option.delta_bags|floatformat:2 }} bultos ({% if option.delta_kg >= 0 %}+{% endif %}{{ option.delta_kg|floatformat:1 }} kg)
-                    </p>
-                    <p class="text-[11px] text-slate-500">
-                      AM: {{ option.morning_bags }} bulto{{ option.morning_bags|pluralize }} · PM: {{ option.afternoon_bags }} bulto{{ option.afternoon_bags|pluralize }}
-                    </p>
-                  </div>
-                {% endfor %}
-              </div>
-            </div>
-          {% endif %}
-        {% endwith %}
-
-        <section class="mt-5 space-y-4">
-          {% for house in feed_plan.houses %}
-            <section class="rounded-2xl border border-emerald-100 bg-white/95 p-4 shadow-sm shadow-emerald-50/80">
-              <header class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-emerald-500">
-                    {{ house.label }}{% if house.farm %} · {{ house.farm }}{% endif %}
-                  </p>
-                  <p class="text-sm text-slate-600">
-                    {{ house.summary.birds|intcomma }} aves · {{ house.summary.feed_kg|floatformat:1 }} kg ({{ house.summary.feed_bags|floatformat:2 }} bultos)
-                  </p>
-                </div>
-              </header>
-              <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                {% for room in house.rooms %}
-                  <article class="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-                    <p class="text-sm font-semibold text-slate-900">
-                      {{ room.label }}
-                      <span class="text-[11px] font-medium text-slate-500">({{ room.lot_label }})</span>
-                    </p>
-                    <p class="text-xs text-slate-500">{{ room.birds|intcomma }} aves · {{ room.grams_per_bird|floatformat:1 }} g/ave</p>
-                    <p class="text-sm font-semibold text-slate-900">
-                      {{ room.feed_kg|floatformat:2 }} kg
-                      <span class="text-[11px] font-semibold text-slate-500">({{ room.feed_bags|floatformat:2 }} bultos)</span>
-                    </p>
-                  </article>
-                {% empty %}
-                  <p class="rounded-xl border border-dashed border-slate-200 bg-white/80 p-3 text-xs text-slate-500">
-                    Sin salones asignados en este galpón.
-                  </p>
-                {% endfor %}
-              </div>
-            </section>
-          {% endfor %}
-        </section>
-
-        <section class="mt-5 grid gap-4 lg:grid-cols-[2fr_1fr]">
-          <div class="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-slate-100/70">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Referencia por lote</p>
-            <div class="mt-3 divide-y divide-slate-100 text-xs text-slate-600">
-              {% for lot in feed_plan.reference.lots %}
-                <div class="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-                  <div>
-                    <p class="text-sm font-semibold text-slate-900">{{ lot.label }}</p>
-                    <p>{{ lot.breed|default:"Raza no definida" }} · Sem {{ lot.age_weeks }} · {{ lot.birds|intcomma }} aves</p>
-                  </div>
-                  <div class="text-right">
-                    <p class="text-sm font-semibold text-slate-900">{{ lot.feed_kg|floatformat:1 }} kg</p>
-                    <p class="text-[11px] text-slate-500">{{ lot.grams_per_bird|floatformat:1 }} g/ave</p>
-                  </div>
-                </div>
-              {% empty %}
-                <p class="py-3 text-sm text-slate-500">Sin lotes activos asociados.</p>
-              {% endfor %}
-            </div>
-          </div>
-          <div class="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 shadow-inner shadow-amber-100/60">
-            <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Gramos por ave</p>
-            <div class="mt-2 space-y-2 text-sm text-amber-900">
-              <p class="font-semibold">
-                Referencia: {{ feed_plan.reference.grams_per_bird|floatformat:1 }} g/ave
-              </p>
-              {% if feed_plan.reference.rounded_grams_per_bird %}
-                <p>
-                  Con ajuste: {{ feed_plan.reference.rounded_grams_per_bird|floatformat:1 }} g/ave
-                  {% with diff=feed_plan.reference.grams_difference %}
-                    {% if diff is not None %}
-                      <span class="text-[11px] font-semibold {% if diff >= 0 %}text-emerald-700{% else %}text-rose-600{% endif %}">
-                        {% if diff >= 0 %}+{% endif %}{{ diff|floatformat:1 }} g
-                      </span>
-                    {% endif %}
-                  {% endwith %}
-                </p>
-              {% else %}
-                <p>Recomendación: usa la misma dosis exacta, no se requieren ajustes.</p>
-              {% endif %}
-              <p class="text-[11px] text-amber-700">* Bultos de {{ feed_plan.reference.bag_weight_kg|floatformat:0 }} kg divididos 65% mañana / 35% tarde.</p>
-            </div>
-          </div>
-        </section>
+      <p class="mt-4 text-[11px] text-slate-500">
+        bl = bulto de {{ feed_plan.reference.bag_weight_kg|floatformat:0 }} kg. Ideal = cálculo exacto, Mín./Máx. se redondean a bultos completos.
+      </p>
     </article>
   {% endwith %}
 {% endif %}

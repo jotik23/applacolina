@@ -2557,7 +2557,7 @@ def _build_telegram_mini_app_payload(
     daily_assignment_schedule = _resolve_operator_daily_assignments(
         user=user,
         reference_date=today,
-        max_days=6,
+        max_days=8,
     )
 
     leader_review_days = [

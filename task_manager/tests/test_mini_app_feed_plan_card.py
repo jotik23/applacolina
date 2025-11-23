@@ -161,6 +161,22 @@ class MiniAppFeedPlanCardTests(TestCase):
         self.assertAlmostEqual(feed_plan["totals"]["feed_kg"], 108.9, places=1)
         self.assertAlmostEqual(feed_plan["totals"]["feed_bags"], 2.72, places=2)
 
+        room_payload = feed_plan["houses"][0]["rooms"][0]
+        dosing = room_payload["dosing"]
+        self.assertIsNotNone(dosing)
+        self.assertAlmostEqual(dosing["ideal"]["am"]["kg"], 70.79, places=2)
+        self.assertAlmostEqual(dosing["ideal"]["am"]["bags"], 1.77, places=2)
+        self.assertAlmostEqual(dosing["ideal"]["pm"]["kg"], 38.11, places=2)
+        self.assertAlmostEqual(dosing["ideal"]["pm"]["bags"], 0.95, places=2)
+        self.assertEqual(dosing["min"]["am"]["bags"], 1.0)
+        self.assertEqual(dosing["min"]["pm"]["bags"], 1.0)
+        self.assertAlmostEqual(dosing["min"]["am"]["kg"], 40.0, places=1)
+        self.assertAlmostEqual(dosing["min"]["pm"]["kg"], 40.0, places=1)
+        self.assertEqual(dosing["max"]["am"]["bags"], 2.0)
+        self.assertEqual(dosing["max"]["pm"]["bags"], 1.0)
+        self.assertAlmostEqual(dosing["max"]["am"]["kg"], 80.0, places=1)
+        self.assertAlmostEqual(dosing["max"]["pm"]["kg"], 40.0, places=1)
+
         recommended = feed_plan["distribution"]["recommended"]
         self.assertIsNotNone(recommended)
         assert recommended
