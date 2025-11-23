@@ -9490,10 +9490,10 @@
           }
           const lines = [];
           const summaryLabel = shift.summary_label || 'Turno nocturno';
-          lines.push('Turno: ' + summaryLabel);
+          lines.push('🌙 Turno: ' + summaryLabel);
           const rangeLabel = buildShiftRangeLabel(shift);
           if (rangeLabel) {
-            lines.push('Fechas: ' + rangeLabel);
+            lines.push('📅 Fechas: ' + rangeLabel);
           }
           const locationParts = [];
           if (shift.farm) {
@@ -9503,11 +9503,11 @@
             locationParts.push(shift.barn);
           }
           if (locationParts.length) {
-            lines.push('Ubicación: ' + locationParts.join(' · '));
+            lines.push('📍 Ubicación: ' + locationParts.join(' · '));
           }
           const operatorName = resolveOperatorName(data);
           if (operatorName) {
-            lines.push('Operario: ' + operatorName);
+            lines.push('👤 Operario: ' + operatorName);
           }
           return lines.join('\n');
         }
@@ -9556,13 +9556,16 @@
               }
             });
           });
-          const lines = ['Tareas'];
+          const lines = ['📋 Tareas'];
           let hasItems = false;
-          groups.forEach(function (group) {
+          groups.forEach(function (group, index) {
             if (!group.items.length) {
               return;
             }
             hasItems = true;
+            if (index > 0) {
+              lines.push('');
+            }
             lines.push(group.label + ':');
             group.items.forEach(function (task) {
               lines.push(formatTaskLine(task));
@@ -9573,10 +9576,6 @@
 
         function formatTaskLine(task) {
           const lines = ['• ' + (task.title || 'Tarea sin nombre')];
-          const statusLabel = task.status && task.status.label ? task.status.label : null;
-          if (statusLabel && task.status.state !== 'completed') {
-            lines.push('  Estado: ' + statusLabel);
-          }
           if (task.completion_note) {
             lines.push('  Nota: ' + task.completion_note);
           }
@@ -9591,7 +9590,7 @@
           if (!registry) {
             return '';
           }
-          const lines = ['Registro nocturno'];
+          const lines = ['🌘 Registro nocturno'];
           const locationParts = [];
           if (registry.farm) {
             locationParts.push(registry.farm);
@@ -9600,7 +9599,7 @@
             locationParts.push(registry.shift_label);
           }
           if (locationParts.length) {
-            lines.push('Ubicación: ' + locationParts.join(' · '));
+            lines.push('📍 Ubicación: ' + locationParts.join(' · '));
           }
           const lots = Array.isArray(registry.lots) ? registry.lots : [];
           let hasDetails = false;
@@ -9613,13 +9612,15 @@
             const roomsByHouse = groupRoomsByHouse(lot.rooms);
             roomsByHouse.forEach(function (rooms, houseLabel) {
               lines.push('  ' + houseLabel + ':');
-              rooms.forEach(function (room) {
-                lines.push(
-                  formatRoomLine(room, integerFormatter, decimalFormatter)
-                );
-              });
+            rooms.forEach(function (room) {
+              const hasEntries = hasRoomEntries(room);
+              if (!hasEntries) {
+                return;
+              }
+              lines.push(formatRoomLine(room, integerFormatter, decimalFormatter));
             });
           });
+        });
           if (!hasDetails) {
             lines.push('Sin registros de salones.');
           }
@@ -9636,6 +9637,10 @@
             map.get(houseLabel).push(room);
           });
           return map;
+        }
+
+        function hasRoomEntries(room) {
+          return toNumber(room.mortality) > 0 || toNumber(room.discard) > 0 || toNumber(room.consumption) > 0;
         }
 
         function formatRoomLine(room, integerFormatter, decimalFormatter) {
