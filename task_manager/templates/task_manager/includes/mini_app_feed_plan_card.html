@@ -1,6 +1,6 @@
 {% load humanize %}
 
-{% if mini_app_card_permissions.feed_plan %}
+{% if mini_app_card_permissions.feed_plan and telegram_mini_app.feed_plan %}
   {% with feed_plan=telegram_mini_app.feed_plan %}
     <article
       class="rounded-3xl border border-amber-200 bg-gradient-to-br from-white via-amber-50/70 to-emerald-50/60 p-5 shadow-xl shadow-amber-200/50"
@@ -12,33 +12,24 @@
             <span aria-hidden="true">🥣</span>
             Dosificación de alimento
           </p>
-          <h3 class="text-lg font-semibold text-slate-900">
-            {% if feed_plan %}Plan diario · {{ feed_plan.date_label }}{% else %}Sin plan disponible{% endif %}
-          </h3>
-          {% if feed_plan %}
-            <p class="text-xs text-slate-600">
-              {{ feed_plan.weekday_label }} · {{ feed_plan.position_label|default:"Posición sin nombre" }}{% if feed_plan.chicken_house %} · {{ feed_plan.chicken_house }}{% endif %}{% if feed_plan.farm %} · {{ feed_plan.farm }}{% endif %}
-            </p>
-          {% else %}
-            <p class="text-xs text-slate-600">Cuando tengas lotes asignados, verás aquí la dosificación sugerida para tu jornada.</p>
-          {% endif %}
+          <h3 class="text-lg font-semibold text-slate-900">Plan diario · {{ feed_plan.date_label }}</h3>
+          <p class="text-xs text-slate-600">
+            {{ feed_plan.weekday_label }} · {{ feed_plan.position_label|default:"Posición sin nombre" }}{% if feed_plan.chicken_house %} · {{ feed_plan.chicken_house }}{% endif %}{% if feed_plan.farm %} · {{ feed_plan.farm }}{% endif %}
+          </p>
         </div>
-        {% if feed_plan %}
-          <div class="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
-            <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100/60">
-              <span aria-hidden="true">🐔</span>
-              {{ feed_plan.totals.birds|intcomma }} aves vivas
-            </span>
-            <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-100/60">
-              <span aria-hidden="true">⚖️</span>
-              {{ feed_plan.totals.feed_kg|floatformat:1 }} kg · {{ feed_plan.totals.feed_bags|floatformat:2 }} bultos
-            </span>
-          </div>
-        {% endif %}
+        <div class="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
+          <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100/60">
+            <span aria-hidden="true">🐔</span>
+            {{ feed_plan.totals.birds|intcomma }} aves vivas
+          </span>
+          <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-100/60">
+            <span aria-hidden="true">⚖️</span>
+            {{ feed_plan.totals.feed_kg|floatformat:1 }} kg · {{ feed_plan.totals.feed_bags|floatformat:2 }} bultos
+          </span>
+        </div>
       </header>
 
-      {% if feed_plan %}
-        {% with distribution=feed_plan.distribution %}
+      {% with distribution=feed_plan.distribution %}
           <section class="mt-4 grid gap-4 lg:grid-cols-2">
             <div class="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-inner shadow-amber-50/80">
               <div class="flex items-center justify-between gap-3">
@@ -217,12 +208,6 @@
             </div>
           </div>
         </section>
-      {% else %}
-        <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white/80 p-6 text-center text-sm text-slate-500">
-          <p class="font-semibold text-slate-700">Sin datos para calcular la dósis.</p>
-          <p class="mt-1">Asegúrate de tener una asignación activa al galpón y lotes con aves vivas.</p>
-        </div>
-      {% endif %}
     </article>
   {% endwith %}
 {% endif %}
