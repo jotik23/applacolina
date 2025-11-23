@@ -12,20 +12,7 @@
             <span aria-hidden="true">🥣</span>
             Dosificación de alimento
           </p>
-          <h3 class="text-lg font-semibold text-slate-900">Plan diario · {{ feed_plan.date_label }}</h3>
-          <p class="text-xs text-slate-600">
-            {{ feed_plan.weekday_label }} · {{ feed_plan.position_label|default:"Posición sin nombre" }}{% if feed_plan.chicken_house %} · {{ feed_plan.chicken_house }}{% endif %}{% if feed_plan.farm %} · {{ feed_plan.farm }}{% endif %}
-          </p>
-        </div>
-        <div class="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
-          <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 shadow-sm shadow-emerald-100/60">
-            <span aria-hidden="true">🐔</span>
-            {{ feed_plan.totals.birds|intcomma }} aves vivas
-          </span>
-          <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 shadow-sm shadow-amber-100/60">
-            <span aria-hidden="true">⚖️</span>
-            {{ feed_plan.totals.feed_kg|floatformat:1 }} kg · {{ feed_plan.totals.feed_bags|floatformat:2 }} bultos
-          </span>
+          <h3 class="text-lg font-semibold text-slate-900">{{ feed_plan.weekday_label }} · {{ feed_plan.position_label|default:"Posición sin nombre" }}{% if feed_plan.chicken_house %} · {{ feed_plan.chicken_house }}{% endif %}{% if feed_plan.farm %} · {{ feed_plan.farm }}{% endif %}</h3>
         </div>
       </header>
 
@@ -57,51 +44,6 @@
                   </dd>
                 </div>
               </dl>
-            </div>
-
-            <div class="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 shadow-inner shadow-emerald-100/70">
-              <div class="flex items-center justify-between gap-3">
-                <h4 class="text-sm font-semibold uppercase tracking-wide text-emerald-700">Ajuste a bultos completos</h4>
-                <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-                  {% if distribution.recommended %}
-                    {% if distribution.recommended.direction == "up" %}Hacia arriba{% else %}Hacia abajo{% endif %}
-                  {% else %}
-                    Exacto
-                  {% endif %}
-                </span>
-              </div>
-              {% if distribution.recommended %}
-                <p class="mt-2 text-base font-semibold text-emerald-800">
-                  {{ distribution.recommended.total_bags }} bultos · {{ distribution.recommended.total_kg|floatformat:1 }} kg
-                </p>
-                <p class="text-xs font-semibold {% if distribution.recommended.delta_kg >= 0 %}text-emerald-700{% else %}text-rose-600{% endif %}">
-                  Diferencial {% if distribution.recommended.delta_kg >= 0 %}+{% endif %}{{ distribution.recommended.delta_bags|floatformat:2 }} bultos ({% if distribution.recommended.delta_kg >= 0 %}+{% endif %}{{ distribution.recommended.delta_kg|floatformat:1 }} kg)
-                </p>
-                <dl class="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
-                  <div class="rounded-xl border border-emerald-100 bg-white/90 p-3 shadow-sm shadow-emerald-100/60">
-                    <dt class="font-semibold uppercase tracking-wide text-emerald-600">
-                      Mañana · {{ distribution.recommended.morning_percentage|floatformat:0 }}%
-                    </dt>
-                    <dd class="mt-1 text-sm font-semibold text-slate-900">
-                      {{ distribution.recommended.morning_kg|floatformat:1 }} kg
-                      <span class="text-[11px] font-semibold text-slate-500">({{ distribution.recommended.morning_bags }} bultos)</span>
-                    </dd>
-                  </div>
-                  <div class="rounded-xl border border-emerald-100 bg-white/90 p-3 shadow-sm shadow-emerald-100/60">
-                    <dt class="font-semibold uppercase tracking-wide text-emerald-600">
-                      Tarde · {{ distribution.recommended.afternoon_percentage|floatformat:0 }}%
-                    </dt>
-                    <dd class="mt-1 text-sm font-semibold text-slate-900">
-                      {{ distribution.recommended.afternoon_kg|floatformat:1 }} kg
-                      <span class="text-[11px] font-semibold text-slate-500">({{ distribution.recommended.afternoon_bags }} bulto{{ distribution.recommended.afternoon_bags|pluralize }})</span>
-                    </dd>
-                  </div>
-                </dl>
-              {% else %}
-                <p class="mt-2 text-sm text-slate-700">
-                  El consumo exacto ya coincide con bultos completos. Sirve la dósis con el esquema base (65% mañana / 35% tarde).
-                </p>
-              {% endif %}
             </div>
           </section>
 
