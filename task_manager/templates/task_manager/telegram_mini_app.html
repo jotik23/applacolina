@@ -9607,20 +9607,28 @@
             if (!lot || !Array.isArray(lot.rooms) || !lot.rooms.length) {
               return;
             }
+            const roomsByHouse = groupRoomsByHouse(lot.rooms);
+            const lotLines = [];
+            roomsByHouse.forEach(function (rooms, houseLabel) {
+              const houseLines = [];
+              rooms.forEach(function (room) {
+                if (!hasRoomEntries(room)) {
+                  return;
+                }
+                houseLines.push(formatRoomLine(room, integerFormatter, decimalFormatter));
+              });
+              if (houseLines.length) {
+                lotLines.push('  ' + houseLabel + ':');
+                lotLines.push.apply(lotLines, houseLines);
+              }
+            });
+            if (!lotLines.length) {
+              return;
+            }
             hasDetails = true;
             lines.push(lot.label + ':');
-            const roomsByHouse = groupRoomsByHouse(lot.rooms);
-            roomsByHouse.forEach(function (rooms, houseLabel) {
-              lines.push('  ' + houseLabel + ':');
-            rooms.forEach(function (room) {
-              const hasEntries = hasRoomEntries(room);
-              if (!hasEntries) {
-                return;
-              }
-              lines.push(formatRoomLine(room, integerFormatter, decimalFormatter));
-            });
+            lines.push.apply(lines, lotLines);
           });
-        });
           if (!hasDetails) {
             lines.push('Sin registros de salones.');
           }
