@@ -9455,9 +9455,17 @@
           if (tasksSection) {
             sections.push(tasksSection);
           }
-          const nightSection = buildNightSection(data.night_mortality || null, integerFormatter, decimalFormatter);
-          if (nightSection) {
-            sections.push(nightSection);
+          const shiftType = resolveShiftType(data);
+          if (shiftType === 'night') {
+            const nightSection = buildNightSection(data.night_mortality || null, integerFormatter, decimalFormatter);
+            if (nightSection) {
+              sections.push(nightSection);
+            }
+          } else if (shiftType === 'day') {
+            const daySection = buildDayProductionSection(data.production || null, integerFormatter, decimalFormatter);
+            if (daySection) {
+              sections.push(daySection);
+            }
           }
           return sections.join('\n\n');
         }
@@ -9469,7 +9477,9 @@
           }
           const lines = [];
           const summaryLabel = shift.summary_label || 'Turno nocturno';
-          lines.push('🌙 Turno: ' + summaryLabel);
+          const shiftType = typeof shift.shift_type === 'string' ? shift.shift_type : '';
+          const shiftIcon = shiftType === 'day' ? '🌞' : shiftType === 'night' ? '🌙' : '🕘';
+          lines.push(shiftIcon + ' Turno: ' + summaryLabel);
           const rangeLabel = buildShiftRangeLabel(shift);
           if (rangeLabel) {
             lines.push('📅 Fechas: ' + rangeLabel);
@@ -9489,6 +9499,11 @@
             lines.push('👤 Operario: ' + operatorName);
           }
           return lines.join('\n');
+        }
+
+        function resolveShiftType(data) {
+          const shift = data && data.shift_confirmation ? data.shift_confirmation : null;
+          return shift && typeof shift.shift_type === 'string' ? shift.shift_type : '';
         }
 
         function buildShiftRangeLabel(shift) {
@@ -9612,6 +9627,173 @@
             lines.push('Sin registros de salones.');
           }
           return lines.join('\n');
+        }
+
+        function buildDayProductionSection(registry, integerFormatter, decimalFormatter) {
+          if (!registry || !Array.isArray(registry.lots) || !registry.lots.length) {
+            return '';
+          }
+          const lines = ['🌞 Reporte de producción'];
+          const locationParts = [];
+          if (registry.farm) {
+            locationParts.push(registry.farm);
+          }
+          if (registry.chicken_house) {
+            locationParts.push(registry.chicken_house);
+          }
+          if (locationParts.length) {
+            lines.push('📍 Ubicación: ' + locationParts.join(' · '));
+          }
+          let hasDetails = false;
+          registry.lots.forEach(function (lot) {
+            const lotLines = buildDayLotLines(lot, integerFormatter, decimalFormatter);
+            if (!lotLines.length) {
+              return;
+            }
+            hasDetails = true;
+            const lotLabel = lot && lot.label ? lot.label : 'Lote asignado';
+            lines.push(lotLabel + ':');
+            lines.push.apply(lines, lotLines);
+          });
+          if (!hasDetails) {
+            lines.push('Sin registros de lotes.');
+          }
+          return lines.join('\n');
+        }
+
+        function buildDayLotLines(lot, integerFormatter, decimalFormatter) {
+          const lines = [];
+          if (!lot) {
+            return lines;
+          }
+          const roomLabels = Array.isArray(lot.room_labels) && lot.room_labels.length ? lot.room_labels.join(', ') : '';
+          if (roomLabels) {
+            lines.push('  Salas: ' + roomLabels);
+          }
+          const summary = formatLotSummaryLine(lot.record || null, integerFormatter, decimalFormatter);
+          if (summary) {
+            lines.push('  ' + summary);
+          }
+          const roomLines = buildDayRoomLines(lot.rooms || [], integerFormatter, decimalFormatter);
+          if (roomLines.length) {
+            lines.push.apply(lines, roomLines);
+          }
+          if (!roomLabels && !summary && !roomLines.length) {
+            lines.push('  Sin registros cargados.');
+          }
+          return lines;
+        }
+
+        function formatLotSummaryLine(record, integerFormatter, decimalFormatter) {
+          if (!record) {
+            return '';
+          }
+          const parts = [];
+          const productionLabel = formatDecimalLabel(record.production, decimalFormatter);
+          if (productionLabel) {
+            parts.push('Prod ' + productionLabel);
+          }
+          const consumptionLabel = formatDecimalLabel(record.consumption, decimalFormatter);
+          if (consumptionLabel) {
+            parts.push('Cons ' + consumptionLabel + ' kg');
+          }
+          const mortalityLabel = formatIntegerLabel(record.mortality, integerFormatter);
+          if (mortalityLabel) {
+            parts.push('Mort ' + mortalityLabel);
+          }
+          const discardLabel = formatIntegerLabel(record.discard, integerFormatter);
+          if (discardLabel) {
+            parts.push('Desc ' + discardLabel);
+          }
+          const weightLabel = formatDecimalLabel(record.average_egg_weight, decimalFormatter);
+          if (weightLabel) {
+            parts.push('Peso ' + weightLabel + ' g');
+          }
+          if (!parts.length) {
+            return '';
+          }
+          if (record.last_actor || record.last_updated_label) {
+            const updates = [];
+            if (record.last_actor) {
+              updates.push(record.last_actor);
+            }
+            if (record.last_updated_label) {
+              updates.push(record.last_updated_label);
+            }
+            parts.push('Act ' + updates.join(' · '));
+          }
+          return parts.join(' · ');
+        }
+
+        function buildDayRoomLines(rooms, integerFormatter, decimalFormatter) {
+          if (!Array.isArray(rooms) || !rooms.length) {
+            return [];
+          }
+          const lines = [];
+          rooms.forEach(function (room) {
+            if (!hasDayRoomEntries(room)) {
+              return;
+            }
+            const metrics = [];
+            const productionLabel = formatDecimalLabel(room.production, decimalFormatter);
+            if (productionLabel) {
+              metrics.push('Prod ' + productionLabel);
+            }
+            const consumptionLabel = formatDecimalLabel(room.consumption, decimalFormatter);
+            if (consumptionLabel) {
+              metrics.push('Cons ' + consumptionLabel + ' kg');
+            }
+            const mortalityLabel = formatIntegerLabel(room.mortality, integerFormatter);
+            if (mortalityLabel) {
+              metrics.push('Mort ' + mortalityLabel);
+            }
+            const discardLabel = formatIntegerLabel(room.discard, integerFormatter);
+            if (discardLabel) {
+              metrics.push('Desc ' + discardLabel);
+            }
+            if (!metrics.length) {
+              return;
+            }
+            const label = room && room.label ? room.label : 'Sala';
+            lines.push('    - ' + label + ': ' + metrics.join(' · '));
+          });
+          return lines;
+        }
+
+        function hasDayRoomEntries(room) {
+          if (!room) {
+            return false;
+          }
+          return (
+            hasNumericValue(room.production) ||
+            hasNumericValue(room.consumption) ||
+            hasNumericValue(room.mortality) ||
+            hasNumericValue(room.discard)
+          );
+        }
+
+        function hasNumericValue(value) {
+          if (value === null || value === undefined || value === '') {
+            return false;
+          }
+          const numericValue = typeof value === 'number' ? value : Number(value);
+          return Number.isFinite(numericValue);
+        }
+
+        function formatDecimalLabel(value, decimalFormatter) {
+          if (!hasNumericValue(value)) {
+            return '';
+          }
+          const numericValue = typeof value === 'number' ? value : Number(value);
+          return decimalFormatter.format(numericValue);
+        }
+
+        function formatIntegerLabel(value, integerFormatter) {
+          if (!hasNumericValue(value)) {
+            return '';
+          }
+          const numericValue = typeof value === 'number' ? value : Number(value);
+          return integerFormatter.format(numericValue);
         }
 
         function groupRoomsByHouse(rooms) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth.models import Permission
 from django.test import TestCase
@@ -17,7 +18,17 @@ from personal.models import (
     ShiftType,
     UserProfile,
 )
-from production.models import ChickenHouse, Farm, Room
+from production.models import (
+    BirdBatch,
+    BirdBatchRoomAllocation,
+    BreedReference,
+    ChickenHouse,
+    Farm,
+    ProductionRecord,
+    ProductionRoomRecord,
+    Room,
+)
+from task_manager.models import TaskAssignment, TaskCategory, TaskDefinition, TaskStatus
 
 
 class MiniAppShiftConfirmationViewTests(TestCase):
@@ -37,6 +48,9 @@ class MiniAppShiftConfirmationViewTests(TestCase):
             code=PositionCategoryCode.LIDER_GRANJA,
             defaults={"shift_type": ShiftType.DAY},
         )
+        if self.category.shift_type != ShiftType.DAY:
+            self.category.shift_type = ShiftType.DAY
+            self.category.save(update_fields=["shift_type"])
         self.position = PositionDefinition.objects.create(
             name="Líder Operativo",
             code="LID-OP-001",
@@ -47,6 +61,11 @@ class MiniAppShiftConfirmationViewTests(TestCase):
             valid_until=timezone.localdate() + timedelta(days=30),
         )
         self.position.rooms.add(self.room)
+        self.task_status, _ = TaskStatus.objects.get_or_create(name="Pendiente", defaults={"is_active": True})
+        self.task_category, _ = TaskCategory.objects.get_or_create(
+            name="Operativo",
+            defaults={"description": "", "is_active": True},
+        )
 
     def _next_identifier(self) -> str:
         self._user_sequence += 1
@@ -82,6 +101,60 @@ class MiniAppShiftConfirmationViewTests(TestCase):
             date=today,
             operator=operator,
         )
+
+    def _grant_permission(self, user: UserProfile, codename: str) -> None:
+        permission = Permission.objects.get(codename=codename)
+        user.user_permissions.add(permission)
+
+    def _create_task_assignment_for_user(self, *, operator: UserProfile) -> TaskAssignment:
+        today = timezone.localdate()
+        definition = TaskDefinition.objects.create(
+            name="Inspección bioseguridad",
+            status=self.task_status,
+            category=self.task_category,
+            task_type=TaskDefinition.TaskType.ONE_TIME,
+            scheduled_for=today,
+            position=self.position,
+        )
+        return TaskAssignment.objects.create(
+            task_definition=definition,
+            collaborator=operator,
+            due_date=today,
+        )
+
+    def _setup_production_registry(self, *, operator: UserProfile) -> ProductionRecord:
+        today = timezone.localdate()
+        breed, _ = BreedReference.objects.get_or_create(name="Hy-Line Brown")
+        batch = BirdBatch.objects.create(
+            farm=self.farm,
+            birth_date=today - timedelta(days=150),
+            initial_quantity=1200,
+            breed=breed,
+        )
+        BirdBatchRoomAllocation.objects.create(
+            bird_batch=batch,
+            room=self.room,
+            quantity=1000,
+        )
+        record = ProductionRecord.objects.create(
+            bird_batch=batch,
+            date=today,
+            production=Decimal("120.5"),
+            consumption=Decimal("350.0"),
+            mortality=3,
+            discard=1,
+            average_egg_weight=Decimal("62.4"),
+            created_by=operator,
+        )
+        ProductionRoomRecord.objects.create(
+            production_record=record,
+            room=self.room,
+            production=Decimal("120.5"),
+            consumption=Decimal("350.0"),
+            mortality=3,
+            discard=1,
+        )
+        return record
 
     def test_authorized_user_sees_shift_card(self):
         user = self._create_user(grant_shift_permission=True)
@@ -142,7 +215,7 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         self.assertIsNone(payload["shift_confirmation"])
         self.assertIsNone(payload["shift_confirmation_empty"])
 
-    def test_whatsapp_share_button_only_for_night_shift(self):
+    def test_whatsapp_share_button_for_night_shift(self):
         self.category.shift_type = ShiftType.NIGHT
         self.category.save(update_fields=["shift_type"])
         user = self._create_user(grant_shift_permission=True)
@@ -156,5 +229,39 @@ class MiniAppShiftConfirmationViewTests(TestCase):
         shift_payload = payload["shift_confirmation"]
         self.assertIsNotNone(shift_payload)
         self.assertEqual(shift_payload["shift_type"], ShiftType.NIGHT)
+        self.assertTrue(payload["can_share_whatsapp_report"])
+        self.assertContains(response, "Compartir reporte por WhatsApp")
+
+    def test_day_shift_user_with_tasks_can_share_report(self):
+        user = self._create_user(grant_shift_permission=True)
+        self._create_assignment(operator=user)
+        self._grant_permission(user, "view_mini_app_task_cards")
+        self._create_task_assignment_for_user(operator=user)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("task_manager:telegram-mini-app"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.context["telegram_mini_app"]
+        self.assertIsNotNone(payload)
+        shift_payload = payload["shift_confirmation"]
+        self.assertIsNotNone(shift_payload)
+        self.assertEqual(shift_payload["shift_type"], ShiftType.DAY)
+        self.assertTrue(payload["can_share_whatsapp_report"])
+        self.assertContains(response, "Compartir reporte por WhatsApp")
+
+    def test_day_shift_user_with_production_lots_can_share_report(self):
+        user = self._create_user(grant_shift_permission=True)
+        self._create_assignment(operator=user)
+        self._grant_permission(user, "view_mini_app_production_card")
+        self._setup_production_registry(operator=user)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("task_manager:telegram-mini-app"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.context["telegram_mini_app"]
+        self.assertIsNotNone(payload)
+        shift_payload = payload["shift_confirmation"]
+        self.assertIsNotNone(shift_payload)
+        self.assertEqual(shift_payload["shift_type"], ShiftType.DAY)
         self.assertTrue(payload["can_share_whatsapp_report"])
         self.assertContains(response, "Compartir reporte por WhatsApp")

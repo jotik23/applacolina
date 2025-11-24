@@ -3051,7 +3051,13 @@ def _build_telegram_mini_app_payload(
     if isinstance(shift_confirmation_payload, dict):
         shift_type_value = shift_confirmation_payload.get("shift_type")
 
-    can_share_whatsapp_report = shift_type_value == ShiftType.NIGHT
+    has_task_payloads = bool(tasks)
+    has_production_lots = bool(
+        isinstance(production, dict) and isinstance(production.get("lots"), list) and production["lots"]
+    )
+    can_share_whatsapp_report = shift_type_value == ShiftType.NIGHT or (
+        shift_type_value == ShiftType.DAY and (has_task_payloads or has_production_lots)
+    )
 
     return {
         "date_label": date_label,
