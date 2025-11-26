@@ -975,6 +975,80 @@ class OperatorRestPeriod(models.Model):
         super().save(*args, **kwargs)
 
 
+class CalendarRestSuggestion(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pendiente")
+        ACKNOWLEDGED = "acknowledged", _("Atendida")
+        DISMISSED = "dismissed", _("Descartada")
+
+    calendar = models.ForeignKey(
+        ShiftCalendar,
+        on_delete=models.CASCADE,
+        related_name="rest_suggestions",
+        verbose_name="Calendario",
+    )
+    operator = models.ForeignKey(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name="rest_suggestions",
+        verbose_name="Colaborador",
+    )
+    rest_period = models.ForeignKey(
+        OperatorRestPeriod,
+        on_delete=models.SET_NULL,
+        related_name="suggestions",
+        verbose_name="Descanso asociado",
+        null=True,
+        blank=True,
+    )
+    scheduled_date = models.DateField("Descanso programado")
+    suggested_date = models.DateField("Descanso sugerido")
+    reason = models.TextField("Motivo", max_length=600)
+    status = models.CharField(
+        "Estado",
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Sugerencia de descanso"
+        verbose_name_plural = "Sugerencias de descanso"
+        ordering = ("-created_at",)
+        db_table = "calendario_rest_suggestion"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("calendar", "operator", "scheduled_date"),
+                name="unique_rest_suggestion_per_day",
+            )
+        ]
+
+    def __str__(self) -> str:
+        operator_name = self.operator.get_full_name() if self.operator_id else "Colaborador"
+        return f"{operator_name} · {self.scheduled_date} → {self.suggested_date}"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.calendar and self.scheduled_date:
+            if not (self.calendar.start_date <= self.scheduled_date <= self.calendar.end_date):
+                raise ValidationError(
+                    {"scheduled_date": _("El descanso reportado no pertenece a este calendario.")}
+                )
+        if self.calendar and self.suggested_date:
+            if not (self.calendar.start_date <= self.suggested_date <= self.calendar.end_date):
+                raise ValidationError(
+                    {"suggested_date": _("Propón un día dentro del rango del calendario.")}
+                )
+        if self.rest_period and self.scheduled_date:
+            if not (self.rest_period.start_date <= self.scheduled_date <= self.rest_period.end_date):
+                raise ValidationError(
+                    {"scheduled_date": _("El descanso indicado no coincide con el registro original.")}
+                )
+
+
+
 @dataclass
 class AssignmentDecision:
     position: PositionDefinition

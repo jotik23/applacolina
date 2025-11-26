@@ -8,6 +8,7 @@ from typing import ClassVar
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from production.models import ChickenHouse, EggDispatchDestination, Farm
 
@@ -802,7 +803,7 @@ class Sale(TimeStampedModel):
         CASH = "cash", "Contado"
         CREDIT = "credit", "Crédito"
 
-    date = models.DateField("Fecha de venta")
+    date = models.DateField("Fecha de venta", default=timezone.localdate)
     customer = models.ForeignKey(
         Supplier,
         on_delete=models.PROTECT,
@@ -834,14 +835,8 @@ class Sale(TimeStampedModel):
         default=PaymentCondition.CREDIT,
     )
     payment_due_date = models.DateField("Fecha esperada de pago", null=True, blank=True)
-    total_amount = models.DecimalField(
-        "Total factura",
-        max_digits=14,
-        decimal_places=2,
-        default=Decimal("0.00"),
-    )
-    auto_withholding_amount = models.DecimalField(
-        "Autorretención",
+    discount_amount = models.DecimalField(
+        "Descuento aplicado",
         max_digits=14,
         decimal_places=2,
         default=Decimal("0.00"),
@@ -876,7 +871,12 @@ class Sale(TimeStampedModel):
         items_manager = getattr(self, "items", None)
         if items_manager is None:
             return Decimal("0.00")
-        return sum((Decimal(item.subtotal or 0) for item in items_manager.all()), Decimal("0.00"))
+        total = Decimal("0.00")
+        for item in items_manager.all():
+            quantity = Decimal(getattr(item, "quantity", 0) or 0)
+            unit_price = Decimal(getattr(item, "unit_price", 0) or 0)
+            total += quantity * unit_price
+        return total.quantize(Decimal("0.01"))
 
     @property
     def payments_total(self) -> Decimal:
@@ -886,9 +886,25 @@ class Sale(TimeStampedModel):
         return sum((Decimal(payment.amount or 0) for payment in payments_manager.all()), Decimal("0.00"))
 
     @property
+    def total_amount(self) -> Decimal:
+        subtotal = self.subtotal_amount
+        discount = Decimal(self.discount_amount or 0)
+        net_total = subtotal - discount
+        if net_total < Decimal("0"):
+            net_total = Decimal("0.00")
+        return net_total.quantize(Decimal("0.01"))
+
+    @property
+    def auto_withholding_amount(self) -> Decimal:
+        net_total = self.total_amount
+        if net_total <= Decimal("0.00"):
+            return Decimal("0.00")
+        return (net_total * Decimal("0.01")).quantize(Decimal("0.01"))
+
+    @property
     def balance_due(self) -> Decimal:
-        subtotal = Decimal(self.total_amount or Decimal("0.00"))
-        withholding = Decimal(self.auto_withholding_amount or Decimal("0.00"))
+        subtotal = self.total_amount
+        withholding = self.auto_withholding_amount
         paid = Decimal(self.payments_total)
         balance = subtotal - withholding - paid
         if balance < Decimal("0.00"):
@@ -967,7 +983,7 @@ class SalePayment(TimeStampedModel):
         related_name="payments",
         verbose_name="Venta",
     )
-    date = models.DateField("Fecha de abono")
+    date = models.DateField("Fecha de abono", default=timezone.localdate)
     amount = models.DecimalField(
         "Monto",
         max_digits=14,

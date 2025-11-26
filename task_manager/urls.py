@@ -13,6 +13,7 @@ from .views import (
     mini_app_purchase_finalize_view,
     mini_app_purchase_approval_view,
     mini_app_purchase_request_modify_view,
+    mini_app_rest_suggestion_view,
     mini_app_task_complete_view,
     mini_app_task_evidence_upload_view,
     mini_app_task_reset_view,
@@ -55,6 +56,11 @@ urlpatterns = [
         "telegram/mini-app/tasks/<int:pk>/reset/",
         mini_app_task_reset_view,
         name="mini-app-task-reset",
+    ),
+    path(
+        "telegram/mini-app/rest-suggestions/",
+        mini_app_rest_suggestion_view,
+        name="mini-app-rest-suggestions",
     ),
     path(
         "telegram/mini-app/production-records/",

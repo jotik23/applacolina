@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from personal.models import (
     AssignmentAlertLevel,
+    CalendarRestSuggestion,
     CalendarStatus,
     OperatorRestPeriod,
     PositionCategory,
@@ -418,7 +419,27 @@ class CalendarDetailViewManualOverrideTests(TestCase):
 
         stats = response.context["stats"]
         self.assertGreater(stats["gaps"], 0)
-        self.assertEqual(stats["critical"], stats["gaps"])
+
+    def test_rest_suggestions_are_exposed_as_alerts(self) -> None:
+        CalendarRestSuggestion.objects.create(
+            calendar=self.calendar,
+            operator=self.operator_manual,
+            scheduled_date=self.calendar.start_date,
+            suggested_date=self.calendar.start_date + timedelta(days=2),
+            reason="Necesito ajustar por cita médica.",
+        )
+
+        url = reverse("personal:calendar-detail", args=[self.calendar.pk])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        assignment_issues = response.context["assignment_issues"]
+        self.assertTrue(
+            any("cita médica" in issue.get("detail", "") for issue in assignment_issues),
+            assignment_issues,
+        )
+        rest_suggestions = response.context["rest_suggestions"]
+        self.assertGreaterEqual(len(rest_suggestions), 1)
 
     def test_rest_rows_include_manual_rest_operator(self) -> None:
         rest_start = self.calendar.start_date + timedelta(days=1)

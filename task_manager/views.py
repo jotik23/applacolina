@@ -51,6 +51,7 @@ from applacolina.mixins import StaffRequiredMixin
 from personal.models import (
     CalendarStatus,
     DayOfWeek,
+    CalendarRestSuggestion,
     OperatorRestPeriod,
     PositionDefinition,
     RestPeriodStatus,
@@ -267,6 +268,22 @@ def _format_compact_date_label(target_date: date) -> str:
     return f"{day_label} {month_label}"
 
 
+def _parse_iso_date(value) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    if not value or not isinstance(value, str):
+        return None
+    raw_value = value.strip()
+    if not raw_value:
+        return None
+    try:
+        if "T" in raw_value:
+            return datetime.fromisoformat(raw_value).date()
+        return date.fromisoformat(raw_value)
+    except ValueError:
+        return None
+
+
 def _build_daily_assignment_day_payload(
     *,
     target_date: date,
@@ -282,6 +299,10 @@ def _build_daily_assignment_day_payload(
     rest_notes: Optional[str],
     assignment_notes: Optional[str],
     alerts: Optional[Iterable[str]] = None,
+    calendar_id: Optional[int] = None,
+    calendar_name: Optional[str] = None,
+    rest_period_id: Optional[int] = None,
+    rest_suggestion: Optional[dict[str, object]] = None,
 ) -> dict[str, object]:
     today = timezone.localdate()
     weekday_label = date_format(target_date, "l").capitalize()
@@ -318,6 +339,10 @@ def _build_daily_assignment_day_payload(
         "assignment_notes": assignment_notes,
         "alerts": [alert for alert in (alerts or []) if alert],
     }
+    payload["calendar_id"] = calendar_id
+    payload["calendar_name"] = calendar_name
+    payload["rest_period_id"] = rest_period_id
+    payload["rest_suggestion"] = rest_suggestion
     # Preserve reference to initial comparison day for consumers that rely on it.
     payload["is_reference_day"] = target_date == reference_date
     return payload
@@ -381,6 +406,20 @@ def _resolve_operator_daily_assignments(
             rest_by_day.setdefault(current, period)
             current += timedelta(days=1)
 
+    rest_suggestion_map: dict[tuple[int, date], CalendarRestSuggestion] = {}
+    rest_suggestions = (
+        CalendarRestSuggestion.objects.filter(
+            operator=user,
+            scheduled_date__gte=reference_date,
+            scheduled_date__lte=search_horizon,
+        )
+        .select_related("calendar")
+        .order_by("-created_at")
+    )
+    for suggestion in rest_suggestions:
+        if suggestion.calendar_id:
+            rest_suggestion_map[(suggestion.calendar_id, suggestion.scheduled_date)] = suggestion
+
     days: list[dict[str, object]] = []
     cursor = reference_date
     horizon_limit = search_horizon
@@ -397,12 +436,16 @@ def _resolve_operator_daily_assignments(
         calendar = getattr(assignment, "calendar", None)
         calendar_status_key: Optional[str] = getattr(calendar, "status", None)
         calendar_status_label = calendar.get_status_display() if calendar else _("Sin estado")
+        calendar_id: Optional[int] = getattr(calendar, "id", None)
+        calendar_name: Optional[str] = getattr(calendar, "name", None)
 
         if rest_period and not calendar_status_label:
             period_calendar = getattr(rest_period, "calendar", None)
             if period_calendar:
                 calendar_status_key = period_calendar.status
                 calendar_status_label = period_calendar.get_status_display()
+                calendar_id = period_calendar.id
+                calendar_name = period_calendar.name
             else:
                 calendar_status_key = "manual"
                 calendar_status_label = _("Manual")
@@ -441,13 +484,33 @@ def _resolve_operator_daily_assignments(
 
         rest_label: Optional[str] = None
         rest_notes: Optional[str] = None
+        rest_period_id: Optional[int] = None
         if rest_period:
             status_display = rest_period.get_status_display()
             rest_label = status_display or _("Descanso")
             rest_notes = rest_period.notes or ""
+            rest_period_id = rest_period.id
             if not calendar_status_label:
                 calendar_status_label = _("Manual")
                 calendar_status_key = "manual"
+            if not calendar_id and getattr(rest_period, "calendar_id", None):
+                calendar_id = rest_period.calendar_id
+                calendar_name = getattr(rest_period.calendar, "name", None)
+
+        rest_suggestion_payload: Optional[dict[str, object]] = None
+        if calendar_id:
+            suggestion_key = (calendar_id, cursor)
+            suggestion_entry = rest_suggestion_map.get(suggestion_key)
+            if suggestion_entry:
+                rest_suggestion_payload = {
+                    "id": suggestion_entry.id,
+                    "status": suggestion_entry.status,
+                    "status_label": suggestion_entry.get_status_display(),
+                    "suggested_date": suggestion_entry.suggested_date.isoformat(),
+                    "suggested_date_label": _format_compact_date_label(suggestion_entry.suggested_date),
+                    "reason": suggestion_entry.reason,
+                    "created_at": suggestion_entry.created_at.isoformat(),
+                }
 
         day_payload = _build_daily_assignment_day_payload(
             target_date=cursor,
@@ -463,6 +526,10 @@ def _resolve_operator_daily_assignments(
             rest_notes=rest_notes,
             assignment_notes=assignment_notes,
             alerts=alerts,
+            calendar_id=calendar_id,
+            calendar_name=calendar_name,
+            rest_period_id=rest_period_id,
+            rest_suggestion=rest_suggestion_payload,
         )
         days.append(day_payload)
         cursor += timedelta(days=1)
@@ -1906,6 +1973,98 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
 
 
 task_manager_home_view = TaskManagerHomeView.as_view()
+
+
+@require_POST
+def mini_app_rest_suggestion_view(request):
+    guard = _mini_app_json_guard(request)
+    if guard:
+        return guard
+
+    user = cast(UserProfile, request.user)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        payload = {}
+
+    scheduled_date = _parse_iso_date(payload.get("scheduled_date"))
+    suggested_date = _parse_iso_date(payload.get("suggested_date"))
+    calendar_id = payload.get("calendar_id")
+    reason = (payload.get("reason") or "").strip()
+
+    errors: dict[str, str] = {}
+    if not scheduled_date:
+        errors["scheduled_date"] = _("Selecciona el descanso que deseas ajustar.")
+    if not suggested_date:
+        errors["suggested_date"] = _("Indica el nuevo día sugerido.")
+    if not reason:
+        errors["reason"] = _("Cuéntanos brevemente el motivo.")
+    elif len(reason) < 12:
+        errors["reason"] = _("Comparte al menos 12 caracteres para entender el contexto.")
+
+    rest_period = None
+    calendar = None
+    if scheduled_date and "scheduled_date" not in errors:
+        rest_period_qs = OperatorRestPeriod.objects.select_related("calendar").filter(
+            operator=user,
+            start_date__lte=scheduled_date,
+            end_date__gte=scheduled_date,
+        )
+        if calendar_id:
+            rest_period_qs = rest_period_qs.filter(calendar_id=calendar_id)
+        rest_period = (
+            rest_period_qs.exclude(status__in=[RestPeriodStatus.CANCELLED, RestPeriodStatus.EXPIRED]).first()
+        )
+        calendar = rest_period.calendar if rest_period else None
+        if not rest_period:
+            errors["scheduled_date"] = _("No encontramos un descanso programado para esa fecha.")
+        elif not calendar:
+            errors["scheduled_date"] = _("Ese descanso no está enlazado a un calendario vigente.")
+
+    if calendar and suggested_date and "suggested_date" not in errors:
+        if not (calendar.start_date <= suggested_date <= calendar.end_date):
+            errors["suggested_date"] = _("El día sugerido debe estar dentro del calendario.")
+
+    if calendar and scheduled_date and not errors:
+        existing = CalendarRestSuggestion.objects.filter(
+            calendar=calendar,
+            operator=user,
+            scheduled_date=scheduled_date,
+        ).exists()
+        if existing:
+            errors["scheduled_date"] = _("Ya registraste una sugerencia para ese descanso.")
+
+    if errors:
+        return JsonResponse({"errors": errors}, status=400)
+
+    suggestion = CalendarRestSuggestion.objects.create(
+        calendar=calendar,
+        operator=user,
+        rest_period=rest_period,
+        scheduled_date=scheduled_date,
+        suggested_date=suggested_date,
+        reason=reason,
+    )
+
+    suggestion_payload = {
+        "id": suggestion.id,
+        "status": suggestion.status,
+        "status_label": suggestion.get_status_display(),
+        "scheduled_date": suggestion.scheduled_date.isoformat(),
+        "scheduled_date_label": _format_compact_date_label(suggestion.scheduled_date),
+        "suggested_date": suggestion.suggested_date.isoformat(),
+        "suggested_date_label": _format_compact_date_label(suggestion.suggested_date),
+        "reason": suggestion.reason,
+    }
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "suggestion": suggestion_payload,
+        },
+        status=201,
+    )
 
 
 def _build_telegram_mini_app_payload(

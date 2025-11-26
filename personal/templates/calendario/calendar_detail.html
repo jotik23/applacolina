@@ -156,47 +156,70 @@
             </div>
           </div>
           <div class="flex w-full flex-col items-center gap-2 sm:w-52 sm:flex-none sm:items-end sm:ml-auto">
-            {% if calendar.status != 'approved' %}
-              <form method="post" class="w-full" data-confirmation>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="approve" />
-                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2" data-confirmation-trigger>
-                  Aprobar calendario
-                </button>
-                <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
-                  <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
-                    <p class="font-semibold text-slate-900">¿Aprobar este calendario?</p>
-                    <p class="mt-1 text-xs text-slate-500">Se publicará para uso operativo.</p>
-                    <div class="mt-3 flex justify-end gap-2">
-                      <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
-                      <button type="button" class="inline-flex items-center rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1" data-confirmation-confirm>Aprobar</button>
+            <div class="flex w-full flex-col gap-2 sm:flex-row">
+              {% if calendar.status != 'approved' %}
+                <form method="post" class="w-full sm:flex-1" data-confirmation>
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="approve" />
+                  <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2" data-confirmation-trigger>
+                    Aprobar calendario
+                  </button>
+                  <div class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-800/40 p-4" data-confirmation-overlay>
+                    <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 text-left text-sm shadow-lg">
+                      <p class="font-semibold text-slate-900">¿Aprobar este calendario?</p>
+                      <p class="mt-1 text-xs text-slate-500">Se publicará para uso operativo.</p>
+                      <div class="mt-3 flex justify-end gap-2">
+                        <button type="button" class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" data-confirmation-cancel data-confirmation-focus>Cancelar</button>
+                        <button type="button" class="inline-flex items-center rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1" data-confirmation-confirm>Aprobar</button>
+                      </div>
                     </div>
                   </div>
+                </form>
+              {% else %}
+                <div class="flex w-full flex-col gap-1 text-xs items-center sm:items-end sm:flex-1">
+                  <div class="flex flex-col items-start gap-2 text-sm font-medium text-slate-500 sm:items-end w-full">
+                    <span class="w-full text-center sm:text-right">
+                      {% if calendar.approved_by %}
+                        Aprobado por {{ calendar.approved_by.get_full_name|default:calendar.approved_by }} el {{ calendar.approved_at|date:"d/m/Y H:i" }}
+                      {% else %}
+                        Aprobado el {{ calendar.approved_at|date:"d/m/Y H:i" }}
+                      {% endif %}
+                    </span>
+                    <form method="post" class="contents">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="mark-modified" />
+                      <button type="submit" class="inline-flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
+                        <span>Marcar modificada</span>
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 11-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                      </button>
+                    </form>
+                  </div>
                 </div>
-              </form>
-            {% else %}
-              <div class="flex w-full flex-col gap-1 text-xs items-center sm:items-end">
-                <div class="flex flex-col items-start gap-2 text-sm font-medium text-slate-500 sm:items-end">
-                  <span class="w-full text-center sm:text-right">
-                    {% if calendar.approved_by %}
-                      Aprobado por {{ calendar.approved_by.get_full_name|default:calendar.approved_by }} el {{ calendar.approved_at|date:"d/m/Y H:i" }}
-                    {% else %}
-                      Aprobado el {{ calendar.approved_at|date:"d/m/Y H:i" }}
-                    {% endif %}
-                  </span>
-                  <form method="post" class="contents">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="mark-modified" />
-                    <button type="submit" class="inline-flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 hover:border-brand hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1">
-                      <span>Marcar modificada</span>
-                      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 11-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                      </svg>
-                    </button>
-                  </form>
-                </div>
-              </div>
-            {% endif %}
+              {% endif %}
+              {% if calendar_whatsapp_message %}
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 shadow hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:w-auto"
+                data-whatsapp-share
+                data-whatsapp-message="{{ calendar_whatsapp_message|escapejs }}"
+                aria-label="Compartir calendario por WhatsApp"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="h-5 w-5" aria-hidden="true">
+                  <path
+                    fill="#25d366"
+                    d="M16 3C9.38 3 4 8.25 4 14.71c0 2.87.98 5.51 2.63 7.62L4 29l6.91-2.25c1.81.99 3.9 1.56 6.09 1.56 6.62 0 12-5.25 12-11.71S22.62 3 16 3z"
+                  />
+                  <path
+                    fill="#fff"
+                    d="M24.38 20.5c-.34.96-1.69 1.77-2.38 1.84-.61.06-1.4.09-2.26-.14-.52-.13-1.19-.39-2.05-.76-3.61-1.56-5.94-5.14-6.12-5.38-.18-.24-1.44-1.93-1.44-3.68s.91-2.61 1.23-2.96c.34-.35.74-.44.99-.44h.72c.23 0 .55-.08.86.65.34.79 1.08 2.73 1.17 2.93.09.2.14.44.03.68-.12.24-.18.39-.35.6-.18.21-.37.47-.53.63-.18.18-.37.38-.16.75.21.35.94 1.53 2.02 2.48 1.39 1.23 2.57 1.62 2.96 1.8.37.18.58.15.79-.09.21-.24.92-1.08 1.17-1.45.24-.35.49-.3.82-.18.34.12 2.13 1.01 2.5 1.2.37.18.61.27.7.41.1.14.1.84-.24 1.8z"
+                  />
+                </svg>
+                Compartir
+              </button>
+              {% endif %}
+            </div>
             <div class="flex w-full justify-end gap-2 text-xs">
               {% if calendar.status != 'approved' %}
                 <form method="post" class="contents" data-confirmation>
@@ -1282,6 +1305,27 @@
             card.addEventListener('focusout', function (event) {
               if (highlightedOperator === operatorId && !card.contains(event.relatedTarget)) {
                 clearHighlightIfUnlocked(operatorId);
+              }
+            });
+          });
+        });
+      </script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          var shareButtons = Array.prototype.slice.call(document.querySelectorAll('[data-whatsapp-share]'));
+          shareButtons.forEach(function (button) {
+            if (!button) {
+              return;
+            }
+            button.addEventListener('click', function () {
+              var message = button.getAttribute('data-whatsapp-message') || '';
+              if (!message || !message.replace(/\s+/g, '').length) {
+                return;
+              }
+              var shareUrl = 'https://wa.me/?text=' + encodeURIComponent(message);
+              var popup = window.open(shareUrl, '_blank', 'noopener');
+              if (popup) {
+                popup.focus();
               }
             });
           });

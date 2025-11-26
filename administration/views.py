@@ -17,7 +17,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse, QueryDict
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -99,7 +99,7 @@ from .services.purchase_requests import (
     PurchaseRequestValidationError,
 )
 from .services.purchases import get_dashboard_state
-from .services.sales import build_warehouse_inventories, refresh_sale_payment_state
+from .services.sales import refresh_sale_payment_state
 from .services.workflows import (
     ExpenseTypeWorkflowRefreshService,
     PurchaseApprovalDecisionError,
@@ -125,86 +125,39 @@ from .services.payroll_snapshot import (
 
 class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
     template_name = "administration/sales/list.html"
-    SALES_LIMIT = 80
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if request.POST.get("intent") == "delete":
+            return self._handle_delete(request)
+        return redirect("administration:sales")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        status_filter = self._resolve_status_filter(self.request.GET.get("status"))
-        search_query = (self.request.GET.get("q") or "").strip()
-        sales_qs = (
-            Sale.objects.select_related("customer", "seller")
-            .prefetch_related("payments", "items")
-            .order_by("-date", "-id")
-        )
-        if status_filter:
-            sales_qs = sales_qs.filter(status=status_filter)
-        if search_query:
-            sales_qs = sales_qs.filter(
-                Q(customer__name__icontains=search_query)
-                | Q(notes__icontains=search_query)
-                | Q(seller__nombres__icontains=search_query)
-                | Q(seller__apellidos__icontains=search_query)
-            )
-        sales = list(sales_qs[: self.SALES_LIMIT])
         context.update(
             {
                 "administration_active_submenu": "sales",
-                "sales": sales,
-                "sales_status_filter": status_filter,
-                "sales_search_query": search_query,
-                "status_choices": Sale.Status.choices,
-                "sales_metrics": self._build_metrics(sales),
-                "sales_limit": self.SALES_LIMIT,
-                "warehouse_snapshots": build_warehouse_inventories(),
-                "egg_type_label_map": dict(EggType.choices),
+                "sales": self._get_sales_queryset(),
             }
         )
         return context
 
-    def _resolve_status_filter(self, raw: Optional[str]) -> Optional[str]:
-        if not raw:
-            return None
-        valid_codes = {choice[0] for choice in Sale.Status.choices}
-        if raw not in valid_codes:
-            return None
-        return raw
+    def _get_sales_queryset(self):
+        return (
+            Sale.objects.select_related("customer", "seller")
+            .prefetch_related("payments", "items")
+            .order_by("-date", "-id")
+        )
 
-    def _build_metrics(self, sales: list[Sale]) -> Dict[str, Any]:
-        total_billed = Decimal("0.00")
-        outstanding_total = Decimal("0.00")
-        draft_count = confirmed_count = paid_count = 0
-        credit_count = cash_count = 0
-        upcoming: list[Sale] = []
-        for sale in sales:
-            total = Decimal(sale.total_amount or 0)
-            balance = sale.balance_due
-            total_billed += total
-            if sale.status == Sale.Status.DRAFT:
-                draft_count += 1
-            elif sale.status == Sale.Status.CONFIRMED:
-                confirmed_count += 1
-                outstanding_total += balance
-            elif sale.status == Sale.Status.PAID:
-                paid_count += 1
-            if sale.payment_condition == Sale.PaymentCondition.CREDIT:
-                credit_count += 1
-                if sale.payment_due_date and balance > Decimal("0"):
-                    upcoming.append(sale)
-            else:
-                cash_count += 1
-                if balance > Decimal("0") and sale.status != Sale.Status.PAID:
-                    upcoming.append(sale)
-        upcoming_sorted = sorted(upcoming, key=lambda sale: sale.payment_due_date or sale.date)
-        return {
-            "total_billed": total_billed,
-            "outstanding_total": outstanding_total,
-            "draft_count": draft_count,
-            "confirmed_count": confirmed_count,
-            "paid_count": paid_count,
-            "credit_count": credit_count,
-            "cash_count": cash_count,
-            "upcoming": upcoming_sorted[:5],
-        }
+    def _handle_delete(self, request: HttpRequest) -> HttpResponse:
+        sale_id = request.POST.get("sale_id")
+        if not sale_id:
+            messages.error(request, "No se encontró la venta que intentas eliminar.")
+            return redirect("administration:sales")
+        sale = get_object_or_404(Sale, pk=sale_id)
+        sale_number = sale.pk
+        sale.delete()
+        messages.success(request, f"La venta #{sale_number} se eliminó correctamente.")
+        return redirect("administration:sales")
 
 
 class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
@@ -212,10 +165,24 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
     form_class = SaleForm
     template_name = "administration/sales/form.html"
 
+    def get_active_tab(self) -> str:
+        forced = getattr(self, "_forced_active_tab", None)
+        if forced:
+            return forced
+        return "form"
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["actor_id"] = getattr(self.request.user, "id", None)
         return kwargs
+
+    def get_initial(self) -> Dict[str, Any]:
+        initial = super().get_initial()
+        if not getattr(self, "object", None):
+            today = timezone.localdate()
+            initial.setdefault("date", today)
+            initial.setdefault("payment_due_date", today + timedelta(days=3))
+        return initial
 
     def get_success_url(self) -> str:
         return reverse("administration:sale-update", kwargs={"pk": self.object.pk})
@@ -227,7 +194,10 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
             {
                 "administration_active_submenu": "sales",
                 "inventory_rows": self._build_inventory_rows(form),
+                "product_inventory_map": form.get_product_inventory_payload(),
+                "financial_snapshot": form.get_financial_snapshot(),
                 "cancel_url": reverse("administration:sales"),
+                "active_tab": self.get_active_tab(),
             }
         )
         return context
@@ -273,6 +243,17 @@ class SaleCreateView(SaleFormMixin, generic.CreateView):
 class SaleUpdateView(SaleFormMixin, generic.UpdateView):
     success_message = "Venta actualizada correctamente."
 
+    def get_active_tab(self) -> str:
+        forced = getattr(self, "_forced_active_tab", None)
+        if forced:
+            return forced
+        requested = self.request.GET.get("tab") or "form"
+        if requested not in {"form", "payments"}:
+            return "form"
+        if requested == "payments" and not getattr(self, "object", None):
+            return "form"
+        return requested
+
     def get_queryset(self):
         return (
             super()
@@ -314,8 +295,9 @@ class SaleUpdateView(SaleFormMixin, generic.UpdateView):
                 request,
                 "Abono registrado correctamente. El saldo pendiente se actualizó de inmediato.",
             )
-            return redirect(self.get_success_url())
+            return redirect(f"{self.get_success_url()}?tab=payments")
         sale_form = self.build_unbound_form()
+        self._forced_active_tab = "payments"
         return self.render_to_response(self.get_context_data(form=sale_form, payment_form=payment_form))
 
 

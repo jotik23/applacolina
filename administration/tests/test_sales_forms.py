@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
 
 from administration.forms import SaleForm, SalePaymentForm
-from administration.models import Sale, SaleProductType, Supplier
+from administration.models import Sale, SaleItem, SaleProductType, Supplier
 from personal.models import UserProfile
 from production.models import EggDispatch, EggDispatchDestination, EggDispatchItem, EggType
 
@@ -42,7 +42,7 @@ class SaleFormTestCase(TestCase):
             "warehouse_destination": "",
             "payment_condition": Sale.PaymentCondition.CREDIT,
             "payment_due_date": tomorrow,
-            "auto_withholding_amount": "0",
+            "discount_amount": "0",
             "notes": "Entrega programada",
             "quantity_jumbo": "12",
             "unit_price_jumbo": "18000",
@@ -105,6 +105,22 @@ class SaleFormTestCase(TestCase):
         error_list = form.errors.get(form.quantity_field_map[SaleProductType.JUMBO], [])
         self.assertTrue(any("Inventario insuficiente" in error for error in error_list))
 
+    def test_discount_and_withholding_are_calculated(self):
+        data = self._base_form_data()
+        data.update(
+            {
+                "quantity_jumbo": "100",
+                "unit_price_jumbo": "1000",
+                "discount_amount": "5000",
+            }
+        )
+        form = SaleForm(data=data, actor_id=self.seller.pk)
+        self.assertTrue(form.is_valid(), form.errors)
+        sale = form.save()
+        self.assertEqual(sale.discount_amount, Decimal("5000"))
+        self.assertEqual(sale.total_amount, Decimal("95000"))
+        self.assertEqual(sale.auto_withholding_amount, Decimal("950"))
+
     def test_payment_form_prevents_amount_greater_than_balance(self):
         sale = Sale.objects.create(
             date=timezone.localdate(),
@@ -113,8 +129,12 @@ class SaleFormTestCase(TestCase):
             status=Sale.Status.CONFIRMED,
             payment_condition=Sale.PaymentCondition.CREDIT,
             payment_due_date=timezone.localdate(),
-            total_amount=Decimal("100000"),
-            auto_withholding_amount=Decimal("0"),
+        )
+        SaleItem.objects.create(
+            sale=sale,
+            product_type=SaleProductType.JUMBO,
+            quantity=Decimal("100"),
+            unit_price=Decimal("1000"),
         )
         form = SalePaymentForm(
             data={

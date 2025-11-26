@@ -160,13 +160,6 @@ def get_inventory_for_seller_destination(
 
 
 def recalculate_sale_totals(sale: Sale) -> Sale:
-    subtotal = (
-        sale.items.aggregate(total=Sum("subtotal")).get("total") if sale.pk else Decimal("0")  # type: ignore[attr-defined]
-    )
-    if subtotal is None:
-        subtotal = Decimal("0")
-    sale.total_amount = Decimal(subtotal)
-    sale.save(update_fields=["total_amount", "updated_at"])
     _refresh_payment_state(sale)
     return sale
 

@@ -17,7 +17,9 @@ from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.dateparse import parse_date
+from django.utils.translation import gettext as _
 from django.views import View
 
 from applacolina.mixins import StaffRequiredMixin
@@ -36,6 +38,7 @@ from .models import (
     AssignmentChangeLog,
     DayOfWeek,
     CalendarStatus,
+    CalendarRestSuggestion,
     JOB_TYPE_CATEGORY_CODE_MAP,
     JOB_TYPES_REQUIRING_LOCATION,
     OperatorRestPeriod,
@@ -897,6 +900,92 @@ ISSUE_STYLE_MAP: dict[str, dict[str, str]] = {
         "label": "Seguimiento",
     },
 }
+
+
+def _build_rest_suggestions_payload(calendar: ShiftCalendar) -> list[dict[str, Any]]:
+    suggestions = (
+        CalendarRestSuggestion.objects.filter(calendar=calendar)
+        .select_related("operator")
+        .order_by("-created_at")
+    )
+    payload: list[dict[str, Any]] = []
+    for suggestion in suggestions:
+        operator = suggestion.operator
+        operator_name = (
+            operator.get_full_name()
+            or operator.nombres
+            or operator.apellidos
+            or operator.cedula
+            if operator
+            else ""
+        )
+        payload.append(
+            {
+                "id": suggestion.id,
+                "operator_name": operator_name,
+                "scheduled_date": suggestion.scheduled_date,
+                "scheduled_date_label": date_format(suggestion.scheduled_date, "DATE_FORMAT"),
+                "suggested_date": suggestion.suggested_date,
+                "suggested_date_label": date_format(suggestion.suggested_date, "DATE_FORMAT"),
+                "reason": suggestion.reason,
+                "status": suggestion.status,
+                "status_label": suggestion.get_status_display(),
+                "created_at": suggestion.created_at,
+            }
+        )
+    return payload
+
+
+def _build_calendar_whatsapp_message(
+    *,
+    calendar: ShiftCalendar,
+    stats: dict[str, int],
+    issues: list[dict[str, Any]],
+    suggestions: list[dict[str, Any]],
+    detail_url: str,
+) -> str:
+    lines: list[str] = []
+    name = calendar.name or _("Calendario %(start)s → %(end)s") % {
+        "start": date_format(calendar.start_date, "DATE_FORMAT"),
+        "end": date_format(calendar.end_date, "DATE_FORMAT"),
+    }
+    lines.append(f"🗓 *Calendario operativo · {name}*")
+    lines.append(
+        f"📅 {date_format(calendar.start_date, 'DATE_FORMAT')} → {date_format(calendar.end_date, 'DATE_FORMAT')}"
+    )
+    lines.append(f"📌 Estado: {calendar.get_status_display()}")
+    lines.append("")
+    lines.append("Resumen rápido:")
+    lines.append(f"• {stats['total_assignments']} turnos confirmados")
+    lines.append(f"• {stats['gaps']} vacíos por asignar")
+    lines.append(f"• {stats['overtime']} turnos extra programados")
+    if stats["critical"]:
+        lines.append(f"• {stats['critical']} alertas críticas activas")
+    if issues:
+        lines.append("")
+        lines.append("Alertas destacadas:")
+        for issue in issues[:4]:
+            title = issue.get("title") or ""
+            detail = issue.get("detail") or ""
+            if detail:
+                lines.append(f"• {title}: {detail}")
+            else:
+                lines.append(f"• {title}")
+    if suggestions:
+        lines.append("")
+        lines.append("Sugerencias del equipo:")
+        for suggestion in suggestions[:3]:
+            operator_name = suggestion.get("operator_name") or _("Colaborador")
+            scheduled_label = suggestion.get("scheduled_date_label") or ""
+            suggested_label = suggestion.get("suggested_date_label") or ""
+            reason = suggestion.get("reason") or ""
+            lines.append(
+                f"• {operator_name}: {scheduled_label} → {suggested_label}. Motivo: {reason}"
+            )
+    if detail_url:
+        lines.append("")
+        lines.append(f"🔗 Detalle completo: {detail_url}")
+    return "\n".join(lines).strip()
 
 
 def _identify_calendar_issues(
@@ -1958,6 +2047,25 @@ class CalendarDetailView(StaffRequiredMixin, View):
         date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
         stats = _calculate_stats(rows)
         assignment_issues = _identify_calendar_issues(date_columns, rows, rest_rows)
+        rest_suggestions = _build_rest_suggestions_payload(calendar)
+        if rest_suggestions:
+            critical_style = ISSUE_STYLE_MAP["critical"]
+            for suggestion in rest_suggestions:
+                operator_name = suggestion.get("operator_name") or _("Colaborador")
+                issue_detail = _("%(current)s → %(suggested)s · %(reason)s") % {
+                    "current": suggestion.get("scheduled_date_label"),
+                    "suggested": suggestion.get("suggested_date_label"),
+                    "reason": suggestion.get("reason") or _("Sin motivo"),
+                }
+                assignment_issues.append(
+                    {
+                        "indicator_class": critical_style["indicator_class"],
+                        "badge_class": critical_style["badge_class"],
+                        "severity_label": critical_style["label"],
+                        "title": _("Solicitud de ajuste de descanso de %(name)s") % {"name": operator_name},
+                        "detail": issue_detail,
+                    }
+                )
         can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
         has_manual_choices = any(
             cell.get("choices")
@@ -1971,6 +2079,14 @@ class CalendarDetailView(StaffRequiredMixin, View):
             .order_by("-created_at")
             .values_list("created_at", flat=True)
             .first()
+        )
+        detail_url = request.build_absolute_uri()
+        whatsapp_message = _build_calendar_whatsapp_message(
+            calendar=calendar,
+            stats=stats,
+            issues=assignment_issues,
+            suggestions=rest_suggestions,
+            detail_url=detail_url,
         )
 
         return render(
@@ -1991,6 +2107,8 @@ class CalendarDetailView(StaffRequiredMixin, View):
                 "calendar_generation_form": CalendarGenerationForm(),
                 "calendar_home_url": _resolve_calendar_home_url(exclude_ids=[calendar.id]),
                 "calendar_generation_recent_calendars": get_recent_calendars_payload(exclude_ids=[calendar.id]),
+                "rest_suggestions": rest_suggestions,
+                "calendar_whatsapp_message": whatsapp_message,
             },
         )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Dict, List
 
@@ -176,7 +177,7 @@ class SaleForm(forms.ModelForm):
             "warehouse_destination",
             "payment_condition",
             "payment_due_date",
-            "auto_withholding_amount",
+            "discount_amount",
             "notes",
         ]
         widgets = {
@@ -193,6 +194,9 @@ class SaleForm(forms.ModelForm):
         self.inventory_snapshot: Dict[str, Decimal] = {}
         self.quantity_field_map: Dict[str, str] = {}
         self.price_field_map: Dict[str, str] = {}
+        self.cleaned_discount = Decimal("0.00")
+        self.net_total = Decimal("0.00")
+        self.cleaned_withholding = Decimal("0.00")
         self._configure_base_fields()
         self._build_product_fields()
 
@@ -207,8 +211,14 @@ class SaleForm(forms.ModelForm):
 
         date_field = self.fields["date"]
         date_field.widget.attrs.setdefault("class", self.input_classes)
-        if not date_field.initial:
-            date_field.initial = timezone.localdate()
+        if (
+            not self.is_bound
+            and not date_field.initial
+            and not getattr(self.instance, "pk", None)
+        ):
+            today = timezone.localdate()
+            date_field.initial = today
+            date_field.widget.attrs.setdefault("value", today.isoformat())
 
         status_field = self.fields["status"]
         status_field.widget.attrs.setdefault("class", self.input_classes)
@@ -228,12 +238,14 @@ class SaleForm(forms.ModelForm):
         payment_condition_field.widget.attrs.setdefault("class", self.input_classes)
         payment_due_field = self.fields["payment_due_date"]
         payment_due_field.widget.attrs.setdefault("class", self.input_classes)
+        if not payment_due_field.initial and not getattr(self.instance, "pk", None):
+            payment_due_field.initial = timezone.localdate() + timedelta(days=3)
 
-        withholding_field = self.fields["auto_withholding_amount"]
-        withholding_field.widget.attrs.setdefault("class", f"{self.input_classes} text-right")
-        withholding_field.min_value = Decimal("0")
-        withholding_field.widget.attrs.setdefault("step", "0.01")
-        withholding_field.widget.attrs.setdefault("min", "0")
+        discount_field = self.fields["discount_amount"]
+        discount_field.widget.attrs.setdefault("class", f"{self.input_classes} text-right")
+        discount_field.widget.attrs.setdefault("step", "0.01")
+        discount_field.widget.attrs.setdefault("min", "0")
+        discount_field.required = False
 
         notes_field = self.fields["notes"]
         existing = notes_field.widget.attrs.get("class", "")
@@ -317,6 +329,7 @@ class SaleForm(forms.ModelForm):
         self._validate_items(cleaned)
         self._validate_payment_rules(cleaned)
         self._validate_inventory(cleaned)
+        self._compute_financial_summary(cleaned)
         return cleaned
 
     def _validate_items(self, cleaned: Dict[str, Any]) -> None:
@@ -394,6 +407,21 @@ class SaleForm(forms.ModelForm):
                     f"Disponible {available} cartones para {product_label}.",
                 )
 
+    def _compute_financial_summary(self, cleaned: Dict[str, Any]) -> None:
+        discount = Decimal(cleaned.get("discount_amount") or 0)
+        if discount < Decimal("0"):
+            self.add_error("discount_amount", "El descuento no puede ser negativo.")
+            discount = Decimal("0")
+        if discount > self.cleaned_total:
+            self.add_error("discount_amount", "El descuento no puede superar el subtotal de la factura.")
+            discount = Decimal("0")
+        self.cleaned_discount = discount.quantize(Decimal("0.01"))
+        net_total = self.cleaned_total - self.cleaned_discount
+        if net_total < Decimal("0"):
+            net_total = Decimal("0")
+        self.net_total = net_total.quantize(Decimal("0.01"))
+        self.cleaned_withholding = (self.net_total * Decimal("0.01")).quantize(Decimal("0.01"))
+
     def get_inventory_preview(self) -> Dict[str, Decimal]:
         if self.inventory_snapshot:
             return self.inventory_snapshot
@@ -403,6 +431,41 @@ class SaleForm(forms.ModelForm):
             destination=destination,
             exclude_sale_id=getattr(self.instance, "pk", None),
         )
+
+    def get_product_inventory_payload(self) -> Dict[str, Decimal]:
+        preview = self.get_inventory_preview()
+        payload: Dict[str, Decimal] = {}
+        for product_code, egg_type in SALE_EGG_TYPE_MAP.items():
+            available = preview.get(egg_type)
+            if available is None:
+                continue
+            payload[product_code] = available
+        return payload
+
+    def get_financial_snapshot(self) -> Dict[str, Decimal]:
+        if self.is_bound:
+            subtotal = self.cleaned_total
+            discount = self.cleaned_discount
+            net_total = self.net_total
+            withholding = self.cleaned_withholding
+        elif self.instance and self.instance.pk:
+            subtotal = self.instance.subtotal_amount
+            discount = Decimal(self.instance.discount_amount or 0)
+            net_total = self.instance.total_amount
+            withholding = self.instance.auto_withholding_amount
+        else:
+            subtotal = self.cleaned_total
+            discount = self.cleaned_discount
+            net_total = self.net_total
+            withholding = self.cleaned_withholding
+        if net_total < Decimal("0"):
+            net_total = Decimal("0.00")
+        return {
+            "subtotal": subtotal,
+            "discount": discount,
+            "total": net_total,
+            "withholding": withholding,
+        }
 
     def _current_seller_destination(self) -> tuple[int | None, str | None]:
         seller_field_name = self.add_prefix("seller")
@@ -442,7 +505,7 @@ class SaleForm(forms.ModelForm):
             sale.confirmed_at = timezone.now()
             if self.actor_id and not sale.confirmed_by_id:
                 sale.confirmed_by_id = self.actor_id
-        sale.total_amount = self.cleaned_total.quantize(Decimal("0.01"))
+        sale.discount_amount = self.cleaned_discount
         if commit:
             sale.save()
             sale.items.all().delete()
@@ -477,8 +540,10 @@ class SalePaymentForm(forms.ModelForm):
         self.sale = sale
         super().__init__(*args, **kwargs)
         date_field = self.fields["date"]
-        if not date_field.initial:
-            date_field.initial = timezone.localdate()
+        if not self.is_bound and not date_field.initial:
+            today = timezone.localdate()
+            date_field.initial = today
+            date_field.widget.attrs.setdefault("value", today.isoformat())
         for field_name in ["date", "amount", "method"]:
             self.fields[field_name].widget.attrs.setdefault("class", self.input_classes)
         amount_field = self.fields["amount"]

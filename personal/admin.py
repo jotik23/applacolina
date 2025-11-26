@@ -280,6 +280,26 @@ class OperatorRestPeriodAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
+@admin.register(models.CalendarRestSuggestion)
+class CalendarRestSuggestionAdmin(admin.ModelAdmin):
+    list_display = (
+        "calendar",
+        "operator",
+        "scheduled_date",
+        "suggested_date",
+        "status",
+        "created_at",
+    )
+    list_filter = ("status", "calendar")
+    search_fields = (
+        "operator__nombres",
+        "operator__apellidos",
+        "reason",
+    )
+    autocomplete_fields = ("calendar", "operator", "rest_period")
+    readonly_fields = ("created_at", "updated_at")
+
+
 class RolePermissionInline(admin.TabularInline):
     model = models.RolePermission
     extra = 0

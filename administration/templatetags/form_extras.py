@@ -107,3 +107,15 @@ def format_cartons_dash_zero(value, decimals: int = 1):
         return "-"
 
     return _format_decimal(number, decimals_int)
+
+
+@register.filter(name="money_co")
+def format_money_co(value):
+    """Format currency with Colombian thousands separators and no decimals."""
+    number = _coerce_decimal(value)
+    if number is None:
+        number = Decimal("0")
+    quantized = number.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    sign = "-" if quantized < 0 else ""
+    integer_display = format(int(abs(quantized)), ",").replace(",", ".")
+    return f"$ {sign}{integer_display}"

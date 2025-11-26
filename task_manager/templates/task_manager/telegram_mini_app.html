@@ -4749,6 +4749,343 @@
         const transportProductionInputs = transportCard
           ? Array.prototype.slice.call(transportCard.querySelectorAll('[data-transport-production-input]'))
           : [];
+
+        const restModal = document.querySelector('[data-rest-suggestion-modal]');
+        const restTriggerButtons = Array.prototype.slice.call(
+          document.querySelectorAll('[data-rest-suggestion-trigger]')
+        );
+        const restDayButtons = Array.prototype.slice.call(
+          document.querySelectorAll('[data-rest-suggestion-day]')
+        );
+        const restStateNodes = function () {
+          return Array.prototype.slice.call(document.querySelectorAll('[data-rest-suggestion-state]'));
+        };
+        const restForm = restModal ? restModal.querySelector('[data-rest-suggestion-form]') : null;
+        const restScheduledSelect = restModal ? restModal.querySelector('[data-rest-scheduled-select]') : null;
+        const restSuggestedInput = restModal ? restModal.querySelector('[data-rest-suggested-input]') : null;
+        const restReasonInput = restModal ? restModal.querySelector('[data-rest-reason-input]') : null;
+        const restErrorNode = restModal ? restModal.querySelector('[data-rest-suggestion-errors]') : null;
+        const restSuccessNode = restModal ? restModal.querySelector('[data-rest-suggestion-success]') : null;
+        const restSubmitButton = restModal ? restModal.querySelector('[data-rest-suggestion-submit]') : null;
+        const restDismissButtons = restModal
+          ? Array.prototype.slice.call(restModal.querySelectorAll('[data-rest-suggestion-dismiss]'))
+          : [];
+        const restEndpoint = restModal ? restModal.getAttribute('data-rest-suggestion-endpoint') || '' : '';
+
+        function getRestOptions() {
+          if (!tmMiniApp.payload) {
+            return [];
+          }
+          const assignments = tmMiniApp.payload.daily_assignments || {};
+          const days = Array.isArray(assignments.days) ? assignments.days : [];
+          return days
+            .filter(function (day) {
+              return day && day.is_rest && day.calendar_id;
+            })
+            .map(function (day) {
+              const label = [day.weekday_label || '', day.date_label || '']
+                .filter(function (value) {
+                  return value && value.trim() !== '';
+                })
+                .join(' · ');
+              const summary = day.calendar_name || day.calendar_status || '';
+              return {
+                date: day.date_iso,
+                label: label || day.date_iso,
+                calendarId: String(day.calendar_id),
+                calendarName: day.calendar_name || '',
+                summary: summary,
+                suggestion: day.rest_suggestion || null,
+              };
+            });
+        }
+
+        function refreshRestTriggerState() {
+          const hasOptions = getRestOptions().length > 0;
+          restTriggerButtons.forEach(function (button) {
+            if (!button) {
+              return;
+            }
+            button.disabled = !hasOptions;
+            button.setAttribute('aria-disabled', hasOptions ? 'false' : 'true');
+            button.classList.toggle('cursor-not-allowed', !hasOptions);
+            button.classList.toggle('opacity-40', !hasOptions);
+          });
+          restDayButtons.forEach(function (button) {
+            if (!button) {
+              return;
+            }
+            const hasCalendar = Boolean(button.getAttribute('data-rest-calendar-id'));
+            button.disabled = !hasCalendar;
+            button.classList.toggle('opacity-40', !hasCalendar);
+          });
+        }
+
+        function populateRestOptions(initialDate) {
+          if (!restScheduledSelect) {
+            return [];
+          }
+          const options = getRestOptions();
+          restScheduledSelect.innerHTML = '';
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = 'Selecciona un día de descanso';
+          restScheduledSelect.appendChild(placeholder);
+          let selectedIndex = 0;
+          options.forEach(function (option, index) {
+            const node = document.createElement('option');
+            node.value = option.date;
+            node.textContent = option.summary ? option.label + ' · ' + option.summary : option.label;
+            node.dataset.calendarId = option.calendarId;
+            restScheduledSelect.appendChild(node);
+            if (initialDate && option.date === initialDate) {
+              selectedIndex = index + 1;
+            }
+          });
+          restScheduledSelect.selectedIndex = selectedIndex;
+          restScheduledSelect.disabled = options.length === 0;
+          return options;
+        }
+
+        function renderRestErrors(messages) {
+          if (!restErrorNode) {
+            return;
+          }
+          const normalized = Array.isArray(messages)
+            ? messages.filter(function (message) {
+                return message && String(message).trim() !== '';
+              })
+            : [];
+          if (normalized.length) {
+            restErrorNode.innerHTML = normalized
+              .map(function (message) {
+                return '<div>' + message + '</div>';
+              })
+              .join('');
+            restErrorNode.classList.remove('hidden');
+          } else {
+            restErrorNode.classList.add('hidden');
+            restErrorNode.innerHTML = '';
+          }
+        }
+
+        function closeRestModal() {
+          if (!restModal) {
+            return;
+          }
+          restModal.classList.add('hidden');
+          restModal.classList.remove('flex');
+          restModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function openRestModal(initialDate) {
+          if (!restModal) {
+            return;
+          }
+          const options = populateRestOptions(initialDate);
+          if (!options.length) {
+            renderRestErrors(['No hay descansos programados en este calendario.']);
+            return;
+          }
+          renderRestErrors([]);
+          if (restSuccessNode) {
+            restSuccessNode.classList.add('hidden');
+          }
+          if (restSuggestedInput) {
+            restSuggestedInput.value = '';
+          }
+          if (restReasonInput) {
+            restReasonInput.value = '';
+          }
+          restModal.classList.remove('hidden');
+          restModal.classList.add('flex');
+          restModal.setAttribute('aria-hidden', 'false');
+          window.setTimeout(function () {
+            if (restScheduledSelect) {
+              restScheduledSelect.focus();
+            }
+          }, 50);
+        }
+
+        function persistRestSuggestionInPayload(calendarId, dateIso, suggestion) {
+          if (!tmMiniApp.payload) {
+            return;
+          }
+          const assignments = tmMiniApp.payload.daily_assignments || {};
+          if (!Array.isArray(assignments.days)) {
+            return;
+          }
+          assignments.days.forEach(function (day) {
+            if (!day) {
+              return;
+            }
+            if (String(day.calendar_id) === String(calendarId) && day.date_iso === dateIso) {
+              day.rest_suggestion = {
+                id: suggestion.id,
+                status: suggestion.status,
+                status_label: suggestion.status_label,
+              };
+            }
+          });
+        }
+
+        function markRestNode(calendarId, dateIso, suggestion) {
+          const nodes = restStateNodes();
+          nodes.forEach(function (node) {
+            if (!node) {
+              return;
+            }
+            if (
+              String(node.getAttribute('data-rest-calendar-id')) === String(calendarId) &&
+              node.getAttribute('data-rest-date') === dateIso
+            ) {
+              node.innerHTML =
+                '<span class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50/80 px-3 py-1 text-[11px] font-semibold text-rose-700">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+                '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4.5c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />' +
+                '</svg>' +
+                'Solicitud enviada · ' +
+                (suggestion.status_label || 'Pendiente') +
+                '</span>';
+            }
+          });
+        }
+
+        function handleRestFormSubmit(event) {
+          event.preventDefault();
+          if (!restEndpoint || !restScheduledSelect || !restSuggestedInput || !restReasonInput) {
+            return;
+          }
+          const selectedOption = restScheduledSelect.options[restScheduledSelect.selectedIndex];
+          const scheduledDate = selectedOption ? selectedOption.value : '';
+          const calendarId = selectedOption ? selectedOption.getAttribute('data-calendar-id') : '';
+          const suggestedDate = restSuggestedInput.value;
+          const reason = restReasonInput.value;
+          if (!scheduledDate || !calendarId) {
+            renderRestErrors(['Selecciona el descanso que deseas ajustar.']);
+            return;
+          }
+
+          renderRestErrors([]);
+          if (restSuccessNode) {
+            restSuccessNode.classList.add('hidden');
+          }
+          if (restSubmitButton) {
+            restSubmitButton.disabled = true;
+            restSubmitButton.classList.add('opacity-60');
+          }
+
+          const restoreSubmitState = function () {
+            if (restSubmitButton) {
+              restSubmitButton.disabled = false;
+              restSubmitButton.classList.remove('opacity-60');
+            }
+          };
+
+          fetch(restEndpoint, {
+            method: 'POST',
+            headers: Object.assign(
+              { 'Content-Type': 'application/json' },
+              csrfToken ? { 'X-CSRFToken': csrfToken } : {}
+            ),
+            body: JSON.stringify({
+              scheduled_date: scheduledDate,
+              suggested_date: suggestedDate,
+              reason: reason,
+              calendar_id: calendarId,
+            }),
+          })
+            .then(function (response) {
+              return response
+                .json()
+                .then(function (data) {
+                  return { response: response, data: data };
+                })
+                .catch(function () {
+                  return { response: response, data: {} };
+                });
+            })
+            .then(function (result) {
+              const response = result.response;
+              const data = result.data || {};
+              if (!response.ok) {
+                const errors = [];
+                if (data.errors) {
+                  Object.keys(data.errors).forEach(function (key) {
+                    const value = data.errors[key];
+                    if (Array.isArray(value)) {
+                      value.forEach(function (item) {
+                        errors.push(item);
+                      });
+                    } else if (value) {
+                      errors.push(value);
+                    }
+                  });
+                } else if (data.error) {
+                  errors.push(data.error);
+                } else {
+                  errors.push('No pudimos registrar tu solicitud, intenta de nuevo.');
+                }
+                renderRestErrors(errors);
+                restoreSubmitState();
+                return;
+              }
+              renderRestErrors([]);
+              const suggestion = data.suggestion || {};
+              if (restSuccessNode) {
+                restSuccessNode.classList.remove('hidden');
+              }
+              persistRestSuggestionInPayload(calendarId, scheduledDate, suggestion);
+              markRestNode(calendarId, scheduledDate, suggestion);
+              refreshRestTriggerState();
+              restoreSubmitState();
+              window.setTimeout(function () {
+                closeRestModal();
+              }, 1600);
+            })
+            .catch(function () {
+              renderRestErrors(['No pudimos enviar tu solicitud, verifica tu conexión.']);
+              restoreSubmitState();
+            });
+        }
+
+        if (restForm && typeof restForm.addEventListener === 'function') {
+          restForm.addEventListener('submit', handleRestFormSubmit);
+        }
+        restTriggerButtons.forEach(function (button) {
+          if (!button) {
+            return;
+          }
+          button.addEventListener('click', function () {
+            openRestModal();
+          });
+        });
+        restDayButtons.forEach(function (button) {
+          if (!button) {
+            return;
+          }
+          button.addEventListener('click', function () {
+            const dateIso = button.getAttribute('data-rest-date') || '';
+            if (!dateIso) {
+              return;
+            }
+            openRestModal(dateIso);
+          });
+        });
+        restDismissButtons.forEach(function (button) {
+          if (!button) {
+            return;
+          }
+          button.addEventListener('click', function () {
+            closeRestModal();
+          });
+        });
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && restModal && !restModal.classList.contains('hidden')) {
+            closeRestModal();
+          }
+        });
+        refreshRestTriggerState();
         const transportSubmitUrl = transportForm
           ? transportForm.getAttribute('data-transport-submit-url') || ''
           : '';
