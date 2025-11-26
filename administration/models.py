@@ -834,6 +834,8 @@ class Sale(TimeStampedModel):
         choices=PaymentCondition.choices,
         default=PaymentCondition.CREDIT,
     )
+    invoice_number = models.CharField("Número de factura", max_length=64, blank=True, default="", db_index=True)
+    sent_to_dian = models.BooleanField("Enviado a la DIAN", default=False)
     payment_due_date = models.DateField("Fecha esperada de pago", null=True, blank=True)
     discount_amount = models.DecimalField(
         "Descuento aplicado",

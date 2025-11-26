@@ -159,6 +159,23 @@
                     {% endif %}
                   </div>
                   <div>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.invoice_number.id_for_label }}">{{ form.invoice_number.label }}</label>
+                    {{ form.invoice_number|add_class:"mt-1" }}
+                    {% if form.invoice_number.errors %}
+                      <p class="text-xs text-rose-600">{{ form.invoice_number.errors|striptags }}</p>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.sent_to_dian.id_for_label }}">{{ form.sent_to_dian.label }}</label>
+                    <div class="mt-1 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      {{ form.sent_to_dian }}
+                      <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Marcala si ya se envió.</span>
+                    </div>
+                    {% if form.sent_to_dian.errors %}
+                      <p class="text-xs text-rose-600">{{ form.sent_to_dian.errors|striptags }}</p>
+                    {% endif %}
+                  </div>
+                  <div>
                     <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.discount_amount.id_for_label }}">{{ form.discount_amount.label }}</label>
                     {{ form.discount_amount|add_class:"mt-1" }}
                     {% if form.discount_amount.errors %}

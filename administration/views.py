@@ -50,6 +50,7 @@ from .forms import (
     ProductForm,
     PurchasingExpenseTypeForm,
     SaleForm,
+    SaleImportForm,
     SalePaymentForm,
     SupplierForm,
     SupplierImportForm,
@@ -99,6 +100,7 @@ from .services.purchase_requests import (
     PurchaseRequestValidationError,
 )
 from .services.purchases import get_dashboard_state
+from .services.sale_imports import SaleImportError, import_sales_from_workbook
 from .services.sales import refresh_sale_payment_state
 from .services.workflows import (
     ExpenseTypeWorkflowRefreshService,
@@ -129,6 +131,8 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if request.POST.get("intent") == "delete":
             return self._handle_delete(request)
+        if request.POST.get("intent") == "import":
+            return self._handle_import(request)
         return redirect("administration:sales")
 
     def get_context_data(self, **kwargs):
@@ -137,6 +141,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             {
                 "administration_active_submenu": "sales",
                 "sales": self._get_sales_queryset(),
+                "import_form": getattr(self, "_import_form", SaleImportForm()),
             }
         )
         return context
@@ -157,6 +162,39 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         sale_number = sale.pk
         sale.delete()
         messages.success(request, f"La venta #{sale_number} se eliminó correctamente.")
+        return redirect("administration:sales")
+
+    def _handle_import(self, request: HttpRequest) -> HttpResponse:
+        form = SaleImportForm(request.POST, request.FILES)
+        if not form.is_valid():
+            self._import_form = form
+            return self.render_to_response(self.get_context_data())
+        try:
+            result = import_sales_from_workbook(form.cleaned_data["workbook"], actor=getattr(request, "user", None))
+        except SaleImportError as exc:
+            form.add_error("workbook", str(exc))
+            self._import_form = form
+            return self.render_to_response(self.get_context_data())
+        messages.success(
+            request,
+            (
+                "Importación completada: "
+                f"{result.created_sales} nuevas, {result.updated_sales} actualizadas, "
+                f"{result.registered_payments} abonos y {result.created_suppliers} terceros creados."
+            ),
+        )
+        issues = result.issues or []
+        if issues:
+            preview = "; ".join(
+                f"{issue.sheet} · fila {issue.row_number}: {issue.message}"
+                for issue in issues[:3]
+            )
+            if len(issues) > 3:
+                preview = f"{preview} …"
+            messages.warning(
+                request,
+                f"{len(issues)} fila(s) se omitieron durante la importación. Ejemplos: {preview}",
+            )
         return redirect("administration:sales")
 
 

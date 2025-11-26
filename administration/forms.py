@@ -177,12 +177,15 @@ class SaleForm(forms.ModelForm):
             "warehouse_destination",
             "payment_condition",
             "payment_due_date",
+            "invoice_number",
+            "sent_to_dian",
             "discount_amount",
             "notes",
         ]
         widgets = {
             "date": forms.DateInput(attrs={"type": "date"}),
             "payment_due_date": forms.DateInput(attrs={"type": "date"}),
+            "invoice_number": forms.TextInput(),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -240,6 +243,18 @@ class SaleForm(forms.ModelForm):
         payment_due_field.widget.attrs.setdefault("class", self.input_classes)
         if not payment_due_field.initial and not getattr(self.instance, "pk", None):
             payment_due_field.initial = timezone.localdate() + timedelta(days=3)
+
+        invoice_field = self.fields["invoice_number"]
+        invoice_field.widget.attrs.setdefault("class", self.input_classes)
+        invoice_field.widget.attrs.setdefault("placeholder", "FV-2025-0001")
+        invoice_field.required = False
+
+        sent_field = self.fields["sent_to_dian"]
+        sent_field.required = False
+        sent_field.widget.attrs.setdefault(
+            "class",
+            "h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500",
+        )
 
         discount_field = self.fields["discount_amount"]
         discount_field.widget.attrs.setdefault("class", f"{self.input_classes} text-right")
@@ -564,3 +579,19 @@ class SalePaymentForm(forms.ModelForm):
                 f"El abono supera el saldo pendiente ({balance}). Actualiza la venta si el valor a pagar cambió."
             )
         return amount
+
+
+class SaleImportForm(forms.Form):
+    workbook = forms.FileField(
+        label="Ventas y abonos (.xlsx)",
+        help_text="El archivo debe incluir las hojas Ventas, Abonos y Terceros.",
+        widget=forms.FileInput(attrs={"accept": ".xlsx"}),
+    )
+
+    def clean_workbook(self):
+        uploaded = self.cleaned_data["workbook"]
+        filename = (uploaded.name or "").lower()
+        if not filename.endswith(".xlsx"):
+            raise ValidationError("Sube un archivo con extensión .xlsx.")
+        uploaded.seek(0)
+        return uploaded
