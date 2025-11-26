@@ -7,11 +7,30 @@
   {% include "administration/_submenu.html" with active=administration_active_submenu %}
 
   <section class="space-y-4">
-    <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
-      <div>
+    <header class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+      <div class="min-w-[200px] grow">
         <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Cadena comercial</p>
         <h1 class="text-2xl font-semibold text-slate-900">Facturación</h1>
       </div>
+      <form method="post" enctype="multipart/form-data" class="flex flex-col gap-1 rounded-2xl border border-dashed border-emerald-200/80 bg-emerald-50/70 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-inner">
+        {% csrf_token %}
+        <input type="hidden" name="intent" value="import">
+        <label class="sr-only" for="{{ import_form.workbook.id_for_label }}">{{ import_form.workbook.label }}</label>
+        <div class="flex items-center gap-2">
+          <span>Ventas y abonos (.xlsx)</span>
+          {{ import_form.workbook|add_class:"block w-48 text-[11px] font-medium text-slate-700 file:mr-2 file:cursor-pointer file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-emerald-500" }}
+          <button
+            type="submit"
+            class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+          >
+            Importar
+          </button>
+        </div>
+        <p class="text-[10px] font-normal text-emerald-700/80">Ubica el archivo con hojas Ventas, Abonos y Terceros.</p>
+        {% if import_form.workbook.errors %}
+          <p class="text-[11px] text-rose-600">{{ import_form.workbook.errors|striptags }}</p>
+        {% endif %}
+      </form>
       <a
         href="{% url 'administration:sale-create' %}"
         class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
@@ -19,31 +38,6 @@
         Registrar venta
       </a>
     </header>
-
-    <section class="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 px-5 py-4 shadow-sm">
-      <form method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4">
-        {% csrf_token %}
-        <input type="hidden" name="intent" value="import">
-        <div class="grow">
-          <label class="text-xs font-semibold uppercase tracking-wide text-emerald-700" for="{{ import_form.workbook.id_for_label }}">
-            {{ import_form.workbook.label }}
-          </label>
-          <div class="mt-1 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-slate-700">
-            {{ import_form.workbook }}
-            <p class="text-xs text-slate-500">{{ import_form.workbook.help_text }}</p>
-          </div>
-          {% if import_form.workbook.errors %}
-            <p class="mt-1 text-xs text-rose-600">{{ import_form.workbook.errors|striptags }}</p>
-          {% endif %}
-        </div>
-        <button
-          type="submit"
-          class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
-        >
-          Importar archivo
-        </button>
-      </form>
-    </section>
 
     <div class="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
       <table class="min-w-full divide-y divide-slate-100 text-sm text-slate-700">
