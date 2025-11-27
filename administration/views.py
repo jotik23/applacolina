@@ -580,14 +580,14 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
 
 
 class SaleCreateView(SaleFormMixin, generic.CreateView):
-    success_message = "Pre-factura creada. Puedes confirmarla cuando definas inventario y entrega."
+    success_message = "Venta creada y confirmada correctamente."
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context.update(
             {
                 "page_title": "Registrar venta",
-                "submit_label": "Guardar pre-factura",
+                "submit_label": "Registrar venta",
                 "sale": None,
                 "payment_form": None,
                 "payments": [],

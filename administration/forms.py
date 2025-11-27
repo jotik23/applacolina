@@ -225,13 +225,14 @@ class SaleForm(forms.ModelForm):
 
         status_field = self.fields["status"]
         status_field.widget.attrs.setdefault("class", self.input_classes)
-        status_field.choices = [
-            (Sale.Status.DRAFT, Sale.Status.DRAFT.label),
-            (Sale.Status.CONFIRMED, Sale.Status.CONFIRMED.label),
-        ]
+        status_field.choices = [(Sale.Status.CONFIRMED, Sale.Status.CONFIRMED.label)]
+        if not self.is_bound:
+            status_field.initial = Sale.Status.CONFIRMED
         if self.instance.pk and self.instance.status == Sale.Status.PAID:
             status_field.choices.append((Sale.Status.PAID, Sale.Status.PAID.label))
             status_field.disabled = True
+        elif self.instance.pk and self.instance.status == Sale.Status.DRAFT:
+            self.initial["status"] = Sale.Status.CONFIRMED
 
         warehouse_field = self.fields["warehouse_destination"]
         warehouse_field.widget.attrs.setdefault("class", self.input_classes)
@@ -347,6 +348,11 @@ class SaleForm(forms.ModelForm):
         self._compute_financial_summary(cleaned)
         return cleaned
 
+    def clean_status(self) -> str:
+        if self.instance.pk and self.instance.status == Sale.Status.PAID:
+            return Sale.Status.PAID
+        return Sale.Status.CONFIRMED
+
     def _validate_items(self, cleaned: Dict[str, Any]) -> None:
         entries: Dict[str, Dict[str, Decimal]] = {}
         total = Decimal("0.00")
@@ -385,9 +391,7 @@ class SaleForm(forms.ModelForm):
             cleaned["payment_due_date"] = None
 
     def _validate_inventory(self, cleaned: Dict[str, Any]) -> None:
-        status = cleaned.get("status") or Sale.Status.DRAFT
-        if status == Sale.Status.DRAFT:
-            return
+        status = cleaned.get("status") or Sale.Status.CONFIRMED
         seller = cleaned.get("seller")
         destination = cleaned.get("warehouse_destination")
         if not destination:
@@ -512,11 +516,8 @@ class SaleForm(forms.ModelForm):
         if not self.cleaned_items:
             raise ValueError("La venta carece de items limpios al guardar.")
         sale: Sale = super().save(commit=False)
-        if sale.status == Sale.Status.DRAFT:
-            sale.warehouse_destination = ""
-            sale.confirmed_at = None
-            sale.confirmed_by = None
-        elif sale.status == Sale.Status.CONFIRMED and not sale.confirmed_at:
+        if sale.status != Sale.Status.PAID and not sale.confirmed_at:
+            sale.status = Sale.Status.CONFIRMED
             sale.confirmed_at = timezone.now()
             if self.actor_id and not sale.confirmed_by_id:
                 sale.confirmed_by_id = self.actor_id

@@ -187,6 +187,9 @@ BASE_SCOPE_STAGE_ORDER = (
     "accounting",
     "archived",
 )
+ALL_SCOPE_CODE = "all"
+ALL_SCOPE_LABEL = "Todas"
+ALL_SCOPE_DESCRIPTION = "Todas las solicitudes ordenadas por fecha de creación más reciente."
 SCOPE_DEFINITIONS = tuple(
     (
         _STAGE_STATUS_MAP[stage_code],
@@ -262,6 +265,7 @@ def get_dashboard_state(
 
 
 def _build_scopes() -> Sequence[PurchaseScope]:
+    total_count = PurchaseRequest.objects.count()
     counts = {code: 0 for code, *_ in SCOPE_DEFINITIONS}
     qs = (
         PurchaseRequest.objects.values('status')
@@ -270,7 +274,7 @@ def _build_scopes() -> Sequence[PurchaseScope]:
     )
     for row in qs:
         counts[row['status']] = row['count']
-    scopes: list[PurchaseScope] = [
+    stage_scopes: list[PurchaseScope] = [
         PurchaseScope(code=code, label=label, description=description, count=counts.get(code, 0))
         for code, label, description in SCOPE_DEFINITIONS
     ]
@@ -280,15 +284,23 @@ def _build_scopes() -> Sequence[PurchaseScope]:
             status__in=WAITING_SCOPE_STATUSES,
         ).count()
     )
-    scopes.insert(
-        BASE_SCOPE_STAGE_ORDER.index('payable') + 1,
-        PurchaseScope(
-            code=WAITING_SCOPE_CODE,
-            label=WAITING_SCOPE_LABEL,
-            description=WAITING_SCOPE_DESCRIPTION,
-            count=waiting_count,
-        ),
+    waiting_scope = PurchaseScope(
+        code=WAITING_SCOPE_CODE,
+        label=WAITING_SCOPE_LABEL,
+        description=WAITING_SCOPE_DESCRIPTION,
+        count=waiting_count,
     )
+    waiting_insert_index = BASE_SCOPE_STAGE_ORDER.index('payable') + 1
+    stage_scopes.insert(waiting_insert_index, waiting_scope)
+    scopes: list[PurchaseScope] = [
+        PurchaseScope(
+            code=ALL_SCOPE_CODE,
+            label=ALL_SCOPE_LABEL,
+            description=ALL_SCOPE_DESCRIPTION,
+            count=total_count,
+        )
+    ]
+    scopes.extend(stage_scopes)
     return tuple(scopes)
 
 
@@ -320,7 +332,7 @@ def _query_purchases(
             delivery_condition=PurchaseRequest.DeliveryCondition.SHIPPING,
             status__in=WAITING_SCOPE_STATUSES,
         )
-    else:
+    elif scope_code != ALL_SCOPE_CODE:
         queryset = queryset.filter(status=scope_code)
     search_value = (search_query or '').strip()
     if search_value:

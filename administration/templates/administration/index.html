@@ -137,6 +137,9 @@
                   <th scope="col" class="px-6 py-3">Solicitud</th>
                   <th scope="col" class="px-6 py-3">Tercero</th>
                   <th scope="col" class="px-6 py-3">Categoría / Soporte</th>
+                  {% if purchases_scope.code == 'all' %}
+                    <th scope="col" class="px-6 py-3">Estado</th>
+                  {% endif %}
                   {% if purchases_scope.code == 'aprobacion' %}
                     <th scope="col" class="px-6 py-3 text-center">Aprobaciones recibidas</th>
                     <th scope="col" class="px-6 py-3 text-center">Aprobaciones pendientes</th>
@@ -183,6 +186,18 @@
                           <p class="text-xs text-slate-400">Sin tipo de soporte</p>
                         {% endif %}
                       </td>
+                      {% if purchases_scope.code == 'all' %}
+                        <td class="px-6 py-4 align-middle">
+                          <div class="flex flex-col gap-1">
+                            <span class="inline-flex items-center rounded-full bg-{{ purchase.status_palette }}-100 px-2 py-0.5 text-[11px] font-semibold text-{{ purchase.status_palette }}-700">
+                              {{ purchase.status_badge }}
+                            </span>
+                            {% if purchase.current_stage %}
+                              <p class="text-xs font-semibold text-slate-500">{{ purchase.current_stage.label }}</p>
+                            {% endif %}
+                          </div>
+                        </td>
+                      {% endif %}
                       {% if purchases_scope.code == 'aprobacion' %}
                         <td class="px-6 py-4 align-middle">
                           {% if purchase.approvals_received %}
@@ -286,7 +301,10 @@
                   {% endfor %}
                 {% else %}
                   <tr>
-                    <td colspan="{% if purchases_scope.code == 'aprobacion' %}7{% else %}5{% endif %}" class="px-6 py-16 text-center">
+                    <td
+                      colspan="{% if purchases_scope.code == 'aprobacion' %}7{% elif purchases_scope.code == 'all' %}6{% else %}5{% endif %}"
+                      class="px-6 py-16 text-center"
+                    >
                       <div class="mx-auto max-w-lg space-y-2">
                         {% if purchases_search %}
                           <p class="text-base font-semibold text-slate-900">No encontramos coincidencias para “{{ purchases_search }}”</p>

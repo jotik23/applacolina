@@ -31,6 +31,15 @@ class SaleFormTestCase(TestCase):
             telefono="3110000000",
             is_staff=True,
         )
+        self.default_destination = EggDispatchDestination.TIERRALTA
+        dispatch = EggDispatch.objects.create(
+            date=date.today(),
+            destination=self.default_destination,
+            driver=self.driver,
+            seller=self.seller,
+            total_cartons=Decimal("500"),
+        )
+        EggDispatchItem.objects.create(dispatch=dispatch, egg_type=EggType.JUMBO, cartons=Decimal("500"))
 
     def _base_form_data(self) -> dict[str, str]:
         tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
@@ -38,8 +47,8 @@ class SaleFormTestCase(TestCase):
             "date": timezone.localdate().isoformat(),
             "customer": str(self.customer.pk),
             "seller": str(self.seller.pk),
-            "status": Sale.Status.DRAFT,
-            "warehouse_destination": "",
+            "status": Sale.Status.CONFIRMED,
+            "warehouse_destination": self.default_destination,
             "payment_condition": Sale.PaymentCondition.CREDIT,
             "payment_due_date": tomorrow,
             "discount_amount": "0",
@@ -48,16 +57,12 @@ class SaleFormTestCase(TestCase):
             "unit_price_jumbo": "18000",
         }
 
-    def test_prefactura_can_be_saved_without_inventory_validation(self):
-        form = SaleForm(data=self._base_form_data(), actor_id=self.seller.pk)
-        self.assertTrue(form.is_valid(), form.errors)
-        sale = form.save()
-        self.assertEqual(sale.status, Sale.Status.DRAFT)
-        self.assertEqual(sale.items.count(), 1)
-        item = sale.items.first()
-        assert item is not None
-        self.assertEqual(item.quantity, Decimal("12"))
-        self.assertEqual(item.unit_price, Decimal("18000"))
+    def test_sale_requires_destination_and_inventory(self):
+        data = self._base_form_data()
+        data["warehouse_destination"] = ""
+        form = SaleForm(data=data, actor_id=self.seller.pk)
+        self.assertFalse(form.is_valid())
+        self.assertIn("Selecciona la bodega", form.errors["warehouse_destination"][0])
 
     def test_confirmed_sale_requires_available_inventory(self):
         dispatch = EggDispatch.objects.create(
@@ -69,13 +74,7 @@ class SaleFormTestCase(TestCase):
         )
         EggDispatchItem.objects.create(dispatch=dispatch, egg_type=EggType.JUMBO, cartons=Decimal("20"))
         data = self._base_form_data()
-        data.update(
-            {
-                "status": Sale.Status.CONFIRMED,
-                "warehouse_destination": EggDispatchDestination.TIERRALTA,
-                "quantity_jumbo": "10",
-            }
-        )
+        data.update({"warehouse_destination": EggDispatchDestination.TIERRALTA, "quantity_jumbo": "10"})
         form = SaleForm(data=data, actor_id=self.seller.pk)
         self.assertTrue(form.is_valid(), form.errors)
         sale = form.save()
