@@ -234,6 +234,7 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
                 "inventory_rows": self._build_inventory_rows(form),
                 "product_inventory_map": form.get_product_inventory_payload(),
                 "financial_snapshot": form.get_financial_snapshot(),
+                "current_customer_name": self._resolve_customer_label(form),
                 "cancel_url": reverse("administration:sales"),
                 "active_tab": self.get_active_tab(),
             }
@@ -259,6 +260,30 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
                 }
             )
         return rows
+
+    def _resolve_customer_label(self, form: SaleForm) -> str:
+        customer = getattr(form.instance, "customer", None)
+        if customer and getattr(customer, "pk", None):
+            return getattr(customer, "name", str(customer))
+        customer_field_name = form.add_prefix("customer")
+        customer_value = None
+        if form.is_bound:
+            customer_value = form.data.get(customer_field_name)
+        if not customer_value:
+            initial_customer = form.initial.get("customer")
+            if isinstance(initial_customer, Supplier):
+                return initial_customer.name
+            customer_value = initial_customer
+        if customer_value:
+            try:
+                customer_id = int(customer_value)
+            except (TypeError, ValueError):
+                customer_id = None
+            if customer_id:
+                supplier = Supplier.objects.filter(pk=customer_id).only("name").first()
+                if supplier:
+                    return supplier.name
+        return "Cliente sin asignar"
 
 
 class SaleCreateView(SaleFormMixin, generic.CreateView):

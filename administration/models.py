@@ -905,10 +905,9 @@ class Sale(TimeStampedModel):
 
     @property
     def balance_due(self) -> Decimal:
-        subtotal = self.total_amount
-        withholding = self.auto_withholding_amount
+        net_total = self.total_amount
         paid = Decimal(self.payments_total)
-        balance = subtotal - withholding - paid
+        balance = net_total - paid
         if balance < Decimal("0.00"):
             return Decimal("0.00")
         return balance

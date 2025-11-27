@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from administration.forms import SaleForm, SalePaymentForm
-from administration.models import Sale, SaleItem, SaleProductType, Supplier
+from administration.models import Sale, SaleItem, SalePayment, SaleProductType, Supplier
 from personal.models import UserProfile
 from production.models import EggDispatch, EggDispatchDestination, EggDispatchItem, EggType
 
@@ -147,3 +147,27 @@ class SaleFormTestCase(TestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("supera el saldo", form.errors["amount"][0])
+
+    def test_balance_due_does_not_subtract_withholding(self):
+        sale = Sale.objects.create(
+            date=timezone.localdate(),
+            customer=self.customer,
+            seller=self.seller,
+            status=Sale.Status.CONFIRMED,
+            payment_condition=Sale.PaymentCondition.CREDIT,
+            payment_due_date=timezone.localdate(),
+        )
+        SaleItem.objects.create(
+            sale=sale,
+            product_type=SaleProductType.JUMBO,
+            quantity=Decimal("100"),
+            unit_price=Decimal("1000"),
+        )
+        self.assertEqual(sale.auto_withholding_amount, Decimal("1000"))
+        self.assertEqual(sale.balance_due, Decimal("100000"))
+        SalePayment.objects.create(
+            sale=sale,
+            amount=Decimal("20000"),
+            method=SalePayment.Method.TRANSFER,
+        )
+        self.assertEqual(sale.balance_due, Decimal("80000"))

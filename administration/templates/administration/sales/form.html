@@ -14,31 +14,29 @@
           <header class="border-b border-slate-100 bg-gradient-to-r from-white via-emerald-50/80 to-white px-5 py-5">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div class="space-y-2 max-w-2xl">
-                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-500">Cadena comercial</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-500">
+                  {{ current_customer_name }}
+                </p>
                 <h1 class="text-3xl font-semibold text-slate-900">{{ page_title }}</h1>
               </div>
               <div class="flex flex-col gap-3 lg:min-w-[640px]">
                 <div class="flex flex-wrap items-start gap-3">
                   {% with summary=financial_snapshot %}
                   <div
-                    class="grid gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500 shadow-sm shadow-slate-200/70 sm:grid-cols-3 lg:grid-cols-6"
+                    class="grid gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500 shadow-sm shadow-slate-200/70 sm:grid-cols-3 lg:grid-cols-5"
                     data-sale-summary-container
                   >
-                    <div class="text-left">
-                      <dt class="text-[10px] text-slate-500">Subtotal</dt>
-                      <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="subtotal">{{ summary.subtotal|money_co }}</dd>
-                    </div>
                     <div class="text-left">
                       <dt class="text-[10px] text-slate-500">Descuento</dt>
                       <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="discount">{{ summary.discount|money_co }}</dd>
                     </div>
                     <div class="text-left">
-                      <dt class="text-[10px] text-slate-500">Total neto</dt>
-                      <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="total">{{ summary.total|money_co }}</dd>
-                    </div>
-                    <div class="text-left">
                       <dt class="text-[10px] text-slate-500">Autorretención</dt>
                       <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="withholding">{{ summary.withholding|money_co }}</dd>
+                    </div>
+                    <div class="text-left">
+                      <dt class="text-[10px] text-slate-500">Total neto</dt>
+                      <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="total">{{ summary.total|money_co }}</dd>
                     </div>
                     {% if sale %}
                       <div class="text-left">
