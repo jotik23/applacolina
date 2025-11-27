@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import Counter, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from itertools import cycle
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional
@@ -12,8 +12,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import ProtectedError, Q
-from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
+from django.db.models import Prefetch, ProtectedError, Q
+from django.http import Http404, HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -125,6 +125,20 @@ REST_CELL_STATE_REST = "rest"
 REST_CELL_STATE_UNASSIGNED = "unassigned"
 REST_CELL_STATE_ASSIGNED = "assigned"
 REST_CELL_STATE_INACTIVE = "inactive"
+
+SHARE_JOB_TYPE_ORDER: tuple[str, ...] = (
+    PositionJobType.PRODUCTION,
+    PositionJobType.CLASSIFICATION,
+    PositionJobType.ADMINISTRATIVE,
+    PositionJobType.SALES,
+)
+
+JOB_TYPE_SHORT_LABELS: dict[str, str] = {
+    PositionJobType.PRODUCTION: _("Prod."),
+    PositionJobType.CLASSIFICATION: _("Clas."),
+    PositionJobType.ADMINISTRATIVE: _("Admin."),
+    PositionJobType.SALES: _("Ventas"),
+}
 
 
 def _operator_display_name(operator: Optional[UserProfile]) -> str:
@@ -986,6 +1000,196 @@ def _build_calendar_whatsapp_message(
         lines.append("")
         lines.append(f"🔗 Detalle completo: {detail_url}")
     return "\n".join(lines).strip()
+
+
+def _collect_operator_job_types(calendar: ShiftCalendar) -> dict[int, set[str]]:
+    operator_job_types: dict[int, set[str]] = defaultdict(set)
+    assignments = (
+        calendar.assignments.exclude(operator_id__isnull=True)
+        .values_list("operator_id", "position__job_type")
+        .distinct()
+    )
+    for operator_id, job_type in assignments:
+        if operator_id and job_type:
+            operator_job_types[operator_id].add(job_type)
+    return operator_job_types
+
+
+def _operator_matches_job_types(
+    operator: Optional[UserProfile],
+    *,
+    selected_job_types: set[str],
+    operator_job_types: dict[int, set[str]],
+    is_filtered: bool,
+) -> bool:
+    if not is_filtered:
+        return True
+    if not operator:
+        return False
+    operator_id = getattr(operator, "id", None)
+    if not operator_id:
+        return False
+    operator_types = operator_job_types.get(operator_id)
+    if operator_types is None:
+        operator_types = set()
+        suggested_positions = getattr(operator, "suggested_positions", None)
+        if suggested_positions is not None:
+            for position in suggested_positions.all():
+                job_type = getattr(position, "job_type", None)
+                if job_type:
+                    operator_types.add(job_type)
+        operator_job_types[operator_id] = operator_types
+    if not operator_types:
+        return False
+    return bool(operator_types & selected_job_types)
+
+
+def _build_calendar_share_message(
+    *,
+    calendar: ShiftCalendar,
+    start_date: date,
+    end_date: date,
+    job_types: Iterable[str] | None = None,
+    rest_only: bool = False,
+) -> dict[str, Any]:
+    if start_date is None or end_date is None:
+        raise ValueError(_("Debes seleccionar un rango de fechas."))
+
+    start = max(calendar.start_date, start_date)
+    end = min(calendar.end_date, end_date)
+    if start > end:
+        raise ValueError(_("El rango seleccionado está fuera del calendario."))
+
+    job_type_labels = {value: str(label) for value, label in PositionJobType.choices}
+    valid_job_types = set(job_type_labels.keys())
+    requested_job_types = {value for value in (job_types or []) if value in valid_job_types}
+    is_filtered = bool(requested_job_types)
+    selected_job_types = requested_job_types or valid_job_types
+
+    date_label = f"{date_format(start, 'DATE_FORMAT')} → {date_format(end, 'DATE_FORMAT')}"
+    selected_labels = [job_type_labels.get(jt, jt) for jt in SHARE_JOB_TYPE_ORDER if jt in selected_job_types]
+    extra_labels = [
+        job_type_labels.get(jt, jt)
+        for jt in selected_job_types
+        if jt not in SHARE_JOB_TYPE_ORDER
+    ]
+    if extra_labels:
+        selected_labels.extend(extra_labels)
+    area_label = ", ".join(selected_labels) if selected_labels else _("Todas las áreas")
+
+    assignment_sections: dict[str, dict[date, list[str]]] = defaultdict(lambda: defaultdict(list))
+    assignment_count = 0
+    if not rest_only:
+        assignments = (
+            calendar.assignments.select_related("position", "position__farm", "operator")
+            .filter(date__gte=start, date__lte=end)
+            .exclude(operator__isnull=True)
+            .order_by("position__job_type", "date", "position__display_order", "position__code")
+        )
+        if requested_job_types:
+            assignments = assignments.filter(position__job_type__in=selected_job_types)
+
+        for assignment in assignments:
+            position = assignment.position
+            operator = assignment.operator
+            if not position or not operator:
+                continue
+            job_type = position.job_type
+            if job_type not in selected_job_types:
+                continue
+            day_bucket = assignment_sections[job_type][assignment.date]
+            operator_name = (
+                operator.get_full_name()
+                or operator.nombres
+                or operator.apellidos
+                or operator.cedula
+                or _("Colaborador")
+            )
+            position_name = position.name or position.code or _("Turno")
+            farm = getattr(position.farm, "name", None)
+            if farm:
+                day_bucket.append(f"{position_name} · {operator_name} ({farm})")
+            else:
+                day_bucket.append(f"{position_name} · {operator_name}")
+            assignment_count += 1
+
+    operator_job_types = _collect_operator_job_types(calendar)
+
+    suggested_prefetch = Prefetch(
+        "operator__suggested_positions",
+        queryset=PositionDefinition.objects.only("id", "job_type"),
+    )
+    rest_periods = (
+        OperatorRestPeriod.objects.select_related("operator")
+        .prefetch_related(suggested_prefetch)
+        .filter(start_date__lte=end, end_date__gte=start)
+        .order_by("start_date", "operator__apellidos", "operator__nombres", "operator__id")
+    )
+
+    rest_entries: list[str] = []
+    for period in rest_periods:
+        operator = getattr(period, "operator", None)
+        if not _operator_matches_job_types(
+            operator,
+            selected_job_types=selected_job_types,
+            operator_job_types=operator_job_types,
+            is_filtered=is_filtered,
+        ):
+            continue
+        rest_start = max(period.start_date, start)
+        rest_end = min(period.end_date, end)
+        if rest_start > rest_end:
+            continue
+        operator_name = _operator_display_name(operator) or _("Colaborador")
+        rest_start_label = date_format(rest_start, "DATE_FORMAT")
+        rest_end_label = date_format(rest_end, "DATE_FORMAT")
+        if rest_start == rest_end:
+            label = rest_start_label
+        else:
+            label = f"{rest_start_label} → {rest_end_label}"
+        status_label = period.get_status_display()
+        rest_entries.append(f"{operator_name}: {label} · {status_label}")
+
+    lines: list[str] = []
+    calendar_name = calendar.name or _("Calendario %(start)s → %(end)s") % {
+        "start": date_format(calendar.start_date, "DATE_FORMAT"),
+        "end": date_format(calendar.end_date, "DATE_FORMAT"),
+    }
+    lines.append(f"🗓 {calendar_name}")
+    lines.append(f"Rango: {date_label}")
+    lines.append(f"Áreas: {area_label}")
+
+    if not rest_only:
+        if assignment_count == 0:
+            lines.append(_("No hay turnos para este filtro."))
+        else:
+            for job_type in SHARE_JOB_TYPE_ORDER:
+                day_map = assignment_sections.get(job_type)
+                if not day_map:
+                    continue
+                lines.append("")
+                lines.append(job_type_labels.get(job_type, job_type).upper())
+                for day in sorted(day_map.keys()):
+                    day_label = date_format(day, "DATE_FORMAT")
+                    lines.append(f"{day_label}:")
+                    for entry in day_map[day]:
+                        lines.append(f"• {entry}")
+
+    if rest_entries:
+        lines.append("")
+        lines.append(_("Descansos"))
+        for entry in rest_entries:
+            lines.append(f"• {entry}")
+    else:
+        lines.append("")
+        lines.append(_("Sin descansos registrados en este rango."))
+
+    return {
+        "message": "\n".join(lines).strip(),
+        "has_assignments": assignment_count > 0,
+        "has_rests": bool(rest_entries),
+        "range_label": date_label,
+    }
 
 
 def _identify_calendar_issues(
@@ -2088,6 +2292,19 @@ class CalendarDetailView(StaffRequiredMixin, View):
             suggestions=rest_suggestions,
             detail_url=detail_url,
         )
+        job_type_labels = {value: str(label) for value, label in PositionJobType.choices}
+        share_job_type_options = [
+            {
+                "value": job_type,
+                "label": job_type_labels.get(job_type, job_type),
+                "short_label": JOB_TYPE_SHORT_LABELS.get(job_type, job_type_labels.get(job_type, job_type)),
+            }
+            for job_type in SHARE_JOB_TYPE_ORDER
+        ]
+        public_share_base = request.build_absolute_uri(reverse("personal:calendar-public-share", args=[calendar.id]))
+        public_share_url = (
+            f"{public_share_base}?start_date={calendar.start_date.isoformat()}&end_date={calendar.end_date.isoformat()}"
+        )
 
         return render(
             request,
@@ -2109,6 +2326,11 @@ class CalendarDetailView(StaffRequiredMixin, View):
                 "calendar_generation_recent_calendars": get_recent_calendars_payload(exclude_ids=[calendar.id]),
                 "rest_suggestions": rest_suggestions,
                 "calendar_whatsapp_message": whatsapp_message,
+                "calendar_share_public_url": public_share_url,
+                "calendar_share_options": {
+                    "url": reverse("personal:calendar-share-preview", args=[calendar.id]),
+                    "job_types": share_job_type_options,
+                },
             },
         )
 
@@ -2307,6 +2529,201 @@ class CalendarDeleteView(StaffRequiredMixin, View):
 # ---------------------------------------------------------------------------
 # API JSON
 # ---------------------------------------------------------------------------
+
+
+class CalendarPublicShareView(View):
+    template_name = "calendario/calendar_public_share.html"
+    http_method_names = ["get"]
+
+    def get(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any):
+        calendar = get_object_or_404(
+            ShiftCalendar.objects.select_related("base_calendar"),
+            pk=pk,
+        )
+
+        start_value = (request.GET.get("start_date") or "").strip()
+        end_value = (request.GET.get("end_date") or "").strip()
+        job_types = request.GET.getlist("job_types[]") or request.GET.getlist("job_types")
+
+        start_date = calendar.start_date
+        end_date = calendar.end_date
+
+        if start_value:
+            try:
+                start_date = _parse_date(start_value, _("fecha inicial"))
+            except ValueError as exc:
+                raise Http404(str(exc))
+        if end_value:
+            try:
+                end_date = _parse_date(end_value, _("fecha final"))
+            except ValueError as exc:
+                raise Http404(str(exc))
+
+        start_date = max(start_date, calendar.start_date)
+        end_date = min(end_date, calendar.end_date)
+        if start_date > end_date:
+            raise Http404("El rango solicitado no pertenece a este calendario.")
+
+        job_type_labels = {value: str(label) for value, label in PositionJobType.choices}
+        valid_job_types = set(job_type_labels.keys())
+        requested_job_types = {value for value in job_types if value in valid_job_types}
+        is_filtered = bool(requested_job_types)
+        selected_job_types = requested_job_types or valid_job_types
+        selected_labels = [job_type_labels.get(jt, jt) for jt in SHARE_JOB_TYPE_ORDER if jt in selected_job_types]
+        extra_labels = [
+            job_type_labels.get(jt, jt)
+            for jt in selected_job_types
+            if jt not in SHARE_JOB_TYPE_ORDER
+        ]
+        if extra_labels:
+            selected_labels.extend(extra_labels)
+        area_label = ", ".join(selected_labels) if selected_labels else _("Todas las áreas")
+        range_label = f"{date_format(start_date, 'DATE_FORMAT')} → {date_format(end_date, 'DATE_FORMAT')}"
+
+        date_columns = _date_range(start_date, end_date)
+        rows: list[dict[str, Any]] = []
+        if date_columns:
+            assignments = (
+                calendar.assignments.select_related("position", "position__farm", "operator")
+                .filter(date__gte=start_date, date__lte=end_date)
+                .order_by("position__display_order", "position__code", "date")
+            )
+            if requested_job_types:
+                assignments = assignments.filter(position__job_type__in=selected_job_types)
+
+            row_map: "OrderedDict[int, dict[str, Any]]" = OrderedDict()
+            for assignment in assignments:
+                position = assignment.position
+                operator = assignment.operator
+                if not position:
+                    continue
+                row = row_map.get(position.id)
+                if not row:
+                    row = {
+                        "position_label": position.name or position.code or _("Posición"),
+                        "position_code": position.code or "",
+                        "farm_name": getattr(position.farm, "name", ""),
+                        "display_order": position.display_order or 0,
+                        "cells": {},
+                    }
+                    row_map[position.id] = row
+                operator_name = _operator_display_name(operator) or _("Vacío")
+                row["cells"][assignment.date] = operator_name
+
+            sorted_rows = sorted(row_map.values(), key=lambda item: (item["display_order"], item["position_label"]))
+            for row in sorted_rows:
+                cells = []
+                for day in date_columns:
+                    value = row["cells"].get(day)
+                    cells.append(
+                        {
+                            "value": value or "—",
+                            "is_empty": not bool(value),
+                        }
+                    )
+                row["cells"] = cells
+                rows.append(row)
+
+        operator_job_types = _collect_operator_job_types(calendar)
+        suggested_prefetch = Prefetch(
+            "operator__suggested_positions",
+            queryset=PositionDefinition.objects.only("id", "job_type"),
+        )
+        rest_periods = (
+            OperatorRestPeriod.objects.select_related("operator")
+            .prefetch_related(suggested_prefetch)
+            .filter(start_date__lte=end_date, end_date__gte=start_date)
+            .order_by("start_date", "operator__apellidos", "operator__nombres", "operator__id")
+        )
+        rest_entries: list[dict[str, str]] = []
+        for period in rest_periods:
+            operator = getattr(period, "operator", None)
+            if not _operator_matches_job_types(
+                operator,
+                selected_job_types=selected_job_types,
+                operator_job_types=operator_job_types,
+                is_filtered=is_filtered,
+            ):
+                continue
+            rest_start = max(period.start_date, start_date)
+            rest_end = min(period.end_date, end_date)
+            if rest_start > rest_end:
+                continue
+            operator_name = _operator_display_name(operator) or _("Colaborador")
+            rest_start_label = date_format(rest_start, "DATE_FORMAT")
+            rest_end_label = date_format(rest_end, "DATE_FORMAT")
+            if rest_start == rest_end:
+                span_label = rest_start_label
+            else:
+                span_label = f"{rest_start_label} → {rest_end_label}"
+            rest_entries.append(
+                {
+                    "operator": operator_name,
+                    "span": span_label,
+                    "status": period.get_status_display(),
+                }
+            )
+
+        generated_at = timezone.localtime()
+        return render(
+            request,
+            self.template_name,
+            {
+                "calendar": calendar,
+                "rows": rows,
+                "date_columns": date_columns,
+                "rest_entries": rest_entries,
+                "range_label": range_label,
+                "area_label": area_label,
+                "start_date": start_date,
+                "end_date": end_date,
+                "generated_at": generated_at,
+            },
+        )
+
+
+class CalendarSharePreviewView(StaffRequiredMixin, View):
+    http_method_names = ["get"]
+
+    def get(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(ShiftCalendar, pk=pk)
+        start_value = (request.GET.get("start_date") or "").strip()
+        end_value = (request.GET.get("end_date") or "").strip()
+
+        start_date = calendar.start_date
+        end_date = calendar.end_date
+
+        if start_value:
+            try:
+                start_date = _parse_date(start_value, _("fecha inicial"))
+            except ValueError as exc:
+                return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+        if end_value:
+            try:
+                end_date = _parse_date(end_value, _("fecha final"))
+            except ValueError as exc:
+                return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+        job_types = request.GET.getlist("job_types[]")
+        if not job_types:
+            job_types = request.GET.getlist("job_types")
+
+        rests_only_value = (request.GET.get("rests_only") or "").strip().lower()
+        rest_only = rests_only_value in {"1", "true", "yes", "on"}
+
+        try:
+            payload = _build_calendar_share_message(
+                calendar=calendar,
+                start_date=start_date,
+                end_date=end_date,
+                job_types=job_types,
+                rest_only=rest_only,
+            )
+        except ValueError as exc:
+            return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+        return JsonResponse({"success": True, **payload})
 
 
 class CalendarGenerateView(StaffRequiredMixin, View):

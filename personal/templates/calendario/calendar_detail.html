@@ -198,27 +198,143 @@
                   </div>
                 </div>
               {% endif %}
-              {% if calendar_whatsapp_message %}
-              <button
-                type="button"
-                class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 shadow hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:w-auto"
-                data-whatsapp-share
-                data-whatsapp-message="{{ calendar_whatsapp_message|escapejs }}"
-                aria-label="Compartir calendario por WhatsApp"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="h-5 w-5" aria-hidden="true">
-                  <path
-                    fill="#25d366"
-                    d="M16 3C9.38 3 4 8.25 4 14.71c0 2.87.98 5.51 2.63 7.62L4 29l6.91-2.25c1.81.99 3.9 1.56 6.09 1.56 6.62 0 12-5.25 12-11.71S22.62 3 16 3z"
-                  />
-                  <path
-                    fill="#fff"
-                    d="M24.38 20.5c-.34.96-1.69 1.77-2.38 1.84-.61.06-1.4.09-2.26-.14-.52-.13-1.19-.39-2.05-.76-3.61-1.56-5.94-5.14-6.12-5.38-.18-.24-1.44-1.93-1.44-3.68s.91-2.61 1.23-2.96c.34-.35.74-.44.99-.44h.72c.23 0 .55-.08.86.65.34.79 1.08 2.73 1.17 2.93.09.2.14.44.03.68-.12.24-.18.39-.35.6-.18.21-.37.47-.53.63-.18.18-.37.38-.16.75.21.35.94 1.53 2.02 2.48 1.39 1.23 2.57 1.62 2.96 1.8.37.18.58.15.79-.09.21-.24.92-1.08 1.17-1.45.24-.35.49-.3.82-.18.34.12 2.13 1.01 2.5 1.2.37.18.61.27.7.41.1.14.1.84-.24 1.8z"
-                  />
-                </svg>
-                Compartir
-              </button>
-              {% endif %}
+              <div class="flex w-full flex-wrap items-center gap-2">
+                {% if calendar_share_public_url %}
+                  <button
+                    type="button"
+                    class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 shadow hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:w-auto"
+                    data-whatsapp-share
+                    data-whatsapp-link="{{ calendar_share_public_url|escapejs }}"
+                    {% if calendar_whatsapp_message %}
+                      data-whatsapp-message="{{ calendar_whatsapp_message|escapejs }}"
+                    {% endif %}
+                    aria-label="Compartir calendario por WhatsApp"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="h-5 w-5" aria-hidden="true">
+                      <path
+                        fill="#25d366"
+                        d="M16 3C9.38 3 4 8.25 4 14.71c0 2.87.98 5.51 2.63 7.62L4 29l6.91-2.25c1.81.99 3.9 1.56 6.09 1.56 6.62 0 12-5.25 12-11.71S22.62 3 16 3z"
+                      />
+                      <path
+                        fill="#fff"
+                        d="M24.38 20.5c-.34.96-1.69 1.77-2.38 1.84-.61.06-1.4.09-2.26-.14-.52-.13-1.19-.39-2.05-.76-3.61-1.56-5.94-5.14-6.12-5.38-.18-.24-1.44-1.93-1.44-3.68s.91-2.61 1.23-2.96c.34-.35.74-.44.99-.44h.72c.23 0 .55-.08.86.65.34.79 1.08 2.73 1.17 2.93.09.2.14.44.03.68-.12.24-.18.39-.35.6-.18.21-.37.47-.53.63-.18.18-.37.38-.16.75.21.35.94 1.53 2.02 2.48 1.39 1.23 2.57 1.62 2.96 1.8.37.18.58.15.79-.09.21-.24.92-1.08 1.17-1.45.24-.35.49-.3.82-.18.34.12 2.13 1.01 2.5 1.2.37.18.61.27.7.41.1.14.1.84-.24 1.8z"
+                      />
+                    </svg>
+                    Compartir
+                  </button>
+                {% endif %}
+                {% if calendar_share_options %}
+                  <div class="relative inline-flex" data-calendar-share-panel>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-sm transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                      data-share-panel-trigger
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                    >
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path
+                          fill-rule="evenodd"
+                          d="M10 3a.75.75 0 01.75.75V6.5h2.75a.75.75 0 010 1.5H10.75v5h2.75a.75.75 0 010 1.5H10.75v2.75a.75.75 0 01-1.5 0V14.5H6.5a.75.75 0 010-1.5h2.75v-5H6.5a.75.75 0 010-1.5h2.75V3.75A.75.75 0 0110 3z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                      <span class="hidden sm:inline">Texto personalizado</span>
+                      <span class="sm:hidden">Opciones</span>
+                    </button>
+                    <div
+                      class="invisible absolute right-0 top-full z-30 mt-2 w-80 origin-top-right rounded-2xl border border-slate-200 bg-white p-4 text-left text-sm opacity-0 shadow-2xl transition data-[open='true']:visible data-[open='true']:opacity-100"
+                      data-share-panel-content
+                      data-open="false"
+                      role="dialog"
+                      aria-hidden="true"
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <p class="text-sm font-semibold text-slate-900">Compartir por WhatsApp</p>
+                        <button type="button" class="rounded-full p-1 text-slate-500 hover:bg-slate-100" data-share-panel-close>
+                          <span class="sr-only">Cerrar panel</span>
+                          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 6l8 8m0-8l-8 8" />
+                          </svg>
+                        </button>
+                      </div>
+                      <p class="mt-1 text-xs text-slate-500">El mensaje incluye turnos asignados y descansos en el rango seleccionado.</p>
+                      <form
+                        class="mt-4 flex flex-col gap-3 text-sm"
+                        data-calendar-share-form
+                        data-share-url="{{ calendar_share_options.url }}"
+                      >
+                        <div class="grid grid-cols-2 gap-2">
+                          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Desde
+                            <input
+                              type="date"
+                              name="start_date"
+                              value="{{ calendar.start_date|date:'Y-m-d' }}"
+                              min="{{ calendar.start_date|date:'Y-m-d' }}"
+                              max="{{ calendar.end_date|date:'Y-m-d' }}"
+                              class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                              data-share-start
+                            />
+                          </label>
+                          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Hasta
+                            <input
+                              type="date"
+                              name="end_date"
+                              value="{{ calendar.end_date|date:'Y-m-d' }}"
+                              min="{{ calendar.start_date|date:'Y-m-d' }}"
+                              max="{{ calendar.end_date|date:'Y-m-d' }}"
+                              class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                              data-share-end
+                            />
+                          </label>
+                        </div>
+                        <div>
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Áreas a incluir</p>
+                          <div class="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Áreas disponibles">
+                            {% for option in calendar_share_options.job_types %}
+                              <button
+                                type="button"
+                                class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 transition data-[active='true']:border-brand data-[active='true']:bg-brand/5 data-[active='true']:text-brand"
+                                data-share-job-type="{{ option.value }}"
+                                data-active="true"
+                                aria-pressed="true"
+                                title="Incluir {{ option.label }}"
+                              >
+                                {{ option.short_label }}
+                              </button>
+                            {% endfor %}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          class="inline-flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition data-[active='true']:border-emerald-300 data-[active='true']:bg-emerald-50 data-[active='true']:text-emerald-700"
+                          data-share-rest-only
+                          data-active="false"
+                          aria-pressed="false"
+                        >
+                          Solo descansos
+                          <span class="rounded-full border border-current px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide" data-share-rest-indicator>
+                            off
+                          </span>
+                        </button>
+                        <p class="hidden text-xs font-medium text-red-600" data-share-feedback></p>
+                        <button
+                          type="button"
+                          class="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+                          data-share-submit
+                        >
+                          <span>Enviar por WhatsApp</span>
+                          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M3 10a.75.75 0 01.75-.75h8.638L9.7 6.11a.75.75 0 111.06-1.06l4.243 4.242a.75.75 0 010 1.061l-4.243 4.243a.75.75 0 11-1.06-1.06l2.686-2.686H3.75A.75.75 0 013 10z" />
+                          </svg>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
             </div>
             <div class="flex w-full justify-end gap-2 text-xs">
               {% if calendar.status != 'approved' %}
@@ -1318,16 +1434,246 @@
               return;
             }
             button.addEventListener('click', function () {
+              var linkValue = button.getAttribute('data-whatsapp-link') || '';
               var message = button.getAttribute('data-whatsapp-message') || '';
-              if (!message || !message.replace(/\s+/g, '').length) {
+              var payload = linkValue || message;
+              if (!payload || !payload.replace(/\s+/g, '').length) {
                 return;
               }
-              var shareUrl = 'https://wa.me/?text=' + encodeURIComponent(message);
+              var shareUrl = 'https://wa.me/?text=' + encodeURIComponent(payload);
               var popup = window.open(shareUrl, '_blank', 'noopener');
               if (popup) {
                 popup.focus();
               }
             });
+          });
+        });
+      </script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          var panelNodes = Array.prototype.slice.call(document.querySelectorAll('[data-calendar-share-panel]'));
+          if (!panelNodes.length) {
+            return;
+          }
+
+          var activePanel = null;
+
+          function setPanelState(panel, open) {
+            if (!panel) {
+              return;
+            }
+            var trigger = panel.querySelector('[data-share-panel-trigger]');
+            var content = panel.querySelector('[data-share-panel-content]');
+            if (!trigger || !content) {
+              return;
+            }
+            content.setAttribute('data-open', open ? 'true' : 'false');
+            content.setAttribute('aria-hidden', open ? 'false' : 'true');
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+              activePanel = panel;
+            } else if (activePanel === panel) {
+              activePanel = null;
+            }
+          }
+
+          function closeActivePanel(target) {
+            if (!activePanel) {
+              return;
+            }
+            if (target && activePanel.contains(target)) {
+              return;
+            }
+            setPanelState(activePanel, false);
+          }
+
+          document.addEventListener('click', function (event) {
+            closeActivePanel(event.target);
+          });
+
+          panelNodes.forEach(function (panel) {
+            var trigger = panel.querySelector('[data-share-panel-trigger]');
+            var content = panel.querySelector('[data-share-panel-content]');
+            var closeButton = panel.querySelector('[data-share-panel-close]');
+            var form = panel.querySelector('[data-calendar-share-form]');
+            if (!trigger || !content || !form) {
+              return;
+            }
+
+            trigger.addEventListener('click', function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+              var isOpen = content.getAttribute('data-open') === 'true';
+              setPanelState(panel, !isOpen);
+            });
+
+            if (closeButton) {
+              closeButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setPanelState(panel, false);
+              });
+            }
+
+            content.addEventListener('click', function (event) {
+              event.stopPropagation();
+            });
+
+            var restToggle = panel.querySelector('[data-share-rest-only]');
+            var restIndicator = restToggle ? restToggle.querySelector('[data-share-rest-indicator]') : null;
+            var jobTypeButtons = Array.prototype.slice.call(panel.querySelectorAll('[data-share-job-type]'));
+            var startInput = panel.querySelector('[data-share-start]');
+            var endInput = panel.querySelector('[data-share-end]');
+            var submitButton = panel.querySelector('[data-share-submit]');
+            var feedback = panel.querySelector('[data-share-feedback]');
+            var shareUrl = form.getAttribute('data-share-url') || '';
+
+            function updateJobTypeState(button, forceActive) {
+              if (!button) {
+                return;
+              }
+              var nextState =
+                typeof forceActive === 'boolean' ? forceActive : button.getAttribute('data-active') !== 'true';
+              button.setAttribute('data-active', nextState ? 'true' : 'false');
+              button.setAttribute('aria-pressed', nextState ? 'true' : 'false');
+            }
+
+            jobTypeButtons.forEach(function (button) {
+              button.addEventListener('click', function () {
+                updateJobTypeState(button);
+              });
+            });
+
+            function setRestState(active) {
+              if (!restToggle) {
+                return;
+              }
+              var nextState = typeof active === 'boolean' ? active : restToggle.getAttribute('data-active') !== 'true';
+              restToggle.setAttribute('data-active', nextState ? 'true' : 'false');
+              restToggle.setAttribute('aria-pressed', nextState ? 'true' : 'false');
+              if (restIndicator) {
+                restIndicator.textContent = nextState ? 'on' : 'off';
+              }
+            }
+
+            if (restToggle) {
+              setRestState(restToggle.getAttribute('data-active') === 'true');
+              restToggle.addEventListener('click', function () {
+                setRestState();
+              });
+            }
+
+            function showFeedback(message, variant) {
+              if (!feedback) {
+                return;
+              }
+              if (!message) {
+                feedback.classList.add('hidden');
+                feedback.textContent = '';
+                return;
+              }
+              feedback.textContent = message;
+              feedback.classList.remove('hidden');
+              if (variant === 'success') {
+                feedback.classList.remove('text-red-600');
+                feedback.classList.add('text-emerald-600');
+              } else {
+                feedback.classList.remove('text-emerald-600');
+                feedback.classList.add('text-red-600');
+              }
+            }
+
+            function toggleBusy(state) {
+              if (!submitButton) {
+                return;
+              }
+              if (state) {
+                submitButton.setAttribute('data-busy', 'true');
+                submitButton.classList.add('opacity-70', 'cursor-wait');
+                submitButton.disabled = true;
+              } else {
+                submitButton.removeAttribute('data-busy');
+                submitButton.classList.remove('opacity-70', 'cursor-wait');
+                submitButton.disabled = false;
+              }
+            }
+
+            if (submitButton) {
+              submitButton.addEventListener('click', function () {
+                if (!shareUrl) {
+                  return;
+                }
+                var startValue = startInput && startInput.value ? startInput.value : '';
+                var endValue = endInput && endInput.value ? endInput.value : '';
+                if (!startValue || !endValue) {
+                  showFeedback('Selecciona el rango completo.', 'error');
+                  return;
+                }
+                var params = new URLSearchParams();
+                params.set('start_date', startValue);
+                params.set('end_date', endValue);
+                var selectedJobTypes = jobTypeButtons
+                  .filter(function (button) {
+                    return button.getAttribute('data-active') === 'true';
+                  })
+                  .map(function (button) {
+                    return button.getAttribute('data-share-job-type');
+                  })
+                  .filter(Boolean);
+                selectedJobTypes.forEach(function (value) {
+                  params.append('job_types[]', value);
+                });
+                if (restToggle && restToggle.getAttribute('data-active') === 'true') {
+                  params.append('rests_only', '1');
+                }
+                showFeedback('', 'success');
+                toggleBusy(true);
+                var targetUrl = shareUrl + (shareUrl.indexOf('?') === -1 ? '?' : '&') + params.toString();
+                fetch(targetUrl, {
+                  credentials: 'same-origin',
+                  headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                  },
+                })
+                  .then(function (response) {
+                    return response
+                      .json()
+                      .then(function (payload) {
+                        return { status: response.status, body: payload };
+                      })
+                      .catch(function () {
+                        return { status: response.status, body: null };
+                      });
+                  })
+                  .then(function (result) {
+                    toggleBusy(false);
+                    if (!result || result.status >= 400 || !result.body || result.body.success === false) {
+                      var errorMessage =
+                        result && result.body && result.body.error
+                          ? result.body.error
+                          : 'No se pudo generar el mensaje.';
+                      showFeedback(errorMessage, 'error');
+                      return;
+                    }
+                    var message = result.body.message || '';
+                    if (!message.trim()) {
+                      showFeedback('No hay información para compartir en este rango.', 'error');
+                      return;
+                    }
+                    var waUrl = 'https://wa.me/?text=' + encodeURIComponent(message);
+                    var popup = window.open(waUrl, '_blank', 'noopener');
+                    if (popup) {
+                      popup.focus();
+                    }
+                    showFeedback('Mensaje generado. Si no ves WhatsApp, revisa el bloqueador de ventanas.', 'success');
+                    setPanelState(panel, false);
+                  })
+                  .catch(function () {
+                    toggleBusy(false);
+                    showFeedback('Hubo un problema al preparar el mensaje.', 'error');
+                  });
+              });
+            }
           });
         });
       </script>
