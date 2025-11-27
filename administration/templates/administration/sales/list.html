@@ -95,6 +95,20 @@
               {% endfor %}
             </div>
           </div>
+          <label class="flex flex-col gap-1 relative w-48">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mes</span>
+            <select
+              name="month"
+              class="h-8 w-full rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+              <option value="">Historial completo</option>
+              {% for option in month_filter_options %}
+                <option value="{{ option.value }}" {% if option.value == active_month_filter %}selected{% endif %}>
+                  {{ option.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
           <label class="flex flex-col gap-1 relative w-56" data-customer-autocomplete-container>
             <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cliente</span>
             <input

@@ -154,6 +154,8 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 "status_filter_options": self._status_filter_options(),
                 "payment_condition_options": self._payment_condition_options(),
                 "warehouse_filter_options": self._warehouse_filter_options(),
+                "month_filter_options": self._month_filter_options(),
+                "active_month_filter": filters.get("month"),
                 "current_sort": current_sort,
                 "sort_state": self._build_sort_state(current_sort, filters_query),
                 "base_filters_query": filters_query,
@@ -272,6 +274,18 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         end_date_raw = (params.get("end_date") or "").strip()
         start_date = parse_date(start_date_raw) if start_date_raw else None
         end_date = parse_date(end_date_raw) if end_date_raw else None
+        raw_month = (params.get("month") or "").strip()
+        month_filter = ""
+        if raw_month:
+            parts = raw_month.split("-")
+            try:
+                year = int(parts[0])
+                month = int(parts[1])
+            except (ValueError, IndexError):
+                year = None
+                month = None
+            if year and month and 1 <= month <= 12:
+                month_filter = f"{year:04d}-{month:02d}"
         payment_conditions = []
         allowed_payments = {Sale.PaymentCondition.CASH, Sale.PaymentCondition.CREDIT}
         for value in params.getlist("payment_condition"):
@@ -294,6 +308,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             "warehouse": warehouse,
             "start_date": start_date,
             "end_date": end_date,
+            "month": month_filter,
         }
         self._filter_payload = payload
         return payload
@@ -374,6 +389,18 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             queryset = queryset.filter(warehouse_destination=warehouse)
         start_date = filters.get("start_date")
         end_date = filters.get("end_date")
+        month_value = filters.get("month")
+        if not start_date and not end_date and month_value:
+            try:
+                year = int(month_value[:4])
+                month = int(month_value[5:7])
+            except (TypeError, ValueError):
+                year = None
+                month = None
+            if year and month:
+                _, last_day = calendar.monthrange(year, month)
+                start_date = date(year, month, 1)
+                end_date = date(year, month, last_day)
         if start_date:
             queryset = queryset.filter(date__gte=start_date)
         if end_date:
@@ -416,6 +443,33 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             for code, label in EggDispatchDestination.choices
             if code
         ]
+
+    def _month_filter_options(self) -> list[Dict[str, str]]:
+        months = Sale.objects.dates("date", "month", order="DESC")
+        options: list[Dict[str, str]] = []
+        month_labels = {
+            1: "Enero",
+            2: "Febrero",
+            3: "Marzo",
+            4: "Abril",
+            5: "Mayo",
+            6: "Junio",
+            7: "Julio",
+            8: "Agosto",
+            9: "Septiembre",
+            10: "Octubre",
+            11: "Noviembre",
+            12: "Diciembre",
+        }
+        for month_date in months:
+            label = f"{month_labels.get(month_date.month, month_date.strftime('%b')).capitalize()} {month_date.year}"
+            options.append(
+                {
+                    "value": f"{month_date.year:04d}-{month_date.month:02d}",
+                    "label": label,
+                }
+            )
+        return options
 
     def _customer_suggestions(self) -> list[dict[str, str]]:
         return list(
