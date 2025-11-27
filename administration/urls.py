@@ -21,7 +21,7 @@ from .views import (
 app_name = 'administration'
 
 urlpatterns = [
-    path('', RedirectView.as_view(pattern_name='administration:purchases', permanent=False), name='index'),
+    path('', RedirectView.as_view(pattern_name='administration:sales', permanent=False), name='index'),
     path('ventas/', SalesDashboardView.as_view(), name='sales'),
     path('ventas/nueva/', SaleCreateView.as_view(), name='sale-create'),
     path('ventas/<int:pk>/editar/', SaleUpdateView.as_view(), name='sale-update'),
