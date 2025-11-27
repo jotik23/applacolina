@@ -1,5 +1,5 @@
 {% extends "calendario/base.html" %}
-{% load humanize form_extras %}
+{% load static humanize form_extras %}
 
 {% block title %}Ventas{% endblock %}
 
@@ -7,57 +7,325 @@
   {% include "administration/_submenu.html" with active=administration_active_submenu %}
 
   <section class="space-y-4">
-    <header class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
-      <div class="min-w-[200px] grow">
-        <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Cadena comercial</p>
-        <h1 class="text-2xl font-semibold text-slate-900">Facturación</h1>
-      </div>
-      <form method="post" enctype="multipart/form-data" class="flex flex-col gap-1 rounded-2xl border border-dashed border-emerald-200/80 bg-emerald-50/70 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-inner">
-        {% csrf_token %}
-        <input type="hidden" name="intent" value="import">
-        <label class="sr-only" for="{{ import_form.workbook.id_for_label }}">{{ import_form.workbook.label }}</label>
-        <div class="flex items-center gap-2">
-          <span>Ventas y abonos (.xlsx)</span>
-          {{ import_form.workbook|add_class:"block w-48 text-[11px] font-medium text-slate-700 file:mr-2 file:cursor-pointer file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-emerald-500" }}
-          <button
-            type="submit"
-            class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-emerald-500"
-          >
-            Importar
-          </button>
+    <header class="space-y-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-5 shadow-sm">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="min-w-[160px] flex-1">
+          <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Cadena comercial</p>
+          <h1 class="text-2xl font-semibold text-slate-900">Facturación</h1>
         </div>
-        <p class="text-[10px] font-normal text-emerald-700/80">Ubica el archivo con hojas Ventas, Abonos y Terceros.</p>
-        {% if import_form.workbook.errors %}
-          <p class="text-[11px] text-rose-600">{{ import_form.workbook.errors|striptags }}</p>
-        {% endif %}
-      </form>
-      <a
-        href="{% url 'administration:sale-create' %}"
-        class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600/90 to-emerald-500/80 px-4 py-2 text-xs font-semibold text-white shadow">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2 11a1 1 0 011-1h2.586l-1.293-1.293a1 1 0 111.414-1.414L8 9.586l2.293-2.293a1 1 0 111.414 1.414L9.414 11H12a1 1 0 110 2H3a1 1 0 01-1-1z"/></svg>
+            </span>
+            <div>
+              <p class="text-[10px] uppercase tracking-wide text-white/70">Total vendido</p>
+              <p class="text-sm font-semibold tracking-tight">{{ sales_totals.total|money_co }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-600/90 to-sky-500/80 px-4 py-2 text-xs font-semibold text-white shadow">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v1H4a1 1 0 100 2h1v1a3 3 0 106 0v-1h1a1 1 0 100-2h-1V7a3 3 0 00-3-3zm1 10v-2H7v2a1 1 0 102 0z" clip-rule="evenodd"/></svg>
+            </span>
+            <div>
+              <p class="text-[10px] uppercase tracking-wide text-white/70">Total abonado</p>
+              <p class="text-sm font-semibold tracking-tight">{{ sales_totals.payments|money_co }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rose-600/90 to-rose-500/80 px-4 py-2 text-xs font-semibold text-white shadow">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-12.75a.75.75 0 011.5 0v5a.75.75 0 01-1.5 0v-5zM10 13a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"/></svg>
+            </span>
+            <div>
+              <p class="text-[10px] uppercase tracking-wide text-white/70">Saldo pendiente</p>
+              <p class="text-sm font-semibold tracking-tight">
+                {{ sales_totals.balance|money_co }}
+              </p>
+            </div>
+          </div>
+        </div>
+        <a
+          href="{% url 'administration:sale-create' %}"
+          class="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+        >
+          Registrar venta
+        </a>
+      </div>
+
+      <form
+        method="get"
+        action="{% url 'administration:sales' %}"
+        class="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-3 text-[11px] text-slate-600 shadow-inner"
       >
-        Registrar venta
-      </a>
+        {% if current_sort %}
+          <input type="hidden" name="sort" value="{{ current_sort }}">
+        {% endif %}
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Condición</span>
+            <div class="flex flex-wrap gap-2">
+              {% for option in payment_condition_options %}
+                <label class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="payment_condition"
+                    value="{{ option.value }}"
+                    class="h-3 w-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    {% if option.value in sales_filters.payment_conditions %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="flex flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Estado</span>
+            <div class="flex flex-wrap gap-2">
+              {% for option in status_filter_options %}
+                <label class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="status"
+                    value="{{ option.value }}"
+                    class="h-3 w-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    {% if option.value in sales_filters.status %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          <label class="flex flex-col gap-1 relative w-56" data-customer-autocomplete-container>
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cliente</span>
+            <input
+              type="text"
+              name="customer"
+              value="{{ sales_filters.customer_query }}"
+              placeholder="Nombre o NIT"
+              autocomplete="off"
+              data-customer-autocomplete-input
+              class="h-8 w-full rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+            <div
+              class="absolute z-10 mt-10 hidden w-full rounded-xl border border-slate-200 bg-white text-[12px] shadow-lg"
+              data-customer-autocomplete-results
+            ></div>
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Bodega</span>
+            <select
+              name="warehouse"
+              class="h-8 w-40 rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+              <option value="">Todas</option>
+              {% for option in warehouse_filter_options %}
+                <option value="{{ option.value }}" {% if option.value == sales_filters.warehouse %}selected{% endif %}>
+                  {{ option.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fecha inicio</span>
+            <input
+              type="date"
+              name="start_date"
+              value="{% if sales_filters.start_date %}{{ sales_filters.start_date|date:'Y-m-d' }}{% endif %}"
+              class="h-8 rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fecha fin</span>
+            <input
+              type="date"
+              name="end_date"
+              value="{% if sales_filters.end_date %}{{ sales_filters.end_date|date:'Y-m-d' }}{% endif %}"
+              class="h-8 rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+          </label>
+          <div class="flex items-center gap-2 pt-5">
+            <button
+              type="submit"
+              class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            >
+              Aplicar filtros
+            </button>
+            {% if has_active_filters %}
+              <a
+                href="{% url 'administration:sales' %}"
+                class="text-xs font-semibold text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+              >
+                Limpiar
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+      {{ customer_suggestions|json_script:"customer-suggestions-data" }}
     </header>
 
     <div class="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
       <table class="min-w-full divide-y divide-slate-100 text-sm text-slate-700">
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
-            <th class="px-4 py-3 text-left">Fecha</th>
-            <th class="px-4 py-3 text-left">Cliente</th>
-            <th class="px-4 py-3 text-left">Estado</th>
-            <th class="px-4 py-3 text-left">Condición</th>
-            <th class="px-4 py-3 text-right">Total</th>
-            <th class="px-4 py-3 text-right">Abonos</th>
-            <th class="px-4 py-3 text-right">Saldo</th>
-            <th class="px-4 py-3 text-left">Bodega</th>
-            <th class="px-4 py-3 text-left">Vendedor</th>
+            <th class="px-4 py-3 text-left">
+              {% with state=sort_state.date %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Fecha</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-left">
+              {% with state=sort_state.customer %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Cliente</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-left">
+              {% with state=sort_state.status %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Estado</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-left">
+              {% with state=sort_state.payment_condition %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Condición</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-right">
+              {% with state=sort_state.total %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center justify-end gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Total</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-right">
+              {% with state=sort_state.payments %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center justify-end gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Abonos</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-left">
+              {% with state=sort_state.last_payment %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Último abono</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-right">
+              {% with state=sort_state.balance %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center justify-end gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Saldo</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
             <th class="px-4 py-3 text-left">Acciones</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for sale in sales %}
-            <tr class="align-top">
+            <tr class="align-top {% if sale.status == 'paid' %}bg-emerald-50/40{% elif sale.status == 'confirmed' %}bg-amber-50/30{% elif sale.status == 'draft' %}bg-slate-50/40{% endif %}">
               <td class="px-4 py-3 text-sm font-semibold text-slate-900">{{ sale.date|date:"d/m/Y" }}</td>
               <td class="px-4 py-3">
                 <p class="font-semibold text-slate-900">{{ sale.customer.name }}</p>
@@ -65,18 +333,39 @@
                   <p class="mt-1 text-xs text-slate-500">{{ sale.notes }}</p>
                 {% endif %}
               </td>
-              <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ sale.get_status_display }}</td>
+              <td class="px-4 py-3">
+                {% if sale.status == 'paid' %}
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/90 text-white" title="{{ sale.get_status_display }}">
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-6.668 6.667a1 1 0 01-1.42 0L4.29 8.75a1 1 0 011.42-1.42l3.176 3.177 5.958-5.958a1 1 0 011.42 0z" clip-rule="evenodd" />
+                    </svg>
+                  </span>
+                {% elif sale.status == 'confirmed' %}
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-400/90 text-white" title="{{ sale.get_status_display }}">
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M10 2a1 1 0 01.894.553l7 14A1 1 0 0117 18H3a1 1 0 01-.894-1.447l7-14A1 1 0 0110 2zM9 7v4h2V7H9zm0 6v2h2v-2H9z" />
+                    </svg>
+                  </span>
+                {% else %}
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-400" title="{{ sale.get_status_display }}">
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <circle cx="10" cy="10" r="4" />
+                    </svg>
+                  </span>
+                {% endif %}
+              </td>
               <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ sale.get_payment_condition_display }}</td>
               <td class="px-4 py-3 text-right font-semibold text-slate-900">{{ sale.total_amount|money_co }}</td>
               <td class="px-4 py-3 text-right text-slate-600">{{ sale.payments_total|money_co }}</td>
+              <td class="px-4 py-3 text-sm text-slate-600">
+                {% if sale.annotated_last_payment %}
+                  {{ sale.annotated_last_payment|date:"d/m/Y" }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
               <td class="px-4 py-3 text-right font-semibold {% if sale.balance_due > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
                 {{ sale.balance_due|money_co }}
-              </td>
-              <td class="px-4 py-3">
-                {{ sale.inventory_destination_label|default:"—" }}
-              </td>
-              <td class="px-4 py-3">
-                {{ sale.seller.get_full_name|default:sale.seller.get_username }}
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2 text-sm">
@@ -122,4 +411,5 @@
       </table>
     </div>
   </section>
+  <script src="{% static 'administration/js/sales-filters.js' %}" defer></script>
 {% endblock %}

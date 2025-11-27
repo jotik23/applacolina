@@ -14,7 +14,8 @@ from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import DateField, DecimalField, F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce, Greatest
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect
@@ -64,6 +65,8 @@ from .models import (
     PurchaseRequest,
     PurchasingExpenseType,
     Sale,
+    SaleItem,
+    SalePayment,
     Supplier,
     SupportDocumentType,
 )
@@ -137,21 +140,85 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        filters = self._get_filter_payload()
+        filters_query = self._build_filter_querystring()
+        sales_queryset = self._get_sales_queryset()
+        current_sort = getattr(self, "_current_sort_value", "")
         context.update(
             {
                 "administration_active_submenu": "sales",
-                "sales": self._get_sales_queryset(),
+                "sales": sales_queryset,
                 "import_form": getattr(self, "_import_form", SaleImportForm()),
+                "sales_filters": filters,
+                "has_active_filters": self._has_active_filters(filters),
+                "status_filter_options": self._status_filter_options(),
+                "payment_condition_options": self._payment_condition_options(),
+                "warehouse_filter_options": self._warehouse_filter_options(),
+                "current_sort": current_sort,
+                "sort_state": self._build_sort_state(current_sort, filters_query),
+                "base_filters_query": filters_query,
+                "list_base_path": reverse("administration:sales"),
+                "customer_suggestions": self._customer_suggestions(),
+                "sales_totals": self._compute_sales_totals(sales_queryset),
             }
         )
         return context
 
     def _get_sales_queryset(self):
-        return (
+        decimal_field = DecimalField(max_digits=14, decimal_places=2)
+        zero_value = Value(Decimal("0.00"), output_field=decimal_field)
+        subtotal_subquery = (
+            SaleItem.objects.filter(sale_id=OuterRef("pk"))
+            .values("sale_id")
+            .annotate(total=Sum("subtotal"))
+            .values("total")
+        )
+        payments_subquery = (
+            SalePayment.objects.filter(sale_id=OuterRef("pk"))
+            .values("sale_id")
+            .annotate(total=Sum("amount"))
+            .values("total")
+        )
+        last_payment_subquery = (
+            SalePayment.objects.filter(sale_id=OuterRef("pk"))
+            .order_by("-date", "-id")
+            .values("date")[:1]
+        )
+        queryset = (
             Sale.objects.select_related("customer", "seller")
             .prefetch_related("payments", "items")
-            .order_by("-date", "-id")
+            .annotate(
+                annotated_subtotal=Coalesce(
+                    Subquery(subtotal_subquery, output_field=decimal_field),
+                    zero_value,
+                ),
+                annotated_payments_total=Coalesce(
+                    Subquery(payments_subquery, output_field=decimal_field),
+                    zero_value,
+                ),
+            )
+            .annotate(
+                annotated_total_amount=Greatest(F("annotated_subtotal") - F("discount_amount"), zero_value),
+            )
+            .annotate(
+                annotated_balance_due=Greatest(
+                    F("annotated_total_amount") - F("annotated_payments_total"),
+                    zero_value,
+                )
+            )
+            .annotate(
+                annotated_last_payment=Subquery(
+                    last_payment_subquery,
+                    output_field=DateField(),
+                )
+            )
         )
+        queryset = self._apply_filters(queryset)
+        ordering, current_sort = self._get_sorting()
+        self._current_sort_value = current_sort
+        if ordering:
+            queryset = queryset.order_by(*ordering)
+        return queryset
 
     def _handle_delete(self, request: HttpRequest) -> HttpResponse:
         sale_id = request.POST.get("sale_id")
@@ -194,8 +261,180 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             messages.warning(
                 request,
                 f"{len(issues)} fila(s) se omitieron durante la importación. Ejemplos: {preview}",
-            )
+        )
         return redirect("administration:sales")
+
+    def _get_filter_payload(self) -> Dict[str, Any]:
+        if hasattr(self, "_filter_payload"):
+            return self._filter_payload
+        params = getattr(self.request, "GET", QueryDict("", mutable=False))
+        start_date_raw = (params.get("start_date") or "").strip()
+        end_date_raw = (params.get("end_date") or "").strip()
+        start_date = parse_date(start_date_raw) if start_date_raw else None
+        end_date = parse_date(end_date_raw) if end_date_raw else None
+        payment_conditions = []
+        allowed_payments = {Sale.PaymentCondition.CASH, Sale.PaymentCondition.CREDIT}
+        for value in params.getlist("payment_condition"):
+            if value in allowed_payments and value not in payment_conditions:
+                payment_conditions.append(value)
+        status_filters = []
+        allowed_statuses = {"paid", "pending"}
+        for value in params.getlist("status"):
+            if value in allowed_statuses and value not in status_filters:
+                status_filters.append(value)
+        customer_query = (params.get("customer") or "").strip()
+        warehouse = params.get("warehouse") or ""
+        allowed_warehouses = {choice[0] for choice in EggDispatchDestination.choices if choice[0]}
+        if warehouse and warehouse not in allowed_warehouses:
+            warehouse = ""
+        payload = {
+            "payment_conditions": payment_conditions,
+            "status": status_filters,
+            "customer_query": customer_query,
+            "warehouse": warehouse,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+        self._filter_payload = payload
+        return payload
+
+    def _build_filter_querystring(self) -> str:
+        params = self.request.GET.copy()
+        if "sort" in params:
+            del params["sort"]
+        return params.urlencode()
+
+    def _get_sorting(self) -> tuple[list[str], str]:
+        sort_param = (self.request.GET.get("sort") or "").strip()
+        direction = "-" if sort_param.startswith("-") else ""
+        key = sort_param.lstrip("-")
+        sort_map = self._sort_field_map()
+        fields = sort_map.get(key)
+        default_order = ["-date", "-id"]
+        if not fields:
+            return default_order, ""
+        ordering = [f"{direction}{field}" for field in fields]
+        ordering.extend(default_order)
+        sanitized = f"{direction}{key}" if direction else key
+        return ordering, sanitized
+
+    def _sort_field_map(self) -> dict[str, tuple[str, ...]]:
+        return {
+            "date": ("date",),
+            "customer": ("customer__name", "customer__tax_id"),
+            "status": ("status",),
+            "payment_condition": ("payment_condition",),
+            "total": ("annotated_total_amount",),
+            "payments": ("annotated_payments_total",),
+             "last_payment": ("annotated_last_payment",),
+            "balance": ("annotated_balance_due",),
+        }
+
+    def _build_sort_state(self, current_sort: str, base_query: str) -> dict[str, dict[str, Any]]:
+        state: dict[str, dict[str, Any]] = {}
+        for key in self._sort_field_map().keys():
+            is_active = current_sort in {key, f"-{key}"}
+            direction = ""
+            if is_active:
+                direction = "desc" if current_sort.startswith("-") else "asc"
+            next_sort: str = key
+            if current_sort == key:
+                next_sort = f"-{key}"
+            elif current_sort == f"-{key}":
+                next_sort = ""
+            if next_sort:
+                if base_query:
+                    target_query = f"{base_query}&sort={next_sort}"
+                else:
+                    target_query = f"sort={next_sort}"
+            else:
+                target_query = base_query
+            state[key] = {
+                "is_active": is_active,
+                "direction": direction,
+                "next": next_sort,
+                "query": target_query,
+            }
+        return state
+
+    def _apply_filters(self, queryset):
+        filters = self._get_filter_payload()
+        if filters["payment_conditions"]:
+            queryset = queryset.filter(payment_condition__in=filters["payment_conditions"])
+        status_values = self._map_status_filters(filters["status"])
+        if status_values:
+            queryset = queryset.filter(status__in=status_values)
+        customer_query = filters["customer_query"]
+        if customer_query:
+            queryset = queryset.filter(
+                Q(customer__name__icontains=customer_query) | Q(customer__tax_id__icontains=customer_query)
+            )
+        warehouse = filters["warehouse"]
+        if warehouse:
+            queryset = queryset.filter(warehouse_destination=warehouse)
+        start_date = filters.get("start_date")
+        end_date = filters.get("end_date")
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        return queryset
+
+    def _map_status_filters(self, filters: list[str]) -> list[str]:
+        statuses: set[str] = set()
+        if "paid" in filters:
+            statuses.add(Sale.Status.PAID)
+        if "pending" in filters:
+            statuses.update({Sale.Status.CONFIRMED, Sale.Status.DRAFT})
+        return list(statuses)
+
+    def _has_active_filters(self, filters: Dict[str, Any]) -> bool:
+        return any(
+            [
+                bool(filters["payment_conditions"]),
+                bool(filters["status"]),
+                bool(filters["customer_query"]),
+                bool(filters["warehouse"]),
+            ]
+        )
+
+    def _status_filter_options(self) -> list[Dict[str, str]]:
+        return [
+            {"value": "pending", "label": "Saldo pendiente"},
+            {"value": "paid", "label": "Pagadas"},
+        ]
+
+    def _payment_condition_options(self) -> list[Dict[str, str]]:
+        return [
+            {"value": Sale.PaymentCondition.CREDIT, "label": "Crédito"},
+            {"value": Sale.PaymentCondition.CASH, "label": "Contado"},
+        ]
+
+    def _warehouse_filter_options(self) -> list[Dict[str, str]]:
+        return [
+            {"value": code, "label": label}
+            for code, label in EggDispatchDestination.choices
+            if code
+        ]
+
+    def _customer_suggestions(self) -> list[dict[str, str]]:
+        return list(
+            Supplier.objects.order_by("name")
+            .values("id", "name", "tax_id")
+        )
+
+    def _compute_sales_totals(self, queryset):
+        aggregates = queryset.aggregate(
+            total=Sum("annotated_total_amount"),
+            payments=Sum("annotated_payments_total"),
+            balance=Sum("annotated_balance_due"),
+        )
+        zero = Decimal("0.00")
+        return {
+            "total": aggregates.get("total") or zero,
+            "payments": aggregates.get("payments") or zero,
+            "balance": aggregates.get("balance") or zero,
+        }
 
 
 class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
