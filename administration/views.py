@@ -67,6 +67,7 @@ from .models import (
     Sale,
     SaleItem,
     SalePayment,
+    SaleProductType,
     Supplier,
     SupportDocumentType,
 )
@@ -153,9 +154,10 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 "has_active_filters": self._has_active_filters(filters),
                 "status_filter_options": self._status_filter_options(),
                 "payment_condition_options": self._payment_condition_options(),
-                "warehouse_filter_options": self._warehouse_filter_options(),
+                "product_type_options": self._product_type_filter_options(),
                 "month_filter_options": self._month_filter_options(),
                 "active_month_filter": filters.get("month"),
+                "active_product_types": filters.get("product_types") or [],
                 "current_sort": current_sort,
                 "sort_state": self._build_sort_state(current_sort, filters_query),
                 "base_filters_query": filters_query,
@@ -297,18 +299,19 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             if value in allowed_statuses and value not in status_filters:
                 status_filters.append(value)
         customer_query = (params.get("customer") or "").strip()
-        warehouse = params.get("warehouse") or ""
-        allowed_warehouses = {choice[0] for choice in EggDispatchDestination.choices if choice[0]}
-        if warehouse and warehouse not in allowed_warehouses:
-            warehouse = ""
+        product_types = []
+        allowed_product_types = {choice[0] for choice in SaleProductType.choices}
+        for value in params.getlist("product_types"):
+            if value in allowed_product_types and value not in product_types:
+                product_types.append(value)
         payload = {
             "payment_conditions": payment_conditions,
             "status": status_filters,
             "customer_query": customer_query,
-            "warehouse": warehouse,
             "start_date": start_date,
             "end_date": end_date,
             "month": month_filter,
+            "product_types": product_types,
         }
         self._filter_payload = payload
         return payload
@@ -384,9 +387,6 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             queryset = queryset.filter(
                 Q(customer__name__icontains=customer_query) | Q(customer__tax_id__icontains=customer_query)
             )
-        warehouse = filters["warehouse"]
-        if warehouse:
-            queryset = queryset.filter(warehouse_destination=warehouse)
         start_date = filters.get("start_date")
         end_date = filters.get("end_date")
         month_value = filters.get("month")
@@ -405,6 +405,9 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             queryset = queryset.filter(date__gte=start_date)
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
+        product_types = filters.get("product_types")
+        if product_types:
+            queryset = queryset.filter(items__product_type__in=product_types).distinct()
         return queryset
 
     def _map_status_filters(self, filters: list[str]) -> list[str]:
@@ -421,7 +424,10 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 bool(filters["payment_conditions"]),
                 bool(filters["status"]),
                 bool(filters["customer_query"]),
-                bool(filters["warehouse"]),
+                bool(filters.get("start_date")),
+                bool(filters.get("end_date")),
+                bool(filters.get("month")),
+                bool(filters.get("product_types")),
             ]
         )
 
@@ -437,11 +443,10 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             {"value": Sale.PaymentCondition.CASH, "label": "Contado"},
         ]
 
-    def _warehouse_filter_options(self) -> list[Dict[str, str]]:
+    def _product_type_filter_options(self) -> list[Dict[str, str]]:
         return [
             {"value": code, "label": label}
-            for code, label in EggDispatchDestination.choices
-            if code
+            for code, label in SaleProductType.choices
         ]
 
     def _month_filter_options(self) -> list[Dict[str, str]]:

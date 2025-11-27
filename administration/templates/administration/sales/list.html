@@ -13,7 +13,7 @@
           <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Cadena comercial</p>
           <h1 class="text-2xl font-semibold text-slate-900">Facturación</h1>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="flex flex-wrap items-end gap-3">
           <div class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600/90 to-emerald-500/80 px-4 py-2 text-xs font-semibold text-white shadow">
             <span class="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
               <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2 11a1 1 0 011-1h2.586l-1.293-1.293a1 1 0 111.414-1.414L8 9.586l2.293-2.293a1 1 0 111.414 1.414L9.414 11H12a1 1 0 110 2H3a1 1 0 01-1-1z"/></svg>
@@ -61,40 +61,64 @@
           <input type="hidden" name="sort" value="{{ current_sort }}">
         {% endif %}
         <div class="flex flex-wrap items-center gap-3">
-          <div class="flex flex-col gap-1">
-            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Condición</span>
-            <div class="flex flex-wrap gap-2">
-              {% for option in payment_condition_options %}
-                <label class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-slate-600">
-                  <input
-                    type="checkbox"
-                    name="payment_condition"
-                    value="{{ option.value }}"
-                    class="h-3 w-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                    {% if option.value in sales_filters.payment_conditions %}checked{% endif %}
-                  >
-                  <span>{{ option.label }}</span>
-                </label>
-              {% endfor %}
-            </div>
+          {% with payment_count=sales_filters.payment_conditions|length status_count=sales_filters.status|length %}
+          {% with filter_total=payment_count|add:status_count %}
+          <div class="flex w-56 flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Condición y estado</span>
+            <details class="relative w-full" data-filter-dropdown>
+              <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300">
+                <span>Selecciona filtros</span>
+                <span class="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                  {% if filter_total %}
+                    {{ filter_total }} seleccionados
+                  {% else %}
+                    Todos
+                  {% endif %}
+                  <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.975a.75.75 0 011.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                  </svg>
+                </span>
+              </summary>
+              <div class="absolute right-0 z-20 mt-2 w-64 rounded-2xl border border-slate-200 bg-white/95 p-3 text-[12px] text-slate-600 shadow-xl">
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Condición de pago</p>
+                  <div class="mt-2 grid gap-2">
+                    {% for option in payment_condition_options %}
+                      <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600">
+                        <input
+                          type="checkbox"
+                          name="payment_condition"
+                          value="{{ option.value }}"
+                          class="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          {% if option.value in sales_filters.payment_conditions %}checked{% endif %}
+                        >
+                        <span>{{ option.label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estado</p>
+                  <div class="mt-2 grid gap-2">
+                    {% for option in status_filter_options %}
+                      <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600">
+                        <input
+                          type="checkbox"
+                          name="status"
+                          value="{{ option.value }}"
+                          class="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          {% if option.value in sales_filters.status %}checked{% endif %}
+                        >
+                        <span>{{ option.label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
-          <div class="flex flex-col gap-1">
-            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Estado</span>
-            <div class="flex flex-wrap gap-2">
-              {% for option in status_filter_options %}
-                <label class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-slate-600">
-                  <input
-                    type="checkbox"
-                    name="status"
-                    value="{{ option.value }}"
-                    class="h-3 w-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                    {% if option.value in sales_filters.status %}checked{% endif %}
-                  >
-                  <span>{{ option.label }}</span>
-                </label>
-              {% endfor %}
-            </div>
-          </div>
+          {% endwith %}
+          {% endwith %}
           <label class="flex flex-col gap-1 relative w-48">
             <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mes</span>
             <select
@@ -109,6 +133,41 @@
               {% endfor %}
             </select>
           </label>
+          <div class="flex w-56 flex-col gap-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Tipos de producto</span>
+            <details class="relative w-full" data-filter-dropdown>
+              <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300">
+                <span>Selecciona tipos</span>
+                <span class="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                  {% if active_product_types %}
+                    {{ active_product_types|length }} seleccionados
+                  {% else %}
+                    Todos
+                  {% endif %}
+                  <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.975a.75.75 0 011.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                  </svg>
+                </span>
+              </summary>
+              <div class="absolute right-0 z-20 mt-2 max-h-56 w-64 rounded-2xl border border-slate-200 bg-white/95 p-3 text-[12px] text-slate-600 shadow-xl">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Filtra por tipo</p>
+                <div class="mt-2 grid grid-cols-2 gap-2 overflow-y-auto pr-1">
+                  {% for option in product_type_options %}
+                    <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600">
+                      <input
+                        type="checkbox"
+                        name="product_types"
+                        value="{{ option.value }}"
+                        class="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        {% if option.value in active_product_types %}checked{% endif %}
+                      >
+                      <span>{{ option.label }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </details>
+          </div>
           <label class="flex flex-col gap-1 relative w-56" data-customer-autocomplete-container>
             <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cliente</span>
             <input
@@ -124,20 +183,6 @@
               class="absolute z-10 mt-10 hidden w-full rounded-xl border border-slate-200 bg-white text-[12px] shadow-lg"
               data-customer-autocomplete-results
             ></div>
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Bodega</span>
-            <select
-              name="warehouse"
-              class="h-8 w-40 rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-            >
-              <option value="">Todas</option>
-              {% for option in warehouse_filter_options %}
-                <option value="{{ option.value }}" {% if option.value == sales_filters.warehouse %}selected{% endif %}>
-                  {{ option.label }}
-                </option>
-              {% endfor %}
-            </select>
           </label>
           <label class="flex flex-col gap-1">
             <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fecha inicio</span>
@@ -157,7 +202,7 @@
               class="h-8 rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
             >
           </label>
-          <div class="flex items-center gap-2 pt-5">
+          <div class="ml-auto flex items-center gap-2">
             <button
               type="submit"
               class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"

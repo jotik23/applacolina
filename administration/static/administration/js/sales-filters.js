@@ -81,18 +81,32 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    var scriptTag = document.getElementById('customer-suggestions-data');
-    if (!scriptTag) {
+  function initFilterDropdowns() {
+    var dropdowns = document.querySelectorAll('details[data-filter-dropdown]');
+    if (!dropdowns.length) {
       return;
     }
-    var suggestions;
+    document.addEventListener('click', function (event) {
+      dropdowns.forEach(function (dropdown) {
+        if (dropdown.hasAttribute('open') && !dropdown.contains(event.target)) {
+          dropdown.removeAttribute('open');
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var scriptTag = document.getElementById('customer-suggestions-data');
+    var suggestions = [];
     try {
-      suggestions = JSON.parse(scriptTag.textContent || '[]');
+      if (scriptTag) {
+        suggestions = JSON.parse(scriptTag.textContent || '[]');
+      }
     } catch (error) {
       suggestions = [];
     }
     var container = document.querySelector('[data-customer-autocomplete-container]');
     initAutocomplete(container, suggestions || []);
+    initFilterDropdowns();
   });
 })();
