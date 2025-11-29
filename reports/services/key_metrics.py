@@ -66,7 +66,7 @@ def build_key_metrics(start_date: date, end_date: date) -> KeyMetricsResult:
     metrics["average_product_prices"] = avg_price_rows
     metrics["units_summary"] = _units_summary(sale_items)
     metrics["price_history_series"] = _price_history_series(sale_items, avg_price_rows)
-    metrics["price_positioning"] = _price_positioning(sale_items, avg_price_rows)
+    metrics["price_positioning"] = _price_positioning(sale_items, avg_price_rows, sales)
     metrics["overdue_customers"] = _overdue_customers(sales)
     metrics["payment_speed"] = _payment_speed(sales)
     metrics["receivables_overview"] = _build_receivables_overview(
@@ -289,7 +289,7 @@ def _price_history_series(sale_items, avg_price_rows: list[dict[str, Any]]):
     return ordered_series
 
 
-def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
+def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]], sales: Iterable[Sale]):
     label_map = dict(SaleProductType.choices)
     reference_prices = {row["type"]: row["avg_price"] for row in avg_price_rows if row["avg_price"] > 0}
     if not reference_prices:
@@ -320,6 +320,34 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
     ]
 
     tracked_type_set = {meta["type"] for meta in type_meta}
+
+    customer_sales: dict[int, dict[str, Any]] = {}
+    overall_revenue = Decimal("0.00")
+    for sale in sales:
+        customer = getattr(sale, "customer", None)
+        if not customer:
+            continue
+        payload = customer_sales.setdefault(
+            customer.pk,
+            {
+                "revenue": Decimal("0.00"),
+                "balance": Decimal("0.00"),
+                "orders": 0,
+            },
+        )
+        net_total = getattr(sale, "annotated_total_amount", Decimal("0.00")) or Decimal("0.00")
+        balance = getattr(sale, "annotated_balance_due", Decimal("0.00")) or Decimal("0.00")
+        payload["revenue"] += net_total
+        payload["balance"] += balance
+        payload["orders"] += 1
+        overall_revenue += net_total
+    if overall_revenue > Decimal("0.00"):
+        for payload in customer_sales.values():
+            payload["share"] = (payload["revenue"] / overall_revenue) * Decimal("100")
+    else:
+        for payload in customer_sales.values():
+            payload["share"] = Decimal("0.00")
+
     customer_mix: dict[int, dict[str, Any]] = {}
     aggregates = (
         sale_items.filter(product_type__in=tracked_type_set)
@@ -361,7 +389,6 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
         "above": {"count": 0, "customers": []},
     }
     details: list[dict[str, Any]] = []
-    bucket_order = {"below": 0, "within": 1, "above": 2}
     tone_map = {
         "below": "text-rose-600",
         "within": "text-slate-700",
@@ -372,7 +399,7 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
         "within": "En línea",
         "above": "Mayor precio",
     }
-    for payload in customer_mix.values():
+    for customer_id, payload in customer_mix.items():
         expected = payload["expected"]
         actual = payload["actual"]
         if expected <= Decimal("0.00"):
@@ -394,8 +421,10 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
                 {
                     "type": meta["type"],
                     "value": detail["actual_avg"] if detail else None,
+                    "reference": meta["reference_avg"],
                 }
             )
+        sales_info = customer_sales.get(customer_id, {})
         details.append(
             {
                 "name": payload["name"],
@@ -407,14 +436,16 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
                 "delta_value": actual - expected,
                 "type_values": type_values,
                 "tone_class": tone_map[bucket],
-                "order": bucket_order[bucket],
+                "balance_due": sales_info.get("balance"),
+                "orders": sales_info.get("orders", 0),
+                "share": sales_info.get("share"),
             }
         )
 
-    details.sort(key=lambda row: (row["order"], row["delta_percentage"]))
+    details.sort(key=lambda row: row["delta_value"])
 
     baseline_values = [
-        {"type": meta["type"], "value": meta["reference_avg"]}
+        {"type": meta["type"], "value": meta["reference_avg"], "reference": meta["reference_avg"]}
         for meta in type_meta
     ]
     details.insert(
@@ -429,8 +460,10 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
             "delta_value": None,
             "type_values": baseline_values,
             "tone_class": "text-amber-900",
-            "order": -1,
             "is_baseline": True,
+            "balance_due": None,
+            "orders": None,
+            "share": None,
         },
     )
 
@@ -479,7 +512,7 @@ def _overdue_customers(sales: Iterable[Sale]) -> list[dict[str, Any]]:
         days_overdue = (today - due_date).days
         payload["oldest_due_days"] = max(payload["oldest_due_days"], days_overdue)
     ordered = sorted(rows.values(), key=lambda row: row["overdue_balance"], reverse=True)
-    return ordered[:8]
+    return ordered
 
 
 def _payment_speed(sales: Iterable[Sale]) -> dict[str, Any]:

@@ -217,4 +217,66 @@
       },
     });
   }
+
+  const parseLocalizedNumber = (value) => {
+    if (typeof value !== 'string') {
+      value = value?.toString() ?? '';
+    }
+    const cleaned = value.replace(/[^0-9,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.');
+    const parsed = parseFloat(cleaned);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const pricingTable = document.getElementById('price-positioning-table');
+  if (pricingTable) {
+    const headers = pricingTable.querySelectorAll('[data-sort-key]');
+    const tbody = pricingTable.querySelector('tbody');
+    const baselineRow = tbody ? tbody.querySelector('tr[data-baseline="true"]') : null;
+    const clearSortIndicators = () => {
+      headers.forEach((header) => header.removeAttribute('data-sort-direction'));
+    };
+
+    const getCellValue = (row, columnIndex, type) => {
+      const cell = row.children[columnIndex];
+      if (!cell) {
+        return type === 'number' ? 0 : '';
+      }
+      const text = cell.textContent.trim();
+      if (type === 'number') {
+        return parseLocalizedNumber(text);
+      }
+      return text.toLowerCase();
+    };
+
+    headers.forEach((header) => {
+      header.addEventListener('click', () => {
+        const columnIndex = Array.from(header.parentNode.children).indexOf(header);
+        const type = header.dataset.sortType || 'text';
+        const currentDirection = header.dataset.sortDirection === 'asc' ? 'asc' : 'desc';
+        const nextDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+        clearSortIndicators();
+        header.dataset.sortDirection = nextDirection;
+
+        const rows = Array.from(tbody.querySelectorAll('tr')).filter((row) => row.dataset.baseline !== 'true');
+        rows.sort((a, b) => {
+          const valueA = getCellValue(a, columnIndex, type);
+          const valueB = getCellValue(b, columnIndex, type);
+          let comparison = 0;
+          if (valueA < valueB) {
+            comparison = -1;
+          } else if (valueA > valueB) {
+            comparison = 1;
+          }
+          return nextDirection === 'asc' ? comparison : -comparison;
+        });
+
+        const orderedRows = [];
+        if (baselineRow) {
+          orderedRows.push(baselineRow);
+        }
+        rows.forEach((row) => orderedRows.push(row));
+        orderedRows.forEach((row) => tbody.appendChild(row));
+      });
+    });
+  }
 })();

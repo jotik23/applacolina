@@ -108,63 +108,9 @@
       </section>
     {% endwith %}
 
-    <section class="grid gap-6 xl:grid-cols-5">
-      <article class="xl:col-span-3 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
-        <header class="flex items-center justify-between gap-4">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Clientes prioritarios</p>
-            <h2 class="text-xl font-semibold text-slate-900">Ranking de compradores</h2>
-          </div>
-          <a href="{% url 'home:sales' %}" class="text-sm font-semibold text-brand transition hover:text-brand/80">Ir al módulo de ventas →</a>
-        </header>
-        <div class="mt-6 overflow-hidden rounded-2xl border border-slate-100">
-                    <table class="min-w-full divide-y divide-slate-100 text-sm">
-                      <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        <tr>
-                <th class="px-4 py-3">Cliente</th>
-                <th class="px-4 py-3 text-right">Ingresos</th>
-                <th class="px-4 py-3 text-right">Saldo</th>
-                <th class="px-4 py-3 text-right">Pedidos</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 bg-white">
-              {% if metrics.top_customers %}
-                {% for customer in metrics.top_customers|slice:":12" %}
-                  <tr class="hover:bg-slate-50/70">
-                    <td class="px-4 py-3">
-                      <div class="font-semibold text-slate-800">{{ customer.name }}</div>
-                      <div class="text-xs text-slate-500">{{ customer.share|number_format:1 }}% del ingreso</div>
-                    </td>
-                    <td class="px-4 py-3 text-right font-semibold text-slate-900">{{ customer.total_amount|peso }}</td>
-                    <td class="px-4 py-3 text-right text-amber-600">{{ customer.balance_due|peso }}</td>
-                    <td class="px-4 py-3 text-right text-slate-500">{{ customer.orders|number_format }}</td>
-                  </tr>
-                {% endfor %}
-              {% else %}
-                <tr>
-                  <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-500">No hay ventas registradas en el rango seleccionado.</td>
-                </tr>
-              {% endif %}
-            </tbody>
-          </table>
-        </div>
-      </article>
-      <article class="xl:col-span-2 grid gap-6">
-        <div class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
-          <header class="flex items-center justify-between">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Dinámica de precios</p>
-              <h2 class="text-lg font-semibold text-slate-900">Histórico por tipo</h2>
-            </div>
-          </header>
-          <div class="mt-4">
-            <canvas id="chart-price-history" height="220" class="w-full"></canvas>
-            {% if not metrics.price_history_series %}
-              <p class="mt-3 rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">Aún no hay suficientes datos para graficar.</p>
-            {% endif %}
-          </div>
-        </div>
-        <div class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+    <section class="grid gap-6 xl:grid-cols-2">
+      <div class="space-y-6">
+        <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
           <header>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Precio promedio por tipo</p>
             <h2 class="text-lg font-semibold text-slate-900">Mix vendido</h2>
@@ -187,121 +133,43 @@
               <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No hay registros de precios en este rango.</p>
             {% endif %}
           </div>
-        </div>
-      </article>
-    </section>
-
-    <section class="space-y-6">
-      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
-        <header class="flex items-center justify-between">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Posicionamiento</p>
-            <h2 class="text-lg font-semibold text-slate-900">Comportamiento frente al precio promedio</h2>
-          </div>
-        </header>
-        <div class="mt-4">
-          <div class="overflow-hidden rounded-2xl border border-slate-100">
-            {% if metrics.price_positioning.details %}
-              <div class="max-h-96 overflow-auto">
-                <table class="min-w-full divide-y divide-slate-100 text-sm">
-                  <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th class="px-4 py-3">Cliente</th>
-                      <th class="px-4 py-3">Segmento</th>
-                      {% for column in metrics.price_positioning.type_meta %}
-                        <th class="px-4 py-3 text-right">{{ column.label }}</th>
-                      {% endfor %}
-                      <th class="px-4 py-3 text-right">Ventas reales</th>
-                      <th class="px-4 py-3 text-right">Valor esperado</th>
-                      <th class="px-4 py-3 text-right">Delta %</th>
-                      <th class="px-4 py-3 text-right">Delta $</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-100 bg-white">
-                    {% for entry in metrics.price_positioning.details %}
-                      {% with tone_class=entry.tone_class|default:"text-slate-700" %}
-                        <tr class="{% if entry.is_baseline %}bg-amber-50/80{% else %}hover:bg-slate-50/70{% endif %}">
-                          <td class="px-4 py-3 font-semibold text-slate-800">
-                            {% if entry.is_baseline %}
-                              <span class="text-xs uppercase tracking-wide text-amber-800">&mdash;</span>
-                            {% else %}
-                              {{ entry.name }}
-                            {% endif %}
-                          </td>
-                          <td class="px-4 py-3 text-sm text-slate-500">{{ entry.segment_label }}</td>
-                          {% for value in entry.type_values %}
-                            <td class="px-4 py-3 text-right text-xs font-semibold {{ tone_class }}">
-                              {% if value.value is not None %}
-                                {{ value.value|number_format:0 }}
-                              {% else %}
-                                <span class="text-slate-300">&mdash;</span>
-                              {% endif %}
-                            </td>
-                          {% endfor %}
-                          <td class="px-4 py-3 text-right text-sm font-semibold {{ tone_class }}">
-                            {% if entry.actual_total is not None %}
-                              {{ entry.actual_total|number_format }}
-                            {% else %}
-                              <span class="text-slate-300">&mdash;</span>
-                            {% endif %}
-                          </td>
-                          <td class="px-4 py-3 text-right text-sm {{ tone_class }}">
-                            {% if entry.expected_total is not None %}
-                              {{ entry.expected_total|number_format }}
-                            {% else %}
-                              <span class="text-slate-300">&mdash;</span>
-                            {% endif %}
-                          </td>
-                          <td class="px-4 py-3 text-right text-sm {{ tone_class }}">
-                            {% if entry.delta_percentage is not None %}
-                              {{ entry.delta_percentage|number_format:1 }}%
-                            {% else %}
-                              <span class="text-slate-300">&mdash;</span>
-                            {% endif %}
-                          </td>
-                          <td class="px-4 py-3 text-right text-sm {{ tone_class }}">
-                            {% if entry.delta_value is not None %}
-                              {{ entry.delta_value|number_format }}
-                            {% else %}
-                              <span class="text-slate-300">&mdash;</span>
-                            {% endif %}
-                          </td>
-                        </tr>
-                      {% endwith %}
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-            {% else %}
-              <p class="px-4 py-6 text-center text-sm text-slate-500">Se necesitan más ventas para comparar los precios por cliente.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Dinámica de precios</p>
+              <h2 class="text-lg font-semibold text-slate-900">Histórico por tipo</h2>
+            </div>
+          </header>
+          <div class="mt-4">
+            <canvas id="chart-price-history" height="220" class="w-full"></canvas>
+            {% if not metrics.price_history_series %}
+              <p class="mt-3 rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">Aún no hay suficientes datos para graficar.</p>
             {% endif %}
           </div>
-        </div>
-        <div class="mt-6 space-y-3">
-          {% for segment in metrics.price_positioning.segments %}
-            <div class="rounded-2xl border border-slate-100 px-4 py-3">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm font-semibold text-slate-800">
-                    {% if segment.segment == "below" %}Menor precio{% elif segment.segment == "above" %}Mayor precio{% else %}En línea{% endif %}
-                  </p>
-                  <p class="text-xs text-slate-500">{{ segment.sample|join:", " }}</p>
-                </div>
-                <div class="text-right">
-                  <p class="text-base font-semibold text-brand">{{ segment.count|number_format }}</p>
-                  <p class="text-xs text-slate-400">{{ segment.share|number_format:1 }}% clientes</p>
-                </div>
-              </div>
+        </article>
+        <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Operación logística</p>
+              <h2 class="text-lg font-semibold text-slate-900">Despachos vs ventas</h2>
             </div>
-          {% empty %}
-            <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">Se necesitan más ventas para comparar los precios.</p>
-          {% endfor %}
-        </div>
-      </article>
-    </section>
-
-    <section class="grid gap-6 lg:grid-cols-2">
-      {% with receivables=metrics.receivables_overview %}
+            <div class="text-right text-sm text-slate-500">
+              <p>Total despachado: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_dispatched|number_format }}</span> cartones</p>
+              <p>Total vendido: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_sold|number_format }}</span> cartones</p>
+              <p>Diferencial: <span class="font-semibold text-amber-600">{{ metrics.dispatch_vs_sales.gap|number_format }}</span></p>
+            </div>
+          </header>
+          <div class="mt-4">
+            <canvas id="chart-dispatch-vs-sales" height="260" class="w-full"></canvas>
+            {% if not metrics.dispatch_vs_sales.per_type %}
+              <p class="mt-3 rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No hay movimientos de venta o despacho en el periodo.</p>
+            {% endif %}
+          </div>
+        </article>
+      </div>
+      <div class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+        {% with receivables=metrics.receivables_overview %}
         <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5 lg:col-span-1">
           <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -320,38 +188,36 @@
             <div class="">
               <div class="overflow-hidden rounded-2xl border border-slate-100">
                 {% if receivables.rows %}
-                  <div class="max-h-80 overflow-auto">
-                    <table class="min-w-full divide-y divide-slate-100 text-sm">
-                      <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        <tr>
-                          <th class="px-4 py-3">Cliente</th>
-                          <th class="px-4 py-3 text-right">Saldo vencido</th>
-                          <th class="px-4 py-3 text-right">Días en mora</th>
-                          <th class="px-4 py-3 text-right">Promedio cierre</th>
+                  <table class="min-w-full divide-y divide-slate-100 text-sm">
+                    <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <tr>
+                        <th class="px-4 py-3">Cliente</th>
+                        <th class="px-4 py-3 text-right">Saldo vencido</th>
+                        <th class="px-4 py-3 text-right">Días en mora</th>
+                        <th class="px-4 py-3 text-right">Promedio cierre</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                      {% for row in receivables.rows %}
+                        <tr class="hover:bg-slate-50/70">
+                          <td class="px-4 py-3">
+                            <p class="font-semibold text-slate-800">{{ row.name }}</p>
+                            <p class="text-xs text-slate-500">{{ row.open_invoices|number_format }} factura{% if row.open_invoices != 1 %}s{% endif %}</p>
+                          </td>
+                          <td class="px-4 py-3 text-right font-semibold text-rose-600">{{ row.overdue_balance|peso }}</td>
+                          <td class="px-4 py-3 text-right text-slate-500">{{ row.oldest_due_days|number_format }} días</td>
+                          <td class="px-4 py-3 text-right">
+                            {% if row.avg_days %}
+                              <div class="font-semibold text-slate-800">{{ row.avg_days|number_format:1 }} días</div>
+                              <p class="text-[11px] text-slate-400">{{ row.paid_sales|number_format }} factura{% if row.paid_sales != 1 %}s{% endif %} pagada{% if row.paid_sales != 1 %}s{% endif %}</p>
+                            {% else %}
+                              <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Sin histórico</span>
+                            {% endif %}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody class="divide-y divide-slate-100 bg-white">
-                        {% for row in receivables.rows %}
-                          <tr class="hover:bg-slate-50/70">
-                            <td class="px-4 py-3">
-                              <p class="font-semibold text-slate-800">{{ row.name }}</p>
-                              <p class="text-xs text-slate-500">{{ row.open_invoices|number_format }} factura{% if row.open_invoices != 1 %}s{% endif %}</p>
-                            </td>
-                            <td class="px-4 py-3 text-right font-semibold text-rose-600">{{ row.overdue_balance|peso }}</td>
-                            <td class="px-4 py-3 text-right text-slate-500">{{ row.oldest_due_days|number_format }} días</td>
-                            <td class="px-4 py-3 text-right">
-                              {% if row.avg_days %}
-                                <div class="font-semibold text-slate-800">{{ row.avg_days|number_format:1 }} días</div>
-                                <p class="text-[11px] text-slate-400">{{ row.paid_sales|number_format }} factura{% if row.paid_sales != 1 %}s{% endif %} pagada{% if row.paid_sales != 1 %}s{% endif %}</p>
-                              {% else %}
-                                <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Sin histórico</span>
-                              {% endif %}
-                            </td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
+                      {% endfor %}
+                    </tbody>
+                  </table>
                 {% else %}
                   <p class="px-4 py-6 text-center text-sm text-emerald-700">No existen saldos vencidos en el rango analizado.</p>
                 {% endif %}
@@ -360,23 +226,122 @@
           </div>
         </article>
       {% endwith %}
-      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5 lg:col-span-1">
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
         <header class="flex items-center justify-between">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Operación logística</p>
-            <h2 class="text-lg font-semibold text-slate-900">Despachos vs ventas</h2>
-          </div>
-          <div class="text-right text-sm text-slate-500">
-            <p>Total despachado: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_dispatched|number_format }}</span> cartones</p>
-            <p>Total vendido: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_sold|number_format }}</span> cartones</p>
-            <p>Diferencial: <span class="font-semibold text-amber-600">{{ metrics.dispatch_vs_sales.gap|number_format }}</span></p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Posicionamiento</p>
+            <h2 class="text-lg font-semibold text-slate-900">Comportamiento frente al precio promedio</h2>
           </div>
         </header>
         <div class="mt-4">
-          <canvas id="chart-dispatch-vs-sales" height="260" class="w-full"></canvas>
-          {% if not metrics.dispatch_vs_sales.per_type %}
-            <p class="mt-3 rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No hay movimientos de venta o despacho en el periodo.</p>
-          {% endif %}
+          <div class="overflow-hidden rounded-2xl border border-slate-100">
+            {% if metrics.price_positioning.details %}
+              <table id="price-positioning-table" class="min-w-full divide-y divide-slate-100 text-sm" data-sortable-table>
+                <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th class="px-4 py-3 cursor-pointer select-none" data-sort-key="customer" data-sort-type="text">Cliente</th>
+                    <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="actual" data-sort-type="number">Ventas reales</th>
+                    <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="balance" data-sort-type="number">Saldo</th>
+                    <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="orders" data-sort-type="number">Pedidos</th>
+                    <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="expected" data-sort-type="number">Valor esperado</th>
+                    <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="delta-percentage" data-sort-type="number">Delta %</th>
+                    <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="delta-value" data-sort-type="number">Delta $</th>
+                    {% for column in metrics.price_positioning.type_meta %}
+                      <th class="px-4 py-3 text-right cursor-pointer select-none" data-sort-key="type-{{ column.type }}" data-sort-type="number">{{ column.label }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 bg-white">
+                  {% for entry in metrics.price_positioning.details %}
+                      <tr class="{% if entry.is_baseline %}bg-amber-50/80{% else %}hover:bg-slate-50/70{% endif %}" data-baseline="{% if entry.is_baseline %}true{% else %}false{% endif %}">
+                        <td class="px-4 py-3 font-semibold text-slate-800">
+                          {% if entry.is_baseline %}
+                            <span class="text-xs uppercase tracking-wide text-amber-800">&mdash;</span>
+                          {% else %}
+                            <div>{{ entry.name }}</div>
+                            {% if entry.share is not None %}
+                              <p class="text-xs text-slate-500">{{ entry.share|number_format:1 }}% del ingreso</p>
+                            {% endif %}
+                          {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                          {% if entry.actual_total is not None %}
+                            {{ entry.actual_total|number_format }}
+                          {% else %}
+                            <span class="text-slate-300">&mdash;</span>
+                          {% endif %}
+                        </td>
+                          <td class="px-4 py-3 text-right text-sm text-slate-900">
+                            {% if entry.balance_due is not None %}
+                              {{ entry.balance_due|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm text-slate-900">
+                            {% if entry.orders is not None %}
+                              {{ entry.orders|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm text-slate-900">
+                            {% if entry.expected_total is not None %}
+                              {{ entry.expected_total|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm {% if entry.delta_percentage is not None %}{% if entry.delta_percentage > 0 %}text-emerald-600{% elif entry.delta_percentage < 0 %}text-rose-600{% else %}text-slate-900{% endif %}{% else %}text-slate-900{% endif %}">
+                            {% if entry.delta_percentage is not None %}
+                              {{ entry.delta_percentage|number_format:1 }}%
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm {% if entry.delta_value is not None %}{% if entry.delta_value > 0 %}text-emerald-600{% elif entry.delta_value < 0 %}text-rose-600{% else %}text-slate-900{% endif %}{% else %}text-slate-900{% endif %}">
+                            {% if entry.delta_value is not None %}
+                              {{ entry.delta_value|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          {% for value in entry.type_values %}
+                            <td class="px-4 py-3 text-right text-xs font-semibold">
+                              {% if value.value is not None %}
+                                {% if entry.is_baseline %}
+                                  <span class="text-amber-900">{{ value.value|number_format:0 }}</span>
+                                {% else %}
+                                  {% if value.reference is not None %}
+                                    {% if value.value > value.reference %}
+                                      <span class="text-emerald-600">{{ value.value|number_format:0 }}</span>
+                                    {% elif value.value < value.reference %}
+                                      <span class="text-rose-600">{{ value.value|number_format:0 }}</span>
+                                    {% else %}
+                                      <span class="text-slate-900">{{ value.value|number_format:0 }}</span>
+                                    {% endif %}
+                                  {% else %}
+                                    <span class="text-slate-500">{{ value.value|number_format:0 }}</span>
+                                  {% endif %}
+                                {% endif %}
+                              {% else %}
+                                <span class="text-slate-300">&mdash;</span>
+                              {% endif %}
+                            </td>
+                          {% endfor %}
+                        </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="px-4 py-6 text-center text-sm text-slate-500">Se necesitan más ventas para comparar los precios por cliente.</p>
+            {% endif %}
+          </div>
         </div>
       </article>
     </section>
