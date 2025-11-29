@@ -25,7 +25,7 @@ class InfrastructureViewTests(TestCase):
         self.client.force_login(self.user)
 
     def test_get_infrastructure_page(self) -> None:
-        response = self.client.get(reverse("production:infrastructure"))
+        response = self.client.get(reverse("configuration:infrastructure"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "production/infrastructure.html")
         self.assertIn("farm_form", response.context)
@@ -33,18 +33,18 @@ class InfrastructureViewTests(TestCase):
 
     def test_create_farm_from_dashboard(self) -> None:
         response = self.client.post(
-            reverse("production:infrastructure"),
+            reverse("configuration:infrastructure"),
             {"form_type": "farm", "name": "Granja Andina"},
         )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Farm.objects.filter(name="Granja Andina").exists())
-        expected_prefix = reverse("production:infrastructure")
+        expected_prefix = reverse("configuration:infrastructure")
         self.assertTrue(response.url.startswith(f"{expected_prefix}?panel=farm"))
 
     def test_create_chicken_house(self) -> None:
         farm = Farm.objects.create(name="Granja Central")
         response = self.client.post(
-            reverse("production:infrastructure"),
+            reverse("configuration:infrastructure"),
             {
                 "form_type": "chicken_house",
                 "farm": farm.pk,
@@ -60,7 +60,7 @@ class InfrastructureViewTests(TestCase):
         farm = Farm.objects.create(name="Granja Central")
         barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
         response = self.client.post(
-            reverse("production:infrastructure"),
+            reverse("configuration:infrastructure"),
             {
                 "form_type": "room",
                 "chicken_house": barn.pk,
@@ -79,9 +79,9 @@ class InfrastructureViewTests(TestCase):
         room = Room.objects.create(chicken_house=barn, name="Salón 1", area_m2=50)
 
         urls = {
-            "farm": reverse("production:farm-update", args=[farm.pk]),
-            "chicken_house": reverse("production:chicken-house-update", args=[barn.pk]),
-            "room": reverse("production:room-update", args=[room.pk]),
+            "farm": reverse("configuration:farm-update", args=[farm.pk]),
+            "chicken_house": reverse("configuration:chicken-house-update", args=[barn.pk]),
+            "room": reverse("configuration:room-update", args=[room.pk]),
         }
 
         for label, url in urls.items():
@@ -95,12 +95,12 @@ class InfrastructureViewTests(TestCase):
         barn = ChickenHouse.objects.create(farm=farm, name="Galpón A")
         room = Room.objects.create(chicken_house=barn, name="Salón 1", area_m2=50)
 
-        response = self.client.post(reverse("production:room-delete", args=[room.pk]))
-        self.assertRedirects(response, reverse("production:infrastructure"))
+        response = self.client.post(reverse("configuration:room-delete", args=[room.pk]))
+        self.assertRedirects(response, reverse("configuration:infrastructure"))
         self.assertFalse(Room.objects.filter(pk=room.pk).exists())
 
     def test_stats_compute_area_from_rooms(self) -> None:
-        baseline = self.client.get(reverse("production:infrastructure"))
+        baseline = self.client.get(reverse("configuration:infrastructure"))
         baseline_total = baseline.context["infrastructure_stats"]["total_house_area"]
 
         farm = Farm.objects.create(name="Granja Central")
@@ -109,7 +109,7 @@ class InfrastructureViewTests(TestCase):
         Room.objects.create(chicken_house=primary_barn, name="Salón 1", area_m2=50)
         Room.objects.create(chicken_house=secondary_barn, name="Salón 2", area_m2=75)
 
-        response = self.client.get(reverse("production:infrastructure"))
+        response = self.client.get(reverse("configuration:infrastructure"))
         stats = response.context["infrastructure_stats"]
 
         self.assertEqual(stats["total_house_area"], baseline_total + Decimal("125"))

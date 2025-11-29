@@ -1,8 +1,8 @@
 <nav class="border-b border-slate-200/70" data-app-submenu>
-  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
+  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500 snap-x snap-mandatory">
     <a
       href="{% url 'administration:sales' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'sales' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'sales' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'sales' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'sales' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
@@ -10,7 +10,7 @@
     </a>
     <a
       href="{% url 'administration:egg-dispatch-list' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'dispatches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'dispatches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'dispatches' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'dispatches' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
@@ -18,23 +18,15 @@
     </a>
     <a
       href="{% url 'administration:purchases' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'purchases' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'purchases' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'purchases' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'purchases' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
       Compras
     </a>
     <a
-      href="{% url 'administration:purchases_products' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'products' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'products' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'products' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
-      Productos
-    </a>
-    <a
       href="{% url 'administration:purchases_payroll' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'payroll' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'payroll' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'payroll' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'payroll' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
@@ -42,19 +34,11 @@
     </a>
     <a
       href="{% url 'administration:purchases_suppliers' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'suppliers' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'suppliers' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'suppliers' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'suppliers' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
       Terceros
-    </a>
-    <a
-      href="{% url 'administration:purchases_configuration' %}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'configuration' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'configuration' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'configuration' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
-      Configuración
     </a>
   </div>
 </nav>

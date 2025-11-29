@@ -57,4 +57,4 @@ class ProductManagementViewTests(TestCase):
         self.assertFalse(Product.objects.filter(pk=self.product.pk).exists())
 
     def _url(self) -> str:
-        return reverse('administration:purchases_products')
+        return reverse('configuration:products')

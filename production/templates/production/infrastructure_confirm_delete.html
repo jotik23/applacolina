@@ -3,7 +3,7 @@
 {% block title %}Eliminar {{ entity_label }} · Infraestructura{% endblock %}
 
 {% block content %}
-  {% include "production/_submenu.html" with active=active_submenu %}
+  {% include "configuration/_submenu.html" with active=active_submenu %}
 
   <section class="space-y-8">
     <header class="rounded-2xl bg-white/85 p-8 shadow-sm ring-1 ring-rose-200/70">
@@ -36,7 +36,7 @@
       </p>
       <div class="flex flex-wrap items-center justify-end gap-3">
         <a
-          href="{% url 'production:infrastructure' %}"
+          href="{% url 'configuration:infrastructure' %}"
           class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
         >
           Cancelar

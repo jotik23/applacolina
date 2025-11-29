@@ -4,7 +4,11 @@
 {% block title %}Indicadores del día{% endblock %}
 
 {% block content %}
-  {% include "production/_submenu.html" with active=active_submenu %}
+  {% if home_active_tab %}
+    {% include "home/_submenu.html" with active=home_active_tab %}
+  {% else %}
+    {% include "production/_submenu.html" with active=active_submenu %}
+  {% endif %}
 
   <section class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-white/95 px-5 py-4 shadow-sm ring-1 ring-emerald-100/40">
@@ -107,14 +111,14 @@
                         id="lot-{{ lot.id }}"
                         class="group border-t border-slate-100 transition-colors cursor-pointer focus-within:bg-emerald-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 {% if focused_lot_id == lot.id %}bg-emerald-50/70{% else %}hover:bg-emerald-50/50{% endif %}"
                         data-lot-row
-                        data-href="{% url 'production:batch-production-board' lot.id %}"
+                        data-href="{% url 'configuration:batch-production-board' lot.id %}"
                         role="link"
                         tabindex="0"
                         aria-label="Abrir tablero de producción diaria del lote {{ lot.barn_houses_display }}"
                       >
                         <td class="px-4 py-4 align-top">
                           <div class="space-y-1">
-                            <a href="{% url 'production:batch-production-board' lot.id %}" class="text-sm font-semibold text-emerald-700 hover:underline">
+                            <a href="{% url 'configuration:batch-production-board' lot.id %}" class="text-sm font-semibold text-emerald-700 hover:underline">
                               Lote {{ lot.barn_houses_display }}: {{ lot.current_birds|intcomma }} Aves - Sem {{ lot.age_weeks }}
                             </a>
                             <p class="text-[11px] text-slate-500">

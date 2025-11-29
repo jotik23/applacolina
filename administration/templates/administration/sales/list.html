@@ -4,7 +4,11 @@
 {% block title %}Ventas{% endblock %}
 
 {% block content %}
-  {% include "administration/_submenu.html" with active=administration_active_submenu %}
+  {% if home_active_tab %}
+    {% include "home/_submenu.html" with active=home_active_tab %}
+  {% else %}
+    {% include "administration/_submenu.html" with active=administration_active_submenu %}
+  {% endif %}
 
   <section class="space-y-4">
     <header class="space-y-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-5 shadow-sm">

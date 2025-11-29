@@ -21,6 +21,7 @@ from django.utils.formats import date_format
 from django.utils.dateparse import parse_date
 from django.utils.translation import gettext as _
 from django.views import View
+from django.views.generic import TemplateView
 
 from applacolina.mixins import StaffRequiredMixin
 
@@ -110,15 +111,31 @@ def _date_range(start: date, end: date) -> List[date]:
 
 
 def _resolve_calendar_home_url(*, exclude_ids: Iterable[int] | None = None) -> str:
-    queryset = ShiftCalendar.objects.order_by("-start_date", "-created_at")
+    queryset = ShiftCalendar.objects.all()
     if exclude_ids:
         queryset = queryset.exclude(pk__in=list(exclude_ids))
 
-    next_calendar = queryset.first()
-    if next_calendar:
-        return reverse("personal:calendar-detail", args=[next_calendar.pk])
+    today = timezone.localdate()
+    active_statuses = (CalendarStatus.APPROVED, CalendarStatus.MODIFIED)
 
-    return reverse("personal:configurator")
+    def pick_calendar(base_queryset):
+        return (
+            base_queryset.filter(status__in=active_statuses)
+            .order_by("-start_date", "-created_at")
+            .first()
+        )
+
+    active_calendar = pick_calendar(queryset.filter(start_date__lte=today, end_date__gte=today))
+    if active_calendar:
+        return reverse("personal:calendar-detail", args=[active_calendar.pk])
+
+    fallback_calendar = pick_calendar(queryset)
+    if not fallback_calendar:
+        fallback_calendar = queryset.order_by("-start_date", "-created_at").first()
+    if fallback_calendar:
+        return reverse("personal:calendar-detail", args=[fallback_calendar.pk])
+
+    return reverse("configuration:collaborators")
 
 
 REST_CELL_STATE_REST = "rest"
@@ -2305,13 +2322,13 @@ def _assignment_payload(assignment: Optional[ShiftAssignment]) -> Optional[dict[
 # ---------------------------------------------------------------------------
 
 
-class CalendarConfiguratorView(StaffRequiredMixin, View):
+class CalendarConfiguratorView(StaffRequiredMixin, TemplateView):
     template_name = "calendario/configurator.html"
+    configuration_active_submenu: str | None = None
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-        return render(
-            request,
-            self.template_name,
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context.update(
             {
                 "alert_choices": _choice_payload(AssignmentAlertLevel.choices),
                 "shift_type_choices": _choice_payload(ShiftType.choices),
@@ -2319,8 +2336,11 @@ class CalendarConfiguratorView(StaffRequiredMixin, View):
                 "calendar_generation_form": CalendarGenerationForm(),
                 "calendar_home_url": _resolve_calendar_home_url(),
                 "calendar_generation_recent_calendars": get_recent_calendars_payload(),
-            },
+            }
         )
+        if self.configuration_active_submenu:
+            context.setdefault("configuration_active_submenu", self.configuration_active_submenu)
+        return context
 
 
 class CalendarDashboardView(StaffRequiredMixin, View):

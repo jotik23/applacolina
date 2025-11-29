@@ -45,6 +45,13 @@ from production.services.egg_classification import (
 )
 from personal.models import UserProfile
 
+
+def _maybe_set_home_tab(context: dict[str, Any], request: HttpRequest, tab: str) -> None:
+    resolver = getattr(request, "resolver_match", None)
+    if resolver and resolver.namespace == "home":
+        context["home_active_tab"] = tab
+
+
 from .forms import (
     ExpenseTypeWorkflowFormSet,
     PayrollPeriodForm,
@@ -166,6 +173,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 "sales_totals": self._compute_sales_totals(sales_queryset),
             }
         )
+        _maybe_set_home_tab(context, self.request, "sales")
         return context
 
     def _get_sales_queryset(self):
@@ -786,6 +794,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
         else:
             context.setdefault('purchase_payment_field_errors', {})
+        _maybe_set_home_tab(context, self.request, "purchases")
         return context
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
@@ -2443,7 +2452,7 @@ class ProductManagementView(StaffRequiredMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.setdefault('administration_active_submenu', 'products')
+        context.setdefault('active_submenu', 'products')
         search = (self.request.GET.get('search') or '').strip()
         panel_code = kwargs.get('panel') or self.request.GET.get('panel')
         product_id = _parse_int(self.request.GET.get('product'))
@@ -2496,7 +2505,7 @@ class ProductManagementView(StaffRequiredMixin, generic.TemplateView):
         return redirect(self._base_url())
 
     def _base_url(self, *, with_panel: bool = True) -> str:
-        base = reverse('administration:purchases_products')
+        base = reverse('configuration:products')
         params = {}
         search = self.request.GET.get('search')
         if search:
@@ -2593,6 +2602,7 @@ class PayrollManagementView(StaffRequiredMixin, generic.TemplateView):
         context.setdefault('payroll_period_is_valid', kwargs.get('payroll_period_is_valid', False))
         context.setdefault('selected_bonified_tokens', kwargs.get('selected_bonified_tokens', set()))
         context.setdefault('selected_bonified_idle_tokens', kwargs.get('selected_bonified_idle_tokens', set()))
+        _maybe_set_home_tab(context, self.request, "payroll")
         return context
 
     def _build_period_form(self, query_data: QueryDict | dict[str, str]) -> PayrollPeriodForm:
@@ -2990,6 +3000,7 @@ class SupplierManagementView(StaffRequiredMixin, generic.TemplateView):
             delete_modal_open=self.request.GET.get('modal') == 'delete' and supplier_instance is not None,
             supplier_import_errors=import_errors or [],
         )
+        _maybe_set_home_tab(context, self.request, "suppliers")
         return context
 
     def _submit_supplier_form(self) -> HttpResponse:
@@ -3150,7 +3161,7 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.setdefault('administration_active_submenu', 'configuration')
+        context.setdefault('active_submenu', 'expenses')
         section = self._current_section()
         search = self.request.GET.get('search', '').strip()
         panel = kwargs.get('panel') or self.request.GET.get('panel')
@@ -3403,7 +3414,7 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
         return None
 
     def _base_url(self, *, section: str | None = None, with_panel: bool = True, extra_params: dict | None = None) -> str:
-        base = reverse('administration:purchases_configuration')
+        base = reverse('configuration:expense-configuration')
         params: dict[str, str] = {}
         section_value = section or self._current_section()
         params['section'] = section_value
@@ -3543,6 +3554,7 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                 ],
             }
         )
+        _maybe_set_home_tab(context, self.request, "dispatches")
         return context
 
     def _parse_month(self, value: Optional[str]) -> date:

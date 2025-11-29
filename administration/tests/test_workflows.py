@@ -40,7 +40,7 @@ class ExpenseTypeWorkflowViewTests(TestCase):
         self.expense_type = _create_expense_type()
 
     def _url(self, params: dict[str, str] | None = None) -> str:
-        base = reverse('administration:purchases_configuration')
+        base = reverse('configuration:expense-configuration')
         if not params:
             return base
         return f"{base}?{urlencode(params)}"

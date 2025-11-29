@@ -1,21 +1,13 @@
 {% load i18n %}
 <nav class="border-b border-slate-200/70" data-app-submenu>
-  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500">
+  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500 snap-x snap-mandatory">
     <a
       href="{{ tab_urls.tareas|default:request.get_full_path }}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'tasks' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'tasks' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'tasks' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'tasks' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
       {% trans "Tareas" %}
-    </a>
-    <a
-      href="{{ tab_urls.reporte|default:request.get_full_path }}"
-      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition {% if active == 'daily-report' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
-      {% if active == 'daily-report' %}aria-current="page"{% endif %}
-    >
-      <span class="h-2 w-2 rounded-full {% if active == 'daily-report' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
-      {% trans "Reporte del día" %}
     </a>
     {# Futuras secciones se insertarán aquí #}
   </div>

@@ -121,6 +121,12 @@ from .models import (
 )
 
 
+def _maybe_set_home_tab(context: dict[str, Any], request, tab: str) -> None:
+    resolver = getattr(request, "resolver_match", None)
+    if resolver and resolver.namespace == "home":
+        context["home_active_tab"] = tab
+
+
 class MiniAppClient(Enum):
     TELEGRAM = "telegram"
     EMBEDDED = "embedded"
@@ -1668,6 +1674,9 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
     """Render a placeholder landing page for the task manager module."""
 
     template_name = "task_manager/index.html"
+    allowed_tabs = {"tareas"}
+    default_active_tab = "tareas"
+    configuration_active_submenu = None
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1676,10 +1685,11 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
         statuses = TaskStatus.objects.filter(is_active=True).order_by("name")
         context["task_manager_categories"] = categories
         context["task_manager_statuses"] = statuses
-        allowed_tabs = {"tareas", "reporte"}
-        active_tab = self.request.GET.get("tm_tab") or "tareas"
+        allowed_tabs = getattr(self, "allowed_tabs", {"tareas"})
+        default_tab = getattr(self, "default_active_tab", "tareas")
+        active_tab = self.request.GET.get("tm_tab") or default_tab
         if active_tab not in allowed_tabs:
-            active_tab = "tareas"
+            active_tab = default_tab
         context["task_manager_active_tab"] = active_tab
         context["task_manager_active_submenu"] = "tasks" if active_tab == "tareas" else "daily-report"
 
@@ -1857,6 +1867,9 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
         )
         context["task_definition_group_primary"] = group_primary_value
         context["task_definition_group_secondary"] = group_secondary_value
+        context["task_definition_grouping_modified"] = (
+            group_primary_value != default_group_primary or group_secondary_value != default_group_secondary
+        )
 
         active_filters: list[ActiveFilterChip] = []
         if filters.status != defaults.status:
@@ -1958,21 +1971,28 @@ class TaskManagerHomeView(StaffRequiredMixin, generic.TemplateView):
                 self.request,
                 tab="tareas",
                 params={"tm_report_date": None},
-            ),
-            "reporte": build_task_manager_tab_url(
-                self.request,
-                tab="reporte",
-                params={"tm_report_date": report_date.isoformat()},
-            ),
+            )
         }
         context["task_manager_daily_report"] = build_daily_assignment_report(
             self.request,
             target_date=report_date,
         )
+        _maybe_set_home_tab(context, self.request, "task_report")
+        configuration_tab = getattr(self, "configuration_active_submenu", None)
+        if configuration_tab:
+            context.setdefault("configuration_active_submenu", configuration_tab)
         return context
 
 
 task_manager_home_view = TaskManagerHomeView.as_view()
+
+
+class TaskManagerDailyReportView(TaskManagerHomeView):
+    allowed_tabs = {"reporte"}
+    default_active_tab = "reporte"
+
+
+task_manager_daily_report_view = TaskManagerDailyReportView.as_view()
 
 
 @require_POST

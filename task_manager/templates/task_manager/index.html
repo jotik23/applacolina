@@ -521,6 +521,25 @@
       flex-shrink: 0;
     }
 
+    .tm-filter-collapse-toggle {
+      width: 100%;
+      text-align: left;
+      transition: border-color 150ms ease, color 150ms ease;
+    }
+
+    .tm-filter-collapse-toggle:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+    }
+
+    .tm-filter-collapse-icon {
+      transition: transform 200ms ease;
+    }
+
+    .tm-filter-collapse-toggle[aria-expanded='true'] .tm-filter-collapse-icon {
+      transform: rotate(180deg);
+    }
+
     tr[data-task-group-row][data-group-level='secondary'] .tm-group-toggle {
       padding-left: 2.25rem;
     }
@@ -544,7 +563,13 @@
     }
   </style>
 
-  {% include "task_manager/_submenu.html" with active=task_manager_active_submenu tab_urls=task_manager_tab_urls %}
+  {% if configuration_active_submenu %}
+    {% include "configuration/_submenu.html" with active=configuration_active_submenu %}
+  {% elif home_active_tab %}
+    {% include "home/_submenu.html" with active=home_active_tab %}
+  {% else %}
+    {% include "task_manager/_submenu.html" with active=task_manager_active_submenu tab_urls=task_manager_tab_urls %}
+  {% endif %}
   <div class="space-y-10">
     <section class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       {% with active_tab=task_manager_active_tab|default:"tareas" %}
@@ -558,179 +583,215 @@
               {% if request.GET.tm_task %}
                 <input type="hidden" name="tm_task" value="{{ request.GET.tm_task }}" />
               {% endif %}
-              <section class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4" aria-labelledby="tm-task-filters-heading">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="tm-badge-neutral">Filtros</span>
-                    <span id="tm-task-filters-heading" class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400"></span>
+              <div
+                class="space-y-4"
+                data-task-filter-collapse
+                data-open-on-load="{% if task_definition_filters_applied or task_definition_grouping_modified %}true{% else %}false{% endif %}"
+              >
+                <button
+                  type="button"
+                  class="tm-filter-collapse-toggle flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
+                  data-task-filter-collapse-toggle
+                  data-collapsed-label="Mostrar filtros y agrupación"
+                  data-expanded-label="Ocultar filtros y agrupación"
+                  aria-controls="tm-task-filter-panel"
+                  aria-expanded="false"
+                >
+                  <span class="flex flex-wrap items-center gap-2" data-task-filter-collapse-label>Mostrar filtros y agrupación</span>
+                  <span class="flex flex-wrap items-center gap-2">
                     {% if task_definition_filters_applied %}
-                      <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-                        {% for filter in task_definition_active_filters %}
-                          <a
-                            href="{{ filter.remove_url }}"
-                            class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
-                          >
-                            <span>{{ filter.label }}:</span>
-                            <span class="text-slate-900">{{ filter.display_value }}</span>
-                            <span aria-hidden="true" class="text-slate-400">&times;</span>
-                            <span class="sr-only">Quitar filtro {{ filter.label }}</span>
-                          </a>
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                  </div>
-                  <a
-                    href="{{ task_definition_clear_filters_url }}"
-                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand {% if not task_definition_filters_applied %}pointer-events-none opacity-60{% endif %}"
-                    {% if not task_definition_filters_applied %}aria-disabled="true" tabindex="-1"{% endif %}
-                  >
-                    Limpiar filtros
-                  </a>
-                </div>
-                <div class="grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-6">
-                  <fieldset class="space-y-3 lg:col-span-2">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</legend>
-                    {% with config=task_manager_status_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="status" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Categoría</legend>
-                    {% with config=task_manager_category_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="category" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Obligatoriedad</legend>
-                    {% with config=task_manager_mandatory_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="mandatory" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Nivel de criticidad</legend>
-                    {% with config=task_manager_criticality_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="criticality" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cobertura</legend>
-                    {% with config=task_manager_scope_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="scope" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3 lg:col-span-2">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Responsable sugerido</legend>
-                    {% with config=task_manager_responsible_filter %}
-                      {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                    {% endwith %}
-                  </fieldset>
-
-                  <fieldset class="space-y-3 lg:col-span-2">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fecha programada</legend>
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                      <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        <span class="whitespace-nowrap">Desde</span>
-                        <input
-                          type="date"
-                          name="scheduled_start"
-                          value="{{ task_manager_schedule_filter.start_value }}"
-                          class="flex-1 h-11 rounded-full border border-slate-200 bg-white px-3 text-sm font-normal uppercase tracking-normal text-slate-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                          data-schedule-filter-start
-                        />
-                      </label>
-                      <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        <span class="whitespace-nowrap">Hasta</span>
-                        <input
-                          type="date"
-                          name="scheduled_end"
-                          value="{{ task_manager_schedule_filter.end_value }}"
-                          class="flex-1 h-11 rounded-full border border-slate-200 bg-white px-3 text-sm font-normal uppercase tracking-normal text-slate-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                          data-schedule-filter-end
-                        />
-                      </label>
-                    </div>
-                  </fieldset>
-
-                  <fieldset class="space-y-3 lg:col-span-2">
-                    <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Buscar</legend>
-                    <label class="relative block">
-                      <span class="sr-only">Buscar tarea</span>
-                      <input
-                        type="search"
-                        name="search"
-                        value="{{ task_manager_search_filter }}"
-                        class="h-11 w-full rounded-full border border-slate-200 bg-white pl-4 pr-10 text-sm font-normal text-slate-600 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                        placeholder="Filtrar por nombre..."
-                        data-task-filter-search
-                      />
-                      <span class="pointer-events-none absolute inset-y-0 right-4 inline-flex items-center text-slate-400">
-                        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fill-rule="evenodd" d="M12.9 14.32a8 8 0 111.414-1.414l3.387 3.386a1 1 0 01-1.414 1.415l-3.387-3.387zM10 15a5 5 0 100-10 5 5 0 000 10z" clip-rule="evenodd"></path>
-                        </svg>
+                      <span class="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-brand">
+                        Filtros activos
                       </span>
-                    </label>
-                  </fieldset>
-                </div>
-              </section>
+                    {% endif %}
+                    {% if task_definition_grouping_modified %}
+                      <span class="inline-flex items-center gap-1 rounded-full bg-slate-900/5 px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Agrupación personalizada
+                      </span>
+                    {% endif %}
+                    <span class="tm-filter-collapse-icon inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+                      <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M10 12.25a.75.75 0 01-.53-.22l-4-4a.75.75 0 111.06-1.06L10 10.69l3.47-3.72a.75.75 0 111.06 1.06l-4 4a.75.75 0 01-.53.22z" clip-rule="evenodd"></path>
+                      </svg>
+                    </span>
+                  </span>
+                </button>
+                <div id="tm-task-filter-panel" class="space-y-6" data-task-filter-collapse-content hidden>
+                  <section class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4" aria-labelledby="tm-task-filters-heading">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="tm-badge-neutral">Filtros</span>
+                        <span id="tm-task-filters-heading" class="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400"></span>
+                        {% if task_definition_filters_applied %}
+                          <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                            {% for filter in task_definition_active_filters %}
+                              <a
+                                href="{{ filter.remove_url }}"
+                                class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-brand hover:text-brand"
+                              >
+                                <span>{{ filter.label }}:</span>
+                                <span class="text-slate-900">{{ filter.display_value }}</span>
+                                <span aria-hidden="true" class="text-slate-400">&times;</span>
+                                <span class="sr-only">Quitar filtro {{ filter.label }}</span>
+                              </a>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                      </div>
+                      <a
+                        href="{{ task_definition_clear_filters_url }}"
+                        class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand {% if not task_definition_filters_applied %}pointer-events-none opacity-60{% endif %}"
+                        {% if not task_definition_filters_applied %}aria-disabled="true" tabindex="-1"{% endif %}
+                      >
+                        Limpiar filtros
+                      </a>
+                    </div>
+                    <div class="grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-6">
+                      <fieldset class="space-y-3 lg:col-span-2">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Estado</legend>
+                        {% with config=task_manager_status_filter %}
+                          {% include "task_manager/includes/filter_picker.html" with name="status" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                        {% endwith %}
+                      </fieldset>
 
-              <div class="border-t border-dashed border-slate-200/70"></div>
+                      <fieldset class="space-y-3">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Categoría</legend>
+                        {% with config=task_manager_category_filter %}
+                          {% include "task_manager/includes/filter_picker.html" with name="category" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                        {% endwith %}
+                      </fieldset>
 
-              <div class="flex flex-wrap items-center gap-4">
-                <div class="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  <span class="tm-badge-neutral">Agrupación</span>
-                </div>
-                <fieldset class="flex min-w-[170px] basis-[220px] flex-none flex-col gap-1 self-stretch justify-center">
-                  {% with config=task_manager_group_primary_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="group_primary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+                      <fieldset class="space-y-3">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Obligatoriedad</legend>
+                        {% with config=task_manager_mandatory_filter %}
+                          {% include "task_manager/includes/filter_picker.html" with name="mandatory" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                        {% endwith %}
+                      </fieldset>
 
-                <fieldset class="flex min-w-[170px] basis-[220px] flex-none flex-col gap-1 self-stretch justify-center" data-group-secondary-fieldset>
-                  {% with config=task_manager_group_secondary_filter %}
-                    {% include "task_manager/includes/filter_picker.html" with name="group_secondary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
-                  {% endwith %}
-                </fieldset>
+                      <fieldset class="space-y-3">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Nivel de criticidad</legend>
+                        {% with config=task_manager_criticality_filter %}
+                          {% include "task_manager/includes/filter_picker.html" with name="criticality" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                        {% endwith %}
+                      </fieldset>
 
-                <fieldset class="flex min-w-[220px] flex-1 flex-col gap-2 self-stretch justify-center">
-                  <div class="flex h-full flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
-                      data-group-preset="status-responsible"
-                    >
-                      Estado → Responsable
-                    </button>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
-                      data-group-preset="category-scope"
-                    >
-                      Categoría → Lugar
-                    </button>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
-                      data-group-preset="scope-task_type"
-                    >
-                      Lugar → Planificación
-                    </button>
+                      <fieldset class="space-y-3">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cobertura</legend>
+                        {% with config=task_manager_scope_filter %}
+                          {% include "task_manager/includes/filter_picker.html" with name="scope" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                        {% endwith %}
+                      </fieldset>
+
+                      <fieldset class="space-y-3 lg:col-span-2">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Responsable sugerido</legend>
+                        {% with config=task_manager_responsible_filter %}
+                          {% include "task_manager/includes/filter_picker.html" with name="responsible" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                        {% endwith %}
+                      </fieldset>
+
+                      <fieldset class="space-y-3 lg:col-span-2">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fecha programada</legend>
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                          <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            <span class="whitespace-nowrap">Desde</span>
+                            <input
+                              type="date"
+                              name="scheduled_start"
+                              value="{{ task_manager_schedule_filter.start_value }}"
+                              class="flex-1 h-11 rounded-full border border-slate-200 bg-white px-3 text-sm font-normal uppercase tracking-normal text-slate-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                              data-schedule-filter-start
+                            />
+                          </label>
+                          <label class="flex flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            <span class="whitespace-nowrap">Hasta</span>
+                            <input
+                              type="date"
+                              name="scheduled_end"
+                              value="{{ task_manager_schedule_filter.end_value }}"
+                              class="flex-1 h-11 rounded-full border border-slate-200 bg-white px-3 text-sm font-normal uppercase tracking-normal text-slate-600 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                              data-schedule-filter-end
+                            />
+                          </label>
+                        </div>
+                      </fieldset>
+
+                      <fieldset class="space-y-3 lg:col-span-2">
+                        <legend class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Buscar</legend>
+                        <label class="relative block">
+                          <span class="sr-only">Buscar tarea</span>
+                          <input
+                            type="search"
+                            name="search"
+                            value="{{ task_manager_search_filter }}"
+                            class="h-11 w-full rounded-full border border-slate-200 bg-white pl-4 pr-10 text-sm font-normal text-slate-600 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                            placeholder="Filtrar por nombre..."
+                            data-task-filter-search
+                          />
+                          <span class="pointer-events-none absolute inset-y-0 right-4 inline-flex items-center text-slate-400">
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path fill-rule="evenodd" d="M12.9 14.32a8 8 0 111.414-1.414l3.387 3.386a1 1 0 01-1.414 1.415l-3.387-3.387zM10 15a5 5 0 100-10 5 5 0 000 10z" clip-rule="evenodd"></path>
+                            </svg>
+                          </span>
+                        </label>
+                      </fieldset>
+                    </div>
+                  </section>
+
+                  <div class="border-t border-dashed border-slate-200/70"></div>
+
+                  <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      <span class="tm-badge-neutral">Agrupación</span>
+                    </div>
+                    <fieldset class="flex min-w-[170px] basis-[220px] flex-none flex-col gap-1 self-stretch justify-center">
+                      {% with config=task_manager_group_primary_filter %}
+                        {% include "task_manager/includes/filter_picker.html" with name="group_primary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                      {% endwith %}
+                    </fieldset>
+
+                    <fieldset class="flex min-w-[170px] basis-[220px] flex-none flex-col gap-1 self-stretch justify-center" data-group-secondary-fieldset>
+                      {% with config=task_manager_group_secondary_filter %}
+                        {% include "task_manager/includes/filter_picker.html" with name="group_secondary" default_value=config.default_value default_label=config.default_label groups=config.groups search_enabled=config.search_enabled neutral_value=config.neutral_value %}
+                      {% endwith %}
+                    </fieldset>
+
+                    <fieldset class="flex min-w-[220px] flex-1 flex-col gap-2 self-stretch justify-center">
+                      <div class="flex h-full flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                          data-group-preset="status-responsible"
+                        >
+                          Estado → Responsable
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                          data-group-preset="category-scope"
+                        >
+                          Categoría → Lugar
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                          data-group-preset="scope-task_type"
+                        >
+                          Lugar → Planificación
+                        </button>
+                      </div>
+                    </fieldset>
+
+                    <div class="ml-auto flex-none self-center">
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
+                        data-group-clear
+                        data-disabled-label="true"
+                      >
+                        Limpiar agrupación
+                      </button>
+                    </div>
                   </div>
-                </fieldset>
-
-                <div class="ml-auto flex-none self-center">
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500 shadow-sm transition hover:border-brand hover:text-brand"
-                    data-group-clear
-                    data-disabled-label="true"
-                  >
-                    Limpiar agrupación
-                  </button>
                 </div>
               </div>
             </form>
@@ -3057,6 +3118,36 @@
       setupTaskDefinitionGrouping();
       setupTaskDefinitionSorting();
       setupTaskDefinitionDragReorder();
+
+      var setupTaskFilterCollapse = function () {
+        var container = document.querySelector('[data-task-filter-collapse]');
+        if (!container) {
+          return;
+        }
+        var toggle = container.querySelector('[data-task-filter-collapse-toggle]');
+        var content = container.querySelector('[data-task-filter-collapse-content]');
+        var label = container.querySelector('[data-task-filter-collapse-label]');
+        if (!toggle || !content) {
+          return;
+        }
+        var collapsedLabel = toggle.getAttribute('data-collapsed-label') || 'Mostrar detalles';
+        var expandedLabel = toggle.getAttribute('data-expanded-label') || collapsedLabel;
+        var setState = function (open) {
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+          content.hidden = !open;
+          if (label) {
+            label.textContent = open ? expandedLabel : collapsedLabel;
+          }
+        };
+        var shouldOpen = container.getAttribute('data-open-on-load') === 'true';
+        setState(shouldOpen);
+        toggle.addEventListener('click', function () {
+          var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+          setState(!isOpen);
+        });
+      };
+
+      setupTaskFilterCollapse();
 
       var filterForm = document.querySelector('[data-task-definition-filter-form]');
       if (filterForm) {

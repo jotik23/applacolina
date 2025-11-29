@@ -1,15 +1,15 @@
 {% extends "calendario/base.html" %}
 {% load form_extras %}
 
-{% block title %}Administración · Configuración de Compras / Gastos{% endblock %}
+{% block title %}Configuración · Compras / Gastos{% endblock %}
 
 {% block content %}
-  {% include "administration/_submenu.html" with active=administration_active_submenu %}
+  {% include "configuration/_submenu.html" with active=active_submenu %}
 
   <section class="space-y-6">
     <header class="flex flex-col gap-4 rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/70 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Administración</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Configuración</p>
         <h1 class="text-2xl font-semibold text-slate-900">Panel de Configuración</h1>
       </div>
       <form method="get" class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2">

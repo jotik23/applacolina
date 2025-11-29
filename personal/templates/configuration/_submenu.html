@@ -1,0 +1,84 @@
+<nav class="border-b border-slate-200/70" data-app-submenu>
+  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500 snap-x snap-mandatory">
+    <a
+      href="{% url 'configuration:tasks' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'tasks' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'tasks' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'tasks' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Tareas
+    </a>
+    <a
+      href="{% url 'configuration:collaborators' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'collaborators' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'collaborators' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'collaborators' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Colaboradores
+    </a>
+    <a
+      href="{% url 'configuration:positions' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'positions' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'positions' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'positions' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Puestos de trabajo
+    </a>
+    <a
+      href="{% url 'configuration:batches' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'batches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'batches' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'batches' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Lotes de aves
+    </a>
+    <a
+      href="{% url 'configuration:infrastructure' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'infrastructure' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'infrastructure' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'infrastructure' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Infraestructura
+    </a>
+    <a
+      href="{% url 'configuration:products' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'products' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'products' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'products' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Productos
+    </a>
+    <a
+      href="{% url 'configuration:expense-configuration' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'expenses' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'expenses' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'expenses' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Configuración de gastos
+    </a>
+    <a
+      href="{% url 'configuration:reference-tables' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'reference_tables' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'reference_tables' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'reference_tables' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Tablas de referencia
+    </a>
+    <a
+      href="{% url 'admin:index' %}"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700 snap-start"
+    >
+      <span class="h-2 w-2 rounded-full bg-slate-300"></span>
+      Super Admin
+      <svg class="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M4.5 4.5A2.5 2.5 0 017 2h6a2.5 2.5 0 012.5 2.5v6a2.5 2.5 0 01-2.5 2.5H7A2.5 2.5 0 014.5 10.5V7A2.5 2.5 0 017 4.5h6V7H7v6h6a2.5 2.5 0 002.5-2.5V4.5A2.5 2.5 0 0013 2H7A2.5 2.5 0 004.5 4.5V13H2V4.5A2.5 2.5 0 014.5 2H6v2.5H4.5z"
+          clip-rule="evenodd"
+        />
+      </svg>
+    </a>
+  </div>
+</nav>

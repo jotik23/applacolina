@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from .views import (
     mini_app_logout_view,
@@ -38,7 +39,7 @@ from .views import (
 app_name = "task_manager"
 
 urlpatterns = [
-    path("", task_manager_home_view, name="index"),
+    path("", RedirectView.as_view(pattern_name="configuration:tasks", permanent=False), name="index"),
     path("telegram/mini-app/", telegram_mini_app_view, name="telegram-mini-app"),
     path("telegram/mini-app/logout/", mini_app_logout_view, name="telegram-mini-app-logout"),
     path("telegram/mini-app/demo/", telegram_mini_app_demo_view, name="telegram-mini-app-demo"),

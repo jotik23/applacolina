@@ -3,6 +3,9 @@
 {% block title %}Configurador de calendarios{% endblock %}
 
 {% block content %}
+  {% if configuration_active_submenu %}
+    {% include "configuration/_submenu.html" with active=configuration_active_submenu %}
+  {% endif %}
   <div class="flex flex-col gap-8">
     <div
       id="configurator-app"

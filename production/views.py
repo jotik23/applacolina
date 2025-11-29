@@ -225,6 +225,12 @@ def resolve_batch_label(batch: BirdBatch, label_map: Mapping[int, str]) -> str:
     return label_map.get(batch.pk, f"Lote #{batch.pk}")
 
 
+def _maybe_set_home_tab(context: Dict[str, Any], request, tab: str) -> None:
+    resolver = getattr(request, "resolver_match", None)
+    if resolver and resolver.namespace == "home":
+        context["home_active_tab"] = tab
+
+
 class ProductionDashboardContextMixin(StaffRequiredMixin):
     """Build the shared poultry production dashboard context."""
 
@@ -1101,6 +1107,7 @@ class EggInventoryDashboardView(EggInventoryPermissionMixin, TemplateView):
                 "unclassified_total": unclassified_total,
             }
         )
+        _maybe_set_home_tab(context, self.request, "egg_inventory")
         return context
 
     def _group_pending_batches(self, batches: list[PendingBatch]) -> list[dict[str, Any]]:
@@ -1832,6 +1839,7 @@ class DailyIndicatorsView(ProductionDashboardContextMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["active_submenu"] = "daily_indicators"
+        _maybe_set_home_tab(context, self.request, "daily_indicators")
         return context
 
 
@@ -1852,7 +1860,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         registry_entry = self.form_registry.get(form_type)
         if not registry_entry:
             messages.error(request, "No se pudo determinar el formulario enviado.")
-            return redirect("production:batches")
+            return redirect("configuration:batches")
 
         form_attr, form_class = registry_entry
         form = form_class(request.POST)
@@ -1870,7 +1878,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
                 request,
                 f"Se registró {batch_label} para {instance.farm.name}. Desde este panel puedes distribuirlo en salones.",
             )
-            return redirect(f"{reverse_lazy('production:batches')}?batch={instance.pk}")
+            return redirect(f"{reverse_lazy('configuration:batches')}?batch={instance.pk}")
 
         return self.get(request, *args, **kwargs)
 
@@ -1878,7 +1886,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
         batch_id = self._safe_pk_lookup(BirdBatch, request.POST.get("batch_id"))
         if not batch_id:
             messages.error(request, "No fue posible identificar el lote seleccionado.")
-            return redirect("production:batches")
+            return redirect("configuration:batches")
 
         allocations_prefetch = Prefetch(
             "allocations",
@@ -1892,7 +1900,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
             )
         except BirdBatch.DoesNotExist:
             messages.error(request, "El lote seleccionado ya no existe.")
-            return redirect("production:batches")
+            return redirect("configuration:batches")
 
         form = BatchDistributionForm(request.POST, batch=batch)
         self._distribution_form = form
@@ -1904,7 +1912,7 @@ class BatchManagementView(StaffRequiredMixin, TemplateView):
                 request,
                 "Distribución guardada correctamente. Las asignaciones fueron actualizadas.",
             )
-            return redirect(f"{reverse_lazy('production:batches')}?batch={batch_id}")
+            return redirect(f"{reverse_lazy('configuration:batches')}?batch={batch_id}")
 
         return self.get(request, *args, **kwargs)
 
@@ -2151,7 +2159,7 @@ class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
         registry_entry = self.form_registry.get(form_key)
         if not registry_entry:
             messages.error(request, "No se pudo determinar el formulario enviado.")
-            return redirect("production:infrastructure")
+            return redirect("configuration:infrastructure")
 
         form_attr, form_class = registry_entry
         form = form_class(request.POST)
@@ -2278,7 +2286,7 @@ class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
         return "Cambios guardados correctamente."
 
     def _build_success_redirect(self, form_key: str, instance) -> str:
-        base_url = str(reverse_lazy("production:infrastructure"))
+        base_url = str(reverse_lazy("configuration:infrastructure"))
         params: Dict[str, str] = {"panel": form_key}
         if form_key == "chicken_house":
             params["farm"] = str(instance.farm_id)
@@ -2290,7 +2298,7 @@ class InfrastructureHomeView(StaffRequiredMixin, TemplateView):
 
 class InfrastructureFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
     template_name = "production/infrastructure_form.html"
-    success_url = reverse_lazy("production:infrastructure")
+    success_url = reverse_lazy("configuration:infrastructure")
     page_title: str = ""
     submit_label: str = ""
     entity_label: str = ""
@@ -2302,7 +2310,7 @@ class InfrastructureFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
         context["submit_label"] = self.submit_label
         context["entity_label"] = self.entity_label
         context["breadcrumbs"] = [
-            {"label": "Infraestructura", "url": reverse_lazy("production:infrastructure")},
+            {"label": "Infraestructura", "url": reverse_lazy("configuration:infrastructure")},
             {"label": self.page_title, "url": ""},
         ]
         return context
@@ -2337,7 +2345,7 @@ class RoomUpdateView(InfrastructureFormViewMixin, UpdateView):
 
 class InfrastructureDeleteView(StaffRequiredMixin, DeleteView):
     template_name = "production/infrastructure_confirm_delete.html"
-    success_url = reverse_lazy("production:infrastructure")
+    success_url = reverse_lazy("configuration:infrastructure")
     entity_label: str = ""
     success_message: str = ""
 
@@ -2347,7 +2355,7 @@ class InfrastructureDeleteView(StaffRequiredMixin, DeleteView):
         context["entity_label"] = self.entity_label
         context["object_display"] = str(self.object)
         context["breadcrumbs"] = [
-            {"label": "Infraestructura", "url": reverse_lazy("production:infrastructure")},
+            {"label": "Infraestructura", "url": reverse_lazy("configuration:infrastructure")},
             {"label": f"Eliminar {self.entity_label}", "url": ""},
         ]
         return context
@@ -2389,7 +2397,7 @@ class ReferenceTablesView(StaffRequiredMixin, TemplateView):
         if action == "update-metrics":
             return self._handle_update_metrics(request)
         messages.error(request, "Acción no reconocida para las tablas de referencia.")
-        return redirect("production:reference-tables")
+        return redirect("configuration:reference-tables")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -2412,7 +2420,7 @@ class ReferenceTablesView(StaffRequiredMixin, TemplateView):
                 "name": breed.name,
                 "week_count": getattr(breed, "week_count", 0),
                 "is_selected": selected_breed.pk == breed.pk if selected_breed else False,
-                "url": f"{reverse('production:reference-tables')}?breed={breed.pk}",
+                "url": f"{reverse('configuration:reference-tables')}?breed={breed.pk}",
             }
             for breed in breeds
         ]
@@ -2453,12 +2461,12 @@ class ReferenceTablesView(StaffRequiredMixin, TemplateView):
         breed_id = self._safe_int(request.POST.get("breed_id"))
         if breed_id is None:
             messages.error(request, "Selecciona una raza antes de guardar métricas.")
-            return redirect("production:reference-tables")
+            return redirect("configuration:reference-tables")
 
         breed = self._fetch_breed_with_guides(breed_id)
         if not breed:
             messages.error(request, "La raza seleccionada no existe.")
-            return redirect("production:reference-tables")
+            return redirect("configuration:reference-tables")
 
         form = BreedWeeklyMetricsForm(request.POST)
         if form.is_valid():
@@ -2540,7 +2548,7 @@ class ReferenceTablesView(StaffRequiredMixin, TemplateView):
         )
 
     def _build_redirect(self, breed_id: int) -> str:
-        base_url = reverse("production:reference-tables")
+        base_url = reverse("configuration:reference-tables")
         return f"{base_url}?breed={breed_id}"
 
     @staticmethod
@@ -2555,7 +2563,7 @@ class ReferenceTablesView(StaffRequiredMixin, TemplateView):
 
 class BatchFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
     template_name = "production/batch_form.html"
-    success_url = reverse_lazy("production:batches")
+    success_url = reverse_lazy("configuration:batches")
     page_title: str = ""
     submit_label: str = ""
     entity_label: str = ""
@@ -2567,7 +2575,7 @@ class BatchFormViewMixin(StaffRequiredMixin, SuccessMessageMixin):
         context["submit_label"] = self.submit_label
         context["entity_label"] = self.entity_label
         context["breadcrumbs"] = [
-            {"label": "Lotes y asignaciones", "url": reverse_lazy("production:batches")},
+            {"label": "Lotes y asignaciones", "url": reverse_lazy("configuration:batches")},
             {"label": self.page_title, "url": ""},
         ]
         return context
@@ -2585,7 +2593,7 @@ class BirdBatchUpdateView(BatchFormViewMixin, UpdateView):
 class BirdBatchDeleteView(StaffRequiredMixin, DeleteView):
     model = BirdBatch
     template_name = "production/batches_confirm_delete.html"
-    success_url = reverse_lazy("production:batches")
+    success_url = reverse_lazy("configuration:batches")
     entity_label = "lote de aves"
     success_message = 'Se eliminó el lote "%(object)s" correctamente.'
 
@@ -2595,7 +2603,7 @@ class BirdBatchDeleteView(StaffRequiredMixin, DeleteView):
         context["entity_label"] = self.entity_label
         context["object_display"] = str(self.object)
         context["breadcrumbs"] = [
-            {"label": "Lotes y asignaciones", "url": reverse_lazy("production:batches")},
+            {"label": "Lotes y asignaciones", "url": reverse_lazy("configuration:batches")},
             {"label": f"Eliminar {self.entity_label}", "url": ""},
         ]
         return context
@@ -2611,7 +2619,7 @@ class BirdBatchDeleteView(StaffRequiredMixin, DeleteView):
 class BatchAllocationDeleteView(StaffRequiredMixin, DeleteView):
     model = BirdBatchRoomAllocation
     template_name = "production/batches_confirm_delete.html"
-    success_url = reverse_lazy("production:batches")
+    success_url = reverse_lazy("configuration:batches")
     entity_label = "asignación de lote"
     success_message = 'Se eliminó la asignación "%(object)s" correctamente.'
 
@@ -2621,7 +2629,7 @@ class BatchAllocationDeleteView(StaffRequiredMixin, DeleteView):
         context["entity_label"] = self.entity_label
         context["object_display"] = str(self.object)
         context["breadcrumbs"] = [
-            {"label": "Lotes y asignaciones", "url": reverse_lazy("production:batches")},
+            {"label": "Lotes y asignaciones", "url": reverse_lazy("configuration:batches")},
             {"label": f"Eliminar {self.entity_label}", "url": ""},
         ]
         return context
@@ -2813,7 +2821,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             return {
                 "id": str(target.pk),
                 "label": resolve_batch_label(target, label_map),
-                "url": reverse("production:batch-production-board", args=[target.pk]),
+                "url": reverse("configuration:batch-production-board", args=[target.pk]),
             }
 
         previous_batch = active_batches[current_index - 1] if current_index > 0 else None
@@ -3167,7 +3175,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         if day < self.batch.birth_date:
             day = self.batch.birth_date
         target_index = week_index if week_index is not None else self.selected_week_index
-        base_url = reverse("production:batch-production-board", args=[self.batch.pk])
+        base_url = reverse("configuration:batch-production-board", args=[self.batch.pk])
         params = {
             "week_index": str(max(target_index, 0)),
             "day": day.isoformat(),

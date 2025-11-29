@@ -1,0 +1,68 @@
+<nav class="border-b border-slate-200/70" data-app-submenu>
+  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500 snap-x snap-mandatory">
+    <a
+      href="{% url 'home:sales' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'sales' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'sales' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'sales' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Ventas
+    </a>
+    <a
+      href="{% url 'home:dispatches' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'dispatches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'dispatches' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'dispatches' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Despachos
+    </a>
+    <a
+      href="{% url 'home:egg-inventory' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'egg_inventory' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'egg_inventory' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'egg_inventory' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Clasificación e Inventario
+    </a>
+    <a
+      href="{% url 'home:daily-indicators' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'daily_indicators' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'daily_indicators' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'daily_indicators' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Producción
+    </a>
+    <a
+      href="{% url 'home:task-report' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'task_report' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'task_report' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'task_report' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Reporte de tareas
+    </a>
+    <a
+      href="{% url 'home:purchases' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'purchases' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'purchases' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'purchases' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Compras
+    </a>
+    <a
+      href="{% url 'home:payroll' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'payroll' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'payroll' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'payroll' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Nómina
+    </a>
+    <a
+      href="{% url 'home:suppliers' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'suppliers' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'suppliers' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'suppliers' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Terceros
+    </a>
+  </div>
+</nav>

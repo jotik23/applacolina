@@ -28,7 +28,7 @@ class ReferenceTablesViewTests(TestCase):
         reset_reference_targets_cache()
 
     def test_render_reference_page_without_breeds(self) -> None:
-        response = self.client.get(reverse("production:reference-tables"))
+        response = self.client.get(reverse("configuration:reference-tables"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "production/reference_tables.html")
         self.assertIn("breed_form", response.context)
@@ -36,7 +36,7 @@ class ReferenceTablesViewTests(TestCase):
 
     def test_create_breed_action(self) -> None:
         response = self.client.post(
-            reverse("production:reference-tables"),
+            reverse("configuration:reference-tables"),
             {"action": "create-breed", "name": "Hy-Line Brown"},
         )
         self.assertEqual(response.status_code, 302)
@@ -53,7 +53,7 @@ class ReferenceTablesViewTests(TestCase):
             "egg_weight_g_1": "60.0",
             "weekly_mortality_percentage_1": "2.1",
         }
-        response = self.client.post(reverse("production:reference-tables"), payload)
+        response = self.client.post(reverse("configuration:reference-tables"), payload)
         self.assertEqual(response.status_code, 302)
         entry = BreedWeeklyGuide.objects.get(breed=breed, week=1)
         self.assertEqual(entry.posture_percentage, Decimal("85.5"))

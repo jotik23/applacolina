@@ -43,7 +43,7 @@ class BatchManagementViewTests(TestCase):
         )
 
     def test_get_batch_dashboard(self) -> None:
-        response = self.client.get(reverse("production:batches"))
+        response = self.client.get(reverse("configuration:batches"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "production/batches.html")
         self.assertIn("batch_cards", response.context)
@@ -52,7 +52,7 @@ class BatchManagementViewTests(TestCase):
 
     def test_create_batch(self) -> None:
         response = self.client.post(
-            reverse("production:batches"),
+            reverse("configuration:batches"),
             {
                 "form_type": "batch",
                 "farm": self.farm.pk,
@@ -77,7 +77,7 @@ class BatchManagementViewTests(TestCase):
         )
         field_name = f"room_{self.room.pk}"
         response = self.client.post(
-            reverse("production:batches"),
+            reverse("configuration:batches"),
             {
                 "form_type": "distribution",
                 "batch_id": batch.pk,
@@ -104,26 +104,26 @@ class BatchManagementViewTests(TestCase):
         )
         field_name = f"room_{self.room.pk}"
         response = self.client.post(
-            reverse("production:batches"),
+            reverse("configuration:batches"),
             {
                 "form_type": "distribution",
                 "batch_id": batch.pk,
                 field_name: "1200",
             },
         )
-        self.assertRedirects(response, f"{reverse('production:batches')}?batch={batch.pk}")
+        self.assertRedirects(response, f"{reverse('configuration:batches')}?batch={batch.pk}")
         allocation.refresh_from_db()
         self.assertEqual(allocation.quantity, 1200)
 
         response = self.client.post(
-            reverse("production:batches"),
+            reverse("configuration:batches"),
             {
                 "form_type": "distribution",
                 "batch_id": batch.pk,
                 field_name: "0",
             },
         )
-        self.assertRedirects(response, f"{reverse('production:batches')}?batch={batch.pk}")
+        self.assertRedirects(response, f"{reverse('configuration:batches')}?batch={batch.pk}")
         self.assertFalse(BirdBatchRoomAllocation.objects.filter(pk=allocation.pk).exists())
 
     def test_distribution_validation_prevents_overflow(self) -> None:
@@ -135,7 +135,7 @@ class BatchManagementViewTests(TestCase):
             breed=self.breed,
         )
         response = self.client.post(
-            reverse("production:batches"),
+            reverse("configuration:batches"),
             {
                 "form_type": "distribution",
                 "batch_id": batch.pk,
@@ -154,7 +154,7 @@ class BatchManagementViewTests(TestCase):
             initial_quantity=1800,
             breed=self.breed,
         )
-        response = self.client.get(reverse("production:batch-update", args=[batch.pk]))
+        response = self.client.get(reverse("configuration:batch-update", args=[batch.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "production/batch_form.html")
 
@@ -171,8 +171,8 @@ class BatchManagementViewTests(TestCase):
             room=self.room,
             quantity=500,
         )
-        response = self.client.post(reverse("production:batch-allocation-delete", args=[allocation.pk]))
-        self.assertRedirects(response, reverse("production:batches"))
+        response = self.client.post(reverse("configuration:batch-allocation-delete", args=[allocation.pk]))
+        self.assertRedirects(response, reverse("configuration:batches"))
         self.assertFalse(BirdBatchRoomAllocation.objects.filter(pk=allocation.pk).exists())
 
     def test_delete_batch_flow(self) -> None:
@@ -183,8 +183,8 @@ class BatchManagementViewTests(TestCase):
             initial_quantity=1800,
             breed=self.breed,
         )
-        response = self.client.post(reverse("production:batch-delete", args=[batch.pk]))
-        self.assertRedirects(response, reverse("production:batches"))
+        response = self.client.post(reverse("configuration:batch-delete", args=[batch.pk]))
+        self.assertRedirects(response, reverse("configuration:batches"))
         self.assertFalse(BirdBatch.objects.filter(pk=batch.pk).exists())
 
     def test_batch_cards_order_and_labels(self) -> None:
@@ -222,7 +222,7 @@ class BatchManagementViewTests(TestCase):
             breed=self.breed,
         )
 
-        response = self.client.get(reverse("production:batches"))
+        response = self.client.get(reverse("configuration:batches"))
         self.assertEqual(response.status_code, 200)
 
         batch_cards = response.context["batch_cards"]
@@ -287,7 +287,7 @@ class BatchManagementViewTests(TestCase):
             breed=self.breed,
         )
 
-        baseline_response = self.client.get(reverse("production:batches"))
+        baseline_response = self.client.get(reverse("configuration:batches"))
         self.assertEqual(baseline_response.status_code, 200)
 
         baseline_order = [card["id"] for card in baseline_response.context["batch_cards"]]
@@ -298,7 +298,7 @@ class BatchManagementViewTests(TestCase):
         )
 
         focused_response = self.client.get(
-            reverse("production:batches"),
+            reverse("configuration:batches"),
             {"batch": youngest_batch.pk},
         )
         self.assertEqual(focused_response.status_code, 200)
