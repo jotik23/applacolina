@@ -40,6 +40,7 @@ urlpatterns = [
     ),
     path('portal/', include('personal.portal_urls', namespace='portal')),
     path('calendario/', include('personal.urls', namespace='personal')),
+    path('informes/', include('reports.urls', namespace='reports')),
     path('inicio/', include('home.urls', namespace='home')),
     path('administracion/', include('administration.urls', namespace='administration')),
     path('configuracion/', include('configuration.urls', namespace='configuration')),

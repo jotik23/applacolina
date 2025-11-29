@@ -1,0 +1,21 @@
+<nav class="border-b border-slate-200/70" data-app-submenu>
+  <div class="-mb-px flex gap-2 overflow-x-auto pb-2 text-sm font-semibold text-slate-500 snap-x snap-mandatory">
+    <a
+      href="{% url 'reports:dashboard' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'key_metrics' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'key_metrics' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'key_metrics' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Métricas clave
+    </a>
+    <span
+      class="inline-flex items-center gap-2 rounded-t-xl border border-dashed border-slate-200/70 px-4 py-2 text-slate-400"
+      title="Nuevas vistas de informes estarán disponibles pronto."
+    >
+      <span class="h-2 w-2 rounded-full bg-slate-200"></span>
+      Colecciones personalizadas
+      <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Próximamente</span>
+    </span>
+  </div>
+</nav>
+

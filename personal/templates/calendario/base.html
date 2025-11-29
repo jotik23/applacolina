@@ -114,6 +114,22 @@
                 {% endif %}
                 {% if request.user.is_staff %}
                   <a
+                    href="{% url 'reports:dashboard' %}"
+                    class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'reports' or current_app == 'reports' or 'reports' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
+                    {% if current_namespace == 'reports' or current_app == 'reports' or 'reports' in namespaces %}aria-current="page"{% endif %}
+                  >
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path
+                        fill-rule="evenodd"
+                        d="M3.75 4a.75.75 0 01.75-.75h11a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75h-11a.75.75 0 01-.75-.75V4zm1.5.75v9h9.5v-9h-9.5zm1.75 7a.75.75 0 00.75-.75V8.5a.75.75 0 00-1.5 0V11a.75.75 0 00.75.75zm3.25 0a.75.75 0 00.75-.75V6.5a.75.75 0 00-1.5 0V11a.75.75 0 00.75.75zm3.25 0a.75.75 0 00.75-.75V9.5a.75.75 0 00-1.5 0V11a.75.75 0 00.75.75z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                    <span>Informes</span>
+                  </a>
+                {% endif %}
+                {% if request.user.is_staff %}
+                  <a
                     href="{% url 'configuration:tasks' %}"
                     class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:border-white hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 {% if current_namespace == 'configuration' or current_app == 'configuration' or 'configuration' in namespaces %}border-white bg-white/20 text-white shadow-sm shadow-white/20{% else %}border-white/25 text-white/80{% endif %}"
                     {% if current_namespace == 'configuration' or current_app == 'configuration' or 'configuration' in namespaces %}aria-current="page"{% endif %}
@@ -439,6 +455,23 @@
                       <path
                         fill-rule="evenodd"
                         d="M10.707 2.293a1 1 0 00-1.414 0l-6 6a1 1 0 001.414 1.414L5 9.414V16a1 1 0 001 1h2.25a.75.75 0 00.75-.75V13a1 1 0 011-1h2a1 1 0 011 1v3.25a.75.75 0 00.75.75H15a1 1 0 001-1V9.414l.293.293a1 1 0 001.414-1.414l-6-6z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </a>
+                {% endif %}
+                {% if request.user.is_staff %}
+                  <a
+                    href="{% url 'reports:dashboard' %}"
+                    class="inline-flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 {% if current_namespace == 'reports' or current_app == 'reports' or 'reports' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
+                    data-mobile-nav-close
+                    {% if current_namespace == 'reports' or current_app == 'reports' or 'reports' in namespaces %}aria-current="page"{% endif %}
+                  >
+                    Informes
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path
+                        fill-rule="evenodd"
+                        d="M3.75 4a.75.75 0 01.75-.75h11a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75h-11a.75.75 0 01-.75-.75V4zm1.5.75v9h9.5v-9h-9.5zm1.75 7a.75.75 0 00.75-.75V8.5a.75.75 0 00-1.5 0V11a.75.75 0 00.75.75zm3.25 0a.75.75 0 00.75-.75V6.5a.75.75 0 00-1.5 0V11a.75.75 0 00.75.75zm3.25 0a.75.75 0 00.75-.75V9.5a.75.75 0 00-1.5 0V11a.75.75 0 00.75.75z"
                         clip-rule="evenodd"
                       />
                     </svg>
