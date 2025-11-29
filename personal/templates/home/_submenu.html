@@ -22,7 +22,7 @@
       {% if active == 'egg_inventory' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'egg_inventory' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Clasificación e Inventario
+      Clasificación
     </a>
     <a
       href="{% url 'home:daily-indicators' %}"
@@ -38,7 +38,7 @@
       {% if active == 'task_report' %}aria-current="page"{% endif %}
     >
       <span class="h-2 w-2 rounded-full {% if active == 'task_report' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
-      Reporte de tareas
+      Actividades
     </a>
     <a
       href="{% url 'home:purchases' %}"
