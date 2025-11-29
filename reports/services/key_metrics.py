@@ -19,6 +19,7 @@ from django.db.models.functions import Coalesce, Greatest
 
 from administration.models import Sale, SaleItem, SalePayment, SaleProductType
 from production.models import (
+    BirdBatch,
     EggClassificationBatch,
     EggClassificationEntry,
     EggDispatchItem,
@@ -30,6 +31,14 @@ from production.services.egg_classification import ORDERED_EGG_TYPES
 
 DEFAULT_RANGE_DAYS = 30
 PRICE_EQUALITY_TOLERANCE = Decimal("0.02")  # ±2 % window treated as par price
+PRICE_HISTORY_TYPES = [
+    SaleProductType.JUMBO,
+    SaleProductType.TRIPLE_A,
+    SaleProductType.DOUBLE_A,
+    SaleProductType.SINGLE_A,
+    SaleProductType.B,
+    SaleProductType.C,
+]
 
 
 @dataclass(frozen=True)
@@ -59,6 +68,10 @@ def build_key_metrics(start_date: date, end_date: date) -> KeyMetricsResult:
     metrics["price_positioning"] = _price_positioning(sale_items, avg_price_rows)
     metrics["overdue_customers"] = _overdue_customers(sales)
     metrics["payment_speed"] = _payment_speed(sales)
+    metrics["receivables_overview"] = _build_receivables_overview(
+        metrics["overdue_customers"],
+        metrics["payment_speed"],
+    )
     metrics["dispatch_vs_sales"] = _dispatch_vs_sales(start_date, end_date)
     metrics["production_losses"] = _production_vs_classification(start_date, end_date)
     metrics["type_d_ratios"] = _type_d_ratios(start_date, end_date)
@@ -192,14 +205,28 @@ def _average_prices_by_type(sale_items):
                 "total_qty": qty,
             }
         )
+    type_priority = {
+        SaleProductType.JUMBO: 0,
+        SaleProductType.TRIPLE_A: 1,
+        SaleProductType.DOUBLE_A: 2,
+        SaleProductType.SINGLE_A: 3,
+        SaleProductType.B: 4,
+        SaleProductType.C: 5,
+    }
+    rows.sort(key=lambda row: type_priority.get(row["type"], 99))
+    total_qty = sum((row["total_qty"] for row in rows), Decimal("0.00"))
+    if total_qty > Decimal("0.00"):
+        for row in rows:
+            row["share_percent"] = (row["total_qty"] / total_qty) * Decimal("100")
+    else:
+        for row in rows:
+            row["share_percent"] = Decimal("0.00")
     return rows
 
 
 def _price_history_series(sale_items, avg_price_rows: list[dict[str, Any]]):
-    if not avg_price_rows:
-        return []
-
-    type_priority = [row["type"] for row in avg_price_rows[:5]]
+    del avg_price_rows  # not needed after enforcing explicit order
+    type_priority = PRICE_HISTORY_TYPES
     aggregates = (
         sale_items.filter(product_type__in=type_priority)
         .values("product_type", "sale__date")
@@ -225,17 +252,49 @@ def _price_history_series(sale_items, avg_price_rows: list[dict[str, Any]]):
                 "avg_price": avg_price,
             }
         )
-    return list(series_map.values())
+    ordered_series: list[dict[str, Any]] = []
+    for product_type in type_priority:
+        bucket = series_map.get(product_type)
+        if bucket:
+            ordered_series.append(bucket)
+    return ordered_series
 
 
 def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
+    label_map = dict(SaleProductType.choices)
     reference_prices = {row["type"]: row["avg_price"] for row in avg_price_rows if row["avg_price"] > 0}
     if not reference_prices:
-        return {"totals": {"below": 0, "within": 0, "above": 0}, "segments": []}
+        return {"totals": {"below": 0, "within": 0, "above": 0}, "segments": [], "details": [], "type_meta": []}
 
+    tracked_types = [
+        SaleProductType.JUMBO,
+        SaleProductType.TRIPLE_A,
+        SaleProductType.DOUBLE_A,
+        SaleProductType.SINGLE_A,
+        SaleProductType.B,
+        SaleProductType.C,
+        SaleProductType.HEN,
+        SaleProductType.HEN_MANURE,
+    ]
+
+    custom_labels = {
+        SaleProductType.HEN: "Gallinas",
+        SaleProductType.HEN_MANURE: "Gallinaza",
+    }
+    type_meta: list[dict[str, Any]] = [
+        {
+            "type": code,
+            "label": custom_labels.get(code, label_map.get(code, code)),
+            "reference_avg": reference_prices.get(code),
+        }
+        for code in tracked_types
+    ]
+
+    tracked_type_set = {meta["type"] for meta in type_meta}
     customer_mix: dict[int, dict[str, Any]] = {}
     aggregates = (
-        sale_items.values("sale__customer_id", "sale__customer__name", "product_type")
+        sale_items.filter(product_type__in=tracked_type_set)
+        .values("sale__customer_id", "sale__customer__name", "product_type")
         .annotate(total_qty=Sum("quantity"), total_revenue=Sum("subtotal"))
     )
     for row in aggregates:
@@ -246,25 +305,43 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
         revenue = row["total_revenue"] or Decimal("0.00")
         if qty <= Decimal("0.00"):
             continue
-        ref_price = reference_prices.get(row["product_type"])
-        if not ref_price:
-            continue
-        expected = ref_price * qty
+        product_type = row["product_type"]
+        ref_price = reference_prices.get(product_type)
         payload = customer_mix.setdefault(
             customer_id,
             {
                 "name": row["sale__customer__name"],
                 "actual": Decimal("0.00"),
                 "expected": Decimal("0.00"),
+                "type_breakdown": {},
             },
         )
-        payload["actual"] += revenue
-        payload["expected"] += expected
+        actual_avg = revenue / qty if qty > Decimal("0.00") else Decimal("0.00")
+        payload["type_breakdown"][product_type] = {
+            "actual_avg": actual_avg,
+            "reference_avg": ref_price,
+            "qty": qty,
+        }
+        if ref_price:
+            payload["actual"] += revenue
+            payload["expected"] += ref_price * qty
 
     buckets = {
         "below": {"count": 0, "customers": []},
         "within": {"count": 0, "customers": []},
         "above": {"count": 0, "customers": []},
+    }
+    details: list[dict[str, Any]] = []
+    bucket_order = {"below": 0, "within": 1, "above": 2}
+    tone_map = {
+        "below": "text-rose-600",
+        "within": "text-slate-700",
+        "above": "text-emerald-600",
+    }
+    label_map_segment = {
+        "below": "Menor precio",
+        "within": "En línea",
+        "above": "Mayor precio",
     }
     for payload in customer_mix.values():
         expected = payload["expected"]
@@ -280,6 +357,53 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
             bucket = "within"
         buckets[bucket]["count"] += 1
         buckets[bucket]["customers"].append(payload["name"])
+        type_info_map = payload.get("type_breakdown", {})
+        type_values: list[dict[str, Any]] = []
+        for meta in type_meta:
+            detail = type_info_map.get(meta["type"])
+            type_values.append(
+                {
+                    "type": meta["type"],
+                    "value": detail["actual_avg"] if detail else None,
+                }
+            )
+        details.append(
+            {
+                "name": payload["name"],
+                "segment": bucket,
+                "segment_label": label_map_segment[bucket],
+                "expected_total": expected,
+                "actual_total": actual,
+                "delta_percentage": float(ratio * Decimal("100")),
+                "delta_value": actual - expected,
+                "type_values": type_values,
+                "tone_class": tone_map[bucket],
+                "order": bucket_order[bucket],
+            }
+        )
+
+    details.sort(key=lambda row: (row["order"], row["delta_percentage"]))
+
+    baseline_values = [
+        {"type": meta["type"], "value": meta["reference_avg"]}
+        for meta in type_meta
+    ]
+    details.insert(
+        0,
+        {
+            "name": "",
+            "segment": "baseline",
+            "segment_label": "Promedio",
+            "expected_total": None,
+            "actual_total": None,
+            "delta_percentage": None,
+            "delta_value": None,
+            "type_values": baseline_values,
+            "tone_class": "text-amber-900",
+            "order": -1,
+            "is_baseline": True,
+        },
+    )
 
     segments = []
     total_clients = sum(bucket["count"] for bucket in buckets.values()) or 1
@@ -295,6 +419,8 @@ def _price_positioning(sale_items, avg_price_rows: list[dict[str, Any]]):
     return {
         "totals": {key: payload["count"] for key, payload in buckets.items()},
         "segments": segments,
+        "details": details,
+        "type_meta": type_meta,
     }
 
 
@@ -312,6 +438,7 @@ def _overdue_customers(sales: Iterable[Sale]) -> list[dict[str, Any]]:
         payload = rows.setdefault(
             customer.pk,
             {
+                "customer_id": customer.pk,
                 "name": customer.name,
                 "overdue_balance": Decimal("0.00"),
                 "oldest_due_days": 0,
@@ -349,7 +476,8 @@ def _payment_speed(sales: Iterable[Sale]) -> dict[str, Any]:
         payload["count"] += 1
 
     slow_clients = []
-    for payload in client_stats.values():
+    per_customer: dict[int, dict[str, Any]] = {}
+    for customer_id, payload in client_stats.items():
         if payload["count"] <= 0:
             continue
         avg_days = payload["days"] / payload["count"]
@@ -360,6 +488,11 @@ def _payment_speed(sales: Iterable[Sale]) -> dict[str, Any]:
                 "paid_sales": payload["count"],
             }
         )
+        per_customer[customer_id] = {
+            "name": payload["name"],
+            "avg_days": avg_days,
+            "paid_sales": payload["count"],
+        }
     slow_clients.sort(key=lambda row: row["avg_days"], reverse=True)
 
     avg_days_global = (total_days / total_sales) if total_sales else 0
@@ -367,6 +500,7 @@ def _payment_speed(sales: Iterable[Sale]) -> dict[str, Any]:
         "global_avg_days": avg_days_global,
         "samples": total_sales,
         "slow_clients": slow_clients[:5],
+        "per_customer": per_customer,
     }
 
 
@@ -448,6 +582,7 @@ def _type_d_ratios(start_date: date, end_date: date) -> dict[str, Any]:
     rows = []
     total_d = Decimal("0.00")
     total_all = Decimal("0.00")
+    batch_ids: set[int] = set()
     for row in aggregates:
         total = row["total_cartons"] or Decimal("0.00")
         d_value = row["d_cartons"] or Decimal("0.00")
@@ -457,6 +592,7 @@ def _type_d_ratios(start_date: date, end_date: date) -> dict[str, Any]:
         total_d += d_value
         ratio = float((d_value / total) * Decimal("100"))
         batch_id = row["batch__bird_batch_id"] or 0
+        batch_ids.add(batch_id)
         farm_name = row["batch__bird_batch__farm__name"] or "Sin granja"
         rows.append(
             {
@@ -467,6 +603,12 @@ def _type_d_ratios(start_date: date, end_date: date) -> dict[str, Any]:
                 "total_cartons": total,
             }
         )
+    house_labels = _build_batch_house_labels(batch_ids)
+    for entry in rows:
+        batch_label = house_labels.get(entry["batch_id"])
+        if batch_label:
+            farm_name = entry["label"].split("·")[-1].strip()
+            entry["label"] = f"{batch_label} · {farm_name}"
     rows.sort(key=lambda row: row["ratio"], reverse=True)
     global_ratio = float(((total_d / total_all) * Decimal("100")) if total_all > 0 else 0)
     return {"global_ratio": global_ratio, "per_batch": rows[:5]}
@@ -479,6 +621,7 @@ def _mortality_ratios(start_date: date, end_date: date) -> list[dict[str, Any]]:
         .annotate(total_mortality=Sum("mortality"))
     )
     rows = []
+    batch_ids: set[int] = set()
     for row in aggregates:
         initial_quantity = row["bird_batch__initial_quantity"] or 0
         total_mortality = row["total_mortality"] or 0
@@ -486,6 +629,7 @@ def _mortality_ratios(start_date: date, end_date: date) -> list[dict[str, Any]]:
             continue
         ratio = (Decimal(total_mortality) / Decimal(initial_quantity)) * Decimal("100")
         batch_id = row["bird_batch_id"] or 0
+        batch_ids.add(batch_id)
         farm_name = row["bird_batch__farm__name"] or "Sin granja"
         rows.append(
             {
@@ -495,6 +639,12 @@ def _mortality_ratios(start_date: date, end_date: date) -> list[dict[str, Any]]:
                 "mortality": total_mortality,
             }
         )
+    house_labels = _build_batch_house_labels(batch_ids)
+    for entry in rows:
+        batch_label = house_labels.get(entry["batch_id"])
+        if batch_label:
+            farm_name = entry["label"].split("·")[-1].strip()
+            entry["label"] = f"{batch_label} · {farm_name}"
     rows.sort(key=lambda row: row["ratio"], reverse=True)
     return rows[:5]
 
@@ -514,13 +664,6 @@ def _build_chart_sources(metrics: Mapping[str, Any]) -> dict[str, Any]:
             }
         )
     charts["priceHistory"] = price_history
-
-    position_data = metrics.get("price_positioning", {})
-    segments = []
-    for entry in position_data.get("segments", []):
-        label = {"below": "Por debajo", "within": "En línea", "above": "Por encima"}.get(entry["segment"], entry["segment"])
-        segments.append({"label": label, "value": entry["count"]})
-    charts["pricePositioning"] = segments
 
     dispatch_metrics = metrics.get("dispatch_vs_sales", {})
     per_type = dispatch_metrics.get("per_type", [])
@@ -552,3 +695,53 @@ def _build_chart_sources(metrics: Mapping[str, Any]) -> dict[str, Any]:
         "values": [row["ratio"] for row in mortality_rows],
     }
     return charts
+
+
+def _build_batch_house_labels(batch_ids: Iterable[int]) -> dict[int, str]:
+    ids = [batch_id for batch_id in batch_ids if batch_id]
+    if not ids:
+        return {}
+    result: dict[int, str] = {}
+    batches = (
+        BirdBatch.objects.filter(pk__in=ids)
+        .prefetch_related("allocations__room__chicken_house")
+    )
+    for batch in batches:
+        names: list[str] = []
+        seen: set[str] = set()
+        for allocation in batch.allocations.all():
+            room = allocation.room
+            house = getattr(room, "chicken_house", None)
+            if not house:
+                continue
+            if house.name in seen:
+                continue
+            seen.add(house.name)
+            names.append(house.name)
+        names.sort()
+        if names:
+            result[batch.pk] = " / ".join(names)
+    return result
+
+
+def _build_receivables_overview(
+    overdue_rows: Iterable[dict[str, Any]],
+    payment_speed: Mapping[str, Any],
+) -> dict[str, Any]:
+    customer_stats = payment_speed.get("per_customer") or {}
+    rows: list[dict[str, Any]] = []
+    for row in overdue_rows:
+        customer_id = row.get("customer_id")
+        stats = customer_stats.get(customer_id) if isinstance(customer_stats, dict) else None
+        rows.append(
+            {
+                **row,
+                "avg_days": stats.get("avg_days") if stats else None,
+                "paid_sales": stats.get("paid_sales") if stats else 0,
+            }
+        )
+    return {
+        "rows": rows,
+        "global_avg_days": payment_speed.get("global_avg_days") or 0,
+        "samples": payment_speed.get("samples") or 0,
+    }

@@ -64,29 +64,6 @@
     });
   }
 
-  const positioningCanvas = document.getElementById('chart-price-positioning');
-  if (positioningCanvas && Array.isArray(payload.pricePositioning) && payload.pricePositioning.length) {
-    new ChartJS(positioningCanvas, {
-      type: 'doughnut',
-      data: {
-        labels: payload.pricePositioning.map((segment) => segment.label),
-        datasets: [
-          {
-            data: payload.pricePositioning.map((segment) => segment.value),
-            backgroundColor: palette.slice(0, payload.pricePositioning.length),
-            borderWidth: 0,
-          },
-        ],
-      },
-      options: {
-        cutout: '65%',
-        plugins: {
-          legend: { display: true, position: 'bottom' },
-        },
-      },
-    });
-  }
-
   const dispatchCanvas = document.getElementById('chart-dispatch-vs-sales');
   if (
     dispatchCanvas &&

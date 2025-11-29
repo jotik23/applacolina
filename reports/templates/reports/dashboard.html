@@ -1,5 +1,5 @@
 {% extends "calendario/base.html" %}
-{% load static %}
+{% load static reports_extras %}
 
 {% block title %}Informes · Métricas clave{% endblock %}
 
@@ -19,10 +19,10 @@
           <div>
             <h1 class="text-3xl font-semibold text-slate-900">Tablero ejecutivo</h1>
             <p class="mt-1 text-base text-slate-500">
-              Visualiza el pulso comercial, financiero y operativo de la organización en un solo lugar. Filtra por rango de fechas para hacer análisis comparativos.
+              Resumen comercial, financiero y operativo en un solo lugar. Filtra por rango de fechas para hacer análisis comparativos.
             </p>
             <p class="mt-2 text-sm font-medium text-slate-600">
-              Análisis del {{ selected_start_date|date:"d M Y" }} al {{ selected_end_date|date:"d M Y" }} · {{ range_days }} día{% if range_days != 1 %}s{% endif %}
+              Análisis del {{ selected_start_date|date:"d M Y" }} al {{ selected_end_date|date:"d M Y" }} · {{ range_days|number_format }} día{% if range_days != 1 %}s{% endif %}
             </p>
           </div>
         </div>
@@ -77,28 +77,28 @@
       <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article class="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingresos netos</p>
-          <p class="mt-3 text-3xl font-semibold text-slate-900">${{ summary.total_revenue|floatformat:0 }}</p>
-          <p class="mt-1 text-sm text-slate-500">Facturas emitidas: {{ summary.invoice_count }}</p>
+          <p class="mt-3 text-3xl font-semibold text-slate-900">{{ summary.total_revenue|peso }}</p>
+          <p class="mt-1 text-sm text-slate-500">Facturas emitidas: {{ summary.invoice_count|number_format }}</p>
         </article>
         <article class="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cartera abierta</p>
-          <p class="mt-3 text-3xl font-semibold text-amber-600">${{ summary.open_balance|floatformat:0 }}</p>
+          <p class="mt-3 text-3xl font-semibold text-amber-600">{{ summary.open_balance|peso }}</p>
           <p class="mt-1 text-sm text-slate-500">Monto pendiente por recaudo.</p>
         </article>
         <article class="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ticket promedio</p>
-          <p class="mt-3 text-3xl font-semibold text-slate-900">${{ summary.average_ticket|floatformat:0 }}</p>
+          <p class="mt-3 text-3xl font-semibold text-slate-900">{{ summary.average_ticket|peso }}</p>
           <p class="mt-1 text-sm text-slate-500">Promedio por factura confirmada.</p>
         </article>
         <article class="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Índice de recaudo</p>
-            <span class="text-xs font-semibold text-emerald-600">{{ summary.collection_rate|floatformat:1 }}%</span>
+            <span class="text-xs font-semibold text-emerald-600">{{ summary.collection_rate|number_format:1 }}%</span>
           </div>
           <div class="mt-3 h-2 rounded-full bg-slate-100">
-            <div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {{ summary.collection_rate|floatformat:0 }}%"></div>
+            <div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {{ summary.collection_rate|number_format }}%"></div>
           </div>
-          <p class="mt-2 text-sm text-slate-500">{{ summary.paid_ratio|floatformat:1 }}% de las facturas fueron pagadas en su totalidad.</p>
+          <p class="mt-2 text-sm text-slate-500">{{ summary.paid_ratio|number_format:1 }}% de las facturas fueron pagadas en su totalidad.</p>
         </article>
       </section>
     {% endwith %}
@@ -113,9 +113,9 @@
           <a href="{% url 'home:sales' %}" class="text-sm font-semibold text-brand transition hover:text-brand/80">Ir al módulo de ventas →</a>
         </header>
         <div class="mt-6 overflow-hidden rounded-2xl border border-slate-100">
-          <table class="min-w-full divide-y divide-slate-100 text-sm">
-            <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-              <tr>
+                    <table class="min-w-full divide-y divide-slate-100 text-sm">
+                      <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <tr>
                 <th class="px-4 py-3">Cliente</th>
                 <th class="px-4 py-3 text-right">Ingresos</th>
                 <th class="px-4 py-3 text-right">Saldo</th>
@@ -124,15 +124,15 @@
             </thead>
             <tbody class="divide-y divide-slate-100 bg-white">
               {% if metrics.top_customers %}
-                {% for customer in metrics.top_customers|slice:":8" %}
+                {% for customer in metrics.top_customers|slice:":12" %}
                   <tr class="hover:bg-slate-50/70">
                     <td class="px-4 py-3">
                       <div class="font-semibold text-slate-800">{{ customer.name }}</div>
-                      <div class="text-xs text-slate-500">{{ customer.share|floatformat:1 }}% del ingreso</div>
+                      <div class="text-xs text-slate-500">{{ customer.share|number_format:1 }}% del ingreso</div>
                     </td>
-                    <td class="px-4 py-3 text-right font-semibold text-slate-900">${{ customer.total_amount|floatformat:0 }}</td>
-                    <td class="px-4 py-3 text-right text-amber-600">${{ customer.balance_due|floatformat:0 }}</td>
-                    <td class="px-4 py-3 text-right text-slate-500">{{ customer.orders }}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-900">{{ customer.total_amount|peso }}</td>
+                    <td class="px-4 py-3 text-right text-amber-600">{{ customer.balance_due|peso }}</td>
+                    <td class="px-4 py-3 text-right text-slate-500">{{ customer.orders|number_format }}</td>
                   </tr>
                 {% endfor %}
               {% else %}
@@ -170,9 +170,12 @@
                 <div class="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3">
                   <div>
                     <p class="text-sm font-semibold text-slate-800">{{ product.label }}</p>
-                    <p class="text-xs text-slate-500">{{ product.total_qty|floatformat:0 }} unidades</p>
+                    <p class="text-xs text-slate-500">
+                      {{ product.total_qty|number_format:0 }} unidades
+                      <span class="text-slate-400">({{ product.share_percent|floatformat:1 }}%)</span>
+                    </p>
                   </div>
-                  <p class="text-base font-semibold text-brand">${{ product.avg_price|floatformat:2 }}</p>
+                  <p class="text-base font-semibold text-brand">{{ product.avg_price|peso:2 }}</p>
                 </div>
               {% endfor %}
             {% else %}
@@ -183,7 +186,7 @@
       </article>
     </section>
 
-    <section class="grid gap-6 lg:grid-cols-2">
+    <section class="space-y-6">
       <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
         <header class="flex items-center justify-between">
           <div>
@@ -191,107 +194,183 @@
             <h2 class="text-lg font-semibold text-slate-900">Comportamiento frente al precio promedio</h2>
           </div>
         </header>
-        <div class="mt-4 grid gap-4 lg:grid-cols-2">
-          <div class="flex items-center justify-center">
-            <canvas id="chart-price-positioning" height="220" class="w-full max-w-[240px]"></canvas>
-          </div>
-          <div class="space-y-3">
-            {% for segment in metrics.price_positioning.segments %}
-              <div class="rounded-2xl border border-slate-100 px-4 py-3">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-sm font-semibold text-slate-800">
-                      {% if segment.segment == "below" %}Por debajo del promedio{% elif segment.segment == "above" %}Por encima{% else %}En línea{% endif %}
-                    </p>
-                    <p class="text-xs text-slate-500">{{ segment.sample|join:", " }}</p>
-                  </div>
-                  <div class="text-right">
-                    <p class="text-base font-semibold text-brand">{{ segment.count }}</p>
-                    <p class="text-xs text-slate-400">{{ segment.share|floatformat:1 }}% clientes</p>
-                  </div>
-                </div>
+        <div class="mt-4">
+          <div class="overflow-hidden rounded-2xl border border-slate-100">
+            {% if metrics.price_positioning.details %}
+              <div class="max-h-96 overflow-auto">
+                <table class="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th class="px-4 py-3">Cliente</th>
+                      <th class="px-4 py-3">Segmento</th>
+                      {% for column in metrics.price_positioning.type_meta %}
+                        <th class="px-4 py-3 text-right">{{ column.label }}</th>
+                      {% endfor %}
+                      <th class="px-4 py-3 text-right">Ventas reales</th>
+                      <th class="px-4 py-3 text-right">Valor esperado</th>
+                      <th class="px-4 py-3 text-right">Delta %</th>
+                      <th class="px-4 py-3 text-right">Delta $</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100 bg-white">
+                    {% for entry in metrics.price_positioning.details %}
+                      {% with tone_class=entry.tone_class|default:"text-slate-700" %}
+                        <tr class="{% if entry.is_baseline %}bg-amber-50/80{% else %}hover:bg-slate-50/70{% endif %}">
+                          <td class="px-4 py-3 font-semibold text-slate-800">
+                            {% if entry.is_baseline %}
+                              <span class="text-xs uppercase tracking-wide text-amber-800">&mdash;</span>
+                            {% else %}
+                              {{ entry.name }}
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-sm text-slate-500">{{ entry.segment_label }}</td>
+                          {% for value in entry.type_values %}
+                            <td class="px-4 py-3 text-right text-xs font-semibold {{ tone_class }}">
+                              {% if value.value is not None %}
+                                {{ value.value|number_format:0 }}
+                              {% else %}
+                                <span class="text-slate-300">&mdash;</span>
+                              {% endif %}
+                            </td>
+                          {% endfor %}
+                          <td class="px-4 py-3 text-right text-sm font-semibold {{ tone_class }}">
+                            {% if entry.actual_total is not None %}
+                              {{ entry.actual_total|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm {{ tone_class }}">
+                            {% if entry.expected_total is not None %}
+                              {{ entry.expected_total|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm {{ tone_class }}">
+                            {% if entry.delta_percentage is not None %}
+                              {{ entry.delta_percentage|number_format:1 }}%
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right text-sm {{ tone_class }}">
+                            {% if entry.delta_value is not None %}
+                              {{ entry.delta_value|number_format }}
+                            {% else %}
+                              <span class="text-slate-300">&mdash;</span>
+                            {% endif %}
+                          </td>
+                        </tr>
+                      {% endwith %}
+                    {% endfor %}
+                  </tbody>
+                </table>
               </div>
-            {% empty %}
-              <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">Se necesitan más ventas para comparar los precios.</p>
-            {% endfor %}
+            {% else %}
+              <p class="px-4 py-6 text-center text-sm text-slate-500">Se necesitan más ventas para comparar los precios por cliente.</p>
+            {% endif %}
           </div>
         </div>
-      </article>
-      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
-        <header class="flex items-center justify-between gap-4">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Riesgos de cartera</p>
-            <h2 class="text-lg font-semibold text-slate-900">Clientes con más saldo vencido</h2>
-          </div>
-          <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">{{ metrics.overdue_customers|length }} cliente{% if metrics.overdue_customers|length != 1 %}s{% endif %}</span>
-        </header>
-        <div class="mt-4 space-y-3">
-          {% if metrics.overdue_customers %}
-            {% for row in metrics.overdue_customers %}
-              <div class="rounded-2xl border border-rose-100/80 bg-rose-50/30 px-4 py-3">
-                <div class="flex items-center justify-between text-sm">
-                  <div>
-                    <p class="font-semibold text-slate-800">{{ row.name }}</p>
-                    <p class="text-xs text-slate-500">{{ row.open_invoices }} factura{% if row.open_invoices != 1 %}s{% endif %} · {{ row.oldest_due_days }} días en mora</p>
-                  </div>
-                  <p class="text-base font-semibold text-rose-600">${{ row.overdue_balance|floatformat:0 }}</p>
+        <div class="mt-6 space-y-3">
+          {% for segment in metrics.price_positioning.segments %}
+            <div class="rounded-2xl border border-slate-100 px-4 py-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-semibold text-slate-800">
+                    {% if segment.segment == "below" %}Menor precio{% elif segment.segment == "above" %}Mayor precio{% else %}En línea{% endif %}
+                  </p>
+                  <p class="text-xs text-slate-500">{{ segment.sample|join:", " }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-base font-semibold text-brand">{{ segment.count|number_format }}</p>
+                  <p class="text-xs text-slate-400">{{ segment.share|number_format:1 }}% clientes</p>
                 </div>
               </div>
-            {% endfor %}
-          {% else %}
-            <p class="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-700">
-              No existen saldos vencidos en el rango analizado.
-            </p>
-          {% endif %}
+            </div>
+          {% empty %}
+            <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">Se necesitan más ventas para comparar los precios.</p>
+          {% endfor %}
         </div>
       </article>
     </section>
 
-    <section class="grid gap-6 lg:grid-cols-3">
-      <article class="lg:col-span-2 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+    <section class="grid gap-6 lg:grid-cols-2">
+      {% with receivables=metrics.receivables_overview %}
+        <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5 lg:col-span-1">
+          <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Riesgos de cartera & pagos</p>
+              <h2 class="text-lg font-semibold text-slate-900">Comportamiento de pago por cliente</h2>
+            </div>
+            <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">
+              {{ receivables.rows|length|number_format }} cliente{% if receivables.rows|length != 1 %}s{% endif %} con mora
+            </span>
+            <span class="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-600">
+              {{ receivables.global_avg_days|number_format:1 }}<span class="text-xs font-normal text-emerald-600"> días</span>.
+                {{ receivables.samples|number_format }} factura{% if receivables.samples != 1 %}s{% endif %}
+            </span>
+          </header>
+          <div class="mt-4 flex flex-col gap-4">
+            <div class="">
+              <div class="overflow-hidden rounded-2xl border border-slate-100">
+                {% if receivables.rows %}
+                  <div class="max-h-80 overflow-auto">
+                    <table class="min-w-full divide-y divide-slate-100 text-sm">
+                      <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <tr>
+                          <th class="px-4 py-3">Cliente</th>
+                          <th class="px-4 py-3 text-right">Saldo vencido</th>
+                          <th class="px-4 py-3 text-right">Días en mora</th>
+                          <th class="px-4 py-3 text-right">Promedio cierre</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100 bg-white">
+                        {% for row in receivables.rows %}
+                          <tr class="hover:bg-slate-50/70">
+                            <td class="px-4 py-3">
+                              <p class="font-semibold text-slate-800">{{ row.name }}</p>
+                              <p class="text-xs text-slate-500">{{ row.open_invoices|number_format }} factura{% if row.open_invoices != 1 %}s{% endif %}</p>
+                            </td>
+                            <td class="px-4 py-3 text-right font-semibold text-rose-600">{{ row.overdue_balance|peso }}</td>
+                            <td class="px-4 py-3 text-right text-slate-500">{{ row.oldest_due_days|number_format }} días</td>
+                            <td class="px-4 py-3 text-right">
+                              {% if row.avg_days %}
+                                <div class="font-semibold text-slate-800">{{ row.avg_days|number_format:1 }} días</div>
+                                <p class="text-[11px] text-slate-400">{{ row.paid_sales|number_format }} factura{% if row.paid_sales != 1 %}s{% endif %} pagada{% if row.paid_sales != 1 %}s{% endif %}</p>
+                              {% else %}
+                                <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Sin histórico</span>
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <p class="px-4 py-6 text-center text-sm text-emerald-700">No existen saldos vencidos en el rango analizado.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </article>
+      {% endwith %}
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5 lg:col-span-1">
         <header class="flex items-center justify-between">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Operación logística</p>
             <h2 class="text-lg font-semibold text-slate-900">Despachos vs ventas</h2>
           </div>
           <div class="text-right text-sm text-slate-500">
-            <p>Total despachado: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_dispatched|floatformat:0 }}</span> cartones</p>
-            <p>Total vendido: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_sold|floatformat:0 }}</span> cartones</p>
-            <p>Diferencial: <span class="font-semibold text-amber-600">{{ metrics.dispatch_vs_sales.gap|floatformat:0 }}</span></p>
+            <p>Total despachado: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_dispatched|number_format }}</span> cartones</p>
+            <p>Total vendido: <span class="font-semibold text-slate-800">{{ metrics.dispatch_vs_sales.total_sold|number_format }}</span> cartones</p>
+            <p>Diferencial: <span class="font-semibold text-amber-600">{{ metrics.dispatch_vs_sales.gap|number_format }}</span></p>
           </div>
         </header>
         <div class="mt-4">
           <canvas id="chart-dispatch-vs-sales" height="260" class="w-full"></canvas>
           {% if not metrics.dispatch_vs_sales.per_type %}
             <p class="mt-3 rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No hay movimientos de venta o despacho en el periodo.</p>
-          {% endif %}
-        </div>
-      </article>
-      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
-        <header>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Comportamiento de pagos</p>
-          <h2 class="text-lg font-semibold text-slate-900">Tiempo medio para cerrar facturas</h2>
-        </header>
-        <div class="mt-4 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4 text-center">
-          <p class="text-sm font-semibold uppercase tracking-wider text-slate-500">Promedio general</p>
-          <p class="mt-2 text-4xl font-semibold text-slate-900">{{ metrics.payment_speed.global_avg_days|floatformat:1 }}<span class="text-base font-normal text-slate-500"> días</span></p>
-          <p class="mt-1 text-xs text-slate-500">{{ metrics.payment_speed.samples }} factura{% if metrics.payment_speed.samples != 1 %}s{% endif %} pagada{% if metrics.payment_speed.samples != 1 %}s{% endif %} en el rango.</p>
-        </div>
-        <div class="mt-4 space-y-3">
-          {% if metrics.payment_speed.slow_clients %}
-            {% for client in metrics.payment_speed.slow_clients %}
-              <div class="rounded-2xl border border-slate-100 px-4 py-3">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-sm font-semibold text-slate-800">{{ client.name }}</p>
-                    <p class="text-xs text-slate-500">{{ client.paid_sales }} factura{% if client.paid_sales != 1 %}s{% endif %}</p>
-                  </div>
-                  <p class="text-base font-semibold text-amber-600">{{ client.avg_days|floatformat:1 }} días</p>
-                </div>
-              </div>
-            {% endfor %}
-          {% else %}
-            <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">Aún no hay facturas completamente pagadas para calcular el promedio.</p>
           {% endif %}
         </div>
       </article>
@@ -309,7 +388,7 @@
           <canvas id="chart-production-vs-classification" height="220" class="w-full"></canvas>
         </div>
         <p class="mt-3 text-sm text-slate-500">
-          Diferencial no clasificado: <span class="font-semibold text-rose-600">{{ metrics.production_losses.gap|floatformat:1 }} cartones</span>
+          Diferencial no clasificado: <span class="font-semibold text-rose-600">{{ metrics.production_losses.gap|number_format:1 }} cartones</span>
         </p>
       </article>
       <article class="xl:col-span-1 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
@@ -319,7 +398,7 @@
         </header>
         <div class="mt-4">
           <canvas id="chart-type-d" height="220" class="w-full"></canvas>
-          <p class="mt-3 text-sm text-slate-500">Promedio general: <span class="font-semibold text-slate-900">{{ metrics.type_d_ratios.global_ratio|floatformat:1 }}%</span></p>
+          <p class="mt-3 text-sm text-slate-500">Promedio general: <span class="font-semibold text-slate-900">{{ metrics.type_d_ratios.global_ratio|number_format:1 }}%</span></p>
         </div>
       </article>
       <article class="xl:col-span-1 rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
