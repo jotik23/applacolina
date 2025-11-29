@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     CalendarApproveView,
+    CalendarAssignmentBulkUpdateView,
     CalendarAssignmentCollectionView,
     CalendarAssignmentDetailView,
     CalendarEligibleOperatorsView,
@@ -35,6 +36,11 @@ urlpatterns = [
         "calendars/<int:calendar_id>/assignments/",
         CalendarAssignmentCollectionView.as_view(),
         name="calendar-assignments",
+    ),
+    path(
+        "calendars/<int:calendar_id>/assignments/bulk/",
+        CalendarAssignmentBulkUpdateView.as_view(),
+        name="calendar-assignment-bulk",
     ),
     path(
         "calendars/<int:calendar_id>/assignments/<int:assignment_id>/",

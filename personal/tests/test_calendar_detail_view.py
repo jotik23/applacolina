@@ -298,10 +298,7 @@ class CalendarDetailViewManualOverrideTests(TestCase):
         )
         self.assertIsNotNone(matching_cell)
         self.assertEqual(matching_cell["alert"], AssignmentAlertLevel.WARN.value)
-        self.assertEqual(
-            matching_cell["skill_gap_message"],
-            "Operario sin sugerencia registrada. Asignación manual confirmada.",
-        )
+        self.assertIsNone(matching_cell["skill_gap_message"])
 
     def test_create_assignment_resets_conflicting_assignment(self) -> None:
         url = reverse("personal:calendar-detail", args=[self.calendar.pk])

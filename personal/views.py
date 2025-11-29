@@ -133,13 +133,6 @@ SHARE_JOB_TYPE_ORDER: tuple[str, ...] = (
     PositionJobType.SALES,
 )
 
-JOB_TYPE_SHORT_LABELS: dict[str, str] = {
-    PositionJobType.PRODUCTION: _("Prod."),
-    PositionJobType.CLASSIFICATION: _("Clas."),
-    PositionJobType.ADMINISTRATIVE: _("Admin."),
-    PositionJobType.SALES: _("Ventas"),
-}
-
 
 def _operator_display_name(operator: Optional[UserProfile]) -> str:
     if not operator:
@@ -313,6 +306,128 @@ def _build_rest_rows(
     return rest_rows, rest_operator_ids
 
 
+def _build_rest_daily_overview(
+    date_columns: Iterable[date],
+    rest_rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    overview: list[dict[str, Any]] = []
+    date_list = list(date_columns)
+    if not date_list or not rest_rows:
+        return overview
+
+    for day in date_list:
+        day_iso = day.isoformat()
+        resting: list[dict[str, str]] = []
+        available: list[dict[str, str]] = []
+        for rest_row in rest_rows:
+            operator_label = rest_row.get("slot") or rest_row.get("label") or ""
+            role_label = rest_row.get("label") or ""
+            for cell in rest_row.get("cells", []):
+                if cell.get("date") != day_iso:
+                    continue
+                entry = {
+                    "name": cell.get("name") or operator_label,
+                    "role": cell.get("role") or role_label,
+                    "reason": cell.get("reason") or cell.get("status_label") or "",
+                }
+                state = cell.get("state")
+                if state == REST_CELL_STATE_REST:
+                    resting.append(entry)
+                elif state == REST_CELL_STATE_UNASSIGNED:
+                    available.append(entry)
+        if resting or available:
+            overview.append(
+                {
+                    "date": day,
+                    "date_label": date_format(day, "DATE_FORMAT"),
+                    "resting": resting,
+                    "available": available,
+                }
+            )
+
+    return overview
+
+
+def _build_rest_matrix_rows(
+    date_columns: Iterable[date],
+    overview: Iterable[dict[str, Any]],
+    *,
+    entry_key: str,
+    label_prefix: str,
+    rest_group: dict[str, Any],
+) -> list[dict[str, Any]]:
+    day_lookup: dict[date, dict[str, Any]] = {day["date"]: day for day in overview}
+    max_count = 0
+    for day in overview:
+        items = day.get(entry_key, []) if day else []
+        if len(items) > max_count:
+            max_count = len(items)
+    if max_count == 0:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    date_list = list(date_columns)
+    for index in range(max_count):
+        cells: list[dict[str, Any]] = []
+        has_content = False
+        for current_date in date_list:
+            day_payload = day_lookup.get(current_date)
+            entries = day_payload.get(entry_key, []) if day_payload else []
+            date_iso = current_date.isoformat()
+            date_display = date_format(current_date, "DATE_FORMAT")
+            if index < len(entries):
+                entry = entries[index]
+                has_content = True
+                reason = entry.get("reason") or (
+                    "Disponible" if entry_key == "available" else ""
+                )
+                cells.append(
+                    {
+                        "name": entry.get("name") or "",
+                        "role": entry.get("role") or "",
+                        "reason": reason,
+                        "state": REST_CELL_STATE_REST
+                        if entry_key == "resting"
+                        else REST_CELL_STATE_UNASSIGNED,
+                        "status_label": (
+                            "Descanso"
+                            if entry_key == "resting"
+                            else "Disponible"
+                        ),
+                        "date": date_iso,
+                        "date_display": date_display,
+                        "rest_period_id": None,
+                        "rest_source": "",
+                        "operator_id": "",
+                    }
+                )
+            else:
+                cells.append(
+                    {
+                        "name": "",
+                        "role": "",
+                        "reason": "",
+                        "state": REST_CELL_STATE_INACTIVE,
+                        "status_label": "",
+                        "date": date_iso,
+                        "date_display": date_display,
+                        "rest_period_id": None,
+                        "rest_source": "",
+                        "operator_id": "",
+                    }
+                )
+        if has_content:
+            rows.append(
+                {
+                    "label": f"{label_prefix} {index + 1}",
+                    "slot": "",
+                    "display_group": rest_group,
+                    "cells": cells,
+                }
+            )
+    return rows
+
+
 def _build_assignment_matrix(
     calendar: ShiftCalendar,
 ) -> tuple[
@@ -456,12 +571,12 @@ def _build_assignment_matrix(
             if operator.is_active_on(target_day):
                 active_candidates_by_day[target_day].add(operator.id)
 
-    def _suggestion_gap_message(
+    def _has_suggestion_gap(
         assignment: ShiftAssignment,
         position: PositionDefinition,
-    ) -> Optional[str]:
+    ) -> bool:
         if not assignment or not assignment.operator_id:
-            return None
+            return False
 
         suggested_positions = suggestion_map.get(assignment.operator_id)
         if suggested_positions is None:
@@ -474,12 +589,7 @@ def _build_assignment_matrix(
                 suggested_positions = set()
             suggestion_map[assignment.operator_id] = suggested_positions
 
-        if position.id not in suggested_positions:
-            if assignment.is_auto_assigned:
-                return "Operario sin sugerencia registrada. Ajusta programación."
-            return "Operario sin sugerencia registrada. Asignación manual confirmada."
-
-        return None
+        return position.id not in suggested_positions
 
     def _overtime_message(assignment: ShiftAssignment) -> Optional[str]:
         if not assignment.operator_id or not assignment.is_overtime:
@@ -566,7 +676,8 @@ def _build_assignment_matrix(
             if not is_active:
                 choices = []
 
-            skill_gap_message = _suggestion_gap_message(assignment, position) if assignment else None
+            has_skill_gap = _has_suggestion_gap(assignment, position) if assignment else False
+            skill_gap_message = None
             is_overtime = bool(assignment and assignment.is_overtime)
             overtime_message = _overtime_message(assignment) if assignment else None
 
@@ -579,7 +690,7 @@ def _build_assignment_matrix(
             else:
                 if is_overtime:
                     alert_level = _escalate_alert(alert_level, AssignmentAlertLevel.CRITICAL)
-                if skill_gap_message:
+                if has_skill_gap:
                     manual_override = not assignment.is_auto_assigned
                     desired_alert = (
                         AssignmentAlertLevel.WARN if manual_override else AssignmentAlertLevel.CRITICAL
@@ -948,59 +1059,6 @@ def _build_rest_suggestions_payload(calendar: ShiftCalendar) -> list[dict[str, A
             }
         )
     return payload
-
-
-def _build_calendar_whatsapp_message(
-    *,
-    calendar: ShiftCalendar,
-    stats: dict[str, int],
-    issues: list[dict[str, Any]],
-    suggestions: list[dict[str, Any]],
-    detail_url: str,
-) -> str:
-    lines: list[str] = []
-    name = calendar.name or _("Calendario %(start)s → %(end)s") % {
-        "start": date_format(calendar.start_date, "DATE_FORMAT"),
-        "end": date_format(calendar.end_date, "DATE_FORMAT"),
-    }
-    lines.append(f"🗓 *Calendario operativo · {name}*")
-    lines.append(
-        f"📅 {date_format(calendar.start_date, 'DATE_FORMAT')} → {date_format(calendar.end_date, 'DATE_FORMAT')}"
-    )
-    lines.append(f"📌 Estado: {calendar.get_status_display()}")
-    lines.append("")
-    lines.append("Resumen rápido:")
-    lines.append(f"• {stats['total_assignments']} turnos confirmados")
-    lines.append(f"• {stats['gaps']} vacíos por asignar")
-    lines.append(f"• {stats['overtime']} turnos extra programados")
-    if stats["critical"]:
-        lines.append(f"• {stats['critical']} alertas críticas activas")
-    if issues:
-        lines.append("")
-        lines.append("Alertas destacadas:")
-        for issue in issues[:4]:
-            title = issue.get("title") or ""
-            detail = issue.get("detail") or ""
-            if detail:
-                lines.append(f"• {title}: {detail}")
-            else:
-                lines.append(f"• {title}")
-    if suggestions:
-        lines.append("")
-        lines.append("Sugerencias del equipo:")
-        for suggestion in suggestions[:3]:
-            operator_name = suggestion.get("operator_name") or _("Colaborador")
-            scheduled_label = suggestion.get("scheduled_date_label") or ""
-            suggested_label = suggestion.get("suggested_date_label") or ""
-            reason = suggestion.get("reason") or ""
-            lines.append(
-                f"• {operator_name}: {scheduled_label} → {suggested_label}. Motivo: {reason}"
-            )
-    if detail_url:
-        lines.append("")
-        lines.append(f"🔗 Detalle completo: {detail_url}")
-    return "\n".join(lines).strip()
-
 
 def _collect_operator_job_types(calendar: ShiftCalendar) -> dict[int, set[str]]:
     operator_job_types: dict[int, set[str]] = defaultdict(set)
@@ -1512,6 +1570,48 @@ REST_GROUP_COLOR: str = "bg-slate-50"
 MISC_GROUP_COLOR: str = "bg-slate-100"
 ADMINISTRATIVE_GROUP_COLOR: str = "bg-orange-50"
 SALES_GROUP_COLOR: str = "bg-yellow-50"
+GROUP_COLOR_MAP: dict[str, str] = {
+    "bg-teal-50": "#f0fdfa",
+    "bg-sky-50": "#f0f9ff",
+    "bg-lime-50": "#f7fee7",
+    "bg-emerald-50": "#ecfdf5",
+    "bg-amber-50": "#fffbeb",
+    "bg-rose-50": "#fff1f2",
+    "bg-indigo-50": "#eef2ff",
+    "bg-slate-50": "#f8fafc",
+    "bg-slate-100": "#f1f5f9",
+    "bg-orange-50": "#fff7ed",
+    "bg-yellow-50": "#fefce8",
+    "bg-white": "#ffffff",
+}
+DEFAULT_GROUP_COLOR = "#f8fafc"
+GROUP_CARD_COLOR_MAP: dict[str, str] = {
+    "bg-teal-50": "#ccfbf1",
+    "bg-sky-50": "#bae6fd",
+    "bg-lime-50": "#ecfccb",
+    "bg-emerald-50": "#d1fae5",
+    "bg-amber-50": "#fef3c7",
+    "bg-rose-50": "#ffe4e6",
+    "bg-indigo-50": "#e0e7ff",
+    "bg-slate-50": "#e2e8f0",
+    "bg-slate-100": "#cbd5f5",
+    "bg-orange-50": "#ffedd5",
+    "bg-yellow-50": "#fef9c3",
+    "bg-white": "#ffffff",
+}
+DEFAULT_CARD_COLOR = "#ffffff"
+
+
+def _resolve_group_color(color_class: str | None) -> str:
+    if not color_class:
+        return DEFAULT_GROUP_COLOR
+    return GROUP_COLOR_MAP.get(color_class, DEFAULT_GROUP_COLOR)
+
+
+def _resolve_group_card_color(color_class: str | None) -> str:
+    if not color_class:
+        return DEFAULT_CARD_COLOR
+    return GROUP_CARD_COLOR_MAP.get(color_class, DEFAULT_CARD_COLOR)
 
 
 def _build_operational_position_groups(
@@ -1604,6 +1704,8 @@ def _build_operational_position_groups(
         color_class = next(color_cycle)
         group_key = f"farm-{entry['farm_id']}"
         group_label = entry["farm"].name if entry["farm"] else "Granja sin nombre"
+        color_value = _resolve_group_color(color_class)
+        card_color_value = _resolve_group_card_color(color_class)
 
         position_ids: list[int] = []
         for row in group_rows:
@@ -1612,6 +1714,8 @@ def _build_operational_position_groups(
                 "type": "farm",
                 "label": group_label,
                 "color_class": color_class,
+                "color_value": color_value,
+                "card_color_value": card_color_value,
             }
             position = row.get("position")
             if position and position.id is not None:
@@ -1641,6 +1745,8 @@ def _build_operational_position_groups(
                 ],
                 "position_ids": position_ids,
                 "color_class": color_class,
+                "color_value": color_value,
+                "card_color_value": card_color_value,
             }
         )
         group_entry = {
@@ -1648,6 +1754,8 @@ def _build_operational_position_groups(
             "type": "farm",
             "label": group_label,
             "color_class": color_class,
+            "color_value": color_value,
+            "card_color_value": card_color_value,
             "position_ids": position_ids,
         }
         groups_payload.append(group_entry)
@@ -1675,12 +1783,16 @@ def _build_operational_position_groups(
     if classifier_rows:
         classifier_key = "classifiers"
         classifier_label = "Clasificadores"
+        classifier_color_value = _resolve_group_color(CLASSIFIER_GROUP_COLOR)
+        classifier_card_color = _resolve_group_card_color(CLASSIFIER_GROUP_COLOR)
         for row in classifier_rows:
             row["display_group"] = {
                 "key": classifier_key,
                 "type": "classifier",
                 "label": classifier_label,
                 "color_class": CLASSIFIER_GROUP_COLOR,
+                "color_value": classifier_color_value,
+                "card_color_value": classifier_card_color,
             }
             position = row.get("position")
             if position and position.id is not None:
@@ -1692,6 +1804,8 @@ def _build_operational_position_groups(
             "type": "classifier",
             "label": classifier_label,
             "color_class": CLASSIFIER_GROUP_COLOR,
+            "color_value": classifier_color_value,
+            "card_color_value": classifier_card_color,
             "position_ids": classifier_position_ids,
         }
         groups_payload.append(classifier_group_entry)
@@ -1700,6 +1814,8 @@ def _build_operational_position_groups(
             "key": classifier_key,
             "label": classifier_label,
             "color_class": CLASSIFIER_GROUP_COLOR,
+            "color_value": classifier_color_value,
+            "card_color_value": classifier_card_color,
             "positions": [_position_payload(position) for position in classifier_positions],
             "position_ids": classifier_position_ids,
         }
@@ -1708,6 +1824,8 @@ def _build_operational_position_groups(
             "key": "classifiers",
             "label": "Clasificadores",
             "color_class": CLASSIFIER_GROUP_COLOR,
+            "color_value": _resolve_group_color(CLASSIFIER_GROUP_COLOR),
+            "card_color_value": _resolve_group_card_color(CLASSIFIER_GROUP_COLOR),
             "positions": [],
             "position_ids": [],
         }
@@ -1725,12 +1843,16 @@ def _build_operational_position_groups(
 
         target_rows.sort(key=_row_sort_key)
         position_ids: list[int] = []
+        color_value = _resolve_group_color(color_class)
+        card_color_value = _resolve_group_card_color(color_class)
         for row in target_rows:
             row["display_group"] = {
                 "key": key,
                 "type": group_type,
                 "label": label,
                 "color_class": color_class,
+                "color_value": color_value,
+                "card_color_value": card_color_value,
             }
             position = row.get("position")
             if position and position.id is not None:
@@ -1743,6 +1865,8 @@ def _build_operational_position_groups(
             "type": group_type,
             "label": label,
             "color_class": color_class,
+            "color_value": color_value,
+            "card_color_value": card_color_value,
             "position_ids": position_ids,
         }
         groups_payload.append(group_entry)
@@ -1770,12 +1894,16 @@ def _build_operational_position_groups(
         misc_key = "misc-positions"
         misc_label = "Otras posiciones"
         misc_ids: list[int] = []
+        misc_color_value = _resolve_group_color(MISC_GROUP_COLOR)
+        misc_card_color = _resolve_group_card_color(MISC_GROUP_COLOR)
         for row in misc_rows:
             row["display_group"] = {
                 "key": misc_key,
                 "type": "misc",
                 "label": misc_label,
                 "color_class": MISC_GROUP_COLOR,
+                "color_value": misc_color_value,
+                "card_color_value": misc_card_color,
             }
             position = row.get("position")
             if position and position.id is not None:
@@ -1788,6 +1916,8 @@ def _build_operational_position_groups(
             "type": "misc",
             "label": misc_label,
             "color_class": MISC_GROUP_COLOR,
+            "color_value": misc_color_value,
+            "card_color_value": misc_card_color,
             "position_ids": misc_ids,
         }
         groups_payload.append(misc_group_payload)
@@ -1804,6 +1934,8 @@ def _build_operational_position_groups(
                 "type": "misc",
                 "label": "Otras posiciones",
                 "color_class": MISC_GROUP_COLOR,
+                "color_value": _resolve_group_color(MISC_GROUP_COLOR),
+                "card_color_value": _resolve_group_card_color(MISC_GROUP_COLOR),
             },
         )
         group_entry = group_map.setdefault(
@@ -1813,6 +1945,8 @@ def _build_operational_position_groups(
                 "type": "misc",
                 "label": "Otras posiciones",
                 "color_class": MISC_GROUP_COLOR,
+                "color_value": _resolve_group_color(MISC_GROUP_COLOR),
+                "card_color_value": _resolve_group_card_color(MISC_GROUP_COLOR),
                 "position_ids": [],
             },
         )
@@ -1831,6 +1965,8 @@ def _build_operational_position_groups(
         "type": "rest",
         "label": "Descansos y disponibilidad",
         "color_class": REST_GROUP_COLOR,
+        "color_value": _resolve_group_color(REST_GROUP_COLOR),
+        "card_color_value": _resolve_group_card_color(REST_GROUP_COLOR),
     }
     group_map[rest_group_payload["key"]] = rest_group_payload
     rest_items: list[dict[str, Any]] = []
@@ -2249,6 +2385,33 @@ class CalendarDetailView(StaffRequiredMixin, View):
             pk=pk,
         )
         date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
+        rest_daily_overview = _build_rest_daily_overview(date_columns, rest_rows)
+        rest_group_meta = position_groups.get("rest_group") or {
+            "key": "rests",
+            "type": "rest",
+            "label": "Descansos y disponibilidad",
+            "color_class": REST_GROUP_COLOR,
+            "color_value": _resolve_group_color(REST_GROUP_COLOR),
+        }
+        rest_matrix_rows = []
+        rest_matrix_rows.extend(
+            _build_rest_matrix_rows(
+                date_columns,
+                rest_daily_overview,
+                entry_key="resting",
+                label_prefix="Descanso",
+                rest_group=rest_group_meta,
+            )
+        )
+        rest_matrix_rows.extend(
+            _build_rest_matrix_rows(
+                date_columns,
+                rest_daily_overview,
+                entry_key="available",
+                label_prefix="Libres",
+                rest_group=rest_group_meta,
+            )
+        )
         stats = _calculate_stats(rows)
         assignment_issues = _identify_calendar_issues(date_columns, rows, rest_rows)
         rest_suggestions = _build_rest_suggestions_payload(calendar)
@@ -2284,28 +2447,6 @@ class CalendarDetailView(StaffRequiredMixin, View):
             .values_list("created_at", flat=True)
             .first()
         )
-        detail_url = request.build_absolute_uri()
-        whatsapp_message = _build_calendar_whatsapp_message(
-            calendar=calendar,
-            stats=stats,
-            issues=assignment_issues,
-            suggestions=rest_suggestions,
-            detail_url=detail_url,
-        )
-        job_type_labels = {value: str(label) for value, label in PositionJobType.choices}
-        share_job_type_options = [
-            {
-                "value": job_type,
-                "label": job_type_labels.get(job_type, job_type),
-                "short_label": JOB_TYPE_SHORT_LABELS.get(job_type, job_type_labels.get(job_type, job_type)),
-            }
-            for job_type in SHARE_JOB_TYPE_ORDER
-        ]
-        public_share_base = request.build_absolute_uri(reverse("personal:calendar-public-share", args=[calendar.id]))
-        public_share_url = (
-            f"{public_share_base}?start_date={calendar.start_date.isoformat()}&end_date={calendar.end_date.isoformat()}"
-        )
-
         return render(
             request,
             self.template_name,
@@ -2316,6 +2457,7 @@ class CalendarDetailView(StaffRequiredMixin, View):
                 "stats": stats,
                 "assignment_issues": assignment_issues,
                 "rest_rows": rest_rows,
+                "rest_matrix_rows": rest_matrix_rows,
                 "rest_summary": rest_summary,
                 "can_override": can_override,
                 "has_manual_choices": has_manual_choices,
@@ -2325,12 +2467,10 @@ class CalendarDetailView(StaffRequiredMixin, View):
                 "calendar_home_url": _resolve_calendar_home_url(exclude_ids=[calendar.id]),
                 "calendar_generation_recent_calendars": get_recent_calendars_payload(exclude_ids=[calendar.id]),
                 "rest_suggestions": rest_suggestions,
-                "calendar_whatsapp_message": whatsapp_message,
-                "calendar_share_public_url": public_share_url,
-                "calendar_share_options": {
-                    "url": reverse("personal:calendar-share-preview", args=[calendar.id]),
-                    "job_types": share_job_type_options,
-                },
+                "calendar_bulk_update_url": reverse(
+                    "personal-api:calendar-assignment-bulk",
+                    args=[calendar.id],
+                ),
             },
         )
 
@@ -3471,6 +3611,241 @@ class CalendarAssignmentCollectionView(StaffRequiredMixin, View):
         )
 
         return JsonResponse({"assignment": _assignment_payload(assignment)}, status=201)
+
+
+class CalendarAssignmentBulkUpdateView(StaffRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, calendar_id: int, *args: Any, **kwargs: Any) -> JsonResponse:
+        calendar = get_object_or_404(ShiftCalendar, pk=calendar_id)
+        if calendar.status not in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}:
+            return _json_error("Solo puedes editar calendarios en estado borrador o modificado.")
+
+        payload, error = _load_json_body(request)
+        if error:
+            return error
+
+        changes = payload.get("changes")
+        if not isinstance(changes, list) or not changes:
+            return _json_error("No se recibieron cambios para guardar.")
+
+        summary = {"updated": 0, "created": 0, "cleared": 0}
+        total_removed_rests = 0
+
+        try:
+            with transaction.atomic():
+                for index, change in enumerate(changes, start=1):
+                    operation, removed_rests = self._apply_change(
+                        calendar=calendar,
+                        change=change,
+                        change_index=index,
+                    )
+                    summary[operation] += 1
+                    total_removed_rests += removed_rests
+                _refresh_workload_snapshots(calendar)
+        except forms.ValidationError as exc:
+            return _json_error(str(exc))
+        except ValueError as exc:
+            return _json_error(str(exc))
+
+        message = self._build_summary_message(summary, total_removed_rests)
+        return JsonResponse(
+            {
+                "success": True,
+                "message": message,
+                "summary": summary,
+                "removed_rest_periods": total_removed_rests,
+            }
+        )
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        if value in {None, "", "null"}:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _apply_change(
+        self,
+        *,
+        calendar: ShiftCalendar,
+        change: dict[str, Any],
+        change_index: int,
+    ) -> tuple[str, int]:
+        assignment_id = self._coerce_int(change.get("assignment_id"))
+        operator_id = self._coerce_int(change.get("operator_id"))
+        position_id = self._coerce_int(change.get("position_id"))
+        target_date = change.get("date")
+        force_override = change.get("force_override", True)
+        allow_override = bool(force_override)
+
+        if assignment_id:
+            return self._handle_assignment_update(
+                calendar=calendar,
+                assignment_id=assignment_id,
+                operator_id=operator_id,
+                allow_override=allow_override,
+                change_index=change_index,
+            )
+
+        return self._handle_assignment_create(
+            calendar=calendar,
+            position_id=position_id,
+            operator_id=operator_id,
+            target_date=target_date,
+            allow_override=allow_override,
+            change_index=change_index,
+        )
+
+    def _handle_assignment_update(
+        self,
+        *,
+        calendar: ShiftCalendar,
+        assignment_id: int | None,
+        operator_id: int | None,
+        allow_override: bool,
+        change_index: int,
+    ) -> tuple[str, int]:
+        if not assignment_id:
+            raise forms.ValidationError(f"Cambio #{change_index}: no se identificó la asignación a actualizar.")
+
+        assignment = calendar.assignments.filter(pk=assignment_id).first()
+        if not assignment:
+            raise forms.ValidationError(f"Cambio #{change_index}: la asignación indicada ya no existe.")
+
+        if not operator_id:
+            assignment.delete()
+            return "cleared", 0
+
+        form_data = {
+            "assignment_id": str(assignment_id),
+            "operator_id": str(operator_id),
+        }
+        if allow_override:
+            form_data["force_override"] = "1"
+
+        form = AssignmentUpdateForm(form_data, calendar=calendar)
+        if not form.is_valid():
+            raise forms.ValidationError(
+                f"Cambio #{change_index}: {form.errors.as_text() or 'Datos inválidos para la asignación.'}"
+            )
+
+        assignment = form.cleaned_data["assignment"]
+        operator = form.cleaned_data["operator"]
+        alert_level = form.cleaned_data["alert_level"]
+        is_overtime = form.cleaned_data["is_overtime"]
+        overtime_points = form.cleaned_data["overtime_points"]
+        conflicting_assignment = form.cleaned_data.get("conflicting_assignment")
+        conflicting_rest_periods: list[OperatorRestPeriod] = list(
+            form.cleaned_data.get("conflicting_rest_periods", [])
+        )
+
+        _, removed_rest_count = _apply_assignment_conflict_resets(
+            conflicting_assignment=conflicting_assignment,
+            conflicting_rest_periods=conflicting_rest_periods,
+        )
+
+        assignment.operator = operator
+        assignment.alert_level = alert_level
+        assignment.is_overtime = is_overtime
+        assignment.overtime_points = overtime_points if is_overtime else 0
+        assignment.is_auto_assigned = False
+        assignment.save(
+            update_fields=[
+                "operator",
+                "alert_level",
+                "is_overtime",
+                "overtime_points",
+                "is_auto_assigned",
+                "updated_at",
+            ]
+        )
+
+        return "updated", removed_rest_count
+
+    def _handle_assignment_create(
+        self,
+        *,
+        calendar: ShiftCalendar,
+        position_id: int | None,
+        operator_id: int | None,
+        target_date: Any,
+        allow_override: bool,
+        change_index: int,
+    ) -> tuple[str, int]:
+        if not position_id or not target_date:
+            raise forms.ValidationError(f"Cambio #{change_index}: faltan datos de posición o fecha.")
+        if not operator_id:
+            raise forms.ValidationError(f"Cambio #{change_index}: selecciona un colaborador para el turno.")
+
+        form_data = {
+            "position_id": str(position_id),
+            "operator_id": str(operator_id),
+            "date": target_date,
+        }
+        if allow_override:
+            form_data["force_override"] = "1"
+
+        form = AssignmentCreateForm(form_data, calendar=calendar)
+        if not form.is_valid():
+            raise forms.ValidationError(
+                f"Cambio #{change_index}: {form.errors.as_text() or 'Datos inválidos para crear la asignación.'}"
+            )
+
+        position: PositionDefinition = form.cleaned_data["position"]
+        operator: UserProfile = form.cleaned_data["operator"]
+        alert_level: AssignmentAlertLevel = form.cleaned_data["alert_level"]
+        target_date_value = form.cleaned_data["target_date"]
+        is_overtime: bool = form.cleaned_data["is_overtime"]
+        overtime_points: int = form.cleaned_data["overtime_points"]
+        conflicting_assignment = form.cleaned_data.get("conflicting_assignment")
+        conflicting_rest_periods: list[OperatorRestPeriod] = list(
+            form.cleaned_data.get("conflicting_rest_periods", [])
+        )
+
+        _, removed_rest_count = _apply_assignment_conflict_resets(
+            conflicting_assignment=conflicting_assignment,
+            conflicting_rest_periods=conflicting_rest_periods,
+        )
+
+        ShiftAssignment.objects.create(
+            calendar=calendar,
+            position=position,
+            date=target_date_value,
+            operator=operator,
+            alert_level=alert_level,
+            is_overtime=is_overtime,
+            overtime_points=overtime_points if is_overtime else 0,
+            is_auto_assigned=False,
+        )
+
+        return "created", removed_rest_count
+
+    @staticmethod
+    def _build_summary_message(summary: dict[str, int], removed_rests: int) -> str:
+        parts: list[str] = []
+        updated = summary.get("updated", 0)
+        created = summary.get("created", 0)
+        cleared = summary.get("cleared", 0)
+
+        if updated:
+            parts.append(f"{updated} actualización{'es' if updated != 1 else ''}")
+        if created:
+            parts.append(f"{created} nuevo turno{'s' if created != 1 else ''}")
+        if cleared:
+            parts.append(f"{cleared} turno{'s' if cleared != 1 else ''} liberado{'s' if cleared != 1 else ''}")
+
+        action_summary = ", ".join(parts) if parts else "Cambios aplicados"
+        message = f"Se guardaron los cambios ({action_summary})."
+
+        if removed_rests == 1:
+            message += " Se eliminó 1 descanso en conflicto."
+        elif removed_rests > 1:
+            message += f" Se eliminaron {removed_rests} descansos en conflicto."
+
+        return message
 
 
 class CalendarAssignmentDetailView(StaffRequiredMixin, View):
