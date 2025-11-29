@@ -1,0 +1,323 @@
+{% extends "calendario/base.html" %}
+{% load humanize form_extras %}
+
+{% block title %}Cardex de ventas{% endblock %}
+
+{% block content %}
+  {% if home_active_tab %}
+    {% include "home/_submenu.html" with active=home_active_tab %}
+  {% else %}
+    {% include "administration/_submenu.html" with active=administration_active_submenu %}
+  {% endif %}
+
+  <div class="space-y-6">
+    <header class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Cadena comercial</p>
+        <h1 class="text-2xl font-semibold text-slate-900">Cardex de ventas</h1>
+        <p class="text-sm text-slate-500 max-w-2xl">
+          Mapea cada despacho contra sus ventas confirmadas, identifica los saldos por tipo de producto y monitorea el ciclo de recaudo sin salir del módulo comercial.
+        </p>
+      </div>
+      <a
+        href="{% url 'administration:sales' %}"
+        class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+      >
+        ← Volver a facturación
+      </a>
+    </header>
+
+    <section class="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <a
+            class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700"
+            href="?month={{ prev_month_slug }}{% if selected_seller_id %}&amp;seller={{ selected_seller_id }}{% endif %}{% if selected_destination %}&amp;destination={{ selected_destination }}{% endif %}{% for code in selected_product_types %}&amp;product_types={{ code }}{% endfor %}"
+          >
+            ← Mes anterior
+          </a>
+          <p class="text-base font-semibold text-slate-900">{{ month_label }}</p>
+          {% if can_go_next %}
+            <a
+              class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700"
+              href="?month={{ next_month_slug }}{% if selected_seller_id %}&amp;seller={{ selected_seller_id }}{% endif %}{% if selected_destination %}&amp;destination={{ selected_destination }}{% endif %}{% for code in selected_product_types %}&amp;product_types={{ code }}{% endfor %}"
+            >
+              Mes siguiente →
+            </a>
+          {% else %}
+            <span class="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-400">
+              Mes siguiente →
+            </span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-slate-500">Los filtros se aplican de inmediato: cambia el vendedor, destino o tipos para comparar escenarios.</p>
+      </div>
+      <form method="get" class="flex flex-wrap items-end gap-4">
+        <input type="hidden" name="month" value="{{ month_slug }}">
+        <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Vendedor
+          <select
+            name="seller"
+            class="mt-1 w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+            {% for option in seller_options %}
+              <option value="{{ option.pk }}" {% if option.pk == selected_seller_id %}selected{% endif %}>
+                {{ option.get_full_name|default:option.get_username }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Destino
+          <select
+            name="destination"
+            class="mt-1 w-48 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+            <option value="">Todos los despachos</option>
+            {% for value,label in destination_choices %}
+              <option value="{{ value }}" {% if value == selected_destination %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <details class="relative text-xs font-semibold uppercase tracking-wide text-slate-500" data-filter-dropdown>
+          <summary class="flex cursor-pointer flex-col gap-1">
+            Tipos de producto
+            <span class="inline-flex w-52 items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+              {% if selected_product_types %}
+                {{ selected_product_types|length }} seleccionados
+              {% else %}
+                Todos
+              {% endif %}
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.207l3.71-3.975a.75.75 0 011.08 1.04l-4.24 4.54a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </span>
+          </summary>
+          <div class="absolute z-20 mt-2 w-64 rounded-2xl border border-slate-200 bg-white/95 p-3 text-[12px] text-slate-600 shadow-xl">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Selecciona tipos</p>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              {% for option in product_type_options %}
+                <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="product_types"
+                    value="{{ option.value }}"
+                    class="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    {% if option.value in selected_product_types %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
+        <button
+          type="submit"
+          class="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+        >
+          Aplicar filtros
+        </button>
+        <a
+          href="?month={{ month_slug }}"
+          class="text-xs font-semibold text-slate-500 transition hover:text-emerald-600"
+        >
+          Limpiar filtros
+        </a>
+      </form>
+    </section>
+
+    <section class="space-y-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+      <div class="grid gap-3 md:grid-cols-4">
+        <article class="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Inventario inicial</p>
+          <p class="text-2xl font-semibold text-slate-900">{{ inventory_totals.opening|floatformat:"-1" }} <span class="text-sm font-medium text-slate-500">cart.</span></p>
+        </article>
+        <article class="rounded-2xl border border-slate-200/70 bg-emerald-50/80 px-4 py-3">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Despachado</p>
+          <p class="text-2xl font-semibold text-emerald-800">{{ inventory_totals.dispatched|floatformat:"-1" }} <span class="text-sm font-medium text-emerald-600">cart.</span></p>
+        </article>
+        <article class="rounded-2xl border border-slate-200/70 bg-sky-50/80 px-4 py-3">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-600">Vendido</p>
+          <p class="text-2xl font-semibold text-sky-800">{{ inventory_totals.sold|floatformat:"-1" }} <span class="text-sm font-medium text-sky-600">cart.</span></p>
+        </article>
+        <article class="rounded-2xl border border-slate-200/70 bg-slate-900 px-4 py-3 text-white">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/90">Inventario final</p>
+          <p class="text-2xl font-semibold">{{ inventory_totals.closing|floatformat:"-1" }} <span class="text-sm font-medium text-white/70">cart.</span></p>
+        </article>
+      </div>
+      <div class="grid gap-3 md:grid-cols-3">
+        <article class="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-inner">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total vendido</p>
+          <p class="text-xl font-semibold text-slate-900">{{ cardex_amount_totals.sold|money_co }}</p>
+        </article>
+        <article class="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-inner">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Total abonado</p>
+          <p class="text-xl font-semibold text-emerald-700">{{ cardex_amount_totals.payments|money_co }}</p>
+        </article>
+        <article class="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-inner">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Saldo por cobrar</p>
+          <p class="text-xl font-semibold text-rose-600">{{ cardex_amount_totals.balance|money_co }}</p>
+        </article>
+      </div>
+    </section>
+
+    {% if unassigned_items %}
+      <section class="rounded-2xl border border-amber-200 bg-amber-50/80 px-5 py-4 text-sm text-amber-900 shadow-sm">
+        <p class="font-semibold">Hay ventas sin despacho asignado</p>
+        <p class="text-amber-800/90 text-xs">Revisa estos casos para ajustar el inventario o vincular el despacho correspondiente.</p>
+        <ul class="mt-2 space-y-1 text-[13px]">
+          {% for item in unassigned_items %}
+            <li class="flex flex-wrap items-center justify-between rounded-xl border border-amber-200/70 bg-white/60 px-3 py-2">
+              <div>
+                <p class="font-semibold text-amber-900">
+                  {{ item.sale.invoice_number|default:"Sin factura" }} · {{ item.sale.customer.name }}
+                </p>
+                <p class="text-[12px] text-amber-800/90">
+                  {{ item.sale.date|date:"d M Y" }} · {{ product_type_labels|dict_get:item.product_type|default:item.product_type|upper }} · {{ item.quantity|floatformat:"-1" }} cartones
+                  {% if item.reason == "missing_inventory" %}
+                    · Inventario insuficiente
+                  {% else %}
+                    · Sin destino
+                  {% endif %}
+                </p>
+              </div>
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">{{ item.sale.get_status_display }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% if has_rows %}
+      <section class="space-y-5">
+        {% for row in cardex_rows %}
+          <article class="space-y-4 rounded-3xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
+            <header class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                  Despacho del {{ row.dispatch.date|date:"d \\d\e F Y" }}
+                </p>
+                <h2 class="text-xl font-semibold text-slate-900">
+                  {{ row.dispatch.destination_label }} · {{ row.dispatch.seller_name }}
+                </h2>
+                {% if row.dispatch.notes %}
+                  <p class="text-sm text-slate-500 max-w-2xl">{{ row.dispatch.notes }}</p>
+                {% endif %}
+              </div>
+              <div class="flex flex-wrap items-center gap-2 text-[12px] font-semibold">
+                <span class="rounded-full border border-slate-200 px-3 py-1 text-slate-600">
+                  Inventario previo · {{ row.opening_total|floatformat:"-1" }} cart.
+                </span>
+                <span class="rounded-full bg-slate-900 px-3 py-1 text-white">
+                  Por cobrar · {{ row.balance_due|money_co }}
+                </span>
+                {% if row.first_payment_date %}
+                  <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                    Recaudo: {{ row.first_payment_date|date:"d M" }} → {{ row.last_payment_date|date:"d M" }}
+                    {% if row.collection_duration_days != None %}
+                      · {{ row.collection_duration_days }} días
+                    {% endif %}
+                  </span>
+                {% else %}
+                  <span class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-rose-600">
+                    Sin abonos
+                  </span>
+                {% endif %}
+              </div>
+            </header>
+            <div class="overflow-x-auto rounded-2xl border border-slate-100">
+              <table class="min-w-full text-left text-[13px]">
+                <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th class="px-4 py-2">Tipo</th>
+                    <th class="px-4 py-2 text-right">Saldo previo</th>
+                    <th class="px-4 py-2 text-right">Despachado</th>
+                    <th class="px-4 py-2 text-right">Vendido</th>
+                    <th class="px-4 py-2 text-right">Saldo</th>
+                    <th class="px-4 py-2 text-right">Precio prom.</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  {% for code in product_type_order %}
+                    <tr>
+                      <td class="px-4 py-2 font-semibold text-slate-800">{{ product_type_labels|dict_get:code|default:code|upper }}</td>
+                      <td class="px-4 py-2 text-right text-slate-600">
+                        {{ row.opening_balance|dict_get:code|default:0|floatformat:"-2" }}
+                      </td>
+                      <td class="px-4 py-2 text-right text-emerald-700">
+                        {{ row.dispatched_by_type|dict_get:code|default:0|floatformat:"-2" }}
+                      </td>
+                      <td class="px-4 py-2 text-right text-sky-700">
+                        {{ row.sold_by_type|dict_get:code|default:0|floatformat:"-2" }}
+                      </td>
+                      <td class="px-4 py-2 text-right text-slate-900">
+                        {{ row.closing_balance|dict_get:code|default:0|floatformat:"-2" }}
+                      </td>
+                      <td class="px-4 py-2 text-right text-slate-600">
+                        {{ row.average_price_by_type|dict_get:code|default:0|money_co }}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="space-y-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ventas vinculadas</p>
+              <ul class="space-y-2">
+                {% for sale_summary in row.sorted_sales %}
+                  <li class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3">
+                    <div class="space-y-1">
+                      <p class="text-sm font-semibold text-slate-900">
+                        {% if sale_summary.sale.invoice_number %}
+                          {{ sale_summary.sale.invoice_number }}
+                        {% else %}
+                          Venta #{{ sale_summary.sale.pk }}
+                        {% endif %}
+                        · {{ sale_summary.sale.customer.name }}
+                      </p>
+                      <p class="text-[12px] text-slate-500">
+                        {{ sale_summary.sale.date|date:"d M Y" }} · {{ sale_summary.sale.get_payment_condition_display }} · {{ sale_summary.sale.get_status_display }}
+                      </p>
+                      <div class="flex flex-wrap gap-2">
+                        {% for code in product_type_order %}
+                          {% with qty=sale_summary.quantities_by_type|dict_get:code %}
+                            {% if qty %}
+                              <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                {{ product_type_labels|dict_get:code|default:code|upper }} · {{ qty|floatformat:"-1" }} cart.
+                              </span>
+                            {% endif %}
+                          {% endwith %}
+                        {% endfor %}
+                      </div>
+                    </div>
+                    <div class="text-right text-[13px]">
+                      <p class="font-semibold text-slate-900">Total · {{ sale_summary.total_amount|money_co }}</p>
+                      <p class="text-emerald-700 font-semibold">Abonado · {{ sale_summary.payments_total|money_co }}</p>
+                      <p class="text-rose-600 font-semibold">Saldo · {{ sale_summary.balance|money_co }}</p>
+                      {% if sale_summary.first_payment_date %}
+                        <p class="text-[11px] text-slate-500">
+                          Abonos: {{ sale_summary.first_payment_date|date:"d M" }} → {{ sale_summary.last_payment_date|date:"d M" }}
+                        </p>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% empty %}
+                  <li class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
+                    No hay ventas confirmadas para este despacho.
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </article>
+        {% endfor %}
+      </section>
+    {% else %}
+      <section class="rounded-3xl border border-dashed border-slate-200/80 bg-white px-6 py-10 text-center shadow-sm">
+        <p class="text-base font-semibold text-slate-900">Sin despachos en el rango seleccionado</p>
+        <p class="text-sm text-slate-500">Ajusta los filtros de mes, vendedor o destino para ver la traza de inventario.</p>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

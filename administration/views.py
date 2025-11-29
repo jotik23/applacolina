@@ -112,7 +112,7 @@ from .services.purchase_requests import (
 )
 from .services.purchases import get_dashboard_state
 from .services.sale_imports import SaleImportError, import_sales_from_workbook
-from .services.sales import refresh_sale_payment_state
+from .services.sales import SALE_EGG_TYPE_MAP, build_sales_cardex, refresh_sale_payment_state
 from .services.workflows import (
     ExpenseTypeWorkflowRefreshService,
     PurchaseApprovalDecisionError,
@@ -175,6 +175,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         )
         _maybe_set_home_tab(context, self.request, "sales")
         return context
+
 
     def _get_sales_queryset(self):
         decimal_field = DecimalField(max_digits=14, decimal_places=2)
@@ -502,6 +503,220 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             "payments": aggregates.get("payments") or zero,
             "balance": aggregates.get("balance") or zero,
         }
+
+
+class SalesCardexView(StaffRequiredMixin, generic.TemplateView):
+    template_name = "administration/sales/cardex.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        seller_options = self._seller_options()
+        selected_seller_id = self._resolve_seller_id(seller_options)
+        destination_filter = self._resolve_destination()
+        selected_product_types = self._resolve_product_types()
+        month_start = self._resolve_month_start()
+        month_end = self._resolve_month_end(month_start)
+
+        default_type_order = self._default_product_type_order()
+        all_rows = []
+        product_type_order = default_type_order
+        unassigned_items = []
+        if selected_seller_id:
+            cardex_result = build_sales_cardex(
+                seller_ids=[selected_seller_id],
+                destinations=[destination_filter] if destination_filter else None,
+                product_types=selected_product_types or None,
+            )
+            all_rows = cardex_result.rows
+            product_type_order = cardex_result.ordered_product_types or default_type_order
+            unassigned_items = cardex_result.unassigned_items
+
+        cardex_rows = self._filter_rows_by_month(all_rows, month_start, month_end)
+        previous_balance = self._compute_previous_balance(all_rows, month_start, product_type_order)
+        inventory_summary = self._build_inventory_summary(cardex_rows, previous_balance, product_type_order)
+        inventory_totals = {
+            "opening": self._sum_decimal_values(inventory_summary["opening"]),
+            "dispatched": self._sum_decimal_values(inventory_summary["dispatched"]),
+            "sold": self._sum_decimal_values(inventory_summary["sold"]),
+            "closing": self._sum_decimal_values(inventory_summary["closing"]),
+        }
+        amount_totals = self._build_amount_totals(cardex_rows)
+        unassigned_filtered = self._filter_unassigned(unassigned_items, month_start, month_end)
+
+        prev_month = self._add_months(month_start, -1)
+        next_month = self._add_months(month_start, 1)
+
+        context.update(
+            {
+                "administration_active_submenu": "sales",
+                "cardex_rows": cardex_rows,
+                "product_type_order": product_type_order,
+                "product_type_labels": dict(SaleProductType.choices),
+                "product_type_options": self._product_type_options(),
+                "selected_product_types": selected_product_types,
+                "seller_options": seller_options,
+                "selected_seller_id": selected_seller_id,
+                "destination_choices": EggDispatchDestination.choices,
+                "selected_destination": destination_filter,
+                "month_start": month_start,
+                "month_end": month_end,
+                "month_label": self._month_label(month_start),
+                "month_slug": self._month_slug(month_start),
+                "prev_month_slug": self._month_slug(prev_month),
+                "next_month_slug": self._month_slug(next_month),
+                "can_go_next": self._can_go_next(next_month),
+                "previous_balance": previous_balance,
+                "inventory_summary": inventory_summary,
+                "inventory_totals": inventory_totals,
+                "cardex_amount_totals": amount_totals,
+                "unassigned_items": unassigned_filtered,
+                "has_rows": bool(cardex_rows),
+            }
+        )
+        _maybe_set_home_tab(context, self.request, "sales")
+        return context
+
+    def _seller_options(self):
+        return list(
+            UserProfile.objects.filter(is_staff=True)
+            .filter(Q(egg_dispatches_sold__isnull=False) | Q(sales__isnull=False))
+            .distinct()
+            .order_by("nombres", "apellidos")
+        )
+
+    def _default_product_type_order(self) -> list[str]:
+        return [code for code, _ in SaleProductType.choices if code in SALE_EGG_TYPE_MAP]
+
+    def _resolve_seller_id(self, options) -> Optional[int]:
+        seller_value = self.request.GET.get("seller")
+        if seller_value:
+            try:
+                return int(seller_value)
+            except (TypeError, ValueError):
+                return None
+        if options:
+            return options[0].pk
+        return None
+
+    def _resolve_destination(self) -> str:
+        destination = self.request.GET.get("destination") or ""
+        valid_destinations = {choice[0] for choice in EggDispatchDestination.choices}
+        if destination and destination not in valid_destinations:
+            return ""
+        return destination
+
+    def _resolve_product_types(self) -> list[str]:
+        valid_types = set(self._default_product_type_order())
+        return [code for code in self.request.GET.getlist("product_types") if code in valid_types]
+
+    def _product_type_options(self) -> list[dict[str, str]]:
+        return [
+            {"value": code, "label": label}
+            for code, label in SaleProductType.choices
+            if code in SALE_EGG_TYPE_MAP
+        ]
+
+    def _resolve_month_start(self) -> date:
+        raw_month = self.request.GET.get("month")
+        if raw_month:
+            try:
+                year, month = map(int, raw_month.split("-", 1))
+                return date(year, month, 1)
+            except (TypeError, ValueError):
+                pass
+        today = timezone.localdate()
+        return today.replace(day=1)
+
+    def _resolve_month_end(self, month_start: date) -> date:
+        _, last_day = monthrange(month_start.year, month_start.month)
+        return month_start.replace(day=last_day)
+
+    def _month_slug(self, month_start: date) -> str:
+        return f"{month_start.year:04d}-{month_start.month:02d}"
+
+    def _add_months(self, reference: date, months: int) -> date:
+        month = reference.month - 1 + months
+        year = reference.year + month // 12
+        month = month % 12 + 1
+        day = min(reference.day, monthrange(year, month)[1])
+        return date(year, month, day)
+
+    def _month_label(self, month_start: date) -> str:
+        label = calendar.month_name[month_start.month] or ""
+        return f"{label.capitalize()} {month_start.year}"
+
+    def _can_go_next(self, next_month: date) -> bool:
+        current_month_start = timezone.localdate().replace(day=1)
+        return next_month <= current_month_start
+
+    def _filter_rows_by_month(self, rows, month_start: date, month_end: date):
+        return [
+            row
+            for row in rows
+            if month_start <= row.dispatch.date <= month_end
+        ]
+
+    def _compute_previous_balance(self, rows, month_start: date, product_type_order: list[str]):
+        combo_balances: Dict[tuple[int, str], Dict[str, Decimal]] = {}
+        for row in sorted(rows, key=lambda entry: (entry.dispatch.date, entry.dispatch.pk)):
+            if row.dispatch.date >= month_start:
+                break
+            combo_balances[row.combo_key] = row.closing_balance
+
+        aggregated = {product_type: Decimal("0") for product_type in product_type_order}
+        for balance in combo_balances.values():
+            for product_type in product_type_order:
+                aggregated[product_type] += balance.get(product_type, Decimal("0"))
+        return aggregated
+
+    def _build_inventory_summary(self, rows, previous_balance, product_type_order: list[str]):
+        summary = {
+            "opening": previous_balance,
+            "dispatched": {product_type: Decimal("0") for product_type in product_type_order},
+            "sold": {product_type: Decimal("0") for product_type in product_type_order},
+            "closing": {product_type: previous_balance.get(product_type, Decimal("0")) for product_type in product_type_order},
+        }
+        closing = summary["closing"].copy()
+        for row in sorted(rows, key=lambda entry: (entry.dispatch.date, entry.dispatch.pk)):
+            for product_type in product_type_order:
+                summary["dispatched"][product_type] += row.dispatched_by_type.get(product_type, Decimal("0"))
+                summary["sold"][product_type] += row.sold_by_type.get(product_type, Decimal("0"))
+                closing[product_type] = closing.get(product_type, Decimal("0"))
+                closing[product_type] += row.dispatched_by_type.get(product_type, Decimal("0"))
+                closing[product_type] -= row.sold_by_type.get(product_type, Decimal("0"))
+                if closing[product_type] < Decimal("0"):
+                    closing[product_type] = Decimal("0")
+        summary["closing"] = closing
+        return summary
+
+    def _build_amount_totals(self, rows):
+        totals = {
+            "sold": Decimal("0"),
+            "payments": Decimal("0"),
+            "balance": Decimal("0"),
+        }
+        for row in rows:
+            totals["sold"] += row.total_amount
+            totals["payments"] += row.payments_total
+            totals["balance"] += row.balance_due
+        return totals
+
+    def _filter_unassigned(self, items, month_start: date, month_end: date):
+        filtered = []
+        for item in items:
+            sale_date = getattr(item.sale, "date", None)
+            if not sale_date:
+                continue
+            if month_start <= sale_date <= month_end:
+                filtered.append(item)
+        return filtered
+
+    def _sum_decimal_values(self, data: Dict[str, Decimal]) -> Decimal:
+        total = Decimal("0")
+        for value in data.values():
+            total += value
+        return total
+
 
 
 class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):

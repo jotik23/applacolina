@@ -48,12 +48,20 @@
             </div>
           </div>
         </div>
-        <a
-          href="{% url 'administration:sale-create' %}"
-          class="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
-        >
-          Registrar venta
-        </a>
+        <div class="flex flex-wrap items-center gap-3">
+          <a
+            href="{% url 'administration:sales-cardex' %}"
+            class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+          >
+            Cardex
+          </a>
+          <a
+            href="{% url 'administration:sale-create' %}"
+            class="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+          >
+            Registrar venta
+          </a>
+        </div>
       </div>
 
       <form
