@@ -73,8 +73,8 @@
       </div>
     </section>
 
-    {% with summary=metrics.sales_overview %}
-      <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    {% with summary=metrics.sales_overview units=metrics.units_summary %}
+      <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <article class="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingresos netos</p>
           <p class="mt-3 text-3xl font-semibold text-slate-900">{{ summary.total_revenue|peso }}</p>
@@ -99,6 +99,11 @@
             <div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {{ summary.collection_rate|number_format }}%"></div>
           </div>
           <p class="mt-2 text-sm text-slate-500">{{ summary.paid_ratio|number_format:1 }}% de las facturas fueron pagadas en su totalidad.</p>
+        </article>
+        <article class="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cartones totales vendidos</p>
+          <p class="mt-3 text-3xl font-semibold text-slate-900">{{ units.total_cartons|number_format }}</p>
+          <p class="mt-1 text-sm text-slate-500">Gallinas: {{ units.hens|number_format }}. Gallinaza: {{ units.hen_manure|number_format }}</p>
         </article>
       </section>
     {% endwith %}

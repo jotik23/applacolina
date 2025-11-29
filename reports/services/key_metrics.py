@@ -64,6 +64,7 @@ def build_key_metrics(start_date: date, end_date: date) -> KeyMetricsResult:
     metrics["top_customers"] = _rank_top_customers(sales)
     avg_price_rows = _average_prices_by_type(sale_items)
     metrics["average_product_prices"] = avg_price_rows
+    metrics["units_summary"] = _units_summary(sale_items)
     metrics["price_history_series"] = _price_history_series(sale_items, avg_price_rows)
     metrics["price_positioning"] = _price_positioning(sale_items, avg_price_rows)
     metrics["overdue_customers"] = _overdue_customers(sales)
@@ -180,6 +181,34 @@ def _sales_overview(sales: Iterable[Sale]) -> dict[str, Any]:
         "collection_rate": float(collection_rate),
         "paid_ratio": float(paid_ratio),
         "invoice_count": total_invoices,
+    }
+
+
+def _units_summary(sale_items) -> dict[str, Decimal]:
+    egg_types = [
+        SaleProductType.JUMBO,
+        SaleProductType.TRIPLE_A,
+        SaleProductType.DOUBLE_A,
+        SaleProductType.SINGLE_A,
+        SaleProductType.B,
+        SaleProductType.C,
+        SaleProductType.D,
+    ]
+    aggregates = (
+        sale_items.values("product_type")
+        .annotate(total_qty=Sum("quantity"))
+    )
+    totals: dict[str, Decimal] = {}
+    for row in aggregates:
+        product_type = row["product_type"]
+        qty = row["total_qty"] or Decimal("0.00")
+        if product_type:
+            totals[product_type] = totals.get(product_type, Decimal("0.00")) + qty
+    egg_cartons = sum(totals.get(code, Decimal("0.00")) for code in egg_types)
+    return {
+        "total_cartons": egg_cartons,
+        "hens": totals.get(SaleProductType.HEN, Decimal("0.00")),
+        "hen_manure": totals.get(SaleProductType.HEN_MANURE, Decimal("0.00")),
     }
 
 
