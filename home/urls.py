@@ -5,6 +5,7 @@ from administration.views import (
     AdministrationHomeView,
     EggDispatchListView,
     PayrollManagementView,
+    SalesCardexView,
     SalesDashboardView,
     SupplierManagementView,
 )
@@ -16,6 +17,7 @@ app_name = "home"
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="home:sales", permanent=False), name="index"),
     path("ventas/", SalesDashboardView.as_view(), name="sales"),
+    path("ventas/cardex/", SalesCardexView.as_view(), name="sales-cardex"),
     path("despachos/", EggDispatchListView.as_view(), name="dispatches"),
     path("clasificacion-inventario/", egg_inventory_dashboard_view, name="egg-inventory"),
     path("produccion-indicadores/", daily_indicators_view, name="daily-indicators"),

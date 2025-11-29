@@ -19,8 +19,13 @@
           Mapea cada despacho contra sus ventas confirmadas, identifica los saldos por tipo de producto y monitorea el ciclo de recaudo sin salir del módulo comercial.
         </p>
       </div>
+      {% if home_active_tab %}
+        {% url 'home:sales' as sales_dashboard_url %}
+      {% else %}
+        {% url 'administration:sales' as sales_dashboard_url %}
+      {% endif %}
       <a
-        href="{% url 'administration:sales' %}"
+        href="{{ sales_dashboard_url }}"
         class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
       >
         ← Volver a facturación

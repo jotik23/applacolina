@@ -49,8 +49,13 @@
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-3">
+          {% if home_active_tab %}
+            {% url 'home:sales-cardex' as sales_cardex_url %}
+          {% else %}
+            {% url 'administration:sales-cardex' as sales_cardex_url %}
+          {% endif %}
           <a
-            href="{% url 'administration:sales-cardex' %}"
+            href="{{ sales_cardex_url }}"
             class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
           >
             Cardex
