@@ -173,26 +173,36 @@
         width: 160px;
       }
 
-      .position-name {
-        font-weight: 600;
-        font-size: 9pt;
-      }
+  .position-name {
+    font-weight: 600;
+    font-size: 9pt;
+  }
 
-      .position-meta {
-        font-size: 7.5pt;
-        color: #64748b;
-      }
+  .position-meta {
+    font-size: 7.5pt;
+    color: #64748b;
+  }
 
-      .cell-content {
-        min-height: 42px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.15rem;
-      }
+  .cell-content {
+    min-height: 42px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
 
-      .cell-content strong {
-        font-size: 8.5pt;
-      }
+  .operator-name {
+    font-size: 8.5pt;
+    font-weight: 400;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .operator-name--critical {
+    color: #dc2626;
+  }
 
       .cell-empty {
         color: #cbd5f5;
@@ -232,9 +242,15 @@
         margin-bottom: 0.35rem;
       }
 
-      .rest-label {
+  .rest-label {
         font-weight: 600;
         font-size: 8.5pt;
+      }
+
+      .rest-entry-name {
+        font-size: 8pt;
+        font-weight: 400;
+        color: #0f172a;
       }
 
       .rest-reason {
@@ -247,9 +263,11 @@
     <header class="sheet-header">
       <div class="sheet-title">
         <h1>{{ calendar.name|default:"Calendario sin título" }}</h1>
-        <p class="title-meta">
-          {{ calendar.start_date|date:"d \\d\\e F Y" }} – {{ calendar.end_date|date:"d \\d\\e F Y" }}
-        </p>
+        {% with pdf_start=current_view_start|default:calendar.start_date pdf_end=current_view_end|default:calendar.end_date %}
+          <p class="title-meta">
+            {{ pdf_start|date:"d \\d\\e F Y" }} – {{ pdf_end|date:"d \\d\\e F Y" }}
+          </p>
+        {% endwith %}
         <span class="status-pill">{{ calendar.get_status_display }}</span>
       </div>
     </header>
@@ -318,13 +336,13 @@
                           <div class="cell-content">
                             {% if assignment %}
                               {% with operator=assignment.operator %}
-                                <strong>
+                                <span class="operator-name{% if cell.alert == 'critical' %} operator-name--critical{% endif %}">
                                   {% if operator %}
                                     {{ operator.get_full_name|default:operator.nombres|default:operator.apellidos|default:"Sin nombre" }}
                                   {% else %}
                                     Sin colaborador registrado
                                   {% endif %}
-                                </strong>
+                                </span>
                               {% endwith %}
                               {% if assignment.notes %}
                                 <span style="font-size:7pt; color:#475569;">{{ assignment.notes }}</span>
@@ -334,11 +352,6 @@
                               {% endif %}
                               {% if cell.skill_gap_message %}
                                 <span class="badge badge-critical">{{ cell.skill_gap_message }}</span>
-                              {% endif %}
-                              {% if cell.alert == "critical" %}
-                                <span class="badge badge-critical">Alerta crítica</span>
-                              {% elif cell.alert == "warn" %}
-                                <span class="badge badge-warn">Ajuste sugerido</span>
                               {% endif %}
                             {% else %}
                               <span class="cell-empty">Sin asignación</span>
@@ -388,7 +401,7 @@
                     <td>
                       {% if cell.name %}
                         <div class="cell-content">
-                          <strong>{{ cell.name }}</strong>
+                          <span class="rest-entry-name">{{ cell.name }}</span>
                           {% if cell.reason %}
                             <span class="rest-reason">{{ cell.reason }}</span>
                           {% endif %}

@@ -68,11 +68,50 @@
 
   .calendar-sheet__actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
+  .calendar-sheet__pdf-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+    background-color: transparent;
+  }
+
+  .calendar-sheet__pdf-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #475569;
+  }
+
+  .calendar-sheet__pdf-field input {
+    border: none;
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #0f172a;
+    background-color: transparent;
+  }
+
+  .calendar-sheet__pdf-field input:focus {
+    outline: 2px solid #818cf8;
+    outline-offset: 1px;
+  }
+
   .calendar-sheet__actions button,
-  .calendar-sheet__actions a {
+  .calendar-sheet__actions a,
+  .calendar-sheet__pdf-form button {
     font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -89,7 +128,8 @@
     gap: 0.35rem;
   }
 
-  .calendar-sheet__actions a:hover {
+  .calendar-sheet__actions a:hover,
+  .calendar-sheet__pdf-form button:hover {
     background-color: #eef2ff;
   }
 
@@ -604,10 +644,38 @@
 
         <div class="flex min-h-[420px] flex-col gap-4 min-w-0">
           <div class="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide text-slate-500">
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">{{ rows|length }} posiciones</span>
-              <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">{{ date_columns|length }} días visibles</span>
-            </div>
+            <form
+              class="calendar-sheet__pdf-form"
+              action="{% url 'personal:calendar-detail-pdf' calendar.id %}"
+              method="get"
+              target="_blank"
+            >
+              <div class="calendar-sheet__pdf-field">
+                <label for="calendar-pdf-start">Desde</label>
+                <input
+                  type="date"
+                  name="start_date"
+                  id="calendar-pdf-start"
+                  value="{{ current_view_start|default:calendar.start_date|date:'Y-m-d' }}"
+                  min="{{ calendar.start_date|date:'Y-m-d' }}"
+                  max="{{ calendar.end_date|date:'Y-m-d' }}"
+                />
+              </div>
+              <div class="calendar-sheet__pdf-field">
+                <label for="calendar-pdf-end">Hasta</label>
+                <input
+                  type="date"
+                  name="end_date"
+                  id="calendar-pdf-end"
+                  value="{{ current_view_end|default:calendar.end_date|date:'Y-m-d' }}"
+                  min="{{ calendar.start_date|date:'Y-m-d' }}"
+                  max="{{ calendar.end_date|date:'Y-m-d' }}"
+                />
+              </div>
+              <button type="submit">
+                Generar PDF
+              </button>
+            </form>
             <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">Turnos registrados: {{ stats.total_assignments }}</span>
           </div>
 
@@ -632,27 +700,23 @@
                   data-save-url="{{ calendar_bulk_update_url }}"
                   data-can-edit="{{ can_override|yesno:'true,false' }}"
                 >
-                  {% if can_override %}
-                    <div class="calendar-sheet__toolbar">
-                      <p class="calendar-sheet__status" data-grid-status>Sin cambios pendientes</p>
+                  <div class="calendar-sheet__toolbar">
+                    <p class="calendar-sheet__status" {% if can_override %}data-grid-status{% endif %}>
+                      {% if can_override %}
+                        Sin cambios pendientes
+                      {% else %}
+                        Vista de solo lectura
+                      {% endif %}
+                    </p>
+                    {% if can_override %}
                       <div class="calendar-sheet__actions">
-                        <a href="{% url 'personal:calendar-detail-pdf' calendar.id %}" target="_blank" rel="noopener">
-                          Generar PDF
-                        </a>
                         <button type="button" data-grid-discard disabled>Descartar</button>
                         <button type="button" data-grid-save data-variant="primary" disabled>Guardar cambios</button>
                       </div>
-                    </div>
+                    {% endif %}
+                  </div>
+                  {% if can_override %}
                     <div class="calendar-sheet__feedback hidden" data-grid-feedback></div>
-                  {% else %}
-                    <div class="calendar-sheet__toolbar">
-                      <p class="calendar-sheet__status">Vista de solo lectura</p>
-                      <div class="calendar-sheet__actions">
-                        <a href="{% url 'personal:calendar-detail-pdf' calendar.id %}" target="_blank" rel="noopener">
-                          Generar PDF
-                        </a>
-                      </div>
-                    </div>
                   {% endif %}
                   <div class="calendar-sheet__table-wrapper">
                     <table class="calendar-sheet text-xs sm:text-sm">

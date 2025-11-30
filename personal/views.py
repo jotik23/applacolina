@@ -478,6 +478,9 @@ def _build_rest_matrix_rows(
 
 def _build_assignment_matrix(
     calendar: ShiftCalendar,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> tuple[
     List[date],
     List[dict[str, Any]],
@@ -485,7 +488,16 @@ def _build_assignment_matrix(
     dict[str, dict[str, Any]],
     dict[str, Any],
 ]:
-    date_columns = _date_range(calendar.start_date, calendar.end_date)
+    range_start = start_date or calendar.start_date
+    range_end = end_date or calendar.end_date
+    if range_start < calendar.start_date:
+        range_start = calendar.start_date
+    if range_end > calendar.end_date:
+        range_end = calendar.end_date
+    if range_start > range_end:
+        raise ValueError("El rango solicitado no es válido para este calendario.")
+
+    date_columns = _date_range(range_start, range_end)
     if not date_columns:
         empty_rows, empty_rest_rows, position_groups = _build_operational_position_groups([], [])
         return [], empty_rows, empty_rest_rows, {}, position_groups
@@ -528,8 +540,8 @@ def _build_assignment_matrix(
             assigned_operator_ids_by_day[assignment_day].add(operator_id)
 
     active_position_filter = (
-        Q(valid_from__lte=calendar.end_date)
-        & (Q(valid_until__isnull=True) | Q(valid_until__gte=calendar.start_date))
+        Q(valid_from__lte=range_end)
+        & (Q(valid_until__isnull=True) | Q(valid_until__gte=range_start))
     )
 
     positions = list(
@@ -582,7 +594,7 @@ def _build_assignment_matrix(
     rest_periods = list(
         OperatorRestPeriod.objects.select_related("operator")
         .prefetch_related("operator__roles")
-        .filter(start_date__lte=calendar.end_date, end_date__gte=calendar.start_date)
+        .filter(start_date__lte=range_end, end_date__gte=range_start)
         .order_by("start_date", "operator__apellidos", "operator__nombres")
     )
 
@@ -594,8 +606,8 @@ def _build_assignment_matrix(
             continue
         if operator_id not in operator_map and operator:
             operator_map[operator_id] = operator
-        start = max(rest_period.start_date, calendar.start_date)
-        end = min(rest_period.end_date, calendar.end_date)
+        start = max(rest_period.start_date, range_start)
+        end = min(rest_period.end_date, range_end)
         current_day = start
         while current_day <= end:
             resting_operator_ids_by_day[current_day].add(operator_id)
@@ -603,8 +615,8 @@ def _build_assignment_matrix(
 
     available_operator_qs = (
         UserProfile.objects.filter(
-            Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=calendar.end_date),
-            Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=calendar.start_date),
+            Q(employment_start_date__isnull=True) | Q(employment_start_date__lte=range_end),
+            Q(employment_end_date__isnull=True) | Q(employment_end_date__gte=range_start),
             is_active=True,
         )
         .prefetch_related("roles")
@@ -902,7 +914,7 @@ def _build_assignment_matrix(
                 (
                     period
                     for period in periods
-                    if period.start_date <= calendar.end_date and period.end_date >= calendar.start_date
+                    if period.start_date <= range_end and period.end_date >= range_start
                 ),
                 None,
             )
@@ -910,10 +922,10 @@ def _build_assignment_matrix(
             upcoming_period = None
 
             for period in periods:
-                if period.end_date < calendar.start_date:
+                if period.end_date < range_start:
                     if not recent_period or recent_period.end_date < period.end_date:
                         recent_period = period
-                elif period.start_date > calendar.end_date:
+                elif period.start_date > range_end:
                     if not upcoming_period or upcoming_period.start_date > period.start_date:
                         upcoming_period = period
 
@@ -2427,8 +2439,17 @@ class CalendarCreateView(StaffRequiredMixin, View):
             status=201,
         )
 
-def _build_calendar_detail_context(calendar: ShiftCalendar) -> dict[str, Any]:
-    date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
+def _build_calendar_detail_context(
+    calendar: ShiftCalendar,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> dict[str, Any]:
+    date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(
+        calendar,
+        start_date=start_date,
+        end_date=end_date,
+    )
     rest_daily_overview = _build_rest_daily_overview(date_columns, rest_rows)
     rest_group_meta = position_groups.get("rest_group") or {
         "key": "rests",
@@ -2580,6 +2601,9 @@ def _build_calendar_detail_context(calendar: ShiftCalendar) -> dict[str, Any]:
         if rest_rows_payload:
             rest_pdf_windows.append({"dates": dates, "rows": rest_rows_payload})
 
+    view_start = date_columns[0] if date_columns else start_date or calendar.start_date
+    view_end = date_columns[-1] if date_columns else end_date or calendar.end_date
+
     return {
         "calendar": calendar,
         "date_columns": date_columns,
@@ -2600,6 +2624,8 @@ def _build_calendar_detail_context(calendar: ShiftCalendar) -> dict[str, Any]:
         "grouped_sections": grouped_sections,
         "pdf_sections": pdf_sections,
         "rest_pdf_windows": rest_pdf_windows,
+        "current_view_start": view_start,
+        "current_view_end": view_end,
     }
 
 
@@ -2802,7 +2828,34 @@ class CalendarDetailPDFView(StaffRequiredMixin, View):
             ShiftCalendar.objects.select_related("created_by", "approved_by", "base_calendar"),
             pk=pk,
         )
-        context = _build_calendar_detail_context(calendar)
+
+        start_value = (request.GET.get("start_date") or "").strip()
+        end_value = (request.GET.get("end_date") or "").strip()
+        range_start = calendar.start_date
+        range_end = calendar.end_date
+
+        try:
+            if start_value:
+                parsed_start = _parse_date(start_value, _("fecha inicial"))
+                if parsed_start < calendar.start_date or parsed_start > calendar.end_date:
+                    return HttpResponseBadRequest("La fecha inicial debe estar dentro del calendario seleccionado.")
+                range_start = parsed_start
+            if end_value:
+                parsed_end = _parse_date(end_value, _("fecha final"))
+                if parsed_end < calendar.start_date or parsed_end > calendar.end_date:
+                    return HttpResponseBadRequest("La fecha final debe estar dentro del calendario seleccionado.")
+                range_end = parsed_end
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
+
+        if range_start > range_end:
+            return HttpResponseBadRequest("La fecha inicial debe ser anterior o igual a la fecha final.")
+
+        context = _build_calendar_detail_context(
+            calendar,
+            start_date=range_start,
+            end_date=range_end,
+        )
         context.update({"generated_at": timezone.localtime()})
         html = render_to_string(self.template_name, context, request=request)
 
@@ -2817,7 +2870,7 @@ class CalendarDetailPDFView(StaffRequiredMixin, View):
 
         calendar_name = calendar.name or _("Calendario")
         filename_base = slugify(calendar_name) or f"calendario-{calendar.pk}"
-        filename = f"{filename_base}-{calendar.start_date:%Y%m%d}-{calendar.end_date:%Y%m%d}.pdf"
+        filename = f"{filename_base}-{range_start:%Y%m%d}-{range_end:%Y%m%d}.pdf"
 
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
