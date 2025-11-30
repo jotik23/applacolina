@@ -272,23 +272,6 @@
       </div>
     </header>
 
-    {% if assignment_issues %}
-      <section class="issue-section">
-        <h2>Alertas y reglas</h2>
-        <ul class="issue-list">
-          {% for issue in assignment_issues %}
-            <li>
-              <strong>{{ issue.severity_label }}</strong> · {{ issue.title }}
-              {% if issue.detail %}
-                <br />
-                <span>{{ issue.detail }}</span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      </section>
-    {% endif %}
-
     {% for section in pdf_sections %}
       <section class="group-section">
         <div class="group-title" style="border-color: {{ section.meta.color_value|default:'#cbd5f5' }};">
@@ -416,6 +399,22 @@
             </tbody>
           </table>
         {% endfor %}
+      </section>
+    {% endif %}
+    {% if assignment_issues %}
+      <section class="issue-section" style="page-break-before: always;">
+        <h2>Alertas y reglas</h2>
+        <ul class="issue-list">
+          {% for issue in assignment_issues %}
+            <li>
+              <strong>{{ issue.severity_label }}</strong> · {{ issue.title }}
+              {% if issue.detail %}
+                <br />
+                <span>{{ issue.detail }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
       </section>
     {% endif %}
   </body>

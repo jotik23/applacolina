@@ -2562,6 +2562,9 @@ def _build_calendar_detail_context(
             row_payloads: list[dict[str, Any]] = []
             for row in section["rows"]:
                 cells = row.get("cells", [])
+                has_assignment = any(cell.get("assignment") for cell in cells)
+                if not has_assignment:
+                    continue
                 slice_cells = cells[start_index : start_index + len(dates)]
                 if not slice_cells:
                     continue

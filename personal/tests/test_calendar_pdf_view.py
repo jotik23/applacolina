@@ -7,10 +7,12 @@ from django.test import TestCase
 from django.urls import reverse
 
 from personal.models import (
+    AssignmentAlertLevel,
     CalendarStatus,
     PositionCategory,
     PositionCategoryCode,
     PositionDefinition,
+    ShiftAssignment,
     ShiftCalendar,
     ShiftType,
     UserProfile,
@@ -49,13 +51,37 @@ class CalendarDetailPDFViewTests(TestCase):
             created_by=self.user,
         )
 
-        PositionDefinition.objects.create(
+        self.position_assigned = PositionDefinition.objects.create(
             name="Operador 1",
             code="OP-1",
             category=self.category,
             farm=self.farm,
             valid_from=self.calendar.start_date,
             valid_until=self.calendar.end_date,
+        )
+        self.position_empty = PositionDefinition.objects.create(
+            name="Operador 2",
+            code="OP-2",
+            category=self.category,
+            farm=self.farm,
+            valid_from=self.calendar.start_date,
+            valid_until=self.calendar.end_date,
+        )
+
+        self.operator = UserProfile.objects.create_user(
+            cedula="1600",
+            password="test",  # noqa: S106 - test credential
+            nombres="Operario",
+            apellidos="Asignado",
+        )
+
+        ShiftAssignment.objects.create(
+            calendar=self.calendar,
+            position=self.position_assigned,
+            date=self.calendar.start_date,
+            operator=self.operator,
+            alert_level=AssignmentAlertLevel.NONE,
+            is_auto_assigned=True,
         )
 
         self.url = reverse("personal:calendar-detail-pdf", args=[self.calendar.pk])
@@ -88,3 +114,12 @@ class CalendarDetailPDFViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("calendario seleccionado", response.content.decode())
         render_pdf_mock.assert_not_called()
+
+    @patch("personal.views._render_calendar_pdf", return_value=b"%PDF-TEST%")
+    def test_hides_positions_without_assignments(self, render_pdf_mock) -> None:
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        html = render_pdf_mock.call_args[0][0]
+        self.assertIn(self.position_assigned.name, html)
+        self.assertNotIn(self.position_empty.name, html)
