@@ -541,29 +541,6 @@
 
   <section class="rounded-2xl bg-white shadow-sm min-w-0">
     <div class="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 class="text-xl font-semibold text-slate-900">Asignaciones</h2>
-        </div>
-        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {% if can_override and has_manual_choices %}
-            <span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-indigo-700">
-              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M2.879 2.879a3 3 0 014.242 0L10 5.757l2.879-2.878a3 3 0 014.242 4.242L14.243 10l2.878 2.879a3 3 0 11-4.242 4.242L10 14.243l-2.879 2.878a3 3 0 01-4.242-4.242L5.757 10 2.879 7.121a3 3 0 010-4.242z" clip-rule="evenodd" />
-              </svg>
-              Reasignación manual activa
-            </span>
-          {% elif can_override %}
-            <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
-              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2H3V4zm0 4h14v8a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm4 2a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
-              </svg>
-              Edición supervisada
-            </span>
-          {% endif %}
-        </div>
-      </div>
-
       {{ rest_summary|json_script:"rest-summary-data" }}
       {{ position_groups.group_map|json_script:"position-group-map" }}
       {{ position_groups.position_to_group|json_script:"position-to-group-map" }}
@@ -676,7 +653,6 @@
                 Generar PDF
               </button>
             </form>
-            <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1">Turnos registrados: {{ stats.total_assignments }}</span>
           </div>
 
           <div class="relative flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white min-w-0">
