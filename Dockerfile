@@ -9,7 +9,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libpq-dev tzdata \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        tzdata \
+        libcairo2 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

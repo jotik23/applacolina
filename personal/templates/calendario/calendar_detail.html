@@ -71,7 +71,8 @@
     gap: 0.5rem;
   }
 
-  .calendar-sheet__actions button {
+  .calendar-sheet__actions button,
+  .calendar-sheet__actions a {
     font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -82,6 +83,14 @@
     background-color: #fff;
     color: #312e81;
     transition: background-color 120ms ease, color 120ms ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .calendar-sheet__actions a:hover {
+    background-color: #eef2ff;
   }
 
   .calendar-sheet__actions button[data-variant="primary"] {
@@ -627,11 +636,23 @@
                     <div class="calendar-sheet__toolbar">
                       <p class="calendar-sheet__status" data-grid-status>Sin cambios pendientes</p>
                       <div class="calendar-sheet__actions">
+                        <a href="{% url 'personal:calendar-detail-pdf' calendar.id %}" target="_blank" rel="noopener">
+                          Generar PDF
+                        </a>
                         <button type="button" data-grid-discard disabled>Descartar</button>
                         <button type="button" data-grid-save data-variant="primary" disabled>Guardar cambios</button>
                       </div>
                     </div>
                     <div class="calendar-sheet__feedback hidden" data-grid-feedback></div>
+                  {% else %}
+                    <div class="calendar-sheet__toolbar">
+                      <p class="calendar-sheet__status">Vista de solo lectura</p>
+                      <div class="calendar-sheet__actions">
+                        <a href="{% url 'personal:calendar-detail-pdf' calendar.id %}" target="_blank" rel="noopener">
+                          Generar PDF
+                        </a>
+                      </div>
+                    </div>
                   {% endif %}
                   <div class="calendar-sheet__table-wrapper">
                     <table class="calendar-sheet text-xs sm:text-sm">

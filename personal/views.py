@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter, OrderedDict, defaultdict
 from itertools import cycle
+import logging
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -13,17 +14,47 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, ProtectedError, Q
-from django.http import Http404, HttpRequest, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.dateparse import parse_date
+from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import TemplateView
 
 from applacolina.mixins import StaffRequiredMixin
+
+
+logger = logging.getLogger(__name__)
+
+
+def _render_calendar_pdf(html: str, base_url: str) -> bytes:
+    """Render HTML into PDF bytes using WeasyPrint if available."""
+
+    try:
+        from weasyprint import HTML  # type: ignore
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError(
+            "WeasyPrint no está disponible en el entorno actual. Sigue la guía de instalación oficial "
+            "para habilitar la exportación a PDF."
+        ) from exc
+    except OSError as exc:  # pragma: no cover - missing system libs during import
+        raise RuntimeError(
+            "WeasyPrint no pudo inicializarse porque faltan bibliotecas del sistema (Cairo/Pango/GObject). "
+            "Instala los paquetes requeridos según la documentación."
+        ) from exc
+
+    try:
+        return HTML(string=html, base_url=base_url).write_pdf()
+    except OSError as exc:  # pragma: no cover - missing system libs
+        raise RuntimeError(
+            "WeasyPrint no pudo cargar las bibliotecas del sistema (Cairo/Pango/GObject). "
+            "Instala los paquetes requeridos según la documentación."
+        ) from exc
 
 from .forms import (
     AssignmentCreateForm,
@@ -2396,6 +2427,182 @@ class CalendarCreateView(StaffRequiredMixin, View):
             status=201,
         )
 
+def _build_calendar_detail_context(calendar: ShiftCalendar) -> dict[str, Any]:
+    date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
+    rest_daily_overview = _build_rest_daily_overview(date_columns, rest_rows)
+    rest_group_meta = position_groups.get("rest_group") or {
+        "key": "rests",
+        "type": "rest",
+        "label": "Descansos y disponibilidad",
+        "color_class": REST_GROUP_COLOR,
+        "color_value": _resolve_group_color(REST_GROUP_COLOR),
+    }
+    rest_matrix_rows: list[dict[str, Any]] = []
+    rest_matrix_rows.extend(
+        _build_rest_matrix_rows(
+            date_columns,
+            rest_daily_overview,
+            entry_key="resting",
+            label_prefix="Descanso",
+            rest_group=rest_group_meta,
+        )
+    )
+    rest_matrix_rows.extend(
+        _build_rest_matrix_rows(
+            date_columns,
+            rest_daily_overview,
+            entry_key="available",
+            label_prefix="Libres",
+            rest_group=rest_group_meta,
+        )
+    )
+    stats = _calculate_stats(rows)
+    assignment_issues = _identify_calendar_issues(date_columns, rows, rest_rows)
+    rest_suggestions = _build_rest_suggestions_payload(calendar)
+    if rest_suggestions:
+        critical_style = ISSUE_STYLE_MAP["critical"]
+        for suggestion in rest_suggestions:
+            operator_name = suggestion.get("operator_name") or _("Colaborador")
+            issue_detail = _("%(current)s → %(suggested)s · %(reason)s") % {
+                "current": suggestion.get("scheduled_date_label"),
+                "suggested": suggestion.get("suggested_date_label"),
+                "reason": suggestion.get("reason") or _("Sin motivo"),
+            }
+            assignment_issues.append(
+                {
+                    "indicator_class": critical_style["indicator_class"],
+                    "badge_class": critical_style["badge_class"],
+                    "severity_label": critical_style["label"],
+                    "title": _("Solicitud de ajuste de descanso de %(name)s") % {"name": operator_name},
+                    "detail": issue_detail,
+                }
+            )
+    can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
+    has_manual_choices = any(
+        cell.get("choices")
+        for row in rows
+        for cell in row.get("cells", [])
+    )
+    for row in rows:
+        cells_by_date: dict[str, Any] = {}
+        for cell in row.get("cells", []):
+            cell_date = cell.get("date")
+            if isinstance(cell_date, date):
+                cell_key = cell_date.isoformat()
+            else:
+                cell_key = str(cell_date)
+            cells_by_date[cell_key] = cell
+        row["cells_by_date"] = cells_by_date
+    rows_by_group: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        display_group = row.get("display_group") or {}
+        group_key = display_group.get("key") or "misc-positions"
+        rows_by_group[group_key].append(row)
+    grouped_sections: list[dict[str, Any]] = []
+    for group_meta in position_groups.get("groups", []):
+        if group_meta.get("type") == "rest":
+            continue
+        section_rows = rows_by_group.get(group_meta.get("key") or "", [])
+        if not section_rows:
+            continue
+        grouped_sections.append(
+            {
+                "meta": group_meta,
+                "rows": section_rows,
+            }
+        )
+    latest_modification = (
+        AssignmentChangeLog.objects.filter(
+            Q(assignment__calendar=calendar) | Q(details__calendar_id=calendar.id)
+        )
+        .order_by("-created_at")
+        .values_list("created_at", flat=True)
+        .first()
+    )
+
+    date_windows: list[dict[str, Any]] = []
+    if date_columns:
+        window_size = 7 if len(date_columns) > 10 else len(date_columns)
+        for index in range(0, len(date_columns), window_size):
+            window_dates = date_columns[index : index + window_size]
+            date_windows.append({"dates": window_dates, "start_index": index})
+
+    pdf_sections: list[dict[str, Any]] = []
+    windows_for_pdf = date_windows or []
+    if not windows_for_pdf and date_columns:
+        windows_for_pdf = [{"dates": date_columns, "start_index": 0}]
+    for section in grouped_sections:
+        window_payload: list[dict[str, Any]] = []
+        for window in windows_for_pdf:
+            dates = window.get("dates") or []
+            if not dates:
+                continue
+            start_index = window.get("start_index", 0)
+            row_payloads: list[dict[str, Any]] = []
+            for row in section["rows"]:
+                cells = row.get("cells", [])
+                slice_cells = cells[start_index : start_index + len(dates)]
+                if not slice_cells:
+                    continue
+                row_payloads.append(
+                    {
+                        "position": row.get("position"),
+                        "cells": slice_cells,
+                    }
+                )
+            if row_payloads:
+                window_payload.append({"dates": dates, "rows": row_payloads})
+        if window_payload:
+            pdf_sections.append(
+                {
+                    "meta": section["meta"],
+                    "windows": window_payload,
+                    "row_count": len(section["rows"]),
+                }
+            )
+    rest_pdf_windows: list[dict[str, Any]] = []
+    for window in windows_for_pdf:
+        dates = window.get("dates") or []
+        if not dates:
+            continue
+        start_index = window.get("start_index", 0)
+        rest_rows_payload: list[dict[str, Any]] = []
+        for rest_row in rest_matrix_rows:
+            slice_cells = rest_row.get("cells", [])[start_index : start_index + len(dates)]
+            if not slice_cells:
+                continue
+            rest_rows_payload.append(
+                {
+                    "label": rest_row.get("label"),
+                    "cells": slice_cells,
+                }
+            )
+        if rest_rows_payload:
+            rest_pdf_windows.append({"dates": dates, "rows": rest_rows_payload})
+
+    return {
+        "calendar": calendar,
+        "date_columns": date_columns,
+        "date_windows": date_windows,
+        "rows": rows,
+        "stats": stats,
+        "assignment_issues": assignment_issues,
+        "rest_rows": rest_rows,
+        "rest_matrix_rows": rest_matrix_rows,
+        "rest_summary": rest_summary,
+        "can_override": can_override,
+        "has_manual_choices": has_manual_choices,
+        "calendar_latest_modification": latest_modification,
+        "position_groups": position_groups,
+        "rest_suggestions": rest_suggestions,
+        "rest_group_meta": rest_group_meta,
+        "rows_by_group": dict(rows_by_group),
+        "grouped_sections": grouped_sections,
+        "pdf_sections": pdf_sections,
+        "rest_pdf_windows": rest_pdf_windows,
+    }
+
+
 class CalendarDetailView(StaffRequiredMixin, View):
     template_name = "calendario/calendar_detail.html"
 
@@ -2404,95 +2611,19 @@ class CalendarDetailView(StaffRequiredMixin, View):
             ShiftCalendar.objects.select_related("created_by", "approved_by", "base_calendar"),
             pk=pk,
         )
-        date_columns, rows, rest_rows, rest_summary, position_groups = _build_assignment_matrix(calendar)
-        rest_daily_overview = _build_rest_daily_overview(date_columns, rest_rows)
-        rest_group_meta = position_groups.get("rest_group") or {
-            "key": "rests",
-            "type": "rest",
-            "label": "Descansos y disponibilidad",
-            "color_class": REST_GROUP_COLOR,
-            "color_value": _resolve_group_color(REST_GROUP_COLOR),
-        }
-        rest_matrix_rows = []
-        rest_matrix_rows.extend(
-            _build_rest_matrix_rows(
-                date_columns,
-                rest_daily_overview,
-                entry_key="resting",
-                label_prefix="Descanso",
-                rest_group=rest_group_meta,
-            )
-        )
-        rest_matrix_rows.extend(
-            _build_rest_matrix_rows(
-                date_columns,
-                rest_daily_overview,
-                entry_key="available",
-                label_prefix="Libres",
-                rest_group=rest_group_meta,
-            )
-        )
-        stats = _calculate_stats(rows)
-        assignment_issues = _identify_calendar_issues(date_columns, rows, rest_rows)
-        rest_suggestions = _build_rest_suggestions_payload(calendar)
-        if rest_suggestions:
-            critical_style = ISSUE_STYLE_MAP["critical"]
-            for suggestion in rest_suggestions:
-                operator_name = suggestion.get("operator_name") or _("Colaborador")
-                issue_detail = _("%(current)s → %(suggested)s · %(reason)s") % {
-                    "current": suggestion.get("scheduled_date_label"),
-                    "suggested": suggestion.get("suggested_date_label"),
-                    "reason": suggestion.get("reason") or _("Sin motivo"),
-                }
-                assignment_issues.append(
-                    {
-                        "indicator_class": critical_style["indicator_class"],
-                        "badge_class": critical_style["badge_class"],
-                        "severity_label": critical_style["label"],
-                        "title": _("Solicitud de ajuste de descanso de %(name)s") % {"name": operator_name},
-                        "detail": issue_detail,
-                    }
-                )
-        can_override = calendar.status in {CalendarStatus.DRAFT, CalendarStatus.MODIFIED}
-        has_manual_choices = any(
-            cell.get("choices")
-            for row in rows
-            for cell in row.get("cells", [])
-        )
-        latest_modification = (
-            AssignmentChangeLog.objects.filter(
-                Q(assignment__calendar=calendar) | Q(details__calendar_id=calendar.id)
-            )
-            .order_by("-created_at")
-            .values_list("created_at", flat=True)
-            .first()
-        )
-        return render(
-            request,
-            self.template_name,
+        context = _build_calendar_detail_context(calendar)
+        context.update(
             {
-                "calendar": calendar,
-                "date_columns": date_columns,
-                "rows": rows,
-                "stats": stats,
-                "assignment_issues": assignment_issues,
-                "rest_rows": rest_rows,
-                "rest_matrix_rows": rest_matrix_rows,
-                "rest_summary": rest_summary,
-                "can_override": can_override,
-                "has_manual_choices": has_manual_choices,
-                "calendar_latest_modification": latest_modification,
-                "position_groups": position_groups,
                 "calendar_generation_form": CalendarGenerationForm(),
                 "calendar_home_url": _resolve_calendar_home_url(exclude_ids=[calendar.id]),
                 "calendar_generation_recent_calendars": get_recent_calendars_payload(exclude_ids=[calendar.id]),
-                "rest_suggestions": rest_suggestions,
                 "calendar_bulk_update_url": reverse(
                     "personal-api:calendar-assignment-bulk",
                     args=[calendar.id],
                 ),
-            },
+            }
         )
+        return render(request, self.template_name, context)
 
     def post(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> Any:
         calendar = get_object_or_404(ShiftCalendar, pk=pk)
@@ -2661,6 +2792,36 @@ class CalendarDetailView(StaffRequiredMixin, View):
             messages.error(request, "Acción no reconocida.")
 
         return redirect(reverse("personal:calendar-detail", args=[calendar.id]))
+
+
+class CalendarDetailPDFView(StaffRequiredMixin, View):
+    template_name = "calendario/calendar_detail_pdf.html"
+
+    def get(self, request: HttpRequest, pk: int, *args: Any, **kwargs: Any) -> HttpResponse:
+        calendar = get_object_or_404(
+            ShiftCalendar.objects.select_related("created_by", "approved_by", "base_calendar"),
+            pk=pk,
+        )
+        context = _build_calendar_detail_context(calendar)
+        context.update({"generated_at": timezone.localtime()})
+        html = render_to_string(self.template_name, context, request=request)
+
+        try:
+            pdf_bytes = _render_calendar_pdf(html, request.build_absolute_uri("/"))
+        except RuntimeError as exc:
+            logger.exception("Fallo generando PDF para el calendario %s", calendar.pk)
+            error_message = _(
+                "No se pudo generar el PDF porque faltan dependencias del sistema para WeasyPrint."
+            )
+            return HttpResponse(error_message, status=503, content_type="text/plain")
+
+        calendar_name = calendar.name or _("Calendario")
+        filename_base = slugify(calendar_name) or f"calendario-{calendar.pk}"
+        filename = f"{filename_base}-{calendar.start_date:%Y%m%d}-{calendar.end_date:%Y%m%d}.pdf"
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
 
 
 class CalendarDeleteView(StaffRequiredMixin, View):

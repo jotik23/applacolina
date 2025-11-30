@@ -1,0 +1,409 @@
+{% load tz %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Calendario {{ calendar.name|default:"sin título" }}</title>
+    <style>
+      @page {
+        size: A4 landscape;
+        margin: 12mm 14mm 16mm 14mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", "Helvetica", "Arial", sans-serif;
+        color: #0f172a;
+        font-size: 9pt;
+        line-height: 1.35;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .sheet-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1.5rem;
+        border-bottom: 1px solid #cbd5f5;
+        padding-bottom: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .sheet-title {
+        flex: 1;
+      }
+
+      .sheet-title h1 {
+        font-size: 20pt;
+        margin-bottom: 0.25rem;
+      }
+
+      .sheet-title .title-meta {
+        font-size: 10pt;
+        color: #475569;
+      }
+
+      .sheet-title .status-pill {
+        display: inline-block;
+        margin-top: 0.4rem;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        font-size: 8pt;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background-color: #e0e7ff;
+        color: #312e81;
+      }
+
+      .sheet-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+        gap: 0.4rem 1rem;
+        font-size: 8.5pt;
+      }
+
+      .sheet-meta dt {
+        font-weight: 600;
+        color: #475569;
+      }
+
+      .sheet-meta dd {
+        margin: 0;
+        color: #0f172a;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(90px, 1fr));
+        gap: 0.35rem;
+        margin-bottom: 0.9rem;
+      }
+
+      .summary-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.5rem;
+      }
+
+      .summary-label {
+        font-size: 8pt;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+      }
+
+      .summary-value {
+        font-size: 14pt;
+        font-weight: 600;
+        color: #0f172a;
+      }
+
+      .issue-section {
+        border: 1px solid #fecdd3;
+        background-color: #fff1f2;
+        border-radius: 10px;
+        padding: 0.6rem 0.8rem;
+        margin-bottom: 1rem;
+      }
+
+      .issue-section h2 {
+        font-size: 11pt;
+        margin-bottom: 0.35rem;
+      }
+
+      .issue-list {
+        margin: 0;
+        padding-left: 1rem;
+        font-size: 8.5pt;
+      }
+
+      .group-section {
+        margin-bottom: 1.2rem;
+        page-break-inside: avoid;
+      }
+
+      .group-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        border-bottom: 2px solid #cbd5f5;
+        padding-bottom: 0.2rem;
+        margin-bottom: 0.4rem;
+      }
+
+      .group-title h2 {
+        font-size: 14pt;
+      }
+
+      .group-title span {
+        font-size: 8.5pt;
+        color: #475569;
+      }
+
+      .calendar-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0.5rem;
+        table-layout: fixed;
+        font-size: 8pt;
+      }
+
+      .calendar-table th,
+      .calendar-table td {
+        border: 1px solid #e2e8f0;
+        padding: 0.25rem;
+        vertical-align: top;
+      }
+
+      .calendar-table thead th {
+        background-color: #f8fafc;
+        font-weight: 600;
+        text-align: left;
+      }
+
+      .column-position {
+        width: 160px;
+      }
+
+      .position-name {
+        font-weight: 600;
+        font-size: 9pt;
+      }
+
+      .position-meta {
+        font-size: 7.5pt;
+        color: #64748b;
+      }
+
+      .cell-content {
+        min-height: 42px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+
+      .cell-content strong {
+        font-size: 8.5pt;
+      }
+
+      .cell-empty {
+        color: #cbd5f5;
+        font-style: italic;
+      }
+
+      .cell-inactive {
+        color: #94a3b8;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 0.05rem 0.35rem;
+        border-radius: 999px;
+        font-size: 7pt;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      .badge-warn {
+        background-color: #fef3c7;
+        color: #92400e;
+      }
+
+      .badge-critical {
+        background-color: #fee2e2;
+        color: #991b1b;
+      }
+
+      .badge-ok {
+        background-color: #dcfce7;
+        color: #166534;
+      }
+
+      .rest-section h2 {
+        font-size: 12pt;
+        margin-bottom: 0.35rem;
+      }
+
+      .rest-label {
+        font-weight: 600;
+        font-size: 8.5pt;
+      }
+
+      .rest-reason {
+        font-size: 7.5pt;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="sheet-header">
+      <div class="sheet-title">
+        <h1>{{ calendar.name|default:"Calendario sin título" }}</h1>
+        <p class="title-meta">
+          {{ calendar.start_date|date:"d \\d\\e F Y" }} – {{ calendar.end_date|date:"d \\d\\e F Y" }}
+        </p>
+        <span class="status-pill">{{ calendar.get_status_display }}</span>
+      </div>
+    </header>
+
+    {% if assignment_issues %}
+      <section class="issue-section">
+        <h2>Alertas y reglas</h2>
+        <ul class="issue-list">
+          {% for issue in assignment_issues %}
+            <li>
+              <strong>{{ issue.severity_label }}</strong> · {{ issue.title }}
+              {% if issue.detail %}
+                <br />
+                <span>{{ issue.detail }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% for section in pdf_sections %}
+      <section class="group-section">
+        <div class="group-title" style="border-color: {{ section.meta.color_value|default:'#cbd5f5' }};">
+          <h2>{{ section.meta.label }}</h2>
+          <span>{{ section.row_count }} posiciones visibles</span>
+        </div>
+        {% for window in section.windows %}
+          <table class="calendar-table">
+            <thead>
+              <tr>
+                <th class="column-position">Posición / Turno</th>
+                {% for day in window.dates %}
+                  <th>
+                    <div>{{ day|date:"d/M" }}</div>
+                    <div style="font-size:7pt; color:#64748b;">{{ day|date:"l"|capfirst }}</div>
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in window.rows %}
+                <tr>
+                  <th class="column-position">
+                    {% with position=row.position %}
+                      <div class="position-name">
+                        {% if position %}
+                          {{ position.name|default:"Sin posición definida" }}
+                        {% else %}
+                          Sin posición definida
+                        {% endif %}
+                      </div>
+                      <div class="position-meta">
+                        {% if position and position.farm %}{{ position.farm.name }}{% endif %}
+                        {% if position and position.get_category_display %}
+                          {% if position and position.farm %} • {% endif %}
+                          {{ position.get_category_display }}
+                        {% endif %}
+                      </div>
+                    {% endwith %}
+                  </th>
+                  {% for cell in row.cells %}
+                    {% with assignment=cell.assignment %}
+                      {% if cell.is_position_active %}
+                        <td>
+                          <div class="cell-content">
+                            {% if assignment %}
+                              {% with operator=assignment.operator %}
+                                <strong>
+                                  {% if operator %}
+                                    {{ operator.get_full_name|default:operator.nombres|default:operator.apellidos|default:"Sin nombre" }}
+                                  {% else %}
+                                    Sin colaborador registrado
+                                  {% endif %}
+                                </strong>
+                              {% endwith %}
+                              {% if assignment.notes %}
+                                <span style="font-size:7pt; color:#475569;">{{ assignment.notes }}</span>
+                              {% endif %}
+                              {% if cell.is_overtime %}
+                                <span class="badge badge-warn">{{ cell.overtime_message|default:"Horas extra" }}</span>
+                              {% endif %}
+                              {% if cell.skill_gap_message %}
+                                <span class="badge badge-critical">{{ cell.skill_gap_message }}</span>
+                              {% endif %}
+                              {% if cell.alert == "critical" %}
+                                <span class="badge badge-critical">Alerta crítica</span>
+                              {% elif cell.alert == "warn" %}
+                                <span class="badge badge-warn">Ajuste sugerido</span>
+                              {% endif %}
+                            {% else %}
+                              <span class="cell-empty">Sin asignación</span>
+                            {% endif %}
+                          </div>
+                        </td>
+                      {% else %}
+                        <td>
+                          <div class="cell-content cell-inactive">Fuera de vigencia</div>
+                        </td>
+                      {% endif %}
+                    {% endwith %}
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endfor %}
+      </section>
+    {% empty %}
+      <p>No hay posiciones para mostrar.</p>
+    {% endfor %}
+
+    {% if rest_pdf_windows %}
+      <section class="group-section rest-section">
+        <h2>Descansos y disponibilidad</h2>
+        {% for window in rest_pdf_windows %}
+          <table class="calendar-table">
+            <thead>
+              <tr>
+                <th class="column-position">Grupo</th>
+                {% for day in window.dates %}
+                  <th>
+                    <div>{{ day|date:"d/M" }}</div>
+                    <div style="font-size:7pt; color:#64748b;">{{ day|date:"l"|capfirst }}</div>
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in window.rows %}
+                <tr>
+                  <th class="column-position">
+                    <span class="rest-label">{{ row.label }}</span>
+                  </th>
+                  {% for cell in row.cells %}
+                    <td>
+                      {% if cell.name %}
+                        <div class="cell-content">
+                          <strong>{{ cell.name }}</strong>
+                          {% if cell.reason %}
+                            <span class="rest-reason">{{ cell.reason }}</span>
+                          {% endif %}
+                        </div>
+                      {% else %}
+                        <span class="cell-empty">—</span>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endfor %}
+      </section>
+    {% endif %}
+  </body>
+</html>
