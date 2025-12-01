@@ -1,0 +1,224 @@
+{% extends "calendario/base.html" %}
+{% load humanize form_extras %}
+
+{% block title %}Abonos{% endblock %}
+
+{% block content %}
+  {% if home_active_tab %}
+    {% include "home/_submenu.html" with active=home_active_tab %}
+  {% else %}
+    {% include "administration/_submenu.html" with active=administration_active_submenu %}
+  {% endif %}
+
+  <section class="space-y-4">
+    <header class="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white px-5 py-5 shadow-sm">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex-1 min-w-[180px]">
+          <p class="text-xs font-semibold uppercase tracking-wide text-sky-600">Cadena comercial</p>
+          <h1 class="text-2xl font-semibold text-slate-900">Abonos y facturación</h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <a
+            href="{% url 'administration:sales' %}"
+            class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
+          >
+            Volver a ventas
+          </a>
+          <a
+            href="{% url 'administration:sale-create' %}"
+            class="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+          >
+            Registrar venta
+          </a>
+        </div>
+      </div>
+      <p class="text-sm text-slate-600">
+        La tabla lista cada venta junto con los abonos relacionados. Usa los filtros para enfocar la búsqueda por fecha,
+        número de factura o montos según si deseas revisar <strong>facturas</strong> o <strong>abonos</strong>.
+      </p>
+    </header>
+
+    <form
+      method="get"
+      action="{% url 'administration:sales-payments' %}"
+      class="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-[11px] text-slate-600 shadow-inner"
+    >
+      <div class="flex flex-wrap items-center gap-4">
+        <div class="flex flex-col gap-2">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Filtrar por</span>
+          <div class="flex flex-wrap gap-2 text-[12px] font-semibold text-slate-600">
+            {% for option in filter_subject_options %}
+              <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-3 py-1.5 shadow-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name="subject"
+                  value="{{ option.value }}"
+                  class="h-3.5 w-3.5 text-emerald-600 focus:ring-emerald-500"
+                  {% if option.value == active_filter_subject %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <label class="flex w-52 flex-col gap-1">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Número de factura</span>
+          <input
+            type="text"
+            name="invoice_number"
+            value="{{ filter_values.invoice_number }}"
+            placeholder="Ej. FV-123"
+            class="h-9 rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+        </label>
+        <label class="flex w-40 flex-col gap-1">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Desde (fecha)</span>
+          <input
+            type="date"
+            name="date_from"
+            value="{{ filter_values.date_from }}"
+            class="h-9 rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+        </label>
+        <label class="flex w-40 flex-col gap-1">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Hasta (fecha)</span>
+          <input
+            type="date"
+            name="date_to"
+            value="{{ filter_values.date_to }}"
+            class="h-9 rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+        </label>
+        <label class="flex w-36 flex-col gap-1">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Monto desde</span>
+          <input
+            type="number"
+            name="amount_min"
+            step="0.01"
+            min="0"
+            value="{{ filter_values.amount_min }}"
+            class="h-9 rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+        </label>
+        <label class="flex w-36 flex-col gap-1">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Monto hasta</span>
+          <input
+            type="number"
+            name="amount_max"
+            step="0.01"
+            min="0"
+            value="{{ filter_values.amount_max }}"
+            class="h-9 rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+        </label>
+      </div>
+      <div class="flex items-center gap-3 text-[12px]">
+        <button
+          type="submit"
+          class="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+        >
+          Aplicar filtros
+        </button>
+        {% if has_active_filters %}
+          <a
+            href="{% url 'administration:sales-payments' %}"
+            class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm transition hover:border-rose-300 hover:text-rose-600"
+          >
+            Limpiar
+          </a>
+        {% endif %}
+      </div>
+    </form>
+
+    <div class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Resultados</p>
+          <p class="text-lg font-semibold text-slate-900">
+            {% if sales %}
+              {{ sales|length }} ventas encontradas
+            {% else %}
+              Sin resultados
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="mt-4 overflow-x-auto">
+        {% if sales %}
+          <table class="min-w-full divide-y divide-slate-200 text-left text-[13px]">
+            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2">Factura</th>
+                <th class="px-3 py-2">Cliente</th>
+                <th class="px-3 py-2">Fecha factura</th>
+                <th class="px-3 py-2 text-right">Total</th>
+                <th class="px-3 py-2 text-right">Abonado</th>
+                <th class="px-3 py-2 text-right">Saldo</th>
+                <th class="px-3 py-2">Abonos</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              {% for sale in sales %}
+                <tr class="align-top">
+                  <td class="px-3 py-3 font-semibold text-slate-900">
+                    {% if sale.invoice_number %}
+                      {{ sale.invoice_number }}
+                    {% else %}
+                      Sin factura (#{{ sale.pk }})
+                    {% endif %}
+                  </td>
+                  <td class="px-3 py-3">
+                    <div class="flex flex-col text-[12px]">
+                      <span class="font-semibold">{{ sale.customer.name }}</span>
+                      <span class="text-slate-500">{{ sale.customer.tax_id }}</span>
+                    </div>
+                  </td>
+                  <td class="px-3 py-3 text-[12px] text-slate-600">
+                    {{ sale.date|date:"d \d\e F" }}
+                  </td>
+                  <td class="px-3 py-3 text-right font-semibold">
+                    {{ sale.annotated_total_amount|money_co }}
+                  </td>
+                  <td class="px-3 py-3 text-right text-slate-600">
+                    {{ sale.annotated_payments_total|money_co }}
+                  </td>
+                  <td class="px-3 py-3 text-right font-semibold text-rose-600">
+                    {{ sale.annotated_balance_due|money_co }}
+                  </td>
+                  <td class="px-3 py-3">
+                    {% if sale.display_payments %}
+                      <ul class="space-y-2 text-[12px]">
+                        {% for payment in sale.display_payments %}
+                          <li class="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                            <div class="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-500">
+                              <span>{{ payment.date|date:"d/m/Y" }}</span>
+                              <span>{{ payment.get_method_display }}</span>
+                            </div>
+                            <p class="text-sm font-semibold text-slate-900">{{ payment.amount|money_co }}</p>
+                            {% if payment.notes %}
+                              <p class="text-[11px] text-slate-500">{{ payment.notes }}</p>
+                            {% endif %}
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <p class="text-[12px] text-slate-500">Sin abonos registrados.</p>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="flex flex-col items-center gap-2 rounded-2xl border border-slate-200/60 bg-slate-50/60 px-6 py-10 text-center text-slate-500">
+            <svg class="h-10 w-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m0 4v10m6-6h6m-3-3v6" />
+            </svg>
+            <p class="text-sm font-semibold">No encontramos registros con los filtros seleccionados.</p>
+            <p class="text-xs">Ajusta las fechas, montos o número de factura para ampliar la búsqueda.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

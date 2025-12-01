@@ -14,7 +14,7 @@ from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import DateField, DecimalField, F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import DateField, DecimalField, F, OuterRef, Prefetch, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Greatest
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse, QueryDict
@@ -511,6 +511,205 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         }
 
 
+
+class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
+    template_name = "administration/sales/payments.html"
+
+    SUBJECT_SALE = "sale"
+    SUBJECT_PAYMENT = "payment"
+    SUBJECT_LABELS = {
+        SUBJECT_SALE: "Facturas",
+        SUBJECT_PAYMENT: "Abonos",
+    }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        filters = self._build_filters()
+        queryset = self._get_sales_queryset(filters)
+        sales = self._apply_payment_display_filters(list(queryset), filters)
+        context.update(
+            {
+                "administration_active_submenu": "sales",
+                "sales": sales,
+                "filter_subject_options": self._filter_subject_options(),
+                "active_filter_subject": filters["subject"],
+                "filter_values": self._filter_form_values(filters),
+                "has_active_filters": self._has_active_filters(filters),
+            }
+        )
+        _maybe_set_home_tab(context, self.request, "sales")
+        return context
+
+    def _build_filters(self) -> dict[str, Any]:
+        subject = self.request.GET.get("subject") or self.SUBJECT_SALE
+        if subject not in self.SUBJECT_LABELS:
+            subject = self.SUBJECT_SALE
+        invoice_number = (self.request.GET.get("invoice_number") or "").strip()
+        date_from_raw = self.request.GET.get("date_from") or ""
+        date_to_raw = self.request.GET.get("date_to") or ""
+        amount_min_raw = self.request.GET.get("amount_min") or ""
+        amount_max_raw = self.request.GET.get("amount_max") or ""
+        return {
+            "subject": subject,
+            "invoice_number": invoice_number,
+            "date_from": self._parse_date_value(date_from_raw),
+            "date_to": self._parse_date_value(date_to_raw),
+            "amount_min": self._parse_decimal_value(amount_min_raw),
+            "amount_max": self._parse_decimal_value(amount_max_raw),
+            "raw_date_from": date_from_raw,
+            "raw_date_to": date_to_raw,
+            "raw_amount_min": amount_min_raw,
+            "raw_amount_max": amount_max_raw,
+        }
+
+    def _get_sales_queryset(self, filters: dict[str, Any]):
+        decimal_field = DecimalField(max_digits=14, decimal_places=2)
+        zero_value = Value(Decimal("0.00"), output_field=decimal_field)
+        subtotal_subquery = (
+            SaleItem.objects.filter(sale_id=OuterRef("pk"))
+            .values("sale_id")
+            .annotate(total=Sum("subtotal"))
+            .values("total")
+        )
+        payments_subquery = (
+            SalePayment.objects.filter(sale_id=OuterRef("pk"))
+            .values("sale_id")
+            .annotate(total=Sum("amount"))
+            .values("total")
+        )
+        payment_prefetch = Prefetch(
+            "payments",
+            queryset=SalePayment.objects.order_by("date", "id"),
+        )
+        queryset = (
+            Sale.objects.select_related("customer", "seller")
+            .prefetch_related(payment_prefetch)
+            .annotate(
+                annotated_subtotal=Coalesce(
+                    Subquery(subtotal_subquery, output_field=decimal_field),
+                    zero_value,
+                ),
+                annotated_payments_total=Coalesce(
+                    Subquery(payments_subquery, output_field=decimal_field),
+                    zero_value,
+                ),
+            )
+            .annotate(
+                annotated_total_amount=Greatest(F("annotated_subtotal") - F("discount_amount"), zero_value)
+            )
+            .annotate(
+                annotated_balance_due=Greatest(
+                    F("annotated_total_amount") - F("annotated_payments_total"),
+                    zero_value,
+                )
+            )
+        )
+        queryset = self._apply_filters(queryset, filters)
+        return queryset.order_by("-date", "-id")
+
+    def _apply_filters(self, queryset, filters: dict[str, Any]):
+        invoice_number = filters.get("invoice_number")
+        if invoice_number:
+            queryset = queryset.filter(invoice_number__icontains=invoice_number)
+        subject = filters["subject"]
+        date_from = filters.get("date_from")
+        date_to = filters.get("date_to")
+        amount_min = filters.get("amount_min")
+        amount_max = filters.get("amount_max")
+        if subject == self.SUBJECT_SALE:
+            if date_from:
+                queryset = queryset.filter(date__gte=date_from)
+            if date_to:
+                queryset = queryset.filter(date__lte=date_to)
+            if amount_min is not None:
+                queryset = queryset.filter(annotated_total_amount__gte=amount_min)
+            if amount_max is not None:
+                queryset = queryset.filter(annotated_total_amount__lte=amount_max)
+            return queryset
+
+        queryset = queryset.filter(payments__isnull=False)
+        if date_from:
+            queryset = queryset.filter(payments__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(payments__date__lte=date_to)
+        if amount_min is not None:
+            queryset = queryset.filter(payments__amount__gte=amount_min)
+        if amount_max is not None:
+            queryset = queryset.filter(payments__amount__lte=amount_max)
+        return queryset.distinct()
+
+    def _apply_payment_display_filters(self, sales: list[Sale], filters: dict[str, Any]) -> list[Sale]:
+        subject = filters["subject"]
+        if subject != self.SUBJECT_PAYMENT:
+            for sale in sales:
+                sale.display_payments = list(sale.payments.all())
+            return sales
+
+        filtered_sales: list[Sale] = []
+        for sale in sales:
+            sale_payments = list(sale.payments.all())
+            payments = [payment for payment in sale_payments if self._payment_matches_filters(payment, filters)]
+            if not payments:
+                continue
+            sale.display_payments = payments
+            filtered_sales.append(sale)
+        return filtered_sales
+
+    def _payment_matches_filters(self, payment: SalePayment, filters: dict[str, Any]) -> bool:
+        date_from = filters.get("date_from")
+        date_to = filters.get("date_to")
+        amount_min = filters.get("amount_min")
+        amount_max = filters.get("amount_max")
+        if date_from and payment.date < date_from:
+            return False
+        if date_to and payment.date > date_to:
+            return False
+        if amount_min is not None and Decimal(payment.amount or 0) < amount_min:
+            return False
+        if amount_max is not None and Decimal(payment.amount or 0) > amount_max:
+            return False
+        return True
+
+    def _filter_subject_options(self) -> list[dict[str, str]]:
+        return [{"value": value, "label": label} for value, label in self.SUBJECT_LABELS.items()]
+
+    def _filter_form_values(self, filters: dict[str, Any]) -> dict[str, str]:
+        return {
+            "invoice_number": filters.get("invoice_number", ""),
+            "date_from": filters.get("raw_date_from", ""),
+            "date_to": filters.get("raw_date_to", ""),
+            "amount_min": filters.get("raw_amount_min", ""),
+            "amount_max": filters.get("raw_amount_max", ""),
+        }
+
+    def _has_active_filters(self, filters: dict[str, Any]) -> bool:
+        return any(
+            (
+                filters.get("invoice_number"),
+                filters.get("raw_date_from"),
+                filters.get("raw_date_to"),
+                filters.get("raw_amount_min"),
+                filters.get("raw_amount_max"),
+            )
+        )
+
+    def _parse_date_value(self, value: str):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+
+    def _parse_decimal_value(self, value: str):
+        if not value:
+            return None
+        try:
+            return Decimal(value)
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+
 class SalesCardexView(StaffRequiredMixin, generic.TemplateView):
     template_name = "administration/sales/cardex.html"
 
@@ -930,7 +1129,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             purchases_end_date=end_date_raw,
         )
         status_values = set(PurchaseRequest.Status.values)
-        context.setdefault('purchase_status_choices', tuple(PurchaseRequest.Status.choices))
+        status_options = tuple((scope.code, scope.label) for scope in state.scopes if scope.code in status_values)
+        context.setdefault('purchase_status_options', status_options)
         context.setdefault('purchase_status_default', state.scope.code if state.scope.code in status_values else '')
         field_errors = kwargs.get('purchase_request_field_errors') or {}
         item_errors = kwargs.get('purchase_request_item_errors') or {}

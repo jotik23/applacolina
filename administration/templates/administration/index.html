@@ -209,7 +209,7 @@
                         data-purchase-bulk-requires-selection
                       >
                         <option value="">Selecciona un estado</option>
-                        {% for value, label in purchase_status_choices %}
+                        {% for value, label in purchase_status_options %}
                           <option value="{{ value }}" {% if purchase_status_default == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                       </select>

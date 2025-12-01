@@ -9,6 +9,7 @@ from .views import (
     EggDispatchUpdateView,
     PayrollManagementView,
     SaleCreateView,
+    SalesPaymentListView,
     SaleUpdateView,
     SalesCardexView,
     SalesDashboardView,
@@ -22,6 +23,7 @@ app_name = 'administration'
 urlpatterns = [
     path('', RedirectView.as_view(pattern_name='administration:sales', permanent=False), name='index'),
     path('ventas/', SalesDashboardView.as_view(), name='sales'),
+    path('ventas/abonos/', SalesPaymentListView.as_view(), name='sales-payments'),
     path('ventas/cardex/', SalesCardexView.as_view(), name='sales-cardex'),
     path('ventas/nueva/', SaleCreateView.as_view(), name='sale-create'),
     path('ventas/<int:pk>/editar/', SaleUpdateView.as_view(), name='sale-update'),
