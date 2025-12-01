@@ -83,6 +83,11 @@ from .services.purchase_orders import (
     PurchaseOrderService,
     PurchaseOrderValidationError,
 )
+from .services.purchase_bulk_actions import (
+    PurchaseBulkActionError,
+    move_purchases_to_status,
+    update_purchases_requested_date,
+)
 from .services.purchase_accounting import (
     PurchaseAccountingPayload,
     PurchaseAccountingService,
@@ -924,6 +929,9 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             purchases_start_date=start_date_raw,
             purchases_end_date=end_date_raw,
         )
+        status_values = set(PurchaseRequest.Status.values)
+        context.setdefault('purchase_status_choices', tuple(PurchaseRequest.Status.choices))
+        context.setdefault('purchase_status_default', state.scope.code if state.scope.code in status_values else '')
         field_errors = kwargs.get('purchase_request_field_errors') or {}
         item_errors = kwargs.get('purchase_request_item_errors') or {}
         overrides = kwargs.get('purchase_form_overrides')
@@ -1014,6 +1022,8 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         return context
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        if 'bulk_action' in request.POST:
+            return self._handle_purchase_bulk_actions()
         panel = request.POST.get('panel')
         if panel == 'request':
             return self._handle_request_panel_post()
@@ -1031,6 +1041,65 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             return self._handle_delete_purchase()
         messages.error(request, "El formulario enviado no está disponible todavía.")
         return redirect(self._build_base_url(scope=request.POST.get('scope')))
+
+    def _handle_purchase_bulk_actions(self) -> HttpResponse:
+        scope = self.request.POST.get('scope') or self.request.GET.get('scope') or ''
+        selected_ids = [
+            purchase_id
+            for purchase_id in (_parse_int(value) for value in self.request.POST.getlist('selected_purchases'))
+            if purchase_id
+        ]
+        if not selected_ids:
+            messages.error(self.request, "Selecciona al menos una compra para ejecutar acciones masivas.")
+            return redirect(self._build_base_url(scope=scope))
+        action = (self.request.POST.get('bulk_action') or '').strip()
+        valid_statuses = set(PurchaseRequest.Status.values)
+        if action == 'move_status':
+            target_status = (self.request.POST.get('target_status') or '').strip()
+            try:
+                updated = move_purchases_to_status(purchase_ids=selected_ids, target_status=target_status)
+            except PurchaseBulkActionError as exc:
+                messages.error(self.request, str(exc))
+            else:
+                if updated:
+                    messages.success(
+                        self.request,
+                        f"Se movieron {updated} solicitudes al estado seleccionado.",
+                    )
+                else:
+                    messages.info(
+                        self.request,
+                        "Las solicitudes seleccionadas ya estaban en el estado indicado.",
+                    )
+            next_scope = target_status if target_status in valid_statuses else scope
+            return redirect(self._build_base_url(scope=next_scope))
+        if action == 'update_requested_date':
+            requested_date_raw = (self.request.POST.get('bulk_requested_date') or '').strip()
+            requested_date = parse_date(requested_date_raw)
+            if not requested_date_raw or requested_date is None:
+                messages.error(self.request, "Selecciona una fecha válida para actualizar las solicitudes.")
+                return redirect(self._build_base_url(scope=scope))
+            try:
+                updated = update_purchases_requested_date(
+                    purchase_ids=selected_ids,
+                    requested_date=requested_date,
+                )
+            except PurchaseBulkActionError as exc:
+                messages.error(self.request, str(exc))
+            else:
+                if updated:
+                    messages.success(
+                        self.request,
+                        f"Se actualizó la fecha de solicitud en {updated} compras.",
+                    )
+                else:
+                    messages.info(
+                        self.request,
+                        "Las solicitudes seleccionadas ya tenían la fecha indicada.",
+                    )
+            return redirect(self._build_base_url(scope=scope))
+        messages.error(self.request, "Selecciona una acción masiva válida.")
+        return redirect(self._build_base_url(scope=scope))
 
     def _handle_request_panel_post(self) -> HttpResponse:
         intent = self.request.POST.get('intent') or 'save_draft'
