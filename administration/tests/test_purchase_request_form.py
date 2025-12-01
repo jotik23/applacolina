@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 import uuid
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from administration.models import (
     ExpenseTypeApprovalRule,
@@ -69,6 +71,16 @@ class PurchaseRequestFormSubmissionTests(TestCase):
         self.assertEqual(PurchaseRequest.AreaScope.CHICKEN_HOUSE, item.scope_area)
         self.assertEqual(self.house, item.scope_chicken_house)
         self.assertEqual(self.farm, item.scope_farm)
+
+    def test_requested_date_is_preserved_on_creation(self) -> None:
+        target_date = timezone.localdate() - timedelta(days=10)
+        payload = self._base_payload() | {'requested_date': target_date.isoformat()}
+        response = self.client.post(self._url(), data=payload)
+        expected_redirect = f"{self._url()}?scope={PurchaseRequest.Status.DRAFT}"
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+
+        purchase = PurchaseRequest.objects.get(name='Compra equipos críticos')
+        self.assertEqual(target_date, timezone.localtime(purchase.created_at).date())
 
     def test_send_purchase_request_runs_workflow(self) -> None:
         ExpenseTypeApprovalRule.objects.create(
@@ -422,6 +434,7 @@ class PurchaseRequestFormSubmissionTests(TestCase):
             'summary': 'Compra equipos críticos',
             'supplier': str(self.supplier.pk),
             'expense_type': str(self.expense_type.pk),
+            'requested_date': timezone.localdate().isoformat(),
             'items[0][description]': 'Motor ventilador',
             'items[0][quantity]': '2',
             'items[0][estimated_amount]': '1200000',

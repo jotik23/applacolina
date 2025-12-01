@@ -304,17 +304,37 @@ class PurchaseRequestSubmissionService:
         purchase.assigned_manager_id = manager_id
         purchase.status = PurchaseRequest.Status.DRAFT
         purchase.currency = purchase.currency or "COP"
+        target_created_at = None
         if payload.requested_date:
-            tz = timezone.get_current_timezone()
-            if purchase.created_at:
-                current_local = timezone.localtime(purchase.created_at, tz)
-            else:
-                current_local = timezone.localtime(timezone.now(), tz)
-            base_time = current_local.time().replace(tzinfo=None)
-            naive_target = datetime.combine(payload.requested_date, base_time)
-            purchase.created_at = timezone.make_aware(naive_target, tz)
+            target_created_at = self._resolve_requested_datetime(
+                purchase=purchase,
+                requested_date=payload.requested_date,
+            )
+            purchase.created_at = target_created_at
         self._save_with_code(purchase, force_code=is_new)
+        if target_created_at:
+            self._sync_requested_datetime(purchase=purchase, target=target_created_at)
         return purchase
+
+    def _resolve_requested_datetime(
+        self,
+        *,
+        purchase: PurchaseRequest,
+        requested_date: date,
+    ) -> datetime:
+        tz = timezone.get_current_timezone()
+        source = purchase.created_at or timezone.now()
+        current_local = timezone.localtime(source, tz)
+        base_time = current_local.time().replace(tzinfo=None)
+        naive_target = datetime.combine(requested_date, base_time)
+        return timezone.make_aware(naive_target, tz)
+
+    def _sync_requested_datetime(self, *, purchase: PurchaseRequest, target: datetime) -> None:
+        current = purchase.created_at
+        if current and abs((current - target).total_seconds()) < 1:
+            return
+        purchase.created_at = target
+        purchase.save(update_fields=["created_at", "updated_at"])
 
     def _save_with_code(self, purchase: PurchaseRequest, *, force_code: bool) -> None:
         attempts = 0
