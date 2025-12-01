@@ -409,22 +409,8 @@ class SaleForm(forms.ModelForm):
             destination=destination,
             exclude_sale_id=getattr(self.instance, "pk", None),
         )
+        # keep snapshot to inform the UI even if inventory falls below zero
         self.inventory_snapshot = inventory
-        destination_label = dict(EggDispatchDestination.choices).get(destination, destination)
-
-        for product_type, payload in self.cleaned_items.items():
-            egg_type = SALE_EGG_TYPE_MAP.get(product_type)
-            if not egg_type:
-                continue
-            available = inventory.get(egg_type, Decimal("0"))
-            if payload["quantity"] > available:
-                field_name = self.quantity_field_map[product_type]
-                product_label = dict(SaleProductType.choices).get(product_type, product_type)
-                self.add_error(
-                    field_name,
-                    f"Inventario insuficiente en la bodega {destination_label}. "
-                    f"Disponible {available} cartones para {product_label}.",
-                )
 
     def _compute_financial_summary(self, cleaned: Dict[str, Any]) -> None:
         discount = Decimal(cleaned.get("discount_amount") or 0)

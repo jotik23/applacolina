@@ -531,9 +531,6 @@ def get_inventory_for_seller_destination(
             continue
         inventory[egg_type] -= Decimal(row.get("total") or 0)
 
-    for egg_type in inventory:
-        if inventory[egg_type] < Decimal("0"):
-            inventory[egg_type] = Decimal("0")
     return inventory
 
 

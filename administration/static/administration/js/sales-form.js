@@ -161,9 +161,6 @@
           remainingLabel.textContent = 'Saldo tras pedido: —';
         } else {
           var remaining = available - quantity;
-          if (remaining < 0) {
-            remaining = 0;
-          }
           remainingLabel.textContent = 'Saldo tras pedido: ' + formatCartons(remaining);
         }
       }

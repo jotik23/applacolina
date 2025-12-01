@@ -82,7 +82,7 @@ class SaleFormTestCase(TestCase):
         self.assertEqual(sale.warehouse_destination, EggDispatchDestination.TIERRALTA)
         self.assertIsNotNone(sale.confirmed_at)
 
-    def test_confirmed_sale_blocks_if_requested_quantity_exceeds_inventory(self):
+    def test_confirmed_sale_allows_quantity_exceeding_inventory(self):
         dispatch = EggDispatch.objects.create(
             date=date.today(),
             destination=EggDispatchDestination.MONTERIA,
@@ -100,9 +100,10 @@ class SaleFormTestCase(TestCase):
             }
         )
         form = SaleForm(data=data, actor_id=self.seller.pk)
-        self.assertFalse(form.is_valid())
-        error_list = form.errors.get(form.quantity_field_map[SaleProductType.JUMBO], [])
-        self.assertTrue(any("Inventario insuficiente" in error for error in error_list))
+        self.assertTrue(form.is_valid(), form.errors)
+        sale = form.save()
+        item = sale.items.get(product_type=SaleProductType.JUMBO)
+        self.assertEqual(item.quantity, Decimal("12"))
 
     def test_discount_and_withholding_are_calculated(self):
         data = self._base_form_data()
