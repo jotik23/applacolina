@@ -348,12 +348,13 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
     def _sort_field_map(self) -> dict[str, tuple[str, ...]]:
         return {
             "date": ("date",),
+            "invoice_number": ("invoice_number",),
             "customer": ("customer__name", "customer__tax_id"),
             "status": ("status",),
             "payment_condition": ("payment_condition",),
             "total": ("annotated_total_amount",),
             "payments": ("annotated_payments_total",),
-             "last_payment": ("annotated_last_payment",),
+            "last_payment": ("annotated_last_payment",),
             "balance": ("annotated_balance_due",),
         }
 

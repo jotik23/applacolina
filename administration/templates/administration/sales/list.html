@@ -264,6 +264,25 @@
               {% endwith %}
             </th>
             <th class="px-4 py-3 text-left">
+              {% with state=sort_state.invoice_number %}
+                {% with query=state.query %}
+                <a
+                  href="{% if query %}?{{ query }}{% else %}{{ list_base_path }}{% endif %}"
+                  class="group inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                >
+                  <span>Factura</span>
+                  <span class="text-[10px] {% if state.is_active %}text-slate-900{% else %}text-slate-400{% endif %}">
+                    {% if state.is_active %}
+                      {% if state.direction == "desc" %}&darr;{% else %}&uarr;{% endif %}
+                    {% else %}
+                      &varr;
+                    {% endif %}
+                  </span>
+                </a>
+                {% endwith %}
+              {% endwith %}
+            </th>
+            <th class="px-4 py-3 text-left">
               {% with state=sort_state.customer %}
                 {% with query=state.query %}
                 <a
@@ -403,6 +422,13 @@
           {% for sale in sales %}
             <tr class="align-top {% if sale.status == 'paid' %}bg-emerald-50/40{% elif sale.status == 'confirmed' %}bg-amber-50/30{% elif sale.status == 'draft' %}bg-slate-50/40{% endif %}">
               <td class="px-4 py-3 text-sm font-semibold text-slate-900">{{ sale.date|date:"d/m/Y" }}</td>
+              <td class="px-4 py-3 text-sm font-semibold text-slate-700">
+                {% if sale.invoice_number %}
+                  {{ sale.invoice_number }}
+                {% else %}
+                  <span class="text-slate-400">—</span>
+                {% endif %}
+              </td>
               <td class="px-4 py-3">
                 <p class="font-semibold text-slate-900">{{ sale.customer.name }}</p>
                 {% if sale.notes %}
