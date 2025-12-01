@@ -1013,8 +1013,6 @@ class EggDispatchForm(forms.ModelForm):
             field.widget.attrs["data-cartons-input"] = "true"
             available_cartons = self.inventory_map.setdefault(egg_type, Decimal("0"))
             field.widget.attrs["data-cartons-available"] = f"{available_cartons:.2f}"
-            if available_cartons > 0:
-                field.widget.attrs["max"] = f"{available_cartons:.2f}"
             if existing_items:
                 field.initial = existing_items.get(egg_type)
             self.fields[field_name] = field
@@ -1085,12 +1083,6 @@ class EggDispatchForm(forms.ModelForm):
             if value in (None, ""):
                 continue
             decimal_value = Decimal(value)
-            available = self.inventory_map.get(egg_type, Decimal("0"))
-            if decimal_value > available:
-                self.add_error(
-                    field_name,
-                    f"Inventario insuficiente. Solo hay {available} cart disponibles.",
-                )
             if decimal_value <= 0:
                 continue
             entries[egg_type] = decimal_value

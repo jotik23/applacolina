@@ -456,10 +456,7 @@ def get_inventory_balance_by_type(*, exclude_dispatch_id: Optional[int] = None) 
     for egg_type in ORDERED_EGG_TYPES:
         classified_total = classification_map.get(egg_type, Decimal("0"))
         dispatched_total = dispatch_map.get(egg_type, Decimal("0"))
-        balance = classified_total - dispatched_total
-        if balance < Decimal("0"):
-            balance = Decimal("0")
-        balances[egg_type] = balance
+        balances[egg_type] = classified_total - dispatched_total
     return balances
 
 
@@ -488,10 +485,7 @@ def get_inventory_balance_until(*, until: date, farm_id: Optional[int] = None) -
     for egg_type in ORDERED_EGG_TYPES:
         classified_total = classification_map.get(egg_type, Decimal("0"))
         dispatched_total = dispatch_map.get(egg_type, Decimal("0"))
-        balance = classified_total - dispatched_total
-        if balance < Decimal("0"):
-            balance = Decimal("0")
-        balances[egg_type] = balance
+        balances[egg_type] = classified_total - dispatched_total
     return balances
 
 

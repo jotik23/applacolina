@@ -482,7 +482,7 @@ class EggDispatchViewsTests(TestCase):
         jumbo_row = next(row for row in inventory_rows if row.egg_type == EggType.JUMBO)
         self.assertEqual(jumbo_row.cartons, Decimal("60"))
 
-    def test_dispatch_prevents_exceeding_inventory(self) -> None:
+    def test_dispatch_allows_exceeding_inventory(self) -> None:
         response = self.client.post(
             reverse("administration:egg-dispatch-create"),
             {
@@ -493,9 +493,13 @@ class EggDispatchViewsTests(TestCase):
                 "type_jumbo": "999",
             },
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Inventario insuficiente", status_code=200)
-        self.assertFalse(EggDispatch.objects.exists())
+        self.assertRedirects(response, reverse("administration:egg-dispatch-list"))
+        dispatch = EggDispatch.objects.get()
+        self.assertEqual(dispatch.total_cartons, Decimal("999"))
+        jumbo_balance = next(
+            row.cartons for row in summarize_classified_inventory() if row.egg_type == EggType.JUMBO
+        )
+        self.assertEqual(jumbo_balance, Decimal("120") - Decimal("999"))
 
     def test_dispatch_update_replaces_items(self) -> None:
         dispatch = EggDispatch.objects.create(
