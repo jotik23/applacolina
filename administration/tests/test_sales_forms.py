@@ -200,3 +200,18 @@ class SaleFormTestCase(TestCase):
         form = SaleForm(data=data, actor_id=self.seller.pk)
         self.assertFalse(form.is_valid())
         self.assertIn("no puede superar", form.errors["retention_amount"][0])
+
+    def test_edit_form_prefills_dates(self):
+        sale = Sale.objects.create(
+            date=timezone.localdate() - timedelta(days=5),
+            payment_due_date=timezone.localdate() + timedelta(days=2),
+            customer=self.customer,
+            seller=self.seller,
+            status=Sale.Status.CONFIRMED,
+            payment_condition=Sale.PaymentCondition.CASH,
+        )
+        form = SaleForm(instance=sale, actor_id=self.seller.pk)
+        self.assertEqual(form.fields["date"].initial, sale.date)
+        self.assertEqual(form.fields["payment_due_date"].initial, sale.payment_due_date)
+        self.assertEqual(str(form["date"].value()), sale.date.isoformat())
+        self.assertEqual(str(form["payment_due_date"].value()), sale.payment_due_date.isoformat())

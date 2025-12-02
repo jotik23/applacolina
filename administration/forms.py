@@ -184,8 +184,8 @@ class SaleForm(forms.ModelForm):
             "notes",
         ]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
-            "payment_due_date": forms.DateInput(attrs={"type": "date"}),
+            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "payment_due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "invoice_number": forms.TextInput(),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
@@ -216,14 +216,11 @@ class SaleForm(forms.ModelForm):
 
         date_field = self.fields["date"]
         date_field.widget.attrs.setdefault("class", self.input_classes)
-        if (
-            not self.is_bound
-            and not date_field.initial
-            and not getattr(self.instance, "pk", None)
-        ):
-            today = timezone.localdate()
-            date_field.initial = today
-            date_field.widget.attrs.setdefault("value", today.isoformat())
+        if not self.is_bound:
+            if getattr(self.instance, "pk", None) and getattr(self.instance, "date", None):
+                date_field.initial = getattr(self.instance, "date")
+            elif not date_field.initial:
+                date_field.initial = timezone.localdate()
 
         status_field = self.fields["status"]
         status_field.widget.attrs.setdefault("class", self.input_classes)
@@ -244,8 +241,12 @@ class SaleForm(forms.ModelForm):
         payment_condition_field.widget.attrs.setdefault("class", self.input_classes)
         payment_due_field = self.fields["payment_due_date"]
         payment_due_field.widget.attrs.setdefault("class", self.input_classes)
-        if not payment_due_field.initial and not getattr(self.instance, "pk", None):
-            payment_due_field.initial = timezone.localdate() + timedelta(days=3)
+        if not self.is_bound:
+            instance_has_pk = bool(getattr(self.instance, "pk", None))
+            if instance_has_pk and getattr(self.instance, "payment_due_date", None):
+                payment_due_field.initial = getattr(self.instance, "payment_due_date")
+            elif not payment_due_field.initial and not instance_has_pk:
+                payment_due_field.initial = timezone.localdate() + timedelta(days=3)
 
         invoice_field = self.fields["invoice_number"]
         invoice_field.widget.attrs.setdefault("class", self.input_classes)
