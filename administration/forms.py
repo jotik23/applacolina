@@ -200,7 +200,8 @@ class SaleForm(forms.ModelForm):
         self.price_field_map: Dict[str, str] = {}
         self.cleaned_discount = Decimal("0.00")
         self.net_total = Decimal("0.00")
-        self.cleaned_retention = Decimal("0.00")
+        self.cleaned_retention_rate = Decimal("0.00")
+        self.retention_deduction = Decimal("0.00")
         self._configure_base_fields()
         self._build_product_fields()
 
@@ -268,6 +269,7 @@ class SaleForm(forms.ModelForm):
         retention_field.widget.attrs.setdefault("class", f"{self.input_classes} text-right")
         retention_field.widget.attrs.setdefault("step", "0.01")
         retention_field.widget.attrs.setdefault("min", "0")
+        retention_field.widget.attrs.setdefault("max", "100")
         retention_field.required = False
 
         notes_field = self.fields["notes"]
@@ -431,18 +433,21 @@ class SaleForm(forms.ModelForm):
         net_before_retention = self.cleaned_total - self.cleaned_discount
         if net_before_retention < Decimal("0"):
             net_before_retention = Decimal("0")
-        retention = Decimal(cleaned.get("retention_amount") or 0)
-        if retention < Decimal("0"):
+        retention_rate = Decimal(cleaned.get("retention_amount") or 0)
+        if retention_rate < Decimal("0"):
             self.add_error("retention_amount", "La retención no puede ser negativa.")
-            retention = Decimal("0")
-        if retention > net_before_retention:
-            self.add_error(
-                "retention_amount",
-                "La retención no puede superar el total después de aplicar el descuento.",
-            )
-            retention = net_before_retention
-        self.cleaned_retention = retention.quantize(Decimal("0.01"))
-        net_total = net_before_retention - self.cleaned_retention
+            retention_rate = Decimal("0")
+        if retention_rate > Decimal("100"):
+            self.add_error("retention_amount", "La retención no puede superar el 100%.")
+            retention_rate = Decimal("100")
+        self.cleaned_retention_rate = retention_rate.quantize(Decimal("0.01"))
+        retention_value = (
+            net_before_retention * self.cleaned_retention_rate / Decimal("100")
+        ).quantize(Decimal("0.01"))
+        if retention_value > net_before_retention:
+            retention_value = net_before_retention
+        self.retention_deduction = retention_value
+        net_total = net_before_retention - self.retention_deduction
         if net_total < Decimal("0"):
             net_total = Decimal("0")
         self.net_total = net_total.quantize(Decimal("0.01"))
@@ -472,17 +477,17 @@ class SaleForm(forms.ModelForm):
             subtotal = self.cleaned_total
             discount = self.cleaned_discount
             net_total = self.net_total
-            retention = self.cleaned_retention
+            retention = self.retention_deduction
         elif self.instance and self.instance.pk:
             subtotal = self.instance.subtotal_amount
             discount = Decimal(self.instance.discount_amount or 0)
             net_total = self.instance.total_amount
-            retention = Decimal(self.instance.retention_amount or 0)
+            retention = self.instance.retention_value
         else:
             subtotal = self.cleaned_total
             discount = self.cleaned_discount
             net_total = self.net_total
-            retention = self.cleaned_retention
+            retention = self.retention_deduction
         if net_total < Decimal("0"):
             net_total = Decimal("0.00")
         return {
@@ -528,7 +533,7 @@ class SaleForm(forms.ModelForm):
             if self.actor_id and not sale.confirmed_by_id:
                 sale.confirmed_by_id = self.actor_id
         sale.discount_amount = self.cleaned_discount
-        sale.retention_amount = self.cleaned_retention
+        sale.retention_amount = self.cleaned_retention_rate
         if commit:
             sale.save()
             sale.items.all().delete()

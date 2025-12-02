@@ -844,12 +844,12 @@ class Sale(TimeStampedModel):
         default=Decimal("0.00"),
     )
     retention_amount = models.DecimalField(
-        "Retención aplicada",
-        max_digits=14,
+        "Retención (%)",
+        max_digits=5,
         decimal_places=2,
         default=Decimal("0.00"),
         blank=True,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     notes = models.TextField("Notas para el equipo comercial", blank=True)
     confirmed_at = models.DateTimeField("Confirmado en", null=True, blank=True)
@@ -899,11 +899,27 @@ class Sale(TimeStampedModel):
     def total_amount(self) -> Decimal:
         subtotal = self.subtotal_amount
         discount = Decimal(self.discount_amount or 0)
-        retention = Decimal(self.retention_amount or 0)
-        net_total = subtotal - discount - retention
+        net_before_retention = subtotal - discount
+        if net_before_retention < Decimal("0"):
+            net_before_retention = Decimal("0.00")
+        retention_value = self.retention_value
+        net_total = net_before_retention - retention_value
         if net_total < Decimal("0"):
             net_total = Decimal("0.00")
         return net_total.quantize(Decimal("0.01"))
+
+    @property
+    def retention_value(self) -> Decimal:
+        base_total = self.subtotal_amount - Decimal(self.discount_amount or 0)
+        if base_total <= Decimal("0.00"):
+            return Decimal("0.00")
+        rate = Decimal(self.retention_amount or 0)
+        if rate <= Decimal("0.00"):
+            return Decimal("0.00")
+        deduction = (base_total * rate / Decimal("100")).quantize(Decimal("0.01"))
+        if deduction > base_total:
+            return base_total
+        return deduction
 
     @property
     def auto_withholding_amount(self) -> Decimal:

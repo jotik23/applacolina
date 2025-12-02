@@ -188,10 +188,14 @@
       if (totalBeforeRetention < 0) {
         totalBeforeRetention = 0;
       }
-      var retention = retentionField ? parseNumber(retentionField.value) : 0;
-      if (retention < 0) {
-        retention = 0;
+      var retentionRate = retentionField ? parseNumber(retentionField.value) : 0;
+      if (retentionRate < 0) {
+        retentionRate = 0;
       }
+      if (retentionRate > 100) {
+        retentionRate = 100;
+      }
+      var retention = (totalBeforeRetention * retentionRate) / 100;
       if (retention > totalBeforeRetention) {
         retention = totalBeforeRetention;
       }

@@ -8,6 +8,7 @@ from typing import Any, Iterable, Mapping
 from django.db.models import (
     DateField,
     DecimalField,
+    ExpressionWrapper,
     F,
     OuterRef,
     Q,
@@ -110,8 +111,23 @@ def _build_sales_queryset(start_date: date, end_date: date):
             annotated_payments_total=Coalesce(Subquery(payments_subquery, output_field=decimal_field), zero_value),
         )
         .annotate(
+            annotated_net_before_retention=Greatest(
+                F("annotated_subtotal") - F("discount_amount"),
+                zero_value,
+            ),
+        )
+        .annotate(
+            annotated_retention_value=Greatest(
+                ExpressionWrapper(
+                    F("annotated_net_before_retention") * F("retention_amount") / Value(Decimal("100")),
+                    output_field=decimal_field,
+                ),
+                zero_value,
+            ),
+        )
+        .annotate(
             annotated_total_amount=Greatest(
-                F("annotated_subtotal") - F("discount_amount") - F("retention_amount"),
+                F("annotated_net_before_retention") - F("annotated_retention_value"),
                 zero_value,
             ),
         )

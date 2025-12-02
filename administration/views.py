@@ -14,7 +14,7 @@ from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import DateField, DecimalField, F, OuterRef, Prefetch, Q, Subquery, Sum, Value
+from django.db.models import DateField, DecimalField, ExpressionWrapper, F, OuterRef, Prefetch, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Greatest
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse, QueryDict
@@ -217,8 +217,23 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 ),
             )
             .annotate(
+                annotated_net_before_retention=Greatest(
+                    F("annotated_subtotal") - F("discount_amount"),
+                    zero_value,
+                ),
+            )
+            .annotate(
+                annotated_retention_value=Greatest(
+                    ExpressionWrapper(
+                        F("annotated_net_before_retention") * F("retention_amount") / Value(Decimal("100")),
+                        output_field=decimal_field,
+                    ),
+                    zero_value,
+                ),
+            )
+            .annotate(
                 annotated_total_amount=Greatest(
-                    F("annotated_subtotal") - F("discount_amount") - F("retention_amount"),
+                    F("annotated_net_before_retention") - F("annotated_retention_value"),
                     zero_value,
                 ),
             )
@@ -602,8 +617,23 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
                 ),
             )
             .annotate(
+                annotated_net_before_retention=Greatest(
+                    F("annotated_subtotal") - F("discount_amount"),
+                    zero_value,
+                ),
+            )
+            .annotate(
+                annotated_retention_value=Greatest(
+                    ExpressionWrapper(
+                        F("annotated_net_before_retention") * F("retention_amount") / Value(Decimal("100")),
+                        output_field=decimal_field,
+                    ),
+                    zero_value,
+                ),
+            )
+            .annotate(
                 annotated_total_amount=Greatest(
-                    F("annotated_subtotal") - F("discount_amount") - F("retention_amount"),
+                    F("annotated_net_before_retention") - F("annotated_retention_value"),
                     zero_value,
                 )
             )

@@ -178,13 +178,14 @@ class SaleFormTestCase(TestCase):
             {
                 "quantity_jumbo": "50",
                 "unit_price_jumbo": "2000",
-                "retention_amount": "10000",
+                "retention_amount": "10",
             }
         )
         form = SaleForm(data=data, actor_id=self.seller.pk)
         self.assertTrue(form.is_valid(), form.errors)
         sale = form.save()
-        self.assertEqual(sale.retention_amount, Decimal("10000"))
+        self.assertEqual(sale.retention_amount, Decimal("10"))
+        self.assertEqual(sale.retention_value, Decimal("10000"))
         self.assertEqual(sale.total_amount, Decimal("90000"))
 
     def test_retention_cannot_exceed_total(self):
@@ -193,7 +194,7 @@ class SaleFormTestCase(TestCase):
             {
                 "quantity_jumbo": "10",
                 "unit_price_jumbo": "1000",
-                "retention_amount": "20000",
+                "retention_amount": "150",
             }
         )
         form = SaleForm(data=data, actor_id=self.seller.pk)
