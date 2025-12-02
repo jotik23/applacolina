@@ -66,12 +66,14 @@
           >
             Tabla de abonos
           </a>
+          {% with return_path=request.get_full_path %}
           <a
-            href="{% url 'administration:sale-create' %}"
+            href="{% url 'administration:sale-create' %}{% if return_path %}?return_to={{ return_path|urlencode }}{% endif %}"
             class="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
           >
             Registrar venta
           </a>
+          {% endwith %}
         </div>
       </div>
 
@@ -471,8 +473,9 @@
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2 text-sm">
+                  {% with return_path=request.get_full_path %}
                   <a
-                    href="{% url 'administration:sale-update' sale.pk %}"
+                    href="{% url 'administration:sale-update' sale.pk %}{% if return_path %}?return_to={{ return_path|urlencode }}{% endif %}"
                     class="inline-flex items-center justify-center rounded-md border border-slate-200 px-2.5 py-1.5 text-slate-600 transition hover:border-slate-400 hover:text-slate-800"
                     title="Gestionar venta y abonos"
                   >
@@ -480,6 +483,7 @@
                       <path d="M4 13.5V16h2.5L15.29 7.21a1 1 0 000-1.42l-1.08-1.08a1 1 0 00-1.42 0L4 13.5zm9.71-8.79l1.08 1.08-1.08 1.08-1.08-1.08 1.08-1.08zM3 17a1 1 0 001 1h12a1 1 0 100-2H5a1 1 0 00-1 1z" />
                     </svg>
                   </a>
+                  {% endwith %}
                   <form
                     method="post"
                     action="{% url 'administration:sales' %}"

@@ -22,6 +22,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.dateparse import parse_date
 from django.utils.functional import cached_property
 from django.utils.text import slugify
@@ -971,7 +972,11 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
         return initial
 
     def get_success_url(self) -> str:
-        return reverse("administration:sale-update", kwargs={"pk": self.object.pk})
+        base_url = reverse("administration:sale-update", kwargs={"pk": self.object.pk})
+        query = self._build_return_query()
+        if query:
+            return f"{base_url}?{query}"
+        return base_url
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -983,7 +988,7 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
                 "product_inventory_map": form.get_product_inventory_payload(),
                 "financial_snapshot": form.get_financial_snapshot(),
                 "current_customer_name": self._resolve_customer_label(form),
-                "cancel_url": reverse("administration:sales"),
+                "cancel_url": self._resolve_cancel_url(),
                 "active_tab": self.get_active_tab(),
             }
         )
@@ -1032,6 +1037,27 @@ class SaleFormMixin(StaffRequiredMixin, SuccessMessageMixin):
                 if supplier:
                     return supplier.name
         return "Cliente sin asignar"
+
+    def _build_return_query(self) -> str:
+        path = self._get_return_path()
+        if not path:
+            return ""
+        return urlencode({"return_to": path})
+
+    def _resolve_cancel_url(self) -> str:
+        return self._get_return_path() or reverse("administration:sales")
+
+    def _get_return_path(self) -> str:
+        raw = (self.request.GET.get("return_to") or "").strip()
+        if not raw:
+            return ""
+        host = self.request.get_host()
+        allowed_hosts = {host} if host else None
+        if url_has_allowed_host_and_scheme(raw, allowed_hosts=allowed_hosts, require_https=self.request.is_secure()):
+            return raw
+        if raw.startswith("/"):
+            return raw
+        return ""
 
 
 class SaleCreateView(SaleFormMixin, generic.CreateView):
@@ -1106,7 +1132,9 @@ class SaleUpdateView(SaleFormMixin, generic.UpdateView):
                 request,
                 "Abono registrado correctamente. El saldo pendiente se actualizó de inmediato.",
             )
-            return redirect(f"{self.get_success_url()}?tab=payments")
+            base_url = self.get_success_url()
+            separator = "&" if "?" in base_url else "?"
+            return redirect(f"{base_url}{separator}tab=payments")
         sale_form = self.build_unbound_form()
         self._forced_active_tab = "payments"
         return self.render_to_response(self.get_context_data(form=sale_form, payment_form=payment_form))
