@@ -193,6 +193,20 @@
               </div>
             </details>
           </div>
+          <label class="flex flex-col gap-1 w-56">
+            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Vendedor</span>
+            <select
+              name="seller"
+              class="h-8 w-full rounded-lg border border-slate-200 bg-white/80 px-2 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+            >
+              <option value="">Todos los vendedores</option>
+              {% for option in seller_filter_options %}
+                <option value="{{ option.id }}" {% if option.id == sales_filters.seller_id %}selected{% endif %}>
+                  {{ option.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
           <label class="flex flex-col gap-1 relative w-56" data-customer-autocomplete-container>
             <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cliente</span>
             <input

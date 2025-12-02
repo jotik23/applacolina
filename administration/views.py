@@ -176,6 +176,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 "base_filters_query": filters_query,
                 "list_base_path": reverse("administration:sales"),
                 "customer_suggestions": self._customer_suggestions(),
+                "seller_filter_options": self._seller_filter_options(),
                 "sales_totals": self._compute_sales_totals(sales_queryset),
             }
         )
@@ -332,6 +333,13 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             if value in allowed_statuses and value not in status_filters:
                 status_filters.append(value)
         customer_query = (params.get("customer") or "").strip()
+        seller_filter = (params.get("seller") or "").strip()
+        seller_id = None
+        if seller_filter:
+            try:
+                seller_id = int(seller_filter)
+            except (TypeError, ValueError):
+                seller_id = None
         product_types = []
         allowed_product_types = {choice[0] for choice in SaleProductType.choices}
         for value in params.getlist("product_types"):
@@ -345,6 +353,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             "end_date": end_date,
             "month": month_filter,
             "product_types": product_types,
+            "seller_id": seller_id,
         }
         self._filter_payload = payload
         return payload
@@ -442,6 +451,9 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         product_types = filters.get("product_types")
         if product_types:
             queryset = queryset.filter(items__product_type__in=product_types).distinct()
+        seller_id = filters.get("seller_id")
+        if seller_id:
+            queryset = queryset.filter(seller_id=seller_id)
         return queryset
 
     def _map_status_filters(self, filters: list[str]) -> list[str]:
@@ -462,6 +474,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 bool(filters.get("end_date")),
                 bool(filters.get("month")),
                 bool(filters.get("product_types")),
+                bool(filters.get("seller_id")),
             ]
         )
 
@@ -515,6 +528,20 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             Supplier.objects.order_by("name")
             .values("id", "name", "tax_id")
         )
+
+    def _seller_filter_options(self) -> list[dict[str, str]]:
+        sellers = (
+            UserProfile.objects.filter(sales__isnull=False)
+            .distinct()
+            .order_by("nombres", "apellidos")
+        )
+        return [
+            {
+                "id": seller.pk,
+                "label": seller.nombre_completo or str(seller.pk),
+            }
+            for seller in sellers
+        ]
 
     def _compute_sales_totals(self, queryset):
         aggregates = queryset.aggregate(
