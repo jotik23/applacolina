@@ -110,7 +110,10 @@ def _build_sales_queryset(start_date: date, end_date: date):
             annotated_payments_total=Coalesce(Subquery(payments_subquery, output_field=decimal_field), zero_value),
         )
         .annotate(
-            annotated_total_amount=Greatest(F("annotated_subtotal") - F("discount_amount"), zero_value),
+            annotated_total_amount=Greatest(
+                F("annotated_subtotal") - F("discount_amount") - F("retention_amount"),
+                zero_value,
+            ),
         )
         .annotate(
             annotated_balance_due=Greatest(F("annotated_total_amount") - F("annotated_payments_total"), zero_value),

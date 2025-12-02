@@ -107,11 +107,12 @@
 
     var productRows = Array.prototype.slice.call(form.querySelectorAll('[data-sale-product-row]'));
     var discountField = form.querySelector('[name="discount_amount"]');
+    var retentionField = form.querySelector('[name="retention_amount"]');
     var summaryTargets = {
       subtotal: document.querySelectorAll('[data-sale-summary="subtotal"]'),
       discount: document.querySelectorAll('[data-sale-summary="discount"]'),
       total: document.querySelectorAll('[data-sale-summary="total"]'),
-      withholding: document.querySelectorAll('[data-sale-summary="withholding"]'),
+      retention: document.querySelectorAll('[data-sale-summary="retention"]'),
     };
 
     function updateSummaryNodes(nodes, text) {
@@ -183,15 +184,25 @@
       if (discount > subtotal) {
         discount = subtotal;
       }
-      var total = subtotal - discount;
+      var totalBeforeRetention = subtotal - discount;
+      if (totalBeforeRetention < 0) {
+        totalBeforeRetention = 0;
+      }
+      var retention = retentionField ? parseNumber(retentionField.value) : 0;
+      if (retention < 0) {
+        retention = 0;
+      }
+      if (retention > totalBeforeRetention) {
+        retention = totalBeforeRetention;
+      }
+      var total = totalBeforeRetention - retention;
       if (total < 0) {
         total = 0;
       }
-      var withholding = total * 0.01;
       updateSummaryNodes(summaryTargets.subtotal, formatCurrency(subtotal));
       updateSummaryNodes(summaryTargets.discount, formatCurrency(discount));
+      updateSummaryNodes(summaryTargets.retention, formatCurrency(retention));
       updateSummaryNodes(summaryTargets.total, formatCurrency(total));
-      updateSummaryNodes(summaryTargets.withholding, formatCurrency(withholding));
     }
 
     function attachListeners() {
@@ -212,6 +223,10 @@
       if (discountField) {
         discountField.addEventListener('input', refreshSummary);
         discountField.addEventListener('change', refreshSummary);
+      }
+      if (retentionField) {
+        retentionField.addEventListener('input', refreshSummary);
+        retentionField.addEventListener('change', refreshSummary);
       }
     }
 

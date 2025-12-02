@@ -216,7 +216,10 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 ),
             )
             .annotate(
-                annotated_total_amount=Greatest(F("annotated_subtotal") - F("discount_amount"), zero_value),
+                annotated_total_amount=Greatest(
+                    F("annotated_subtotal") - F("discount_amount") - F("retention_amount"),
+                    zero_value,
+                ),
             )
             .annotate(
                 annotated_balance_due=Greatest(
@@ -598,7 +601,10 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
                 ),
             )
             .annotate(
-                annotated_total_amount=Greatest(F("annotated_subtotal") - F("discount_amount"), zero_value)
+                annotated_total_amount=Greatest(
+                    F("annotated_subtotal") - F("discount_amount") - F("retention_amount"),
+                    zero_value,
+                )
             )
             .annotate(
                 annotated_balance_due=Greatest(

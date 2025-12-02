@@ -180,6 +180,7 @@ class SaleForm(forms.ModelForm):
             "invoice_number",
             "sent_to_dian",
             "discount_amount",
+            "retention_amount",
             "notes",
         ]
         widgets = {
@@ -199,7 +200,7 @@ class SaleForm(forms.ModelForm):
         self.price_field_map: Dict[str, str] = {}
         self.cleaned_discount = Decimal("0.00")
         self.net_total = Decimal("0.00")
-        self.cleaned_withholding = Decimal("0.00")
+        self.cleaned_retention = Decimal("0.00")
         self._configure_base_fields()
         self._build_product_fields()
 
@@ -262,6 +263,12 @@ class SaleForm(forms.ModelForm):
         discount_field.widget.attrs.setdefault("step", "0.01")
         discount_field.widget.attrs.setdefault("min", "0")
         discount_field.required = False
+
+        retention_field = self.fields["retention_amount"]
+        retention_field.widget.attrs.setdefault("class", f"{self.input_classes} text-right")
+        retention_field.widget.attrs.setdefault("step", "0.01")
+        retention_field.widget.attrs.setdefault("min", "0")
+        retention_field.required = False
 
         notes_field = self.fields["notes"]
         existing = notes_field.widget.attrs.get("class", "")
@@ -421,11 +428,24 @@ class SaleForm(forms.ModelForm):
             self.add_error("discount_amount", "El descuento no puede superar el subtotal de la factura.")
             discount = Decimal("0")
         self.cleaned_discount = discount.quantize(Decimal("0.01"))
-        net_total = self.cleaned_total - self.cleaned_discount
+        net_before_retention = self.cleaned_total - self.cleaned_discount
+        if net_before_retention < Decimal("0"):
+            net_before_retention = Decimal("0")
+        retention = Decimal(cleaned.get("retention_amount") or 0)
+        if retention < Decimal("0"):
+            self.add_error("retention_amount", "La retención no puede ser negativa.")
+            retention = Decimal("0")
+        if retention > net_before_retention:
+            self.add_error(
+                "retention_amount",
+                "La retención no puede superar el total después de aplicar el descuento.",
+            )
+            retention = net_before_retention
+        self.cleaned_retention = retention.quantize(Decimal("0.01"))
+        net_total = net_before_retention - self.cleaned_retention
         if net_total < Decimal("0"):
             net_total = Decimal("0")
         self.net_total = net_total.quantize(Decimal("0.01"))
-        self.cleaned_withholding = (self.net_total * Decimal("0.01")).quantize(Decimal("0.01"))
 
     def get_inventory_preview(self) -> Dict[str, Decimal]:
         if self.inventory_snapshot:
@@ -452,24 +472,24 @@ class SaleForm(forms.ModelForm):
             subtotal = self.cleaned_total
             discount = self.cleaned_discount
             net_total = self.net_total
-            withholding = self.cleaned_withholding
+            retention = self.cleaned_retention
         elif self.instance and self.instance.pk:
             subtotal = self.instance.subtotal_amount
             discount = Decimal(self.instance.discount_amount or 0)
             net_total = self.instance.total_amount
-            withholding = self.instance.auto_withholding_amount
+            retention = Decimal(self.instance.retention_amount or 0)
         else:
             subtotal = self.cleaned_total
             discount = self.cleaned_discount
             net_total = self.net_total
-            withholding = self.cleaned_withholding
+            retention = self.cleaned_retention
         if net_total < Decimal("0"):
             net_total = Decimal("0.00")
         return {
             "subtotal": subtotal,
             "discount": discount,
             "total": net_total,
-            "withholding": withholding,
+            "retention": retention,
         }
 
     def _current_seller_destination(self) -> tuple[int | None, str | None]:
@@ -508,6 +528,7 @@ class SaleForm(forms.ModelForm):
             if self.actor_id and not sale.confirmed_by_id:
                 sale.confirmed_by_id = self.actor_id
         sale.discount_amount = self.cleaned_discount
+        sale.retention_amount = self.cleaned_retention
         if commit:
             sale.save()
             sale.items.all().delete()

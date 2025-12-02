@@ -31,8 +31,8 @@
                       <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="discount">{{ summary.discount|money_co }}</dd>
                     </div>
                     <div class="text-left">
-                      <dt class="text-[10px] text-slate-500">Autorretención</dt>
-                      <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="withholding">{{ summary.withholding|money_co }}</dd>
+                      <dt class="text-[10px] text-slate-500">Retención</dt>
+                      <dd class="mt-1 text-base font-semibold text-slate-900" data-sale-summary="retention">{{ summary.retention|money_co }}</dd>
                     </div>
                     <div class="text-left">
                       <dt class="text-[10px] text-slate-500">Total neto</dt>
@@ -178,6 +178,13 @@
                     {{ form.discount_amount|add_class:"mt-1" }}
                     {% if form.discount_amount.errors %}
                       <p class="text-xs text-rose-600">{{ form.discount_amount.errors|striptags }}</p>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form.retention_amount.id_for_label }}">{{ form.retention_amount.label }}</label>
+                    {{ form.retention_amount|add_class:"mt-1" }}
+                    {% if form.retention_amount.errors %}
+                      <p class="text-xs text-rose-600">{{ form.retention_amount.errors|striptags }}</p>
                     {% endif %}
                   </div>
                   <div class="md:col-span-2 lg:col-span-4">
