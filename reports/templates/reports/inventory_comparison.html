@@ -1,0 +1,293 @@
+{% extends "calendario/base.html" %}
+{% load static reports_extras form_extras %}
+
+{% block title %}Informes · Comparativa de inventarios{% endblock %}
+
+{% block content %}
+  {% include "reports/_submenu.html" with active=reports_active_submenu %}
+
+  <div class="space-y-10">
+    <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-brand">
+            <span class="inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-[10px] uppercase tracking-[0.35em] text-brand">
+              Informes
+            </span>
+            Comparativa de inventarios
+          </div>
+          <div>
+            <h1 class="text-3xl font-semibold text-slate-900">Desglose de producción y ventas</h1>
+            <p class="mt-1 text-base text-slate-500">
+              Cartones producidos, clasificados, despachados y vendidos por tipo para estimar diferencias valuadas con los precios promedio.
+            </p>
+            <p class="mt-2 text-sm font-medium text-slate-600">
+              Producción del {{ filters.production_start|date:"d M Y" }} al {{ filters.production_end|date:"d M Y" }} · {{ comparison.production_days|number_format }} día{% if comparison.production_days != 1 %}s{% endif %}
+              <span class="mx-2 text-slate-400">&middot;</span>
+              Ventas del {{ filters.sales_start|date:"d M Y" }} al {{ filters.sales_end|date:"d M Y" }} · {{ comparison.sales_days|number_format }} día{% if comparison.sales_days != 1 %}s{% endif %}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-4 rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+      <form method="get" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Producción · Desde
+          <input
+            type="date"
+            name="production_start"
+            value="{{ filters.production_start|date:'Y-m-d' }}"
+            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+          >
+        </label>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Producción · Hasta
+          <input
+            type="date"
+            name="production_end"
+            value="{{ filters.production_end|date:'Y-m-d' }}"
+            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+          >
+        </label>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Ventas · Desde
+          <input
+            type="date"
+            name="sales_start"
+            value="{{ filters.sales_start|date:'Y-m-d' }}"
+            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+          >
+        </label>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Ventas · Hasta
+          <input
+            type="date"
+            name="sales_end"
+            value="{{ filters.sales_end|date:'Y-m-d' }}"
+            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+          >
+        </label>
+        <div class="md:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            class="inline-flex items-center justify-center rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
+          >
+            Aplicar filtros
+          </button>
+          <a
+            href="{% url 'reports:inventory-comparison' %}"
+            class="text-xs font-semibold text-slate-500 underline underline-offset-4 transition hover:text-slate-900"
+          >
+            Restablecer
+          </a>
+        </div>
+      </form>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Atajos producción/clasificación</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+            {% for preset in production_quick_ranges %}
+              <a
+                href="?production_start={{ preset.start|date:'Y-m-d' }}&production_end={{ preset.end|date:'Y-m-d' }}&sales_start={{ filters.sales_start|date:'Y-m-d' }}&sales_end={{ filters.sales_end|date:'Y-m-d' }}"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition {% if preset.days == comparison.production_days %}border-brand bg-brand/10 text-brand shadow-inner{% else %}border-slate-200 hover:border-brand hover:text-brand{% endif %}"
+              >
+                {{ preset.label }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Atajos ventas</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+            {% for preset in sales_quick_ranges %}
+              <a
+                href="?production_start={{ filters.production_start|date:'Y-m-d' }}&production_end={{ filters.production_end|date:'Y-m-d' }}&sales_start={{ preset.start|date:'Y-m-d' }}&sales_end={{ preset.end|date:'Y-m-d' }}"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition {% if preset.days == comparison.sales_days %}border-brand bg-brand/10 text-brand shadow-inner{% else %}border-slate-200 hover:border-brand hover:text-brand{% endif %}"
+              >
+                {{ preset.label }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {% for stage in comparison.stages %}
+        <article class="rounded-2xl border border-slate-200/70 bg-white/95 p-5 shadow-sm shadow-slate-900/5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ stage.note }}</p>
+          <h2 class="mt-1 text-lg font-semibold text-slate-900">{{ stage.label }}</h2>
+          <p class="mt-3 text-3xl font-semibold text-{{ stage.accent }}-700">
+            {{ stage.total|cartons:1 }} <span class="text-base font-semibold text-slate-500">cart</span>
+          </p>
+          {% if stage.delta is not None %}
+            <p class="mt-3 text-sm font-semibold {% if stage.delta > 0 %}text-amber-600{% elif stage.delta < 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
+              {{ stage.delta|cartons:1 }} cart {{ stage.delta_label }}
+            </p>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-3">
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Totales por etapa</p>
+          <h2 class="text-lg font-semibold text-slate-900">Embudo productivo</h2>
+        </header>
+        <div class="mt-4">
+          <canvas id="chart-inventory-stages" height="240" class="w-full"></canvas>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          Diferencia reportado vs clasificado:
+          <span class="font-semibold {% if comparison.totals.production_gap > 0 %}text-amber-600{% elif comparison.totals.production_gap < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">
+            {{ comparison.totals.production_gap|cartons:1 }} cart
+          </span>
+          (≈ {{ comparison.totals.production_gap_cost|peso:0 }}).
+        </p>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Comparativa por tipo</p>
+          <h2 class="text-lg font-semibold text-slate-900">Clasificado vs despachado vs vendido</h2>
+        </header>
+        <div class="mt-4">
+          <canvas id="chart-type-comparison" height="240" class="w-full"></canvas>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          Inventario clasificado no despachado:
+          <span class="font-semibold {% if comparison.totals.inventory_gap > 0 %}text-sky-600{% elif comparison.totals.inventory_gap < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">
+            {{ comparison.totals.inventory_gap|cartons:1 }} cart
+          </span>
+          (≈ {{ comparison.totals.inventory_gap_cost|peso:0 }}).
+        </p>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <header class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Alertas operativas</p>
+            <h2 class="text-lg font-semibold text-slate-900">Insights clave</h2>
+          </div>
+          <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{{ comparison.insights|length }} hallazgo{% if comparison.insights|length != 1 %}s{% endif %}</span>
+        </header>
+        {% if comparison.insights %}
+          <div class="mt-4 space-y-4">
+            {% for insight in comparison.insights %}
+              <div class="rounded-2xl border border-slate-100/80 bg-slate-50/70 px-4 py-3">
+                <p class="text-sm font-semibold text-slate-900">{{ insight.title }}</p>
+                <p class="text-xs text-slate-500">{{ insight.description }}</p>
+                <div class="mt-2 flex flex-wrap items-baseline gap-3 text-sm">
+                  <span class="font-semibold {% if insight.delta > 0 %}text-{{ insight.tone }}-600{% elif insight.delta < 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
+                    {{ insight.delta|cartons:1 }} cart
+                  </span>
+                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Costo estimado</span>
+                  <span class="text-sm font-semibold text-slate-900">{{ insight.cost|peso:0 }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="mt-6 rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
+            Sin alertas para los rangos seleccionados.
+          </p>
+        {% endif %}
+      </article>
+    </section>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+      <header class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Precios promedios</p>
+          <h2 class="text-lg font-semibold text-slate-900">Referencias comerciales</h2>
+        </div>
+        <p class="text-sm text-slate-500">
+          Precio global ponderado: <span class="font-semibold text-slate-900">{{ comparison.totals.global_avg_price|peso:2 }}</span>
+        </p>
+      </header>
+      {% if comparison.price_rows %}
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {% for price in comparison.price_rows %}
+            <div class="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ price.label }}</p>
+              <p class="mt-2 text-xl font-semibold text-slate-900">{{ price.price|peso:2 }}</p>
+              <p class="text-xs text-slate-500">Cartón promedio vendido</p>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="mt-4 text-sm text-slate-500">No hay ventas de huevo en el rango seleccionado.</p>
+      {% endif %}
+    </section>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+      <header class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalle por tipo</p>
+          <h2 class="text-lg font-semibold text-slate-900">Cartones y valorización</h2>
+        </div>
+        <div class="text-sm text-slate-500">
+          Diferencia despachos vs ventas:
+          <span class="font-semibold {% if comparison.totals.dispatch_gap > 0 %}text-rose-600{% elif comparison.totals.dispatch_gap < 0 %}text-emerald-600{% else %}text-slate-600{% endif %}">
+            {{ comparison.totals.dispatch_gap|cartons:1 }} cart
+          </span>
+          (≈ {{ comparison.totals.dispatch_gap_cost|peso:0 }}).
+        </div>
+      </header>
+      <div class="mt-6 overflow-x-auto">
+        <table class="w-full border-collapse text-sm text-slate-700">
+          <thead>
+            <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              <th class="px-4 py-3 text-left">Tipo</th>
+              <th class="px-4 py-3 text-right">Clasificado</th>
+              <th class="px-4 py-3 text-right">Despachado</th>
+              <th class="px-4 py-3 text-right">Vendido</th>
+              <th class="px-4 py-3 text-right">Inventario (cart)</th>
+              <th class="px-4 py-3 text-right">Gap vs ventas</th>
+              <th class="px-4 py-3 text-right">Precio prom.</th>
+              <th class="px-4 py-3 text-right">Valor inventario</th>
+              <th class="px-4 py-3 text-right">Valor gap</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in comparison.type_rows %}
+              <tr class="border-b border-slate-100 last:border-none">
+                <td class="px-4 py-3 font-semibold text-slate-900">{{ row.label }}</td>
+                <td class="px-4 py-3 text-right">{{ row.classified|cartons:1 }}</td>
+                <td class="px-4 py-3 text-right">{{ row.dispatched|cartons:1 }}</td>
+                <td class="px-4 py-3 text-right">{{ row.sold|cartons:1 }}</td>
+                <td class="px-4 py-3 text-right {% if row.inventory_gap > 0 %}text-sky-600{% elif row.inventory_gap < 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
+                  {{ row.inventory_gap|cartons:1 }}
+                </td>
+                <td class="px-4 py-3 text-right {% if row.dispatch_gap > 0 %}text-rose-600{% elif row.dispatch_gap < 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
+                  {{ row.dispatch_gap|cartons:1 }}
+                </td>
+                <td class="px-4 py-3 text-right">{{ row.average_price|peso:2 }}</td>
+                <td class="px-4 py-3 text-right">{{ row.inventory_cost|peso:0 }}</td>
+                <td class="px-4 py-3 text-right">{{ row.dispatch_gap_cost|peso:0 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="bg-slate-50 text-sm font-semibold text-slate-900">
+              <td class="px-4 py-3 text-left">Total</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.classification_total|cartons:1 }}</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.dispatch_total|cartons:1 }}</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.sales_total|cartons:1 }}</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.inventory_gap|cartons:1 }}</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.dispatch_gap|cartons:1 }}</td>
+              <td class="px-4 py-3 text-right">—</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.inventory_gap_cost|peso:0 }}</td>
+              <td class="px-4 py-3 text-right">{{ comparison.totals.dispatch_gap_cost|peso:0 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  {{ comparison.chart_payload|json_script:"inventory-comparison-data" }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+  <script src="{% static 'reports/inventory.js' %}" defer></script>
+{% endblock %}

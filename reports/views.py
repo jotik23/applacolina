@@ -9,6 +9,7 @@ from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
 
+from .services.inventory_comparison import build_inventory_comparison
 from .services.key_metrics import DEFAULT_RANGE_DAYS, build_key_metrics
 
 
@@ -62,6 +63,91 @@ class KeyMetricsDashboardView(StaffRequiredMixin, generic.TemplateView):
                     "start": start,
                     "end": end_date,
                     "days": days,
+                }
+            )
+        return ranges
+
+
+class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
+    template_name = "reports/inventory_comparison.html"
+    DEFAULT_PRODUCTION_RANGE = 30
+    DEFAULT_SALES_RANGE = 30
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        production_start, production_end = self._resolve_range(
+            prefix="production",
+            default_days=self.DEFAULT_PRODUCTION_RANGE,
+        )
+        sales_start, sales_end = self._resolve_range(
+            prefix="sales",
+            default_days=self.DEFAULT_SALES_RANGE,
+            fallback=(production_start, production_end),
+        )
+        comparison = build_inventory_comparison(
+            production_start=production_start,
+            production_end=production_end,
+            sales_start=sales_start,
+            sales_end=sales_end,
+        )
+        context.update(
+            {
+                "reports_active_submenu": "inventory_comparison",
+                "filters": {
+                    "production_start": production_start,
+                    "production_end": production_end,
+                    "sales_start": sales_start,
+                    "sales_end": sales_end,
+                },
+                "production_quick_ranges": self._build_quick_ranges(
+                    end_date=production_end,
+                    prefix="production",
+                ),
+                "sales_quick_ranges": self._build_quick_ranges(
+                    end_date=sales_end,
+                    prefix="sales",
+                ),
+                "comparison": comparison,
+            }
+        )
+        return context
+
+    def _resolve_range(
+        self,
+        *,
+        prefix: str,
+        default_days: int,
+        fallback: tuple[date, date] | None = None,
+    ) -> tuple[date, date]:
+        params = self.request.GET
+        today = timezone.localdate()
+        fallback_start, fallback_end = fallback if fallback else (None, None)
+        default_end = fallback_end or today
+        default_start = fallback_start or (default_end - timedelta(days=default_days - 1))
+        start_raw = (params.get(f"{prefix}_start") or "").strip()
+        end_raw = (params.get(f"{prefix}_end") or "").strip()
+        start_date = parse_date(start_raw) if start_raw else default_start
+        end_date = parse_date(end_raw) if end_raw else default_end
+        if not start_date:
+            start_date = default_start
+        if not end_date:
+            end_date = default_end
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+        return start_date, end_date
+
+    def _build_quick_ranges(self, *, end_date: date, prefix: str) -> list[dict[str, Any]]:
+        presets = [7, 15, 30, 60]
+        ranges: list[dict[str, Any]] = []
+        for days in presets:
+            start = end_date - timedelta(days=days - 1)
+            ranges.append(
+                {
+                    "label": f"Últimos {days} días" if days != 7 else "Últimos 7 días",
+                    "start": start,
+                    "end": end_date,
+                    "days": days,
+                    "prefix": prefix,
                 }
             )
         return ranges
