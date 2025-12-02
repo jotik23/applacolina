@@ -535,6 +535,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
                 "active_filter_subject": filters["subject"],
                 "filter_values": self._filter_form_values(filters),
                 "has_active_filters": self._has_active_filters(filters),
+                "customer_suggestions": self._customer_suggestions(),
             }
         )
         _maybe_set_home_tab(context, self.request, "sales")
@@ -545,6 +546,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         if subject not in self.SUBJECT_LABELS:
             subject = self.SUBJECT_SALE
         invoice_number = (self.request.GET.get("invoice_number") or "").strip()
+        customer_query = (self.request.GET.get("customer") or "").strip()
         date_from_raw = self.request.GET.get("date_from") or ""
         date_to_raw = self.request.GET.get("date_to") or ""
         amount_min_raw = self.request.GET.get("amount_min") or ""
@@ -552,6 +554,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         return {
             "subject": subject,
             "invoice_number": invoice_number,
+            "customer_query": customer_query,
             "date_from": self._parse_date_value(date_from_raw),
             "date_to": self._parse_date_value(date_to_raw),
             "amount_min": self._parse_decimal_value(amount_min_raw),
@@ -611,6 +614,12 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         invoice_number = filters.get("invoice_number")
         if invoice_number:
             queryset = queryset.filter(invoice_number__icontains=invoice_number)
+        customer_query = filters.get("customer_query")
+        if customer_query:
+            queryset = queryset.filter(
+                Q(customer__name__icontains=customer_query)
+                | Q(customer__tax_id__icontains=customer_query)
+            )
         subject = filters["subject"]
         date_from = filters.get("date_from")
         date_to = filters.get("date_to")
@@ -676,6 +685,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
     def _filter_form_values(self, filters: dict[str, Any]) -> dict[str, str]:
         return {
             "invoice_number": filters.get("invoice_number", ""),
+            "customer": filters.get("customer_query", ""),
             "date_from": filters.get("raw_date_from", ""),
             "date_to": filters.get("raw_date_to", ""),
             "amount_min": filters.get("raw_amount_min", ""),
@@ -686,6 +696,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         return any(
             (
                 filters.get("invoice_number"),
+                filters.get("customer_query"),
                 filters.get("raw_date_from"),
                 filters.get("raw_date_to"),
                 filters.get("raw_amount_min"),
@@ -708,6 +719,11 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
             return Decimal(value)
         except (InvalidOperation, TypeError, ValueError):
             return None
+
+    def _customer_suggestions(self) -> list[dict[str, str]]:
+        return list(
+            Supplier.objects.order_by("name").values("id", "name", "tax_id")
+        )
 
 
 class SalesCardexView(StaffRequiredMixin, generic.TemplateView):

@@ -1,5 +1,5 @@
 {% extends "calendario/base.html" %}
-{% load humanize form_extras %}
+{% load static humanize form_extras %}
 
 {% block title %}Abonos{% endblock %}
 
@@ -71,6 +71,22 @@
             class="h-9 rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
           >
         </label>
+        <label class="relative flex w-56 flex-col gap-1" data-customer-autocomplete-container>
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cliente</span>
+          <input
+            type="text"
+            name="customer"
+            value="{{ filter_values.customer }}"
+            placeholder="Nombre o NIT"
+            autocomplete="off"
+            data-customer-autocomplete-input
+            class="h-9 w-full rounded-lg border border-slate-200 bg-white/80 px-3 text-[12px] font-medium text-slate-700 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          >
+          <div
+            class="absolute z-10 mt-11 hidden w-full rounded-xl border border-slate-200 bg-white text-[12px] shadow-lg"
+            data-customer-autocomplete-results
+          ></div>
+        </label>
         <label class="flex w-40 flex-col gap-1">
           <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Desde (fecha)</span>
           <input
@@ -129,6 +145,7 @@
         {% endif %}
       </div>
     </form>
+    {{ customer_suggestions|json_script:"customer-suggestions-data" }}
 
     <div class="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm">
       <div class="flex items-center justify-between">
@@ -221,4 +238,5 @@
       </div>
     </div>
   </section>
+  <script src="{% static 'administration/js/sales-filters.js' %}" defer></script>
 {% endblock %}
