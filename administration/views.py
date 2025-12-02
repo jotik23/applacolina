@@ -422,9 +422,12 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         filters = self._get_filter_payload()
         if filters["payment_conditions"]:
             queryset = queryset.filter(payment_condition__in=filters["payment_conditions"])
-        status_values = self._map_status_filters(filters["status"])
+        status_filters = filters["status"]
+        status_values = self._map_status_filters(status_filters)
         if status_values:
             queryset = queryset.filter(status__in=status_values)
+        if "pending" in status_filters and "paid" not in status_filters:
+            queryset = queryset.filter(annotated_balance_due__gt=Decimal("0.00"))
         customer_query = filters["customer_query"]
         if customer_query:
             queryset = queryset.filter(
