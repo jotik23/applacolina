@@ -90,8 +90,8 @@ class WeightSessionSummary:
 @dataclass(frozen=True)
 class WeightRegistry:
     date: date
-    task_assignment_id: int
-    task_definition_id: int
+    task_assignment_id: Optional[int]
+    task_definition_id: Optional[int]
     production_record_id: Optional[int]
     room_record_ids: Mapping[int, int]
     context_token: str

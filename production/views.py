@@ -1,3 +1,4 @@
+import json
 from collections import OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
 from calendar import monthrange
@@ -7,15 +8,16 @@ from urllib.parse import urlencode, quote_plus
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, Max, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncWeek
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView
+from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView, View
 
 from applacolina.mixins import EggInventoryPermissionMixin, StaffRequiredMixin
 from production.forms import (
@@ -65,6 +67,8 @@ from production.services.egg_classification import (
     summarize_classified_inventory,
 )
 from production.services.reference_tables import get_reference_targets, reset_reference_targets_cache
+from production.services.weight_registry import build_batch_weight_registry
+from task_manager.mini_app.features import persist_weight_registry, serialize_weight_registry
 
 
 class MortalityRecord(TypedDict):
@@ -2701,6 +2705,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 "selected_uniformity": self.selected_uniformity,
                 "batch_age_weeks": self.batch_age_weeks,
                 "batch_age_days": self.batch_age_days,
+                "weight_registry": self.weight_registry_payload,
             }
         )
         _maybe_set_home_tab(context, self.request, "daily_indicators")
@@ -2789,6 +2794,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         self.selected_uniformity = uniformity
         self.weight_comparison = self._build_weight_comparison()
         self.mortality_comparison = self._build_mortality_comparison()
+        self.weight_registry_payload = self._build_weight_registry_payload()
 
     def _build_batch_navigation(self) -> Dict[str, Optional[Dict[str, str]]]:
         """Compute previous/next active batches to allow quick navigation."""
@@ -3298,6 +3304,30 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         reference = self._to_decimal(metrics.get("body_weight_g"))
         return self._make_comparison("Peso promedio", actual, reference, 1, " g")
 
+    def _build_weight_registry_payload(self) -> Optional[Dict[str, object]]:
+        if not self.allocations:
+            return None
+        registry = build_batch_weight_registry(
+            batch=self.batch,
+            target_date=self.selected_day,
+            actor=self.request.user if self.request.user.is_authenticated else None,
+        )
+        if not registry:
+            return None
+        payload = serialize_weight_registry(registry)
+        payload["title"] = f"Pesaje lote #{self.batch.pk}"
+        payload["subtitle"] = (
+            f"{self.batch.farm.name} · {self.selected_day:%d/%m/%Y}"
+            if self.batch.farm
+            else f"{self.selected_day:%d/%m/%Y}"
+        )
+        payload["submit_url"] = reverse(
+            "configuration:batch-production-weight-registry",
+            args=[self.batch.pk],
+        )
+        payload["storage_key"] = f"batch-weight:{self.batch.pk}:{self.selected_day:%Y%m%d}"
+        return payload
+
     def _build_mortality_comparison(self) -> Dict[str, str]:
         metrics = self.reference_metrics.get("metrics", {})
         actual = self._to_decimal(self.weekly_mortality_pct)
@@ -3599,6 +3629,86 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             return None
 
 
+class BatchWeightRegistrySubmitView(StaffRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        batch = get_object_or_404(
+            BirdBatch.objects.select_related("farm"),
+            pk=kwargs.get("pk"),
+        )
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Formato de solicitud inválido."}, status=400)
+
+        target_date: Optional[date]
+        date_str = payload.get("date")
+        if date_str:
+            try:
+                target_date = date.fromisoformat(str(date_str))
+            except ValueError:
+                return JsonResponse({"error": "La fecha enviada no es válida."}, status=400)
+        else:
+            target_date = timezone.localdate()
+
+        registry = build_batch_weight_registry(
+            batch=batch,
+            target_date=target_date,
+            actor=request.user if request.user.is_authenticated else None,
+        )
+        if not registry:
+            return JsonResponse(
+                {"error": "Configura la distribución del lote antes de registrar pesos."},
+                status=404,
+            )
+        if registry.date != target_date:
+            return JsonResponse(
+                {"error": "La fecha enviada no coincide con el tablero actual."},
+                status=400,
+            )
+
+        sessions_payload = payload.get("sessions") or payload.get("session_details")
+        if not isinstance(sessions_payload, list):
+            return JsonResponse({"error": "Envía los salones con sus pesos capturados."}, status=400)
+
+        actor = request.user if request.user.is_authenticated else None
+        try:
+            persist_weight_registry(
+                registry=registry,
+                sessions=sessions_payload,
+                user=actor,
+            )
+        except ValidationError as exc:
+            return JsonResponse({"error": _extract_validation_message(exc)}, status=400)
+
+        refreshed = build_batch_weight_registry(batch=batch, target_date=target_date, actor=actor)
+        response_payload = None
+        if refreshed:
+            response_payload = serialize_weight_registry(refreshed)
+            response_payload["submit_url"] = reverse(
+                "configuration:batch-production-weight-registry",
+                args=[batch.pk],
+            )
+            response_payload["storage_key"] = f"batch-weight:{batch.pk}:{target_date:%Y%m%d}"
+
+        return JsonResponse(
+            {
+                "status": "ok",
+                "weight_registry": response_payload,
+            }
+        )
+
+
+def _extract_validation_message(exc: ValidationError) -> str:
+    if getattr(exc, "message", None):
+        return str(exc.message)
+    messages = getattr(exc, "messages", None) or []
+    if messages:
+        return str(messages[0])
+    return "No pudimos validar los datos enviados."
+
+
 batch_production_board_view = BatchProductionBoardView.as_view()
 egg_inventory_dashboard_view = EggInventoryDashboardView.as_view()
 egg_inventory_cardex_view = EggInventoryCardexView.as_view()
@@ -3617,3 +3727,4 @@ batch_management_view = BatchManagementView.as_view()
 bird_batch_update_view = BirdBatchUpdateView.as_view()
 bird_batch_delete_view = BirdBatchDeleteView.as_view()
 batch_allocation_delete_view = BatchAllocationDeleteView.as_view()
+batch_weight_registry_submit_view = BatchWeightRegistrySubmitView.as_view()
