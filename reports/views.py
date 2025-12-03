@@ -282,6 +282,7 @@ class PurchaseSpendingReportView(StaffRequiredMixin, generic.TemplateView):
         ordering = self._resolve_ordering()
         sorted_rows = self._sort_rows(insights.rows, ordering)
         table_rows = self._serialize_rows(sorted_rows[: self.TABLE_LIMIT])
+        table_grouped_rows = self._group_rows_by_category(table_rows)
         range_days = (filter_payload["end_date"] - filter_payload["start_date"]).days + 1
         context.update(
             {
@@ -293,12 +294,16 @@ class PurchaseSpendingReportView(StaffRequiredMixin, generic.TemplateView):
                 "current_sort": ordering,
                 "summary": insights.summary,
                 "category_breakdown": insights.category_breakdown,
+                "area_breakdown": insights.area_breakdown,
+                "payment_method_breakdown": insights.payment_method_breakdown,
                 "supplier_breakdown": insights.supplier_breakdown,
                 "requester_breakdown": insights.requester_breakdown,
+                "support_breakdown": insights.support_breakdown,
                 "status_breakdown": insights.status_breakdown,
                 "timeline": insights.timeline,
                 "alerts": insights.optimization_alerts,
                 "table_rows": table_rows,
+                "table_grouped_rows": table_grouped_rows,
                 "table_total_rows": len(insights.rows),
                 "table_visible_rows": len(table_rows),
                 "charts_dataset": insights.chart_payload,
@@ -461,6 +466,18 @@ class PurchaseSpendingReportView(StaffRequiredMixin, generic.TemplateView):
                 }
             )
         return serialized
+
+    def _group_rows_by_category(self, rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            category = row.get("parent_category") or "Sin categoría"
+            entry = grouped.setdefault(
+                category,
+                {"category": category, "total": Decimal("0"), "rows": []},
+            )
+            entry["rows"].append(row)
+            entry["total"] += row.get("executed_total") or Decimal("0")
+        return list(grouped.values())
 
     def _build_detail_url(self, base_url: str, purchase_id: int, panel: str | None) -> str:
         if panel:

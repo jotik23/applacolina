@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Hashable, Iterable, Sequence
 
 from django.db import models
 from django.db.models import DecimalField, Q
@@ -53,6 +53,8 @@ class PurchaseInsightsRow:
     area_label: str
     scope_label: str
     action_panel: str | None
+    payment_method_label: str
+    support_type_label: str
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,9 @@ class PurchaseInsightsResult:
     status_breakdown: list[dict[str, Any]]
     supplier_breakdown: list[dict[str, Any]]
     requester_breakdown: list[dict[str, Any]]
+    area_breakdown: list[dict[str, Any]]
+    payment_method_breakdown: list[dict[str, Any]]
+    support_breakdown: list[dict[str, Any]]
     timeline: list[dict[str, Any]]
     optimization_alerts: list[dict[str, str]]
     chart_payload: dict[str, Any]
@@ -88,6 +93,24 @@ def build_purchase_insights(filters: PurchaseInsightsFilters) -> PurchaseInsight
         key_selector=lambda row: row.requester_id or 0,
         label_selector=lambda row: row.requester_name,
     )
+    area_breakdown = _build_dimension_breakdown(
+        rows,
+        summary["executed_amount"],
+        key_selector=lambda row: (row.area_label or "Sin área"),
+        label_selector=lambda row: row.area_label or "Sin área",
+    )
+    payment_method_breakdown = _build_dimension_breakdown(
+        rows,
+        summary["executed_amount"],
+        key_selector=lambda row: (row.payment_method_label or "Sin medio"),
+        label_selector=lambda row: row.payment_method_label or "Sin medio",
+    )
+    support_breakdown = _build_dimension_breakdown(
+        rows,
+        summary["executed_amount"],
+        key_selector=lambda row: (row.support_type_label or "Sin soporte"),
+        label_selector=lambda row: row.support_type_label or "Sin soporte",
+    )
     timeline = _build_timeline(rows)
     optimization_alerts = _build_alerts(
         summary=summary,
@@ -97,6 +120,10 @@ def build_purchase_insights(filters: PurchaseInsightsFilters) -> PurchaseInsight
     )
     chart_payload = _build_chart_payload(
         category_breakdown=category_breakdown,
+        area_breakdown=area_breakdown,
+        payment_method_breakdown=payment_method_breakdown,
+        requester_breakdown=requester_breakdown,
+        support_breakdown=support_breakdown,
         status_breakdown=status_breakdown,
         timeline=timeline,
     )
@@ -107,6 +134,9 @@ def build_purchase_insights(filters: PurchaseInsightsFilters) -> PurchaseInsight
         status_breakdown=status_breakdown,
         supplier_breakdown=supplier_breakdown,
         requester_breakdown=requester_breakdown,
+        area_breakdown=area_breakdown,
+        payment_method_breakdown=payment_method_breakdown,
+        support_breakdown=support_breakdown,
         timeline=timeline,
         optimization_alerts=optimization_alerts,
         chart_payload=chart_payload,
@@ -204,6 +234,11 @@ def _build_rows(purchases: Iterable[PurchaseRequest]) -> Iterable[PurchaseInsigh
         )
         action = ACTION_BY_STATUS.get(purchase.status)
         analysis_date = getattr(purchase, "analysis_date", None)
+        payment_method_label = purchase.get_payment_method_display() if purchase.payment_method else "Sin medio"
+        support_type_label = (
+            purchase.support_document_type.name if purchase.support_document_type else "Sin soporte"
+        )
+
         yield PurchaseInsightsRow(
             pk=purchase.pk,
             timeline_code=purchase.timeline_code,
@@ -227,6 +262,8 @@ def _build_rows(purchases: Iterable[PurchaseRequest]) -> Iterable[PurchaseInsigh
             area_label=area_label,
             scope_label=scope_label,
             action_panel=action.panel if action else None,
+            payment_method_label=payment_method_label,
+            support_type_label=support_type_label,
         )
 
 
@@ -357,11 +394,11 @@ def _build_dimension_breakdown(
     rows: Sequence[PurchaseInsightsRow],
     overall_amount: Decimal,
     *,
-    key_selector,
-    label_selector,
+    key_selector: Callable[[PurchaseInsightsRow], Hashable],
+    label_selector: Callable[[PurchaseInsightsRow], str],
     limit: int = 8,
 ) -> list[dict[str, Any]]:
-    totals: dict[int, dict[str, Any]] = {}
+    totals: dict[Hashable, dict[str, Any]] = {}
     for row in rows:
         key = key_selector(row)
         if not key:
@@ -493,14 +530,28 @@ def _build_alerts(
 def _build_chart_payload(
     *,
     category_breakdown: Sequence[dict[str, Any]],
+    area_breakdown: Sequence[dict[str, Any]],
+    payment_method_breakdown: Sequence[dict[str, Any]],
+    requester_breakdown: Sequence[dict[str, Any]],
+    support_breakdown: Sequence[dict[str, Any]],
     status_breakdown: Sequence[dict[str, Any]],
     timeline: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
+    def _simple_share(items: Sequence[dict[str, Any]], label_key: str = "label"):
+        return [
+            {"label": item[label_key], "value": float(item["amount"])}
+            for item in items[:8]
+        ]
+
     return {
         "categoryShare": [
             {"label": row["name"], "value": float(row["amount"])}
             for row in category_breakdown[:8]
         ],
+        "areaShare": _simple_share(area_breakdown),
+        "paymentMethodShare": _simple_share(payment_method_breakdown),
+        "requesterShare": _simple_share(requester_breakdown),
+        "supportShare": _simple_share(support_breakdown),
         "statusShare": {
             "labels": [row["label"] for row in status_breakdown],
             "amounts": [float(row["amount"]) for row in status_breakdown],

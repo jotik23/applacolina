@@ -28,18 +28,19 @@
     '#ec4899',
   ];
 
-  const categoryCanvas = document.getElementById('chart-category-share');
-  if (categoryCanvas && Array.isArray(payload.categoryShare) && payload.categoryShare.length) {
-    new ChartJS(categoryCanvas, {
+  const renderDoughnut = (canvasId, entries) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !Array.isArray(entries) || !entries.length) {
+      return;
+    }
+    new ChartJS(canvas, {
       type: 'doughnut',
       data: {
-        labels: payload.categoryShare.map((entry) => entry.label),
+        labels: entries.map((entry) => entry.label),
         datasets: [
           {
-            data: payload.categoryShare.map((entry) => entry.value),
-            backgroundColor: payload.categoryShare.map(
-              (_, index) => palette[index % palette.length],
-            ),
+            data: entries.map((entry) => entry.value),
+            backgroundColor: entries.map((_, index) => palette[index % palette.length]),
             borderWidth: 0,
           },
         ],
@@ -52,7 +53,13 @@
         },
       },
     });
-  }
+  };
+
+  renderDoughnut('chart-category-share', payload.categoryShare);
+  renderDoughnut('chart-area-share', payload.areaShare);
+  renderDoughnut('chart-payment-share', payload.paymentMethodShare);
+  renderDoughnut('chart-requester-share', payload.requesterShare);
+  renderDoughnut('chart-support-share', payload.supportShare);
 
   const timelineCanvas = document.getElementById('chart-spending-timeline');
   if (

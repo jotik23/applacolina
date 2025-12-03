@@ -230,54 +230,65 @@
       </section>
     {% endif %}
 
-    <section class="grid gap-4 xl:grid-cols-3">
+    <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
       <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
         <header>
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Participación por categoría</p>
           <h2 class="text-lg font-semibold text-slate-900">¿Dónde se concentra el gasto?</h2>
         </header>
         <div class="mt-4">
-          <canvas id="chart-category-share" height="260"></canvas>
+          <canvas id="chart-category-share" height="220"></canvas>
           {% if not category_breakdown %}
             <p class="mt-4 text-sm text-slate-500">No hay datos suficientes para esta vista.</p>
           {% endif %}
         </div>
       </article>
       <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Evolución de compromisos</p>
-            <h2 class="text-lg font-semibold text-slate-900">Linea de tiempo</h2>
-          </div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Comprometido vs ejecutado</p>
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Por tipo de área</p>
+          <h2 class="text-lg font-semibold text-slate-900">Ámbitos operativos</h2>
         </header>
         <div class="mt-4">
-          <canvas id="chart-spending-timeline" height="220"></canvas>
-          {% if not timeline %}
-            <p class="mt-4 text-sm text-slate-500">Sin datos para el rango seleccionado.</p>
+          <canvas id="chart-area-share" height="220"></canvas>
+          {% if not area_breakdown %}
+            <p class="mt-4 text-sm text-slate-500">No hay áreas con datos suficientes.</p>
           {% endif %}
         </div>
       </article>
       <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <header class="flex flex-col gap-2">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados del flujo</p>
-            <h2 class="text-lg font-semibold text-slate-900">Progreso operativo</h2>
-          </div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Participación por monto</p>
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Por medio de pago</p>
+          <h2 class="text-lg font-semibold text-slate-900">Canales utilizados</h2>
         </header>
-        <div class="mt-4 flex flex-col gap-4">
-          <div>
-            <canvas id="chart-status-share" height="200"></canvas>
-          </div>
-          <ul class="space-y-2 text-sm text-slate-600">
-            {% for status in status_breakdown %}
-              <li class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-2">
-                <span>{{ status.label }}</span>
-                <span class="font-semibold text-slate-900">{{ status.amount|peso }} · {{ status.share|floatformat:1 }}%</span>
-              </li>
-            {% endfor %}
-          </ul>
+        <div class="mt-4">
+          <canvas id="chart-payment-share" height="220"></canvas>
+          {% if not payment_method_breakdown %}
+            <p class="mt-4 text-sm text-slate-500">Aún no se registran medios de pago.</p>
+          {% endif %}
+        </div>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Por solicitante</p>
+          <h2 class="text-lg font-semibold text-slate-900">Demanda interna</h2>
+        </header>
+        <div class="mt-4">
+          <canvas id="chart-requester-share" height="220"></canvas>
+          {% if not requester_breakdown %}
+            <p class="mt-4 text-sm text-slate-500">Sin solicitudes relevantes en el rango.</p>
+          {% endif %}
+        </div>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Por tipo de soporte</p>
+          <h2 class="text-lg font-semibold text-slate-900">Documentación</h2>
+        </header>
+        <div class="mt-4">
+          <canvas id="chart-support-share" height="220"></canvas>
+          {% if not support_breakdown %}
+            <p class="mt-4 text-sm text-slate-500">No hay soportes registrados.</p>
+          {% endif %}
         </div>
       </article>
     </section>
@@ -353,8 +364,8 @@
     <section class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
       <header class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Compras filtradas</p>
-          <h2 class="text-lg font-semibold text-slate-900">Listado detallado</h2>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados del flujo</p>
+          <h2 class="text-lg font-semibold text-slate-900">Listado agrupado por categoría</h2>
         </div>
         <p class="text-sm text-slate-500">
           Mostrando {{ table_visible_rows }} de {{ table_total_rows }} compras (límite {{ table_limit }}).
@@ -364,64 +375,69 @@
         <table class="min-w-full divide-y divide-slate-100 text-sm">
           <thead class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
+              <th class="px-3 py-2">Fecha</th>
               <th class="px-3 py-2">Código</th>
               <th class="px-3 py-2">Descripción</th>
               <th class="px-3 py-2">Proveedor</th>
               <th class="px-3 py-2">Categoría</th>
               <th class="px-3 py-2">Estado</th>
-              <th class="px-3 py-2">Fecha clave</th>
               <th class="px-3 py-2">Monto ejecutado</th>
-              <th class="px-3 py-2">Variación</th>
               <th class="px-3 py-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-50 text-slate-700">
-            {% for purchase in table_rows %}
-              <tr class="hover:bg-slate-50/70">
-                <td class="px-3 py-3 font-semibold text-slate-900">{{ purchase.code }}</td>
-                <td class="px-3 py-3">
-                  <p class="font-medium text-slate-900">{{ purchase.name }}</p>
-                  <p class="text-xs text-slate-500">{{ purchase.scope_label }}</p>
-                </td>
-                <td class="px-3 py-3">{{ purchase.supplier }}</td>
-                <td class="px-3 py-3">
-                  <p>{{ purchase.parent_category }}</p>
-                  <p class="text-xs text-slate-500">{{ purchase.category }}</p>
-                </td>
-                <td class="px-3 py-3">
-                  <span class="rounded-full px-3 py-1 text-xs font-semibold ring-1 {{ purchase.status_badge }}">
-                    {{ purchase.status_label }}
-                  </span>
-                </td>
-                <td class="px-3 py-3 text-sm text-slate-500">{{ purchase.analysis_date|date:"d M Y" }}</td>
-                <td class="px-3 py-3 font-semibold text-slate-900">{{ purchase.executed_total|peso }}</td>
-                <td class="px-3 py-3">
-                  <span class="{% if purchase.variance_positive %}text-rose-600{% else %}text-emerald-600{% endif %} font-semibold">
-                    {{ purchase.variance|peso }}
-                  </span>
-                  <span class="block text-xs text-slate-500">vs {{ purchase.estimated_total|peso }}</span>
-                </td>
-                <td class="px-3 py-3 text-right">
-                  <a
-                    href="{{ purchase.detail_url }}"
-                    class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Ver detalle
-                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M5 10h7.586l-2.293 2.293a1 1 0 101.414 1.414l4-4a1 1 0 000-1.414l-4-4a1 1 0 10-1.414 1.414L12.586 8H5a1 1 0 100 2z" />
-                    </svg>
-                  </a>
-                </td>
-              </tr>
-            {% empty %}
+            {% if table_grouped_rows %}
+              {% for group in table_grouped_rows %}
+                <tr class="bg-slate-50/70">
+                  <td colspan="8" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span>{{ group.category }}</span>
+                      <span class="text-sm text-slate-900">{{ group.total|peso }}</span>
+                    </div>
+                  </td>
+                </tr>
+                {% for purchase in group.rows %}
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-3 text-sm text-slate-500">{{ purchase.analysis_date|date:"d M Y" }}</td>
+                    <td class="px-3 py-3 font-semibold text-slate-900">{{ purchase.code }}</td>
+                    <td class="px-3 py-3">
+                      <p class="font-medium text-slate-900">{{ purchase.name }}</p>
+                      <p class="text-xs text-slate-500">{{ purchase.scope_label }}</p>
+                    </td>
+                    <td class="px-3 py-3">{{ purchase.supplier }}</td>
+                    <td class="px-3 py-3">
+                      <p>{{ purchase.parent_category }}</p>
+                      <p class="text-xs text-slate-500">{{ purchase.category }}</p>
+                    </td>
+                    <td class="px-3 py-3">
+                      <span class="rounded-full px-3 py-1 text-xs font-semibold ring-1 {{ purchase.status_badge }}">
+                        {{ purchase.status_label }}
+                      </span>
+                    </td>
+                    <td class="px-3 py-3 font-semibold text-slate-900">{{ purchase.executed_total|peso }}</td>
+                    <td class="px-3 py-3 text-right">
+                      <a
+                        href="{{ purchase.detail_url }}"
+                        class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Ver detalle
+                        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M5 10h7.586l-2.293 2.293a1 1 0 101.414 1.414l4-4a1 1 0 000-1.414l-4-4a1 1 0 10-1.414 1.414L12.586 8H5a1 1 0 100 2z" />
+                        </svg>
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% endfor %}
+            {% else %}
               <tr>
-                <td colspan="9" class="px-3 py-8 text-center text-sm text-slate-500">
+                <td colspan="8" class="px-3 py-8 text-center text-sm text-slate-500">
                   Ajusta los filtros o rango de fechas para ver compras en este informe.
                 </td>
               </tr>
-            {% endfor %}
+            {% endif %}
           </tbody>
         </table>
       </div>
