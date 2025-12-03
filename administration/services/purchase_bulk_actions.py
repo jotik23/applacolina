@@ -34,10 +34,16 @@ def move_purchases_to_status(*, purchase_ids: Sequence[int], target_status: str 
     update_kwargs: dict[str, Any] = {'status': target_status, 'updated_at': now}
     if target_status in PurchaseRequest.POST_PAYMENT_STATUSES:
         zero_payment_condition = Q(payment_amount__isnull=True) | Q(payment_amount__lte=0)
+        invoice_positive = Q(invoice_total__gt=0)
+        estimated_positive = Q(estimated_total__gt=0)
         update_kwargs['payment_amount'] = Case(
             When(
-                Q(invoice_total__isnull=False) & zero_payment_condition,
+                zero_payment_condition & invoice_positive,
                 then=F('invoice_total'),
+            ),
+            When(
+                zero_payment_condition & ~invoice_positive & estimated_positive,
+                then=F('estimated_total'),
             ),
             default=F('payment_amount'),
             output_field=DecimalField(max_digits=14, decimal_places=2),

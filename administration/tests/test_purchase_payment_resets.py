@@ -37,20 +37,29 @@ class PurchasePaymentResetsTests(TestCase):
             invoice_total=Decimal('99999'),
             payment_amount=Decimal('0'),
         )
+        estimated_only = self._create_purchase(
+            status=PurchaseRequest.Status.RECEPTION,
+            invoice_total=Decimal('0'),
+            payment_amount=Decimal('0'),
+            estimated_total=Decimal('321'),
+        )
 
         updated = reset_missing_payment_amounts()
 
-        self.assertEqual(1, updated)
+        self.assertEqual(2, updated)
         affected.refresh_from_db()
         unaffected.refresh_from_db()
+        estimated_only.refresh_from_db()
         self.assertEqual(Decimal('123456.78'), affected.payment_amount)
         self.assertEqual(Decimal('0'), unaffected.payment_amount)
+        self.assertEqual(Decimal('321'), estimated_only.payment_amount)
 
     def test_get_queryset_filters_only_missing_payments(self) -> None:
         pending = self._create_purchase(
             status=PurchaseRequest.Status.RECEPTION,
-            invoice_total=Decimal('5000'),
+            invoice_total=Decimal('0'),
             payment_amount=Decimal('0'),
+            estimated_total=Decimal('5000'),
         )
         self._create_purchase(
             status=PurchaseRequest.Status.PAYMENT,
@@ -68,6 +77,7 @@ class PurchasePaymentResetsTests(TestCase):
         status: str,
         invoice_total: Decimal,
         payment_amount: Decimal,
+        estimated_total: Decimal | None = None,
     ) -> PurchaseRequest:
         sequence = PurchaseRequest.objects.count() + 1
         return PurchaseRequest.objects.create(
@@ -79,7 +89,7 @@ class PurchasePaymentResetsTests(TestCase):
             expense_type=self.category,
             status=status,
             currency='COP',
-            estimated_total=invoice_total,
+            estimated_total=estimated_total if estimated_total is not None else invoice_total,
             invoice_total=invoice_total,
             payment_amount=payment_amount,
         )

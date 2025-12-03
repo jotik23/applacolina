@@ -60,6 +60,55 @@ class PurchaseBulkActionsTests(TestCase):
         self.assertEqual(Decimal('125000.50'), purchase.payment_amount)
         self.assertEqual(PurchaseRequest.Status.PAYMENT, purchase.status)
 
+    def test_move_purchases_to_status_sets_payment_amount_on_support_stage(self) -> None:
+        purchase = self._create_purchase(
+            status=PurchaseRequest.Status.SUBMITTED,
+            invoice_total=Decimal('100'),
+            payment_amount=Decimal('0'),
+        )
+
+        move_purchases_to_status(
+            purchase_ids=[purchase.pk],
+            target_status=PurchaseRequest.Status.INVOICE,
+        )
+
+        purchase.refresh_from_db()
+        self.assertEqual(Decimal('100'), purchase.payment_amount)
+        self.assertEqual(PurchaseRequest.Status.INVOICE, purchase.status)
+
+    def test_move_purchases_to_status_sets_payment_amount_on_support_stage(self) -> None:
+        purchase = self._create_purchase(
+            status=PurchaseRequest.Status.SUBMITTED,
+            invoice_total=Decimal('100'),
+            payment_amount=Decimal('0'),
+        )
+
+        move_purchases_to_status(
+            purchase_ids=[purchase.pk],
+            target_status=PurchaseRequest.Status.INVOICE,
+        )
+
+        purchase.refresh_from_db()
+        self.assertEqual(Decimal('100'), purchase.payment_amount)
+        self.assertEqual(PurchaseRequest.Status.INVOICE, purchase.status)
+
+    def test_move_purchases_to_status_uses_estimated_total_when_invoice_missing(self) -> None:
+        purchase = self._create_purchase(
+            status=PurchaseRequest.Status.APPROVED,
+            invoice_total=None,
+            estimated_total=Decimal('212000'),
+            payment_amount=Decimal('0'),
+        )
+
+        move_purchases_to_status(
+            purchase_ids=[purchase.pk],
+            target_status=PurchaseRequest.Status.PAYMENT,
+        )
+
+        purchase.refresh_from_db()
+        self.assertEqual(Decimal('212000'), purchase.payment_amount)
+        self.assertEqual(PurchaseRequest.Status.PAYMENT, purchase.status)
+
     def test_move_purchases_to_status_preserves_existing_payment_amount(self) -> None:
         purchase = self._create_purchase(
             status=PurchaseRequest.Status.APPROVED,
@@ -113,6 +162,7 @@ class PurchaseBulkActionsTests(TestCase):
         created_at: datetime | None = None,
         invoice_total: Decimal | None = None,
         payment_amount: Decimal = Decimal('0'),
+        estimated_total: Decimal = Decimal('1'),
     ) -> PurchaseRequest:
         sequence = PurchaseRequest.objects.count() + 1
         purchase = PurchaseRequest.objects.create(
@@ -124,7 +174,7 @@ class PurchaseBulkActionsTests(TestCase):
             expense_type=self.category,
             status=status,
             currency='COP',
-            estimated_total=1,
+            estimated_total=estimated_total,
             invoice_total=invoice_total,
             payment_amount=payment_amount,
         )

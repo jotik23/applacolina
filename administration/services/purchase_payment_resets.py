@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.db.models import F, Q, QuerySet
+from django.db.models import Case, DecimalField, F, Q, QuerySet, When
 from django.utils import timezone
 
 from administration.models import PurchaseRequest
@@ -12,10 +12,12 @@ def get_purchases_missing_payment_amount_queryset() -> QuerySet[PurchaseRequest]
     """
 
     zero_payment_condition = Q(payment_amount__isnull=True) | Q(payment_amount__lte=0)
-    return PurchaseRequest.objects.filter(
-        status__in=PurchaseRequest.POST_PAYMENT_STATUSES,
-        invoice_total__gt=0,
-    ).filter(zero_payment_condition)
+    value_positive = Q(invoice_total__gt=0) | Q(estimated_total__gt=0)
+    return (
+        PurchaseRequest.objects.filter(status__in=PurchaseRequest.POST_PAYMENT_STATUSES)
+        .filter(zero_payment_condition)
+        .filter(value_positive)
+    )
 
 
 def reset_missing_payment_amounts() -> int:
@@ -25,4 +27,11 @@ def reset_missing_payment_amounts() -> int:
 
     queryset = get_purchases_missing_payment_amount_queryset()
     now = timezone.now()
-    return queryset.update(payment_amount=F('invoice_total'), updated_at=now)
+    return queryset.update(
+        payment_amount=Case(
+            When(invoice_total__gt=0, then=F('invoice_total')),
+            default=F('estimated_total'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
+        updated_at=now,
+    )

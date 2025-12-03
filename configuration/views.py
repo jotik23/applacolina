@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.views.generic import TemplateView
-from django.db.models import Sum
+from django.db.models import Sum, Case, When, DecimalField, F
 
 from applacolina.mixins import StaffRequiredMixin
 from administration.services.purchase_payment_resets import (
@@ -51,12 +53,19 @@ class ConfigurationCommandsView(StaffRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.setdefault("configuration_active_submenu", self.configuration_active_submenu)
-        pending_qs = get_purchases_missing_payment_amount_queryset()
-        pending_count = pending_qs.count()
-        pending_total = pending_qs.aggregate(total=Sum('invoice_total'))['total'] or 0
+        pending_qs = get_purchases_missing_payment_amount_queryset().annotate(
+            approved_amount=Case(
+                When(invoice_total__gt=0, then=F('invoice_total')),
+                default=F('estimated_total'),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )
+        pending_total = pending_qs.aggregate(total=Sum('approved_amount'))['total'] or Decimal('0')
+        pending_entries = list(pending_qs.order_by('timeline_code'))
         context.update(
-            pending_payment_resets_count=pending_count,
+            pending_payment_resets_count=len(pending_entries),
             pending_payment_resets_total=pending_total,
+            pending_payment_resets=pending_entries,
         )
         return context
 

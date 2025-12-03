@@ -34,20 +34,46 @@
           </button>
         </form>
       </div>
-      <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+      <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 space-y-4">
         {% if pending_payment_resets_count %}
-          <p>
-            Se encontraron
-            <span class="font-semibold text-slate-900">{{ pending_payment_resets_count }}</span>
-            solicitudes con valor pagado en cero y un total de factura combinando
-            <span class="font-semibold text-slate-900">
-              {{ pending_payment_resets_total|floatformat:0 }}
-            </span>.
-          </p>
-          <p class="mt-2">
-            Al ejecutar el comando se actualizará el campo <strong>valor pagado</strong> usando el total de cada factura
-            y se registrará la fecha de actualización.
-          </p>
+          <div>
+            <p>
+              Hay
+              <span class="font-semibold text-slate-900">{{ pending_payment_resets_count }}</span>
+              solicitudes con el campo <strong>valor pagado</strong> en cero aunque ya superaron la etapa de pago.
+            </p>
+            <p class="mt-2">
+              Este comando copiará el monto aprobado (factura o estimado) en el campo <strong>valor pagado</strong>.
+              Total estimado a sincronizar:
+              <span class="font-semibold text-slate-900">{{ pending_payment_resets_total|floatformat:0 }}</span>.
+            </p>
+          </div>
+          <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+              <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th class="px-4 py-2">Código</th>
+                  <th class="px-4 py-2">Nombre</th>
+                  <th class="px-4 py-2">Monto aprobado</th>
+                  <th class="px-4 py-2">Nuevo valor pagado</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
+                {% for purchase in pending_payment_resets %}
+                  <tr>
+                    <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ purchase.timeline_code }}</td>
+                    <td class="px-4 py-2">{{ purchase.name }}</td>
+                    <td class="px-4 py-2 font-semibold text-slate-900">
+                      {{ purchase.currency }} {{ purchase.approved_amount|floatformat:0 }}
+                    </td>
+                    <td class="px-4 py-2 font-semibold text-emerald-600">
+                      {{ purchase.currency }} {{ purchase.approved_amount|floatformat:0 }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% else %}
           <p>No se detectaron solicitudes con valor pagado pendiente de ajustar.</p>
         {% endif %}
