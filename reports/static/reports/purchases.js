@@ -56,10 +56,46 @@
   };
 
   renderDoughnut('chart-category-share', payload.categoryShare);
-  renderDoughnut('chart-area-share', payload.areaShare);
   renderDoughnut('chart-payment-share', payload.paymentMethodShare);
   renderDoughnut('chart-requester-share', payload.requesterShare);
   renderDoughnut('chart-support-share', payload.supportShare);
+
+  const renderHorizontalBar = (canvasId, entries) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !Array.isArray(entries) || !entries.length) {
+      return;
+    }
+    new ChartJS(canvas, {
+      type: 'bar',
+      data: {
+        labels: entries.map((entry) => entry.label),
+        datasets: [
+          {
+            data: entries.map((entry) => entry.value),
+            backgroundColor: '#0ea5e9',
+            borderRadius: 6,
+          },
+        ],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: {
+              callback: (value) => `$${Number(value).toLocaleString()}`,
+            },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+        },
+      },
+    });
+  };
+
+  renderHorizontalBar('chart-area-share-bar', payload.areaShare);
 
   const timelineCanvas = document.getElementById('chart-spending-timeline');
   if (

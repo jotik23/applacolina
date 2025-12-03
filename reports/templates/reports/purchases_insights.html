@@ -230,7 +230,7 @@
       </section>
     {% endif %}
 
-    <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
         <header>
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Participación por categoría</p>
@@ -240,18 +240,6 @@
           <canvas id="chart-category-share" height="220"></canvas>
           {% if not category_breakdown %}
             <p class="mt-4 text-sm text-slate-500">No hay datos suficientes para esta vista.</p>
-          {% endif %}
-        </div>
-      </article>
-      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <header>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Por tipo de área</p>
-          <h2 class="text-lg font-semibold text-slate-900">Ámbitos operativos</h2>
-        </header>
-        <div class="mt-4">
-          <canvas id="chart-area-share" height="220"></canvas>
-          {% if not area_breakdown %}
-            <p class="mt-4 text-sm text-slate-500">No hay áreas con datos suficientes.</p>
           {% endif %}
         </div>
       </article>
@@ -325,40 +313,57 @@
           {% endfor %}
         </div>
       </article>
-      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
-        <header class="flex flex-col gap-2">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Concentración por terceros</p>
-          <h2 class="text-lg font-semibold text-slate-900">Top proveedores y colaboradores</h2>
-        </header>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Proveedores</p>
-            <ul class="mt-2 space-y-2 text-sm">
-              {% for supplier in supplier_breakdown %}
-                <li class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
-                  <span>{{ supplier.label }}</span>
-                  <span class="font-semibold text-slate-900">{{ supplier.amount|peso }}</span>
-                </li>
-              {% empty %}
-                <li class="text-sm text-slate-500">Sin proveedores en el filtro actual.</li>
-              {% endfor %}
-            </ul>
+      <div class="space-y-4">
+        <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Por tipo de área</p>
+              <h2 class="text-lg font-semibold text-slate-900">Ámbitos operativos</h2>
+            </div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Distribución del gasto</p>
+          </header>
+          <div class="mt-4 h-72">
+            <canvas id="chart-area-share-bar" height="320"></canvas>
+            {% if not area_breakdown %}
+              <p class="mt-4 text-sm text-slate-500">No hay áreas con datos suficientes.</p>
+            {% endif %}
           </div>
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Colaboradores</p>
-            <ul class="mt-2 space-y-2 text-sm">
-              {% for requester in requester_breakdown %}
-                <li class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
-                  <span>{{ requester.label }}</span>
-                  <span class="font-semibold text-slate-900">{{ requester.amount|peso }}</span>
-                </li>
-              {% empty %}
-                <li class="text-sm text-slate-500">Sin registros.</li>
-              {% endfor %}
-            </ul>
+        </article>
+        <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex flex-col gap-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Concentración por terceros</p>
+            <h2 class="text-lg font-semibold text-slate-900">Top proveedores y colaboradores</h2>
+          </header>
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Proveedores</p>
+              <ul class="mt-2 space-y-2 text-sm">
+                {% for supplier in supplier_breakdown %}
+                  <li class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                    <span>{{ supplier.label }}</span>
+                    <span class="font-semibold text-slate-900">{{ supplier.amount|peso }}</span>
+                  </li>
+                {% empty %}
+                  <li class="text-sm text-slate-500">Sin proveedores en el filtro actual.</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Colaboradores</p>
+              <ul class="mt-2 space-y-2 text-sm">
+                {% for requester in requester_breakdown %}
+                  <li class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                    <span>{{ requester.label }}</span>
+                    <span class="font-semibold text-slate-900">{{ requester.amount|peso }}</span>
+                  </li>
+                {% empty %}
+                  <li class="text-sm text-slate-500">Sin registros.</li>
+                {% endfor %}
+              </ul>
+            </div>
           </div>
-        </div>
-      </article>
+        </article>
+      </div>
     </section>
 
     <section class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
@@ -368,7 +373,7 @@
           <h2 class="text-lg font-semibold text-slate-900">Listado agrupado por categoría</h2>
         </div>
         <p class="text-sm text-slate-500">
-          Mostrando {{ table_visible_rows }} de {{ table_total_rows }} compras (límite {{ table_limit }}).
+          Mostrando {{ table_total_rows }} compras filtradas.
         </p>
       </header>
       <div class="mt-4 overflow-x-auto">

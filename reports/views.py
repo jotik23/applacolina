@@ -281,7 +281,7 @@ class PurchaseSpendingReportView(StaffRequiredMixin, generic.TemplateView):
         insights = build_purchase_insights(filters)
         ordering = self._resolve_ordering()
         sorted_rows = self._sort_rows(insights.rows, ordering)
-        table_rows = self._serialize_rows(sorted_rows[: self.TABLE_LIMIT])
+        table_rows = self._serialize_rows(sorted_rows)
         table_grouped_rows = self._group_rows_by_category(table_rows)
         range_days = (filter_payload["end_date"] - filter_payload["start_date"]).days + 1
         context.update(
@@ -304,11 +304,9 @@ class PurchaseSpendingReportView(StaffRequiredMixin, generic.TemplateView):
                 "alerts": insights.optimization_alerts,
                 "table_rows": table_rows,
                 "table_grouped_rows": table_grouped_rows,
-                "table_total_rows": len(insights.rows),
-                "table_visible_rows": len(table_rows),
+                "table_total_rows": len(table_rows),
                 "charts_dataset": insights.chart_payload,
                 "quick_ranges": self._build_quick_ranges(filter_payload["end_date"]),
-                "table_limit": self.TABLE_LIMIT,
                 "range_days": range_days,
             }
         )
