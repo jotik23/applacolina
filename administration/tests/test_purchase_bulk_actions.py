@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -43,6 +44,38 @@ class PurchaseBulkActionsTests(TestCase):
         self.assertEqual(PurchaseRequest.Status.APPROVED, draft.status)
         self.assertEqual(PurchaseRequest.Status.APPROVED, submitted.status)
 
+    def test_move_purchases_to_status_sets_payment_amount_after_payment(self) -> None:
+        purchase = self._create_purchase(
+            status=PurchaseRequest.Status.SUBMITTED,
+            invoice_total=Decimal('125000.50'),
+            payment_amount=Decimal('0.00'),
+        )
+
+        move_purchases_to_status(
+            purchase_ids=[purchase.pk],
+            target_status=PurchaseRequest.Status.PAYMENT,
+        )
+
+        purchase.refresh_from_db()
+        self.assertEqual(Decimal('125000.50'), purchase.payment_amount)
+        self.assertEqual(PurchaseRequest.Status.PAYMENT, purchase.status)
+
+    def test_move_purchases_to_status_preserves_existing_payment_amount(self) -> None:
+        purchase = self._create_purchase(
+            status=PurchaseRequest.Status.APPROVED,
+            invoice_total=Decimal('90000'),
+            payment_amount=Decimal('45000'),
+        )
+
+        move_purchases_to_status(
+            purchase_ids=[purchase.pk],
+            target_status=PurchaseRequest.Status.PAYMENT,
+        )
+
+        purchase.refresh_from_db()
+        self.assertEqual(Decimal('45000'), purchase.payment_amount)
+        self.assertEqual(PurchaseRequest.Status.PAYMENT, purchase.status)
+
     def test_move_purchases_to_status_validates_target(self) -> None:
         purchase = self._create_purchase(status=PurchaseRequest.Status.DRAFT)
 
@@ -78,6 +111,8 @@ class PurchaseBulkActionsTests(TestCase):
         *,
         status: str,
         created_at: datetime | None = None,
+        invoice_total: Decimal | None = None,
+        payment_amount: Decimal = Decimal('0'),
     ) -> PurchaseRequest:
         sequence = PurchaseRequest.objects.count() + 1
         purchase = PurchaseRequest.objects.create(
@@ -90,6 +125,8 @@ class PurchaseBulkActionsTests(TestCase):
             status=status,
             currency='COP',
             estimated_total=1,
+            invoice_total=invoice_total,
+            payment_amount=payment_amount,
         )
         if created_at:
             PurchaseRequest.objects.filter(pk=purchase.pk).update(created_at=created_at)

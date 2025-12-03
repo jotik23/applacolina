@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Sequence
+from typing import Any, Sequence
 
+from django.db.models import Case, DecimalField, F, Q, When
 from django.utils import timezone
 
 from administration.models import PurchaseRequest
@@ -26,12 +27,22 @@ def move_purchases_to_status(*, purchase_ids: Sequence[int], target_status: str 
         raise PurchaseBulkActionError("Selecciona un estado válido para continuar.")
     if not purchase_ids:
         return 0
+    queryset = PurchaseRequest.objects.filter(pk__in=purchase_ids).exclude(status=target_status)
+    if not queryset:
+        return 0
     now = timezone.now()
-    return (
-        PurchaseRequest.objects.filter(pk__in=purchase_ids)
-        .exclude(status=target_status)
-        .update(status=target_status, updated_at=now)
-    )
+    update_kwargs: dict[str, Any] = {'status': target_status, 'updated_at': now}
+    if target_status in PurchaseRequest.POST_PAYMENT_STATUSES:
+        zero_payment_condition = Q(payment_amount__isnull=True) | Q(payment_amount__lte=0)
+        update_kwargs['payment_amount'] = Case(
+            When(
+                Q(invoice_total__isnull=False) & zero_payment_condition,
+                then=F('invoice_total'),
+            ),
+            default=F('payment_amount'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+    return queryset.update(**update_kwargs)
 
 
 def update_purchases_requested_date(*, purchase_ids: Sequence[int], requested_date: date | None) -> int:

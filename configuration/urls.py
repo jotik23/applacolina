@@ -4,6 +4,7 @@ from django.views.generic import RedirectView
 from administration.views import ProductManagementView, PurchaseConfigurationView
 from configuration.views import (
     ConfigurationCollaboratorsView,
+    ConfigurationCommandsView,
     ConfigurationPositionsView,
     ConfigurationTaskManagerView,
 )
@@ -48,6 +49,7 @@ urlpatterns = [
     path("infraestructura/", infrastructure_home_view, name="infrastructure"),
     path("tablas-referencia/", reference_tables_view, name="reference-tables"),
     path("productos/", ProductManagementView.as_view(), name="products"),
+    path("comandos/", ConfigurationCommandsView.as_view(), name="commands"),
     path("infraestructura/granjas/<int:pk>/editar/", farm_update_view, name="farm-update"),
     path("infraestructura/granjas/<int:pk>/eliminar/", farm_delete_view, name="farm-delete"),
     path(

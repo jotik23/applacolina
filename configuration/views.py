@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import redirect
+from django.views.generic import TemplateView
+from django.db.models import Sum
 
+from applacolina.mixins import StaffRequiredMixin
+from administration.services.purchase_payment_resets import (
+    get_purchases_missing_payment_amount_queryset,
+    reset_missing_payment_amounts,
+)
 from personal.views import CalendarConfiguratorView
 from task_manager.views import TaskManagerHomeView
 
@@ -34,3 +42,32 @@ class ConfigurationPositionsView(BaseConfigurationConfiguratorView):
 
 class ConfigurationTaskManagerView(TaskManagerHomeView):
     configuration_active_submenu = "tasks"
+
+
+class ConfigurationCommandsView(StaffRequiredMixin, TemplateView):
+    template_name = "configuration/commands.html"
+    configuration_active_submenu = "commands"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("configuration_active_submenu", self.configuration_active_submenu)
+        pending_qs = get_purchases_missing_payment_amount_queryset()
+        pending_count = pending_qs.count()
+        pending_total = pending_qs.aggregate(total=Sum('invoice_total'))['total'] or 0
+        context.update(
+            pending_payment_resets_count=pending_count,
+            pending_payment_resets_total=pending_total,
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = (request.POST.get("command_action") or "").strip()
+        if action == "reset_purchase_payments":
+            updated = reset_missing_payment_amounts()
+            if updated:
+                messages.success(request, f"Se actualizaron {updated} solicitudes con su valor pagado.")
+            else:
+                messages.info(request, "No se encontraron solicitudes pendientes por actualizar.")
+            return redirect("configuration:commands")
+        messages.error(request, "Comando no soportado.")
+        return redirect("configuration:commands")

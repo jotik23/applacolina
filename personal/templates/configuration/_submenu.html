@@ -57,6 +57,14 @@
       Configuración de gastos
     </a>
     <a
+      href="{% url 'configuration:commands' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'commands' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'commands' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'commands' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+      Comandos
+    </a>
+    <a
       href="{% url 'configuration:reference-tables' %}"
       class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'reference_tables' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
       {% if active == 'reference_tables' %}aria-current="page"{% endif %}

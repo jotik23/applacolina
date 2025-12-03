@@ -1,0 +1,57 @@
+{% extends "calendario/base.html" %}
+{% block title %}Configuración · Comandos{% endblock %}
+
+{% block content %}
+  {% include "configuration/_submenu.html" with active=configuration_active_submenu %}
+
+  <section class="space-y-6">
+    <header class="flex flex-col gap-2 rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/70">
+      <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Configuración</p>
+      <div>
+        <h1 class="text-2xl font-semibold text-slate-900">Centro de comandos</h1>
+        <p class="text-sm text-slate-500">Acciones utilitarias para corregir datos operativos.</p>
+      </div>
+    </header>
+
+    <article class="space-y-4 rounded-2xl border border-slate-200/70 bg-white/95 p-6 shadow-sm">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Compras / Gastos</p>
+          <h2 class="text-xl font-semibold text-slate-900">Restablecer valores pagados</h2>
+          <p class="text-sm text-slate-600">
+            Copia el total de la factura en el campo de valor pagado para solicitudes que ya están en etapas posteriores al pago.
+          </p>
+        </div>
+        <form method="post" class="flex items-center gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="command_action" value="reset_purchase_payments">
+          <button
+            type="submit"
+            class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition {% if pending_payment_resets_count %}bg-emerald-600 hover:bg-emerald-500{% else %}cursor-not-allowed bg-slate-400{% endif %}"
+            {% if not pending_payment_resets_count %}disabled{% endif %}
+          >
+            Ejecutar comando
+          </button>
+        </form>
+      </div>
+      <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+        {% if pending_payment_resets_count %}
+          <p>
+            Se encontraron
+            <span class="font-semibold text-slate-900">{{ pending_payment_resets_count }}</span>
+            solicitudes con valor pagado en cero y un total de factura combinando
+            <span class="font-semibold text-slate-900">
+              {{ pending_payment_resets_total|floatformat:0 }}
+            </span>.
+          </p>
+          <p class="mt-2">
+            Al ejecutar el comando se actualizará el campo <strong>valor pagado</strong> usando el total de cada factura
+            y se registrará la fecha de actualización.
+          </p>
+        {% else %}
+          <p>No se detectaron solicitudes con valor pagado pendiente de ajustar.</p>
+        {% endif %}
+      </div>
+    </article>
+  </section>
+{% endblock %}
