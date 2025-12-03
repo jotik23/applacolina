@@ -6,6 +6,10 @@
 {% block content %}
   {% include "reports/_submenu.html" with active=reports_active_submenu %}
 
+  <style>
+    @import url("https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css");
+  </style>
+
   <div class="space-y-10">
     <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
       <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -26,48 +30,97 @@
               <span class="mx-2 text-slate-400">&middot;</span>
               Ventas del {{ filters.sales_start|date:"d M Y" }} al {{ filters.sales_end|date:"d M Y" }} · {{ comparison.sales_days|number_format }} día{% if comparison.sales_days != 1 %}s{% endif %}
             </p>
+            <p class="mt-1 text-sm font-medium text-slate-600">
+              Despachos del {{ filters.dispatch_start|date:"d M Y" }} al {{ filters.dispatch_end|date:"d M Y" }} · {{ comparison.dispatch_days|number_format }} día{% if comparison.dispatch_days != 1 %}s{% endif %}
+              {% if filters.dispatch_seller_label %}
+                <span class="mx-2 text-slate-400">&middot;</span>
+                Vendedor: {{ filters.dispatch_seller_label }}
+              {% endif %}
+              {% if filters.dispatch_destination_label %}
+                <span class="mx-2 text-slate-400">&middot;</span>
+                Bodega: {{ filters.dispatch_destination_label }}
+              {% endif %}
+            </p>
           </div>
         </div>
       </div>
     </section>
 
     <section class="space-y-4 rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
-      <form method="get" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <form method="get" class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Producción · Desde
+          Producción · Rango
           <input
-            type="date"
-            name="production_start"
-            value="{{ filters.production_start|date:'Y-m-d' }}"
-            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            type="text"
+            data-date-range
+            data-range-start="#production-range-start"
+            data-range-end="#production-range-end"
+            data-range-format="YYYY-MM-DD"
+            data-range-display-format="DD MMM YYYY"
+            data-range-placeholder="Selecciona rango"
+            value="{{ filters.production_start|date:'d M Y' }} → {{ filters.production_end|date:'d M Y' }}"
+            class="mt-1 w-full cursor-pointer rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
           >
+          <input type="hidden" id="production-range-start" name="production_start" value="{{ filters.production_start|date:'Y-m-d' }}">
+          <input type="hidden" id="production-range-end" name="production_end" value="{{ filters.production_end|date:'Y-m-d' }}">
         </label>
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Producción · Hasta
+          Despachos · Rango
           <input
-            type="date"
-            name="production_end"
-            value="{{ filters.production_end|date:'Y-m-d' }}"
-            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            type="text"
+            data-date-range
+            data-range-start="#dispatch-range-start"
+            data-range-end="#dispatch-range-end"
+            data-range-format="YYYY-MM-DD"
+            data-range-display-format="DD MMM YYYY"
+            data-range-placeholder="Selecciona rango"
+            value="{{ filters.dispatch_start|date:'d M Y' }} → {{ filters.dispatch_end|date:'d M Y' }}"
+            class="mt-1 w-full cursor-pointer rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
           >
+          <input type="hidden" id="dispatch-range-start" name="dispatch_start" value="{{ filters.dispatch_start|date:'Y-m-d' }}">
+          <input type="hidden" id="dispatch-range-end" name="dispatch_end" value="{{ filters.dispatch_end|date:'Y-m-d' }}">
         </label>
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Ventas · Desde
+          Ventas · Rango
           <input
-            type="date"
-            name="sales_start"
-            value="{{ filters.sales_start|date:'Y-m-d' }}"
-            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            type="text"
+            data-date-range
+            data-range-start="#sales-range-start"
+            data-range-end="#sales-range-end"
+            data-range-format="YYYY-MM-DD"
+            data-range-display-format="DD MMM YYYY"
+            data-range-placeholder="Selecciona rango"
+            value="{{ filters.sales_start|date:'d M Y' }} → {{ filters.sales_end|date:'d M Y' }}"
+            class="mt-1 w-full cursor-pointer rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
           >
+          <input type="hidden" id="sales-range-start" name="sales_start" value="{{ filters.sales_start|date:'Y-m-d' }}">
+          <input type="hidden" id="sales-range-end" name="sales_end" value="{{ filters.sales_end|date:'Y-m-d' }}">
         </label>
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Ventas · Hasta
-          <input
-            type="date"
-            name="sales_end"
-            value="{{ filters.sales_end|date:'Y-m-d' }}"
+          Vendedor
+          <select
+            name="dispatch_seller"
             class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
           >
+            <option value="">Todos</option>
+            {% for seller in dispatch_filter_options.sellers %}
+              <option value="{{ seller.id }}" {% if filters.dispatch_seller == seller.id %}selected{% endif %}>
+                {{ seller.label }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Bodega destino
+          <select
+            name="dispatch_destination"
+            class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+          >
+            <option value="">Todas</option>
+            {% for code, label in dispatch_filter_options.destinations %}
+              <option value="{{ code }}" {% if filters.dispatch_destination == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
         </label>
         <div class="md:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-3">
           <button
@@ -84,34 +137,6 @@
           </a>
         </div>
       </form>
-      <div class="grid gap-4 lg:grid-cols-2">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Atajos producción/clasificación</p>
-          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-            {% for preset in production_quick_ranges %}
-              <a
-                href="?production_start={{ preset.start|date:'Y-m-d' }}&production_end={{ preset.end|date:'Y-m-d' }}&sales_start={{ filters.sales_start|date:'Y-m-d' }}&sales_end={{ filters.sales_end|date:'Y-m-d' }}"
-                class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition {% if preset.days == comparison.production_days %}border-brand bg-brand/10 text-brand shadow-inner{% else %}border-slate-200 hover:border-brand hover:text-brand{% endif %}"
-              >
-                {{ preset.label }}
-              </a>
-            {% endfor %}
-          </div>
-        </div>
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Atajos ventas</p>
-          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-            {% for preset in sales_quick_ranges %}
-              <a
-                href="?production_start={{ filters.production_start|date:'Y-m-d' }}&production_end={{ filters.production_end|date:'Y-m-d' }}&sales_start={{ preset.start|date:'Y-m-d' }}&sales_end={{ preset.end|date:'Y-m-d' }}"
-                class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition {% if preset.days == comparison.sales_days %}border-brand bg-brand/10 text-brand shadow-inner{% else %}border-slate-200 hover:border-brand hover:text-brand{% endif %}"
-              >
-                {{ preset.label }}
-              </a>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
     </section>
 
     <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -127,8 +152,133 @@
               {{ stage.delta|cartons:1 }} cart {{ stage.delta_label }}
             </p>
           {% endif %}
+          <a
+            href="#details-{{ stage.slug }}"
+            class="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand transition hover:text-brand/80"
+          >
+            Ver detalle
+            <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path
+                fill-rule="evenodd"
+                d="M3.75 10a.75.75 0 01.75-.75h9.19l-3.22-3.22a.75.75 0 111.06-1.06l4.5 4.5a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 01-1.06-1.06l3.22-3.22H4.5A.75.75 0 013.75 10z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </a>
         </article>
       {% endfor %}
+    </section>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white/95 p-6 shadow-sm shadow-slate-900/5">
+      <header>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalle de registros</p>
+        <h2 class="text-lg font-semibold text-slate-900">Profundiza cada etapa</h2>
+        <p class="mt-1 text-sm text-slate-500">Despliega los registros incluidos para investigar discrepancias rápidamente.</p>
+      </header>
+      <div class="mt-6 space-y-4">
+        {% for stage in comparison.stages %}
+          {% with rows=comparison.details|dict_get:stage.slug %}
+            <details id="details-{{ stage.slug }}" class="group rounded-2xl border border-slate-100 bg-white/80 p-4">
+              <summary class="flex cursor-pointer items-center justify-between gap-4 text-left">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ stage.label }}</p>
+                  <p class="text-sm text-slate-400">{{ stage.note }}</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  {% if rows %}
+                    {{ rows|length }} registro{% if rows|length != 1 %}s{% endif %}
+                  {% else %}
+                    Sin registros
+                  {% endif %}
+                  <svg class="h-4 w-4 text-slate-400 transition group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.354a.75.75 0 111.02 1.1l-4.25 3.845a.75.75 0 01-1.02 0l-4.25-3.845a.75.75 0 01.02-1.1z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+              </summary>
+              {% if rows %}
+                <div class="mt-4 overflow-x-auto">
+                  <table class="w-full border-collapse text-sm text-slate-700">
+                    <thead>
+                      <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        <th class="px-4 py-2 text-left">Fecha</th>
+                        <th class="px-4 py-2 text-left">Referencia</th>
+                        <th class="px-4 py-2 text-right">Cartones</th>
+                        <th class="px-4 py-2 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for row in rows %}
+                        <tr class="border-b border-slate-100 last:border-none">
+                          <td class="px-4 py-3 text-sm text-slate-600">
+                            {% if row.date %}
+                              {{ row.date|date:"d M Y" }}
+                            {% else %}
+                              —
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3">
+                            <p class="font-semibold text-slate-900">{{ row.title }}</p>
+                            {% if row.subtitle %}
+                              <p class="text-xs text-slate-500">{{ row.subtitle }}</p>
+                            {% endif %}
+                            {% if row.description %}
+                              <p class="text-[11px] text-slate-400">{{ row.description }}</p>
+                            {% endif %}
+                          </td>
+                          <td class="px-4 py-3 text-right font-semibold text-slate-900">{{ row.quantity|cartons:1 }}</td>
+                          <td class="px-4 py-3 text-right text-xs">
+                            {% if row.pk %}
+                              {% if stage.slug == 'production' %}
+                                <a
+                                  href="{% url 'configuration:batch-production-board' row.pk %}{% if row.date %}?day={{ row.date|date:'Y-m-d' }}{% endif %}"
+                                  class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+                                  target="_blank"
+                                >
+                                  Tablero diario
+                                </a>
+                              {% elif stage.slug == 'classification' %}
+                                <a
+                                  href="{% url 'production:egg-inventory-batch' row.pk %}"
+                                  class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+                                  target="_blank"
+                                >
+                                  Ver lote
+                                </a>
+                              {% elif stage.slug == 'dispatch' %}
+                                <a
+                                  href="{% url 'administration:egg-dispatch-update' row.pk %}"
+                                  class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+                                  target="_blank"
+                                >
+                                  Ver despacho
+                                </a>
+                              {% elif stage.slug == 'sales' %}
+                                <a
+                                  href="{% url 'administration:sale-update' row.pk %}"
+                                  class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+                                  target="_blank"
+                                >
+                                  Ver venta
+                                </a>
+                              {% endif %}
+                            {% else %}
+                              <span class="text-slate-400">—</span>
+                            {% endif %}
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <p class="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
+                  No hay registros dentro del rango para esta etapa.
+                </p>
+              {% endif %}
+            </details>
+          {% endwith %}
+        {% endfor %}
+      </div>
     </section>
 
     <section class="grid gap-6 xl:grid-cols-3">
@@ -288,6 +438,8 @@
   </div>
 
   {{ comparison.chart_payload|json_script:"inventory-comparison-data" }}
+  <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js" defer></script>
+  <script src="{% static 'reports/date-range-picker.js' %}" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
   <script src="{% static 'reports/inventory.js' %}" defer></script>
 {% endblock %}

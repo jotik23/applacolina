@@ -2703,6 +2703,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
                 "batch_age_days": self.batch_age_days,
             }
         )
+        _maybe_set_home_tab(context, self.request, "daily_indicators")
         return context
 
     def post(self, request, *args, **kwargs):

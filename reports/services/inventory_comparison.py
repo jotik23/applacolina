@@ -6,10 +6,10 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from administration.models import Sale, SaleItem, SaleProductType
-from production.models import EggClassificationBatch, EggClassificationEntry, EggDispatchItem, EggType
+from production.models import EggClassificationBatch, EggClassificationEntry, EggDispatch, EggDispatchItem, EggType
 from production.services.egg_classification import ORDERED_EGG_TYPES
 
 ZERO = Decimal("0.00")
@@ -51,8 +51,19 @@ class InsightCard:
 
 
 @dataclass(frozen=True)
+class StageDetailRow:
+    pk: int | None
+    date: date | None
+    title: str
+    subtitle: str
+    quantity: Decimal
+    description: str | None = None
+
+
+@dataclass(frozen=True)
 class InventoryComparisonResult:
     production_days: int
+    dispatch_days: int
     sales_days: int
     stages: list[StageSummary]
     type_rows: list[InventoryTypeRow]
@@ -60,23 +71,35 @@ class InventoryComparisonResult:
     insights: list[InsightCard]
     totals: dict[str, Decimal]
     chart_payload: dict[str, Any]
+    details: dict[str, list["StageDetailRow"]]
 
 
 def build_inventory_comparison(
     *,
     production_start: date,
     production_end: date,
+    dispatch_start: date,
+    dispatch_end: date,
+    dispatch_seller_id: int | None,
+    dispatch_destination: str | None,
     sales_start: date,
     sales_end: date,
 ) -> InventoryComparisonResult:
     if production_start > production_end:
         production_start, production_end = production_end, production_start
+    if dispatch_start > dispatch_end:
+        dispatch_start, dispatch_end = dispatch_end, dispatch_start
     if sales_start > sales_end:
         sales_start, sales_end = sales_end, sales_start
 
     production_summary = _production_summary(production_start, production_end)
     classification_summary = _classification_breakdown(production_start, production_end)
-    dispatch_summary = _dispatch_breakdown(production_start, production_end)
+    dispatch_summary = _dispatch_breakdown(
+        dispatch_start,
+        dispatch_end,
+        dispatch_seller_id,
+        dispatch_destination,
+    )
     sales_summary = _sales_breakdown(sales_start, sales_end)
 
     production_total = production_summary["total"]
@@ -147,6 +170,7 @@ def build_inventory_comparison(
     )
 
     production_days = (production_end - production_start).days + 1
+    dispatch_days = (dispatch_end - dispatch_start).days + 1
     sales_days = (sales_end - sales_start).days + 1
 
     totals = {
@@ -176,8 +200,21 @@ def build_inventory_comparison(
         },
     }
 
+    details = {
+        "production": _production_detail_rows(production_start, production_end),
+        "classification": _classification_detail_rows(production_start, production_end),
+        "dispatch": _dispatch_detail_rows(
+            dispatch_start,
+            dispatch_end,
+            dispatch_seller_id,
+            dispatch_destination,
+        ),
+        "sales": _sales_detail_rows(sales_start, sales_end),
+    }
+
     return InventoryComparisonResult(
         production_days=production_days,
+        dispatch_days=dispatch_days,
         sales_days=sales_days,
         stages=stages,
         type_rows=type_rows,
@@ -185,6 +222,7 @@ def build_inventory_comparison(
         insights=insights,
         totals=totals,
         chart_payload=chart_payload,
+        details=details,
     )
 
 
@@ -213,8 +251,17 @@ def _classification_breakdown(start: date, end: date) -> dict[str, Any]:
     }
 
 
-def _dispatch_breakdown(start: date, end: date) -> dict[str, Any]:
+def _dispatch_breakdown(
+    start: date,
+    end: date,
+    seller_id: int | None,
+    destination: str | None,
+) -> dict[str, Any]:
     queryset = EggDispatchItem.objects.filter(dispatch__date__range=(start, end))
+    if seller_id:
+        queryset = queryset.filter(dispatch__seller_id=seller_id)
+    if destination:
+        queryset = queryset.filter(dispatch__destination=destination)
     totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for row in queryset.values("egg_type").annotate(total=Sum("cartons")):
         egg_type = row["egg_type"]
@@ -378,3 +425,121 @@ def _build_insights(
 def _pluralize(value: int, label: str) -> str:
     suffix = "s" if value != 1 else ""
     return f"{value} {label}{suffix}"
+
+
+def _production_detail_rows(start: date, end: date) -> list[StageDetailRow]:
+    queryset = (
+        EggClassificationBatch.objects.filter(production_record__date__range=(start, end))
+        .select_related("production_record", "bird_batch__farm")
+        .order_by("-production_record__date", "-id")
+    )
+    rows: list[StageDetailRow] = []
+    for batch in queryset:
+        record = getattr(batch, "production_record", None)
+        production_date = record.date if record else None
+        farm_name = ""
+        bird_batch = getattr(batch, "bird_batch", None)
+        if bird_batch and getattr(bird_batch, "farm", None):
+            farm_name = bird_batch.farm.name
+        rows.append(
+            StageDetailRow(
+                pk=bird_batch.pk if bird_batch else None,
+                date=production_date,
+                title=farm_name or "Sin granja",
+                subtitle=str(bird_batch) if bird_batch else "Sin lote",
+                quantity=Decimal(batch.reported_cartons or ZERO),
+                description="Cartones reportados",
+            )
+        )
+    return rows
+
+
+def _classification_detail_rows(start: date, end: date) -> list[StageDetailRow]:
+    queryset = (
+        EggClassificationBatch.objects.filter(production_record__date__range=(start, end))
+        .select_related("production_record", "bird_batch__farm")
+        .annotate(classified_sum=Sum("classification_entries__cartons"))
+        .order_by("-production_record__date", "-id")
+    )
+    rows: list[StageDetailRow] = []
+    for batch in queryset:
+        record = getattr(batch, "production_record", None)
+        production_date = record.date if record else None
+        bird_batch = getattr(batch, "bird_batch", None)
+        farm_name = ""
+        if bird_batch and getattr(bird_batch, "farm", None):
+            farm_name = bird_batch.farm.name
+        rows.append(
+            StageDetailRow(
+                pk=batch.pk,
+                date=production_date,
+                title=farm_name or "Sin granja",
+                subtitle=str(bird_batch) if bird_batch else "Sin lote",
+                quantity=Decimal(getattr(batch, "classified_sum", ZERO) or ZERO),
+                description="Cartones clasificados",
+            )
+        )
+    return rows
+
+
+def _dispatch_detail_rows(
+    start: date,
+    end: date,
+    seller_id: int | None,
+    destination: str | None,
+) -> list[StageDetailRow]:
+    queryset = EggDispatch.objects.filter(date__range=(start, end))
+    if seller_id:
+        queryset = queryset.filter(seller_id=seller_id)
+    if destination:
+        queryset = queryset.filter(destination=destination)
+    queryset = queryset.select_related("seller", "driver").annotate(items_sum=Sum("items__cartons")).order_by("-date", "-id")
+    rows: list[StageDetailRow] = []
+    for dispatch in queryset:
+        total = Decimal(getattr(dispatch, "items_sum", dispatch.total_cartons) or ZERO)
+        rows.append(
+            StageDetailRow(
+                pk=dispatch.pk,
+                date=dispatch.date,
+                title=dispatch.destination_label,
+                subtitle=dispatch.seller_name or "Sin vendedor",
+                quantity=total,
+                description=dispatch.notes[:120] if dispatch.notes else None,
+            )
+        )
+    return rows
+
+
+def _sales_detail_rows(start: date, end: date) -> list[StageDetailRow]:
+    queryset = (
+        Sale.objects.filter(
+            date__range=(start, end),
+            status__in=(Sale.Status.CONFIRMED, Sale.Status.PAID),
+            items__product_type__in=ORDERED_EGG_TYPES,
+        )
+        .select_related("customer")
+        .annotate(
+            egg_cartons=Sum(
+                "items__quantity",
+                filter=Q(items__product_type__in=ORDERED_EGG_TYPES),
+            )
+        )
+        .order_by("-date", "-id")
+    )
+    rows: list[StageDetailRow] = []
+    for sale in queryset:
+        total_cartons = Decimal(sale.egg_cartons or ZERO)
+        if total_cartons == ZERO:
+            continue
+        customer = getattr(sale, "customer", None)
+        rows.append(
+            StageDetailRow(
+                pk=sale.pk,
+                date=sale.date,
+                title=str(customer) if customer else "Cliente sin definir",
+                subtitle=sale.invoice_number or f"Venta #{sale.pk}",
+                quantity=total_cartons,
+                description=sale.get_status_display(),
+            )
+        )
+    return rows

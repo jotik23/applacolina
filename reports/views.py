@@ -3,14 +3,18 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
+from production.models import EggDispatch, EggDispatchDestination
 
 from .services.inventory_comparison import build_inventory_comparison
 from .services.key_metrics import DEFAULT_RANGE_DAYS, build_key_metrics
+
+UserProfile = get_user_model()
 
 
 class KeyMetricsDashboardView(StaffRequiredMixin, generic.TemplateView):
@@ -71,6 +75,7 @@ class KeyMetricsDashboardView(StaffRequiredMixin, generic.TemplateView):
 class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
     template_name = "reports/inventory_comparison.html"
     DEFAULT_PRODUCTION_RANGE = 30
+    DEFAULT_DISPATCH_RANGE = 30
     DEFAULT_SALES_RANGE = 30
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -79,14 +84,31 @@ class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
             prefix="production",
             default_days=self.DEFAULT_PRODUCTION_RANGE,
         )
+        dispatch_start, dispatch_end = self._resolve_range(
+            prefix="dispatch",
+            default_days=self.DEFAULT_DISPATCH_RANGE,
+            fallback=(production_start, production_end),
+        )
         sales_start, sales_end = self._resolve_range(
             prefix="sales",
             default_days=self.DEFAULT_SALES_RANGE,
             fallback=(production_start, production_end),
         )
+        dispatch_filters = self._resolve_dispatch_filters()
+        seller_options = self._get_dispatch_seller_options()
+        destination_choices = EggDispatchDestination.choices
+        seller_label = next(
+            (option["label"] for option in seller_options if option["id"] == dispatch_filters["seller_id"]),
+            "",
+        )
+        destination_label = dict(destination_choices).get(dispatch_filters["destination"], "")
         comparison = build_inventory_comparison(
             production_start=production_start,
             production_end=production_end,
+            dispatch_start=dispatch_start,
+            dispatch_end=dispatch_end,
+            dispatch_seller_id=dispatch_filters["seller_id"],
+            dispatch_destination=dispatch_filters["destination"],
             sales_start=sales_start,
             sales_end=sales_end,
         )
@@ -96,8 +118,14 @@ class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
                 "filters": {
                     "production_start": production_start,
                     "production_end": production_end,
+                    "dispatch_start": dispatch_start,
+                    "dispatch_end": dispatch_end,
                     "sales_start": sales_start,
                     "sales_end": sales_end,
+                    "dispatch_seller": dispatch_filters["seller_id"],
+                    "dispatch_destination": dispatch_filters["destination"],
+                    "dispatch_seller_label": seller_label,
+                    "dispatch_destination_label": destination_label,
                 },
                 "production_quick_ranges": self._build_quick_ranges(
                     end_date=production_end,
@@ -107,6 +135,10 @@ class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
                     end_date=sales_end,
                     prefix="sales",
                 ),
+                "dispatch_filter_options": {
+                    "sellers": seller_options,
+                    "destinations": destination_choices,
+                },
                 "comparison": comparison,
             }
         )
@@ -151,3 +183,46 @@ class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
                 }
             )
         return ranges
+
+    def _resolve_dispatch_filters(self) -> dict[str, Any]:
+        seller_value = self.request.GET.get("dispatch_seller")
+        destination_value = (self.request.GET.get("dispatch_destination") or "").strip()
+        seller_id = self._parse_int(seller_value)
+        valid_destinations = {choice[0] for choice in EggDispatchDestination.choices}
+        destination = destination_value if destination_value in valid_destinations else ""
+        return {
+            "seller_id": seller_id,
+            "destination": destination,
+        }
+
+    def _get_dispatch_seller_options(self) -> list[dict[str, Any]]:
+        seller_ids = list(
+            EggDispatch.objects.exclude(seller__isnull=True)
+            .values_list("seller_id", flat=True)
+            .distinct()
+        )
+        if not seller_ids:
+            return []
+        sellers = (
+            UserProfile.objects.filter(id__in=seller_ids)
+            .order_by("apellidos", "nombres", "id")
+        )
+        return [
+            {
+                "id": seller.id,
+                "label": seller.get_full_name() or str(seller),
+            }
+            for seller in sellers
+        ]
+
+    @staticmethod
+    def _parse_int(value: str | None) -> int | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
