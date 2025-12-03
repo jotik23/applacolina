@@ -264,6 +264,28 @@ def get_dashboard_state(
     )
 
 
+def get_filtered_purchases_queryset(
+    *,
+    scope_code: str | None,
+    search_query: str | None,
+    start_date: date | None,
+    end_date: date | None,
+) -> tuple[models.QuerySet[PurchaseRequest], PurchaseScope]:
+    """
+    Resolve the scope based on the current dashboard filters and return the queryset
+    that powers the list view without pagination so it can be reused for exports.
+    """
+    scopes = _build_scopes()
+    selected_scope = _find_scope(scopes, scope_code or scopes[0].code)
+    queryset = _query_purchases(
+        scope_code=selected_scope.code,
+        search_query=search_query,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return queryset, selected_scope
+
+
 def _build_scopes() -> Sequence[PurchaseScope]:
     total_count = PurchaseRequest.objects.count()
     counts = {code: 0 for code, *_ in SCOPE_DEFINITIONS}

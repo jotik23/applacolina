@@ -60,6 +60,23 @@
           >
             Cardex
           </a>
+          {% if base_filters_query %}
+            {% with export_query=base_filters_query|add:'&export=excel' %}
+              <a
+                href="{{ list_base_path }}?{{ export_query }}"
+                class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+              >
+                Exportar Excel
+              </a>
+            {% endwith %}
+          {% else %}
+            <a
+              href="{{ list_base_path }}?export=excel"
+              class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+            >
+              Exportar Excel
+            </a>
+          {% endif %}
           <a
             href="{% url 'administration:sales-payments' %}"
             class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700"

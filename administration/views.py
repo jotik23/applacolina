@@ -116,7 +116,7 @@ from .services.purchase_requests import (
     PurchaseRequestSubmissionService,
     PurchaseRequestValidationError,
 )
-from .services.purchases import get_dashboard_state
+from .services.purchases import get_dashboard_state, get_filtered_purchases_queryset
 from .services.sale_imports import SaleImportError, import_sales_from_workbook
 from .services.sales import SALE_EGG_TYPE_MAP, build_sales_cardex, refresh_sale_payment_state
 from .services.workflows import (
@@ -144,6 +144,12 @@ from .services.payroll_snapshot import (
 
 class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
     template_name = "administration/sales/list.html"
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if request.GET.get("export") == "excel":
+            queryset = self._get_sales_queryset()
+            return self._export_sales_to_excel(queryset)
+        return super().get(request, *args, **kwargs)
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if request.POST.get("intent") == "delete":
@@ -174,7 +180,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
                 "current_sort": current_sort,
                 "sort_state": self._build_sort_state(current_sort, filters_query),
                 "base_filters_query": filters_query,
-                "list_base_path": reverse("administration:sales"),
+                "list_base_path": self.request.path,
                 "customer_suggestions": self._customer_suggestions(),
                 "seller_filter_options": self._seller_filter_options(),
                 "sales_totals": self._compute_sales_totals(sales_queryset),
@@ -185,6 +191,8 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
 
 
     def _get_sales_queryset(self):
+        if hasattr(self, "_sales_queryset_cache"):
+            return self._sales_queryset_cache
         decimal_field = DecimalField(max_digits=14, decimal_places=2)
         zero_value = Value(Decimal("0.00"), output_field=decimal_field)
         subtotal_subquery = (
@@ -256,6 +264,7 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
         self._current_sort_value = current_sort
         if ordering:
             queryset = queryset.order_by(*ordering)
+        self._sales_queryset_cache = queryset
         return queryset
 
     def _handle_delete(self, request: HttpRequest) -> HttpResponse:
@@ -558,6 +567,89 @@ class SalesDashboardView(StaffRequiredMixin, generic.TemplateView):
             "payments": aggregates.get("payments") or zero,
             "balance": aggregates.get("balance") or zero,
         }
+
+    def _export_sales_to_excel(self, queryset) -> HttpResponse:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Ventas"
+        product_choices = list(SaleProductType.choices)
+        product_headers = [f"Cantidad {label}" for _, label in product_choices]
+        headers = [
+            "ID",
+            "Fecha",
+            "Cliente",
+            "NIT / ID",
+            "Vendedor",
+            "Estado",
+            "Condición de pago",
+            "Factura",
+            "Destino inventario",
+            "Subtotal",
+            "Descuento",
+            "Retención %",
+            "Retención aplicada",
+            "Total neto",
+            "Abonos",
+            "Saldo",
+            "Último abono",
+            "Vencimiento de pago",
+            "Notas",
+        ]
+        sheet.append(headers + product_headers)
+        for sale in queryset:
+            customer_name = getattr(sale.customer, "name", "")
+            customer_tax_id = getattr(sale.customer, "tax_id", "")
+            seller_name = ""
+            if sale.seller:
+                seller_name = sale.seller.get_full_name() or sale.seller.get_username()
+            type_totals: dict[str, Decimal] = {code: Decimal("0") for code, _ in product_choices}
+            for item in sale.items.all():
+                if item.product_type in type_totals:
+                    type_totals[item.product_type] += Decimal(item.quantity or 0)
+                else:
+                    type_totals[item.product_type] = Decimal(item.quantity or 0)
+            row = [
+                _normalize_excel_value(sale.pk),
+                sale.date,
+                customer_name,
+                customer_tax_id,
+                seller_name,
+                sale.get_status_display(),
+                sale.get_payment_condition_display(),
+                sale.invoice_number,
+                sale.inventory_destination_label,
+                _normalize_excel_value(getattr(sale, "annotated_subtotal", None)),
+                _normalize_excel_value(sale.discount_amount),
+                _normalize_excel_value(sale.retention_amount),
+                _normalize_excel_value(getattr(sale, "annotated_retention_value", None)),
+                _normalize_excel_value(getattr(sale, "annotated_total_amount", None)),
+                _normalize_excel_value(getattr(sale, "annotated_payments_total", None)),
+                _normalize_excel_value(getattr(sale, "annotated_balance_due", None)),
+                getattr(sale, "annotated_last_payment", None),
+                sale.payment_due_date,
+                sale.notes or "",
+            ]
+            for code, _ in product_choices:
+                row.append(_normalize_excel_value(type_totals.get(code, Decimal("0"))))
+            sheet.append(row)
+        filename = self._sales_export_filename()
+        return _workbook_response(workbook, filename)
+
+    def _sales_export_filename(self) -> str:
+        filters = self._get_filter_payload()
+        if filters.get("month"):
+            sanitized = filters["month"].replace("-", "")
+            return f"ventas_{sanitized}.xlsx"
+        start_date: date | None = filters.get("start_date")
+        end_date: date | None = filters.get("end_date")
+        if start_date and end_date:
+            return f"ventas_{start_date:%Y%m%d}_{end_date:%Y%m%d}.xlsx"
+        if start_date:
+            return f"ventas_desde_{start_date:%Y%m%d}.xlsx"
+        if end_date:
+            return f"ventas_hasta_{end_date:%Y%m%d}.xlsx"
+        timestamp = timezone.localtime().strftime("%Y%m%d%H%M")
+        return f"ventas_{timestamp}.xlsx"
 
 
 
@@ -1203,6 +1295,11 @@ class SaleUpdateView(SaleFormMixin, generic.UpdateView):
 class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
     template_name = 'administration/index.html'
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if request.GET.get('export') == 'excel':
+            return self._export_purchases()
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.setdefault('administration_active_submenu', 'purchases')
@@ -1331,6 +1428,141 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         _maybe_set_home_tab(context, self.request, "purchases")
         return context
 
+    def _export_purchases(self) -> HttpResponse:
+        search_query = (self.request.GET.get('search') or '').strip()
+        start_date_raw = (self.request.GET.get('start_date') or '').strip()
+        end_date_raw = (self.request.GET.get('end_date') or '').strip()
+        start_date = parse_date(start_date_raw) if start_date_raw else None
+        end_date = parse_date(end_date_raw) if end_date_raw else None
+        queryset, scope = get_filtered_purchases_queryset(
+            scope_code=self.request.GET.get('scope'),
+            search_query=search_query or None,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Compras'
+        headers = [
+            'ID',
+            'Código',
+            'Nombre',
+            'Descripción',
+            'Estado',
+            'Solicitante',
+            'Proveedor',
+            'Categoría de gasto',
+            'Soporte contable',
+            'Ámbito',
+            'Área',
+            'Lote / Scope',
+            'Condición de entrega',
+            'Condición de pago',
+            'Medio de pago',
+            'Fuente de pago',
+            'Moneda',
+            'Total estimado',
+            'Total factura',
+            'Total pagado',
+            'ETA',
+            'Fecha de orden',
+            'Número de orden',
+            'Fecha de factura',
+            'Número de factura',
+            'Fecha estimada envío',
+            'Notas de envío',
+            'Notas de recepción',
+            'Notas de pago',
+            'Aprobaciones recibidas',
+            'Aprobaciones pendientes',
+            'Desfase recepción',
+            'Creado en',
+            'Actualizado en',
+        ]
+        sheet.append(headers)
+        for purchase in queryset:
+            requester_name = 'Sistema'
+            if purchase.requester:
+                requester_name = purchase.requester.get_full_name() or purchase.requester.get_username()
+            approvals = list(purchase.approvals.all())
+            approvals_received = ', '.join(
+                self._format_purchase_approval_actor(approval)
+                for approval in approvals
+                if approval.status == PurchaseApproval.Status.APPROVED
+            )
+            approvals_pending = ', '.join(
+                self._format_purchase_approval_actor(approval)
+                for approval in approvals
+                if approval.status == PurchaseApproval.Status.PENDING
+            )
+            created_at = timezone.localtime(purchase.created_at) if purchase.created_at else None
+            updated_at = timezone.localtime(purchase.updated_at) if purchase.updated_at else None
+            row = [
+                purchase.pk,
+                purchase.timeline_code,
+                purchase.name,
+                purchase.description or '',
+                purchase.get_status_display(),
+                requester_name,
+                getattr(purchase.supplier, 'name', ''),
+                purchase.expense_type.name,
+                purchase.support_document_type.name if purchase.support_document_type else '',
+                purchase.scope_label,
+                purchase.area_label,
+                purchase.scope_batch_code or '',
+                purchase.get_delivery_condition_display(),
+                purchase.get_payment_condition_display() if purchase.payment_condition else '',
+                purchase.get_payment_method_display() if purchase.payment_method else '',
+                purchase.get_payment_source_display() if purchase.payment_source else '',
+                purchase.currency,
+                _normalize_excel_value(purchase.estimated_total),
+                _normalize_excel_value(purchase.invoice_total),
+                _normalize_excel_value(purchase.payment_amount),
+                purchase.eta,
+                purchase.order_date,
+                purchase.order_number,
+                purchase.invoice_date,
+                purchase.invoice_number,
+                purchase.shipping_eta,
+                purchase.shipping_notes or '',
+                purchase.reception_notes or '',
+                purchase.payment_notes or '',
+                approvals_received,
+                approvals_pending,
+                purchase.reception_mismatch,
+                _normalize_excel_value(created_at),
+                _normalize_excel_value(updated_at),
+            ]
+            sheet.append(row)
+        filename = self._purchases_export_filename(
+            scope_code=getattr(scope, 'code', ''),
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return _workbook_response(workbook, filename)
+
+    @staticmethod
+    def _format_purchase_approval_actor(approval: PurchaseApproval) -> str:
+        if approval.approver:
+            return approval.approver.get_full_name() or approval.approver.get_username()
+        return approval.role or 'Pendiente asignación'
+
+    def _purchases_export_filename(
+        self,
+        *,
+        scope_code: str | None,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> str:
+        scope_fragment = slugify(scope_code or 'todas') or 'todas'
+        if start_date and end_date:
+            return f'compras_{scope_fragment}_{start_date:%Y%m%d}_{end_date:%Y%m%d}.xlsx'
+        if start_date:
+            return f'compras_{scope_fragment}_desde_{start_date:%Y%m%d}.xlsx'
+        if end_date:
+            return f'compras_{scope_fragment}_hasta_{end_date:%Y%m%d}.xlsx'
+        timestamp = timezone.localtime().strftime('%Y%m%d%H%M')
+        return f'compras_{scope_fragment}_{timestamp}.xlsx'
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         if 'bulk_action' in request.POST:
             return self._handle_purchase_bulk_actions()
@@ -4027,6 +4259,11 @@ class PurchaseConfigurationView(StaffRequiredMixin, generic.TemplateView):
 class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
     template_name = "administration/dispatches/list.html"
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if request.GET.get("export") == "excel":
+            return self._export_dispatches_to_excel()
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         selected_month = self._parse_month(self.request.GET.get("month"))
@@ -4115,6 +4352,10 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
 
         dispatch_form = EggDispatchForm(inventory_map=get_inventory_balance_by_type())
         panel_open = self.request.GET.get("panel") == "dispatch-create"
+        export_params = self.request.GET.copy()
+        if "export" in export_params:
+            del export_params["export"]
+        context_export_query = export_params.urlencode()
 
         context.update(
             {
@@ -4147,6 +4388,7 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                     {"id": str(profile.id), "name": self._format_user_name(profile)}
                     for profile in seller_options
                 ],
+                "dispatch_export_query": context_export_query,
             }
         )
         _maybe_set_home_tab(context, self.request, "dispatches")
@@ -4204,6 +4446,56 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         if email:
             return email
         return f"Usuario {profile.pk}"
+
+    def _export_dispatches_to_excel(self) -> HttpResponse:
+        selected_month = self._parse_month(self.request.GET.get("month"))
+        start_date = selected_month
+        last_day = monthrange(selected_month.year, selected_month.month)[1]
+        end_date = start_date.replace(day=last_day)
+        queryset = EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
+        destination = self._resolve_destination_filter(self.request.GET.get("destination"))
+        seller_id = self._parse_int(self.request.GET.get("seller"))
+        if destination:
+            queryset = queryset.filter(destination=destination)
+        if seller_id:
+            queryset = queryset.filter(seller_id=seller_id)
+        dispatches = list(
+            queryset.select_related("driver", "seller").prefetch_related("items").order_by("date", "id")
+        )
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Despachos"
+        type_label_map = dict(EggType.choices)
+        type_headers = [f"Cartones {type_label_map.get(code, code)}" for code in ORDERED_EGG_TYPES]
+        headers = [
+            "ID",
+            "Fecha",
+            "Destino",
+            "Total cartones",
+            "Conductor",
+            "Vendedor",
+            "Notas",
+        ]
+        sheet.append(headers + type_headers)
+        for dispatch in dispatches:
+            type_totals = {code: Decimal("0") for code in ORDERED_EGG_TYPES}
+            for item in dispatch.items.all():
+                cartons = Decimal(item.cartons or 0)
+                type_totals[item.egg_type] += cartons
+            row = [
+                dispatch.pk,
+                dispatch.date,
+                dispatch.get_destination_display(),
+                _normalize_excel_value(dispatch.total_cartons),
+                dispatch.driver_name,
+                dispatch.seller_name,
+                dispatch.notes or "",
+            ]
+            for code in ORDERED_EGG_TYPES:
+                row.append(_normalize_excel_value(type_totals.get(code, Decimal("0"))))
+            sheet.append(row)
+        filename = f"despachos_{selected_month:%Y%m}.xlsx"
+        return _workbook_response(workbook, filename)
 
 
 class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
@@ -4328,6 +4620,37 @@ class EggDispatchDeleteView(StaffRequiredMixin, SuccessMessageMixin, generic.Del
         response = super().delete(request, *args, **kwargs)
         messages.success(self.request, self.success_message)
         return response
+
+
+def _normalize_excel_value(value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, datetime):
+        if timezone.is_aware(value):
+            try:
+                value = timezone.make_naive(value)
+            except Exception:
+                value = value.replace(tzinfo=None)
+        return value
+    if isinstance(value, date):
+        return value
+    if isinstance(value, bool):
+        return value
+    return value
+
+
+def _workbook_response(workbook: Workbook, filename: str) -> HttpResponse:
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 def _parse_int(value):

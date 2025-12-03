@@ -89,6 +89,23 @@
             Limpiar
           </a>
         {% endif %}
+        {% if dispatch_export_query %}
+          {% with export_href='?'|add:dispatch_export_query|add:'&export=excel' %}
+            <a
+              href="{{ export_href }}"
+              class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            >
+              Exportar Excel
+            </a>
+          {% endwith %}
+        {% else %}
+          <a
+            href="?export=excel"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+          >
+            Exportar Excel
+          </a>
+        {% endif %}
         <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <a
             href="?month={{ prev_month_param }}{% if dispatch_destination_filter %}&destination={{ dispatch_destination_filter }}{% endif %}{% if dispatch_seller_filter %}&seller={{ dispatch_seller_filter }}{% endif %}"

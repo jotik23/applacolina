@@ -70,6 +70,12 @@
             Limpiar filtros
           </a>
         {% endif %}
+        <a
+          href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}&export=excel"
+          class="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+        >
+          Exportar Excel
+        </a>
         {% if purchases_panel %}
           <a
             href="?scope={{ purchases_scope.code }}{% if purchases_search %}&search={{ purchases_search|urlencode }}{% endif %}{% if purchases_start_date %}&start_date={{ purchases_start_date|urlencode }}{% endif %}{% if purchases_end_date %}&end_date={{ purchases_end_date|urlencode }}{% endif %}{% if purchases_page %}&page={{ purchases_page.page_number }}{% endif %}"
