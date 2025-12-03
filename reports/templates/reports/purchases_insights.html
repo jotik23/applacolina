@@ -1,0 +1,442 @@
+{% extends "calendario/base.html" %}
+{% load static reports_extras %}
+
+{% block title %}Informes · Gastos y Compras{% endblock %}
+
+{% block content %}
+  {% include "reports/_submenu.html" with active=reports_active_submenu %}
+
+  <section class="space-y-8">
+    <header class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div class="space-y-2">
+          <div class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-brand">
+            <span class="rounded-full bg-brand/10 px-3 py-1 text-[10px] tracking-[0.35em] text-brand">Informes</span>
+            Gastos y Compras
+          </div>
+          <div>
+            <h1 class="text-3xl font-semibold text-slate-900">Vista estratégica de gastos</h1>
+            <p class="mt-2 text-base text-slate-500">
+              Analiza los compromisos operativos con filtros por estado, responsables, proveedores y montos. Prioriza dónde optimizar.
+            </p>
+            <p class="mt-2 text-sm font-medium text-slate-600">
+              Del {{ filters.start_date|date:"d M Y" }} al {{ filters.end_date|date:"d M Y" }} · {{ range_days }} día{% if range_days != 1 %}s{% endif %}
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span>Filtros aplicados: {{ applied_filters_count }}</span>
+          <div class="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">
+            {% for preset in quick_ranges %}
+              <a
+                href="?start_date={{ preset.start|date:'Y-m-d' }}&end_date={{ preset.end|date:'Y-m-d' }}"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition {% if preset.end == filters.end_date and preset.start == filters.start_date %}border-brand bg-brand/10 text-brand shadow-inner{% else %}border-slate-200 hover:border-brand hover:text-brand{% endif %}"
+              >
+                {{ preset.label }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+      <form method="get" class="space-y-6">
+        <div class="grid gap-4 lg:grid-cols-4">
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Buscar
+            <input
+              type="search"
+              name="search"
+              value="{{ filters.search }}"
+              placeholder="Código, proveedor, descripción"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Desde
+            <input
+              type="date"
+              name="start_date"
+              value="{{ filters.start_date|date:'Y-m-d' }}"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Hasta
+            <input
+              type="date"
+              name="end_date"
+              value="{{ filters.end_date|date:'Y-m-d' }}"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Ordenar por
+            <select
+              name="sort"
+              class="mt-1 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+              {% for value, label in sort_options %}
+                <option value="{{ value }}" {% if current_sort == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <fieldset>
+            <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados</legend>
+            <div class="mt-2 grid gap-2 sm:grid-cols-2">
+              {% for status in filter_options.statuses %}
+                <label class="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="status"
+                    value="{{ status.value }}"
+                    class="rounded border-slate-300 text-brand focus:ring-brand"
+                    {% if status.value in filters.statuses %}checked{% endif %}
+                  >
+                  {{ status.label }}
+                </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Colaboradores
+            <select
+              name="requester"
+              multiple
+              size="6"
+              class="mt-2 h-48 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+              {% for requester in filter_options.requesters %}
+                <option
+                  value="{{ requester.value }}"
+                  {% if requester.value in filters.requesters %}selected{% endif %}
+                >
+                  {{ requester.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Proveedores
+            <select
+              name="supplier"
+              multiple
+              size="6"
+              class="mt-2 h-48 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+              {% for supplier in filter_options.suppliers %}
+                <option
+                  value="{{ supplier.value }}"
+                  {% if supplier.value in filters.suppliers %}selected{% endif %}
+                >
+                  {{ supplier.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Categorías y subcategorías
+            <select
+              name="category"
+              multiple
+              size="6"
+              class="mt-2 h-48 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+              {% for group in filter_options.categories %}
+                <optgroup label="{{ group.label }}">
+                  {% for option in group.options %}
+                    <option
+                      value="{{ option.value }}"
+                      {% if option.value in filters.categories %}selected{% endif %}
+                    >
+                      {% if option.is_parent %}{{ option.label }} · todas{% else %}{{ option.label }}{% endif %}
+                    </option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Monto mínimo
+            <input
+              type="number"
+              step="1000"
+              name="amount_min"
+              value="{{ filters.amount_min|default_if_none:'' }}"
+              placeholder="Ej. 500000"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Monto máximo
+            <input
+              type="number"
+              step="1000"
+              name="amount_max"
+              value="{{ filters.amount_max|default_if_none:'' }}"
+              placeholder="Ej. 2000000"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <div class="flex items-end gap-3">
+            <button
+              type="submit"
+              class="inline-flex w-full items-center justify-center rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
+            >
+              Aplicar filtros
+            </button>
+            <a
+              href="{% url 'reports:purchases-insights' %}"
+              class="text-xs font-semibold text-slate-500 underline underline-offset-4"
+            >
+              Limpiar
+            </a>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gasto ejecutado</p>
+        <p class="mt-2 text-3xl font-semibold text-slate-900">{{ summary.executed_amount|peso }}</p>
+        <p class="mt-1 text-sm text-slate-500">Total de {{ summary.total_requests }} solicitudes.</p>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Planeado vs real</p>
+        <p class="mt-2 text-2xl font-semibold text-slate-900">{{ summary.planned_amount|peso }}</p>
+        <p class="mt-1 text-sm text-slate-500">
+          Variación: <span class="{% if summary.variance_total > 0 %}text-rose-600{% else %}text-emerald-600{% endif %} font-semibold">{{ summary.variance_total|peso }}</span>
+        </p>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ticket promedio</p>
+        <p class="mt-2 text-3xl font-semibold text-slate-900">{{ summary.average_ticket|peso }}</p>
+        <p class="mt-1 text-sm text-slate-500">Valor medio por compra.</p>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pagos pendientes</p>
+        <p class="mt-2 text-3xl font-semibold text-slate-900">{{ summary.pending_amount|peso }}</p>
+        <p class="mt-1 text-sm text-slate-500">{{ summary.pending_count }} compras sin cerrar.</p>
+      </article>
+    </section>
+
+    {% if alerts %}
+      <section class="grid gap-4 md:grid-cols-2">
+        {% for alert in alerts %}
+          <article class="rounded-3xl border border-dashed border-slate-200/80 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ alert.title }}</p>
+            <p class="mt-2 text-sm text-slate-600">{{ alert.body }}</p>
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    <section class="grid gap-4 xl:grid-cols-3">
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Participación por categoría</p>
+          <h2 class="text-lg font-semibold text-slate-900">¿Dónde se concentra el gasto?</h2>
+        </header>
+        <div class="mt-4">
+          <canvas id="chart-category-share" height="260"></canvas>
+          {% if not category_breakdown %}
+            <p class="mt-4 text-sm text-slate-500">No hay datos suficientes para esta vista.</p>
+          {% endif %}
+        </div>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm shadow-slate-900/5 xl:col-span-2">
+        <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Evolución de compromisos</p>
+            <h2 class="text-lg font-semibold text-slate-900">Linea de tiempo</h2>
+          </div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Comprometido vs ejecutado</p>
+        </header>
+        <div class="mt-4">
+          <canvas id="chart-spending-timeline" height="260"></canvas>
+          {% if not timeline %}
+            <p class="mt-4 text-sm text-slate-500">Sin datos para el rango seleccionado.</p>
+          {% endif %}
+        </div>
+      </article>
+    </section>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+      <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados del flujo</p>
+          <h2 class="text-lg font-semibold text-slate-900">Progreso operativo</h2>
+        </div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Participación por monto</p>
+      </header>
+      <div class="mt-4 grid gap-4 lg:grid-cols-[2fr,1fr]">
+        <div>
+          <canvas id="chart-status-share" height="220"></canvas>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          {% for status in status_breakdown %}
+            <li class="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-2">
+              <span>{{ status.label }}</span>
+              <span class="font-semibold text-slate-900">{{ status.amount|peso }} · {{ status.share|floatformat:1 }}%</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid gap-4 lg:grid-cols-2">
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <header>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Categorías y subcategorías</p>
+          <h2 class="text-lg font-semibold text-slate-900">Detalle jerárquico</h2>
+        </header>
+        <div class="mt-4 space-y-4">
+          {% for category in category_breakdown %}
+            <div class="rounded-2xl border border-slate-200/80 p-4">
+              <div class="flex items-center justify-between text-sm">
+                <div>
+                  <p class="text-base font-semibold text-slate-900">{{ category.name }}</p>
+                  <p class="text-xs uppercase tracking-wide text-slate-500">{{ category.count }} compras · {{ category.share|floatformat:1 }}%</p>
+                </div>
+                <p class="text-base font-semibold text-slate-900">{{ category.amount|peso }}</p>
+              </div>
+              {% if category.children %}
+                <ul class="mt-3 space-y-2 text-sm text-slate-600">
+                  {% for child in category.children %}
+                    <li class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+                      <span>{{ child.name }}</span>
+                      <span class="font-semibold text-slate-900">{{ child.amount|peso }} · {{ child.share_parent|floatformat:1 }}%</span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          {% empty %}
+            <p class="text-sm text-slate-500">Sin datos para este rango.</p>
+          {% endfor %}
+        </div>
+      </article>
+      <article class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <header class="flex flex-col gap-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Concentración por terceros</p>
+          <h2 class="text-lg font-semibold text-slate-900">Top proveedores y colaboradores</h2>
+        </header>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Proveedores</p>
+            <ul class="mt-2 space-y-2 text-sm">
+              {% for supplier in supplier_breakdown %}
+                <li class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                  <span>{{ supplier.label }}</span>
+                  <span class="font-semibold text-slate-900">{{ supplier.amount|peso }}</span>
+                </li>
+              {% empty %}
+                <li class="text-sm text-slate-500">Sin proveedores en el filtro actual.</li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Colaboradores</p>
+            <ul class="mt-2 space-y-2 text-sm">
+              {% for requester in requester_breakdown %}
+                <li class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                  <span>{{ requester.label }}</span>
+                  <span class="font-semibold text-slate-900">{{ requester.amount|peso }}</span>
+                </li>
+              {% empty %}
+                <li class="text-sm text-slate-500">Sin registros.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-900/5">
+      <header class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Compras filtradas</p>
+          <h2 class="text-lg font-semibold text-slate-900">Listado detallado</h2>
+        </div>
+        <p class="text-sm text-slate-500">
+          Mostrando {{ table_visible_rows }} de {{ table_total_rows }} compras (límite {{ table_limit }}).
+        </p>
+      </header>
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-100 text-sm">
+          <thead class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr>
+              <th class="px-3 py-2">Código</th>
+              <th class="px-3 py-2">Descripción</th>
+              <th class="px-3 py-2">Proveedor</th>
+              <th class="px-3 py-2">Categoría</th>
+              <th class="px-3 py-2">Estado</th>
+              <th class="px-3 py-2">Fecha clave</th>
+              <th class="px-3 py-2">Monto ejecutado</th>
+              <th class="px-3 py-2">Variación</th>
+              <th class="px-3 py-2 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-50 text-slate-700">
+            {% for purchase in table_rows %}
+              <tr class="hover:bg-slate-50/70">
+                <td class="px-3 py-3 font-semibold text-slate-900">{{ purchase.code }}</td>
+                <td class="px-3 py-3">
+                  <p class="font-medium text-slate-900">{{ purchase.name }}</p>
+                  <p class="text-xs text-slate-500">{{ purchase.scope_label }}</p>
+                </td>
+                <td class="px-3 py-3">{{ purchase.supplier }}</td>
+                <td class="px-3 py-3">
+                  <p>{{ purchase.parent_category }}</p>
+                  <p class="text-xs text-slate-500">{{ purchase.category }}</p>
+                </td>
+                <td class="px-3 py-3">
+                  <span class="rounded-full px-3 py-1 text-xs font-semibold ring-1 {{ purchase.status_badge }}">
+                    {{ purchase.status_label }}
+                  </span>
+                </td>
+                <td class="px-3 py-3 text-sm text-slate-500">{{ purchase.analysis_date|date:"d M Y" }}</td>
+                <td class="px-3 py-3 font-semibold text-slate-900">{{ purchase.executed_total|peso }}</td>
+                <td class="px-3 py-3">
+                  <span class="{% if purchase.variance_positive %}text-rose-600{% else %}text-emerald-600{% endif %} font-semibold">
+                    {{ purchase.variance|peso }}
+                  </span>
+                  <span class="block text-xs text-slate-500">vs {{ purchase.estimated_total|peso }}</span>
+                </td>
+                <td class="px-3 py-3 text-right">
+                  <a
+                    href="{{ purchase.detail_url }}"
+                    class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-brand hover:text-brand"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ver detalle
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M5 10h7.586l-2.293 2.293a1 1 0 101.414 1.414l4-4a1 1 0 000-1.414l-4-4a1 1 0 10-1.414 1.414L12.586 8H5a1 1 0 100 2z" />
+                    </svg>
+                  </a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" class="px-3 py-8 text-center text-sm text-slate-500">
+                  Ajusta los filtros o rango de fechas para ver compras en este informe.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  {{ charts_dataset|json_script:"reports-purchases-data" }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+  <script src="{% static 'reports/purchases.js' %}" defer></script>
+{% endblock %}

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import InventoryComparisonView, KeyMetricsDashboardView
+from .views import InventoryComparisonView, KeyMetricsDashboardView, PurchaseSpendingReportView
 
 app_name = "reports"
 
@@ -10,5 +10,10 @@ urlpatterns = [
         "inventarios/",
         InventoryComparisonView.as_view(),
         name="inventory-comparison",
+    ),
+    path(
+        "gastos/",
+        PurchaseSpendingReportView.as_view(),
+        name="purchases-insights",
     ),
 ]
