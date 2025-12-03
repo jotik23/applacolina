@@ -9,6 +9,7 @@ from django.utils.dateparse import parse_date
 from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
+from administration.models import Sale
 from production.models import EggDispatch, EggDispatchDestination
 
 from .services.inventory_comparison import build_inventory_comparison
@@ -111,6 +112,8 @@ class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
             dispatch_destination=dispatch_filters["destination"],
             sales_start=sales_start,
             sales_end=sales_end,
+            sales_seller_id=dispatch_filters["seller_id"],
+            sales_destination=dispatch_filters["destination"],
         )
         context.update(
             {
@@ -196,11 +199,17 @@ class InventoryComparisonView(StaffRequiredMixin, generic.TemplateView):
         }
 
     def _get_dispatch_seller_options(self) -> list[dict[str, Any]]:
-        seller_ids = list(
+        dispatch_ids = set(
             EggDispatch.objects.exclude(seller__isnull=True)
             .values_list("seller_id", flat=True)
             .distinct()
         )
+        sale_ids = set(
+            Sale.objects.exclude(seller__isnull=True)
+            .values_list("seller_id", flat=True)
+            .distinct()
+        )
+        seller_ids = sorted(dispatch_ids.union(sale_ids))
         if not seller_ids:
             return []
         sellers = (

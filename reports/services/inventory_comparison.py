@@ -84,6 +84,8 @@ def build_inventory_comparison(
     dispatch_destination: str | None,
     sales_start: date,
     sales_end: date,
+    sales_seller_id: int | None,
+    sales_destination: str | None,
 ) -> InventoryComparisonResult:
     if production_start > production_end:
         production_start, production_end = production_end, production_start
@@ -100,7 +102,12 @@ def build_inventory_comparison(
         dispatch_seller_id,
         dispatch_destination,
     )
-    sales_summary = _sales_breakdown(sales_start, sales_end)
+    sales_summary = _sales_breakdown(
+        sales_start,
+        sales_end,
+        sales_seller_id,
+        sales_destination,
+    )
 
     production_total = production_summary["total"]
     classification_total = classification_summary["total"]
@@ -209,7 +216,12 @@ def build_inventory_comparison(
             dispatch_seller_id,
             dispatch_destination,
         ),
-        "sales": _sales_detail_rows(sales_start, sales_end),
+        "sales": _sales_detail_rows(
+            sales_start,
+            sales_end,
+            sales_seller_id,
+            sales_destination,
+        ),
     }
 
     return InventoryComparisonResult(
@@ -275,12 +287,21 @@ def _dispatch_breakdown(
     }
 
 
-def _sales_breakdown(start: date, end: date) -> dict[str, Any]:
+def _sales_breakdown(
+    start: date,
+    end: date,
+    seller_id: int | None,
+    destination: str | None,
+) -> dict[str, Any]:
     queryset = SaleItem.objects.filter(
         sale__date__range=(start, end),
         sale__status__in=(Sale.Status.CONFIRMED, Sale.Status.PAID),
         product_type__in=ORDERED_EGG_TYPES,
     )
+    if seller_id:
+        queryset = queryset.filter(sale__seller_id=seller_id)
+    if destination:
+        queryset = queryset.filter(sale__warehouse_destination=destination)
     totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
     price_totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
     total_qty = ZERO
@@ -510,7 +531,12 @@ def _dispatch_detail_rows(
     return rows
 
 
-def _sales_detail_rows(start: date, end: date) -> list[StageDetailRow]:
+def _sales_detail_rows(
+    start: date,
+    end: date,
+    seller_id: int | None,
+    destination: str | None,
+) -> list[StageDetailRow]:
     queryset = (
         Sale.objects.filter(
             date__range=(start, end),
@@ -526,6 +552,10 @@ def _sales_detail_rows(start: date, end: date) -> list[StageDetailRow]:
         )
         .order_by("-date", "-id")
     )
+    if seller_id:
+        queryset = queryset.filter(seller_id=seller_id)
+    if destination:
+        queryset = queryset.filter(warehouse_destination=destination)
     rows: list[StageDetailRow] = []
     for sale in queryset:
         total_cartons = Decimal(sale.egg_cartons or ZERO)

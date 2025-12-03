@@ -1375,7 +1375,7 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
 class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateView):
     template_name = "production/egg_classification_shift_summary.html"
     shift_hours = 12
-    target_cartons = Decimal("700")
+    target_cartons = Decimal("1050")
     egg_type_labels = dict(EggType.choices)
 
     def get_context_data(self, **kwargs):
