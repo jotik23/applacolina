@@ -5,6 +5,7 @@ import calendar
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+import json
 from typing import Any, Dict, Iterable, Mapping, Optional
 import re
 from io import BytesIO
@@ -4266,27 +4267,20 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        selected_month = self._parse_month(self.request.GET.get("month"))
-        start_date = selected_month
-        last_day = monthrange(selected_month.year, selected_month.month)[1]
-        end_date = start_date.replace(day=last_day)
+        start_date = self._parse_date(self.request.GET.get("start_date"))
+        end_date = self._parse_date(self.request.GET.get("end_date"))
+        start_date, end_date = self._normalize_date_range(start_date, end_date)
 
-        base_queryset = EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
-        seller_ids = list(
-            base_queryset.exclude(seller__isnull=True).values_list("seller_id", flat=True).distinct()
-        )
-        seller_options = list(
-            UserProfile.objects.filter(id__in=seller_ids)
-            .order_by("apellidos", "nombres", "id")
-        )
+        base_queryset = EggDispatch.objects.all()
+        if start_date:
+            base_queryset = base_queryset.filter(date__gte=start_date)
+        if end_date:
+            base_queryset = base_queryset.filter(date__lte=end_date)
         destination_filter = self._resolve_destination_filter(self.request.GET.get("destination"))
-        seller_filter = self._parse_int(self.request.GET.get("seller"))
 
         dispatch_queryset = base_queryset
         if destination_filter:
             dispatch_queryset = dispatch_queryset.filter(destination=destination_filter)
-        if seller_filter:
-            dispatch_queryset = dispatch_queryset.filter(seller_id=seller_filter)
 
         dispatches = list(
             dispatch_queryset.select_related("driver", "seller").prefetch_related("items").order_by("-date", "-id")
@@ -4306,6 +4300,13 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                 cartons = Decimal(item.cartons or 0)
                 type_totals[item.egg_type] += cartons
                 type_breakdown[item.egg_type] = cartons
+            selection_payload = json.dumps(
+                {
+                    "id": dispatch.pk,
+                    "total": float(dispatch_total),
+                    "types": {egg_type: float(type_breakdown[egg_type]) for egg_type in ORDERED_EGG_TYPES},
+                }
+            )
             dispatch_rows.append(
                 {
                     "dispatch": dispatch,
@@ -4317,6 +4318,7 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                         }
                         for egg_type in ORDERED_EGG_TYPES
                     ],
+                    "selection_payload": selection_payload,
                 }
             )
 
@@ -4341,14 +4343,10 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         egg_type_headers = [
             {"code": egg_type, "label": type_label_map.get(egg_type, egg_type)} for egg_type in ORDERED_EGG_TYPES
         ]
+        egg_type_codes = [header["code"] for header in egg_type_headers]
 
         inventory_rows = summarize_classified_inventory()
         inventory_total = sum((row.cartons for row in inventory_rows), Decimal("0"))
-
-        prev_month = self._shift_month(start_date, -1)
-        next_month = self._shift_month(start_date, 1)
-        today_month = timezone.localdate().replace(day=1)
-        has_next_month = next_month <= today_month
 
         dispatch_form = EggDispatchForm(inventory_map=get_inventory_balance_by_type())
         panel_open = self.request.GET.get("panel") == "dispatch-create"
@@ -4368,11 +4366,7 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                 "destination_summary": destination_summary,
                 "type_summary": type_summary,
                 "egg_type_headers": egg_type_headers,
-                "selected_month": start_date,
-                "month_query": start_date.strftime("%Y-%m"),
-                "prev_month_param": prev_month.strftime("%Y-%m"),
-                "next_month_param": next_month.strftime("%Y-%m"),
-                "has_next_month": has_next_month,
+                "egg_type_codes": egg_type_codes,
                 "dispatch_form": dispatch_form,
                 "dispatch_form_type_rows": dispatch_form.type_rows,
                 "dispatch_panel_open": panel_open,
@@ -4382,43 +4376,46 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
                 "dispatch_panel_submit_label": "Guardar despacho",
                 "dispatch_panel_cancel_url": reverse("administration:egg-dispatch-list"),
                 "dispatch_destination_filter": destination_filter,
-                "dispatch_seller_filter": str(seller_filter) if seller_filter else "",
+                "dispatch_start_date": start_date,
+                "dispatch_end_date": end_date,
+                "dispatch_timeframe_label": self._build_timeframe_label(start_date, end_date),
+                "dispatch_has_filters": bool(start_date or end_date or destination_filter),
                 "dispatch_destination_choices": EggDispatchDestination.choices,
-                "dispatch_seller_options": [
-                    {"id": str(profile.id), "name": self._format_user_name(profile)}
-                    for profile in seller_options
-                ],
                 "dispatch_export_query": context_export_query,
             }
         )
         _maybe_set_home_tab(context, self.request, "dispatches")
         return context
 
-    def _parse_month(self, value: Optional[str]) -> date:
-        today = timezone.localdate().replace(day=1)
+    def _parse_date(self, value: Optional[str]) -> Optional[date]:
         if not value:
-            return today
-        try:
-            parsed = datetime.strptime(value, "%Y-%m").date().replace(day=1)
-        except ValueError:
-            return today
-        if parsed > today:
-            return today
-        return parsed
-
-    def _shift_month(self, base: date, delta: int) -> date:
-        month = base.month - 1 + delta
-        year = base.year + month // 12
-        month = month % 12 + 1
-        return date(year, month, 1)
-
-    def _parse_int(self, value: Optional[str]) -> Optional[int]:
-        if value in (None, ""):
             return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+        return parse_date(value)
+
+    def _normalize_date_range(
+        self, start: Optional[date], end: Optional[date]
+    ) -> tuple[Optional[date], Optional[date]]:
+        if start and end and start > end:
+            return end, start
+        return start, end
+
+    def _build_export_filename(self, start_date: Optional[date], end_date: Optional[date]) -> str:
+        if start_date and end_date:
+            return f"despachos_{start_date:%Y%m%d}_{end_date:%Y%m%d}.xlsx"
+        if start_date:
+            return f"despachos_desde_{start_date:%Y%m%d}.xlsx"
+        if end_date:
+            return f"despachos_hasta_{end_date:%Y%m%d}.xlsx"
+        return "despachos.xlsx"
+
+    def _build_timeframe_label(self, start_date: Optional[date], end_date: Optional[date]) -> str:
+        if start_date and end_date:
+            return f"Despachado del {start_date:%d/%m/%Y} al {end_date:%d/%m/%Y}"
+        if start_date:
+            return f"Despachado desde el {start_date:%d/%m/%Y}"
+        if end_date:
+            return f"Despachado hasta el {end_date:%d/%m/%Y}"
+        return "Despachado histórico"
 
     def _resolve_destination_filter(self, value: Optional[str]) -> str:
         if not value:
@@ -4426,39 +4423,18 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
         valid_choices = {code for code, _ in EggDispatchDestination.choices}
         return value if value in valid_choices else ""
 
-    def _format_user_name(self, profile: UserProfile) -> str:
-        if not profile:
-            return ""
-        full_name = profile.get_full_name()
-        if full_name:
-            return full_name
-        get_username = getattr(profile, "get_username", None)
-        if callable(get_username):
-            username = get_username()
-            if username:
-                return username
-        short_name = getattr(profile, "get_short_name", None)
-        if callable(short_name):
-            name = short_name()
-            if name:
-                return name
-        email = getattr(profile, "email", "")
-        if email:
-            return email
-        return f"Usuario {profile.pk}"
-
     def _export_dispatches_to_excel(self) -> HttpResponse:
-        selected_month = self._parse_month(self.request.GET.get("month"))
-        start_date = selected_month
-        last_day = monthrange(selected_month.year, selected_month.month)[1]
-        end_date = start_date.replace(day=last_day)
-        queryset = EggDispatch.objects.filter(date__gte=start_date, date__lte=end_date)
+        start_date = self._parse_date(self.request.GET.get("start_date"))
+        end_date = self._parse_date(self.request.GET.get("end_date"))
+        start_date, end_date = self._normalize_date_range(start_date, end_date)
+        queryset = EggDispatch.objects.all()
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
         destination = self._resolve_destination_filter(self.request.GET.get("destination"))
-        seller_id = self._parse_int(self.request.GET.get("seller"))
         if destination:
             queryset = queryset.filter(destination=destination)
-        if seller_id:
-            queryset = queryset.filter(seller_id=seller_id)
         dispatches = list(
             queryset.select_related("driver", "seller").prefetch_related("items").order_by("date", "id")
         )
@@ -4494,7 +4470,7 @@ class EggDispatchListView(StaffRequiredMixin, generic.TemplateView):
             for code in ORDERED_EGG_TYPES:
                 row.append(_normalize_excel_value(type_totals.get(code, Decimal("0"))))
             sheet.append(row)
-        filename = f"despachos_{selected_month:%Y%m}.xlsx"
+        filename = self._build_export_filename(start_date, end_date)
         return _workbook_response(workbook, filename)
 
 
@@ -4504,7 +4480,7 @@ class EggDispatchFormMixin(StaffRequiredMixin, SuccessMessageMixin):
     template_name = "administration/dispatches/form.html"
 
     embedded_panel_title = "Registrar despacho"
-    embedded_panel_subtitle = "Completa el despacho sin perder de vista el resumen mensual."
+    embedded_panel_subtitle = "Completa el despacho sin perder de vista el resumen operativo."
 
     def get_success_url(self) -> str:
         return reverse("administration:egg-dispatch-list")

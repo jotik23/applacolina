@@ -13,16 +13,13 @@
   <div class="space-y-6">
     <header class="flex flex-wrap items-center justify-between gap-6 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Cadena logística</p>
-        <h1 class="text-2xl font-semibold text-slate-900">Despachos de huevo</h1>
-        <p class="text-sm text-slate-500">
-          Controla los cartones que salen de clasificación antes de que se registren ventas y mantén sincronizado el inventario disponible.
-        </p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Logística</p>
+        <h1 class="text-2xl font-semibold text-slate-900">Despachos</h1>
       </div>
       <dl class="grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
         <div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
           <dt class="font-semibold uppercase tracking-wide text-emerald-700">
-            Despachado {{ selected_month|date:"F Y" }}
+            {{ dispatch_timeframe_label }}
           </dt>
           <dd class="mt-1 text-2xl font-semibold text-emerald-900">
             {{ dispatch_total|cartons }} <span class="text-xs font-semibold text-emerald-600">cart</span>
@@ -40,12 +37,22 @@
     <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm">
       <form method="get" class="flex flex-wrap items-center gap-3 text-sm text-slate-600">
         <div class="flex items-center gap-2">
-          <label for="month" class="font-semibold text-slate-700">Mes:</label>
+          <label for="start_date" class="font-semibold text-slate-700">Desde:</label>
           <input
-            type="month"
-            id="month"
-            name="month"
-            value="{{ month_query }}"
+            type="date"
+            id="start_date"
+            name="start_date"
+            value="{{ dispatch_start_date|date:'Y-m-d' }}"
+            class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          >
+        </div>
+        <div class="flex items-center gap-2">
+          <label for="end_date" class="font-semibold text-slate-700">Hasta:</label>
+          <input
+            type="date"
+            id="end_date"
+            name="end_date"
+            value="{{ dispatch_end_date|date:'Y-m-d' }}"
             class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
           >
         </div>
@@ -62,33 +69,22 @@
             {% endfor %}
           </select>
         </div>
-        <div class="flex items-center gap-2">
-          <label for="seller" class="font-semibold text-slate-700">Vendedor:</label>
-          <select
-            id="seller"
-            name="seller"
-            class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          >
-            <option value="">Todos</option>
-            {% for seller in dispatch_seller_options %}
-              <option value="{{ seller.id }}" {% if seller.id == dispatch_seller_filter %}selected{% endif %}>{{ seller.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
         <button
           type="submit"
           class="inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-100"
         >
           Aplicar
         </button>
-        {% if dispatch_destination_filter or dispatch_seller_filter %}
+        {% if dispatch_has_filters %}
           <a
-            href="?month={{ month_query }}"
+            href="{{ request.path }}"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
           >
             Limpiar
           </a>
         {% endif %}
+      </form>
+      <div class="flex flex-wrap items-center gap-3">
         {% if dispatch_export_query %}
           {% with export_href='?'|add:dispatch_export_query|add:'&export=excel' %}
             <a
@@ -106,30 +102,49 @@
             Exportar Excel
           </a>
         {% endif %}
-        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          <a
-            href="?month={{ prev_month_param }}{% if dispatch_destination_filter %}&destination={{ dispatch_destination_filter }}{% endif %}{% if dispatch_seller_filter %}&seller={{ dispatch_seller_filter }}{% endif %}"
-            class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
-          >
-            ← Mes anterior
-          </a>
-          {% if has_next_month %}
-            <a
-              href="?month={{ next_month_param }}{% if dispatch_destination_filter %}&destination={{ dispatch_destination_filter }}{% endif %}{% if dispatch_seller_filter %}&seller={{ dispatch_seller_filter }}{% endif %}"
-              class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-emerald-200 hover:text-emerald-700"
-            >
-              Próximo mes →
-            </a>
-          {% endif %}
+        <a
+          href="{% url 'administration:egg-dispatch-create' %}"
+          class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
+          data-dispatch-panel-open-trigger
+        >
+          Registrar despacho
+        </a>
+      </div>
+    </div>
+
+    <div
+      class="space-y-4 rounded-2xl border border-amber-100 bg-white/90 px-4 py-4 shadow-sm"
+      data-dispatch-selection
+      data-selection-type-codes="{{ egg_type_codes|join:',' }}"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Despachos seleccionados</p>
+          <p class="text-2xl font-semibold text-slate-900" data-selection-count>0</p>
         </div>
-      </form>
-      <a
-        href="{% url 'administration:egg-dispatch-create' %}"
-        class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
-        data-dispatch-panel-open-trigger
-      >
-        Registrar despacho
-      </a>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Total despachado</p>
+          <p class="text-2xl font-semibold text-emerald-700" data-selection-total>0 cart</p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 transition hover:border-amber-300 hover:text-amber-800 hidden"
+          data-selection-reset
+        >
+          Limpiar selección
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <div class="inline-flex min-w-full flex-nowrap gap-3 text-xs text-slate-600">
+          {% for header in egg_type_headers %}
+            <div class="min-w-[140px] rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 py-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ header.label }}</p>
+              <p class="text-base font-semibold text-slate-900" data-selection-type="{{ header.code }}">0 cart</p>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <p class="text-xs text-slate-500" data-selection-empty>Selecciona despachos en la tabla para sumar o restar sus totales sin afectar el informe.</p>
     </div>
 
     <section class="rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm">
@@ -147,6 +162,17 @@
           <table class="min-w-full border-collapse text-sm text-slate-600">
             <thead>
               <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th class="px-3 py-3 text-center">
+                  <label class="inline-flex items-center justify-center gap-2 text-[10px] font-semibold text-slate-500">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      data-dispatch-select-all
+                      aria-label="Seleccionar todos los despachos del listado"
+                    >
+                    <span>Todos</span>
+                  </label>
+                </th>
                 <th class="px-3 py-3 text-left">Fecha</th>
                 <th class="px-3 py-3 text-left">Destino</th>
                 <th class="px-3 py-3 text-right">Total despachado</th>
@@ -161,7 +187,19 @@
             <tbody>
               {% for row in dispatch_rows %}
                 {% with dispatch=row.dispatch %}
-                  <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+                  <tr class="border-t border-slate-100 hover:bg-slate-50/60" data-dispatch-row="{{ dispatch.pk }}">
+                    <td class="px-3 py-3 text-center align-top">
+                      <label class="inline-flex items-center justify-center gap-2 text-xs font-semibold text-slate-500">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          data-dispatch-select
+                          data-dispatch-payload="{{ row.selection_payload|escape }}"
+                          value="{{ dispatch.pk }}"
+                          aria-label="Seleccionar despacho {{ dispatch.pk }}"
+                        >
+                      </label>
+                    </td>
                     <td class="px-3 py-3 font-semibold text-slate-900">
                       {{ dispatch.date|date:"d M Y" }}
                     </td>
@@ -205,7 +243,7 @@
                   </tr>
                   {% if dispatch.notes %}
                     <tr class="border-t border-slate-100 bg-slate-50/70">
-                      <td class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500" colspan="{{ egg_type_headers|length|add:'6' }}">
+                      <td class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500" colspan="{{ egg_type_headers|length|add:'7' }}">
                         Notas: <span class="ml-1 font-normal normal-case text-slate-600">{{ dispatch.notes }}</span>
                       </td>
                     </tr>
@@ -215,7 +253,7 @@
             </tbody>
             <tfoot>
               <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900">
-                <td class="px-3 py-3" colspan="2">Total del periodo</td>
+                <td class="px-3 py-3" colspan="3">Total del periodo</td>
                 <td class="px-3 py-3 text-right text-emerald-700">{{ dispatch_total|cartons }} cart</td>
                 {% for summary in type_summary %}
                   <td class="px-3 py-3 text-right">
@@ -233,7 +271,7 @@
         </div>
       {% else %}
         <p class="px-5 py-6 text-center text-sm text-slate-500">
-          No hay despachos registrados en el mes seleccionado.
+          No hay despachos registrados con los filtros aplicados.
         </p>
       {% endif %}
     </section>
@@ -241,6 +279,165 @@
   {% with panel_open=dispatch_panel_open panel_embedded=True panel_title=dispatch_panel_title panel_subtitle=dispatch_panel_subtitle panel_form_action=dispatch_form_action panel_submit_label=dispatch_panel_submit_label panel_cancel_url=dispatch_panel_cancel_url form=dispatch_form type_rows=dispatch_form_type_rows inventory_total=inventory_total dispatch=dispatch_form.instance %}
     {% include "administration/dispatches/includes/panel.html" %}
   {% endwith %}
+  <style>
+    [data-dispatch-row][data-selected="true"] {
+      background-color: #ecfdf5;
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var selectionRoot = document.querySelector('[data-dispatch-selection]');
+      if (!selectionRoot) {
+        return;
+      }
+      var typeCodeAttr = selectionRoot.getAttribute('data-selection-type-codes') || '';
+      var typeCodes = typeCodeAttr
+        .split(',')
+        .map(function (code) {
+          return code.trim();
+        })
+        .filter(function (code) {
+          return code.length > 0;
+        });
+      var selectionState = {
+        count: 0,
+        total: 0,
+        types: {},
+      };
+      typeCodes.forEach(function (code) {
+        selectionState.types[code] = 0;
+      });
+      var numberFormatter = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 });
+      var countNode = selectionRoot.querySelector('[data-selection-count]');
+      var totalNode = selectionRoot.querySelector('[data-selection-total]');
+      var emptyNode = selectionRoot.querySelector('[data-selection-empty]');
+      var resetButton = selectionRoot.querySelector('[data-selection-reset]');
+      var typeNodes = {};
+      typeCodes.forEach(function (code) {
+        typeNodes[code] = selectionRoot.querySelector('[data-selection-type="' + code + '"]');
+      });
+      var masterCheckbox = document.querySelector('[data-dispatch-select-all]');
+
+      function round(value) {
+        return Math.round(value * 1000) / 1000;
+      }
+
+      function updateSummary() {
+        if (countNode) {
+          countNode.textContent = selectionState.count.toString();
+        }
+        if (totalNode) {
+          totalNode.textContent = numberFormatter.format(selectionState.total) + ' cart';
+        }
+        typeCodes.forEach(function (code) {
+          var target = typeNodes[code];
+          if (target) {
+            var value = selectionState.types[code] || 0;
+            target.textContent = numberFormatter.format(value) + ' cart';
+          }
+        });
+        if (emptyNode) {
+          emptyNode.classList.toggle('hidden', selectionState.count > 0);
+        }
+        if (resetButton) {
+          resetButton.classList.toggle('hidden', selectionState.count === 0);
+        }
+        selectionRoot.setAttribute('data-has-selection', selectionState.count > 0 ? 'true' : 'false');
+      }
+
+      function applyPayload(payload, factor) {
+        if (!payload) {
+          return;
+        }
+        selectionState.count = Math.max(0, selectionState.count + factor);
+        selectionState.total = round(selectionState.total + factor * (payload.total || 0));
+        typeCodes.forEach(function (code) {
+          var delta = payload.types && payload.types[code] ? payload.types[code] : 0;
+          selectionState.types[code] = round((selectionState.types[code] || 0) + factor * delta);
+        });
+      }
+
+      function toggleRowState(checkbox) {
+        var row = checkbox.closest('[data-dispatch-row]');
+        if (!row) {
+          return;
+        }
+        if (checkbox.checked) {
+          row.setAttribute('data-selected', 'true');
+        } else {
+          row.removeAttribute('data-selected');
+        }
+      }
+
+      function getPayload(checkbox) {
+        var rawPayload = checkbox.getAttribute('data-dispatch-payload');
+        if (!rawPayload) {
+          return null;
+        }
+        try {
+          return JSON.parse(rawPayload);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      var checkboxes = Array.prototype.slice.call(document.querySelectorAll('[data-dispatch-select]'));
+      function updateMasterState() {
+        if (!masterCheckbox) {
+          return;
+        }
+        var total = checkboxes.length;
+        var checkedCount = checkboxes.filter(function (checkbox) {
+          return checkbox.checked;
+        }).length;
+        masterCheckbox.indeterminate = checkedCount > 0 && checkedCount < total;
+        masterCheckbox.checked = total > 0 && checkedCount === total;
+      }
+
+      checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', function () {
+          var payload = getPayload(checkbox);
+          var factor = checkbox.checked ? 1 : -1;
+          applyPayload(payload, factor);
+          toggleRowState(checkbox);
+          updateSummary();
+          updateMasterState();
+        });
+      });
+
+      if (resetButton) {
+        resetButton.addEventListener('click', function (event) {
+          event.preventDefault();
+          checkboxes.forEach(function (checkbox) {
+            if (checkbox.checked) {
+              checkbox.checked = false;
+              checkbox.dispatchEvent(new Event('change'));
+            }
+          });
+          if (masterCheckbox) {
+            masterCheckbox.checked = false;
+            masterCheckbox.indeterminate = false;
+          }
+        });
+      }
+
+      if (masterCheckbox) {
+        masterCheckbox.addEventListener('change', function () {
+          var targetChecked = Boolean(masterCheckbox.checked);
+          masterCheckbox.indeterminate = false;
+          checkboxes.forEach(function (checkbox) {
+            if (checkbox.checked !== targetChecked) {
+              checkbox.checked = targetChecked;
+              checkbox.dispatchEvent(new Event('change'));
+            }
+          });
+        });
+      }
+
+      updateSummary();
+      updateMasterState();
+    });
+  </script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var panel = document.querySelector('[data-dispatch-panel][data-dispatch-panel-embedded="true"]');
