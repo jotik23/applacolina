@@ -12,8 +12,9 @@ from django.views import generic
 
 from applacolina.mixins import StaffRequiredMixin
 from administration.models import PurchaseRequest, PurchasingExpenseType, Sale, Supplier
-from production.models import EggDispatch, EggDispatchDestination
+from production.models import BirdBatch, EggDispatch, EggDispatchDestination
 
+from .services.bird_batch_closure import build_bird_batch_closure_report
 from .services.inventory_comparison import build_inventory_comparison
 from .services.key_metrics import DEFAULT_RANGE_DAYS, build_key_metrics
 from .services.purchase_insights import PurchaseInsightsFilters, build_purchase_insights
@@ -540,3 +541,95 @@ class PurchaseSpendingReportView(StaffRequiredMixin, generic.TemplateView):
                 }
             )
         return ranges
+
+
+class BirdBatchClosureReportView(StaffRequiredMixin, generic.TemplateView):
+    template_name = "reports/bird_batch_closure.html"
+    DEFAULT_RANGE_DAYS = 30
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        start_date, end_date = self._resolve_range()
+        selected_batch_id = self._parse_int(self.request.GET.get("batch"))
+        final_notes = (self.request.GET.get("final_notes") or "").strip()
+        vaccination_info = (self.request.GET.get("vaccination_info") or "").strip()
+        report = None
+        if selected_batch_id:
+            try:
+                report = build_bird_batch_closure_report(
+                    batch_id=selected_batch_id,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            except BirdBatch.DoesNotExist:
+                selected_batch_id = None
+        context.update(
+            {
+                "reports_active_submenu": "batch_closure",
+                "selected_start_date": start_date,
+                "selected_end_date": end_date,
+                "range_days": (end_date - start_date).days + 1,
+                "batch_options": self._load_batch_options(),
+                "selected_batch_id": selected_batch_id,
+                "final_notes": final_notes,
+                "vaccination_info": vaccination_info,
+                "report": report,
+                "quick_ranges": self._build_quick_ranges(end_date),
+            }
+        )
+        return context
+
+    def _resolve_range(self) -> tuple[date, date]:
+        params = self.request.GET
+        today = timezone.localdate()
+        default_end = today
+        default_start = today - timedelta(days=self.DEFAULT_RANGE_DAYS - 1)
+        start_raw = (params.get("start_date") or "").strip()
+        end_raw = (params.get("end_date") or "").strip()
+        start_date = parse_date(start_raw) if start_raw else default_start
+        end_date = parse_date(end_raw) if end_raw else default_end
+        if not start_date:
+            start_date = default_start
+        if not end_date:
+            end_date = default_end
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+        return start_date, end_date
+
+    def _build_quick_ranges(self, end_date: date) -> list[dict[str, Any]]:
+        presets = [15, 30, 60, 90]
+        ranges: list[dict[str, Any]] = []
+        for days in presets:
+            start = end_date - timedelta(days=days - 1)
+            ranges.append(
+                {
+                    "label": f"Últimos {days} días",
+                    "start": start,
+                    "end": end_date,
+                    "days": days,
+                }
+            )
+        return ranges
+
+    def _load_batch_options(self) -> list[dict[str, Any]]:
+        batches = BirdBatch.objects.select_related("farm").order_by("status", "-birth_date", "farm__name")
+        options: list[dict[str, Any]] = []
+        for batch in batches:
+            farm_name = batch.farm.name if batch.farm else "Sin granja"
+            label = f"Lote #{batch.pk} · {farm_name} ({batch.birth_date:%d %b %Y})"
+            if batch.status != BirdBatch.Status.ACTIVE:
+                label = f"{label} · Inactivo"
+            options.append({"value": batch.pk, "label": label})
+        return options
+
+    @staticmethod
+    def _parse_int(raw_value: str | None) -> int | None:
+        if raw_value is None:
+            return None
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return None
+        if value <= 0:
+            return None
+        return value

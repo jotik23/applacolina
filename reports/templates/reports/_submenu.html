@@ -24,5 +24,13 @@
       <span class="h-2 w-2 rounded-full {% if active == 'purchases' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
       Gastos y Compras
     </a>
+    <a
+      href="{% url 'reports:bird-batch-closure' %}"
+      class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'batch_closure' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+      {% if active == 'batch_closure' %}aria-current="page"{% endif %}
+    >
+      <span class="h-2 w-2 rounded-full {% if active == 'batch_closure' %}bg-brand{% else %}bg-slate-300{% endif %}"></span>
+      Cierre por Lote
+    </a>
   </div>
 </nav>

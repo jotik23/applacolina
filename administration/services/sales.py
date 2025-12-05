@@ -37,9 +37,7 @@ SALE_PRODUCT_ORDER: tuple[str, ...] = (
     SaleProductType.HEN_MANURE,
 )
 
-CARDEX_DEFAULT_PRODUCT_ORDER: tuple[str, ...] = tuple(
-    product for product in SALE_PRODUCT_ORDER if product in SALE_EGG_TYPE_MAP
-)
+CARDEX_DEFAULT_PRODUCT_ORDER: tuple[str, ...] = SALE_PRODUCT_ORDER
 
 DECIMAL_ZERO = Decimal("0.00")
 
@@ -334,7 +332,7 @@ def build_sales_cardex(
     for sale in sales:
         for item in sale.items.all():
             product_type = getattr(item, "product_type", "")
-            if product_type not in product_type_set or product_type not in SALE_EGG_TYPE_MAP:
+            if product_type not in product_type_set:
                 continue
             quantity = Decimal(getattr(item, "quantity", 0) or 0)
             if quantity <= DECIMAL_ZERO:

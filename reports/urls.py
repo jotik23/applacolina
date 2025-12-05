@@ -1,6 +1,11 @@
 from django.urls import path
 
-from .views import InventoryComparisonView, KeyMetricsDashboardView, PurchaseSpendingReportView
+from .views import (
+    BirdBatchClosureReportView,
+    InventoryComparisonView,
+    KeyMetricsDashboardView,
+    PurchaseSpendingReportView,
+)
 
 app_name = "reports"
 
@@ -15,5 +20,10 @@ urlpatterns = [
         "gastos/",
         PurchaseSpendingReportView.as_view(),
         name="purchases-insights",
+    ),
+    path(
+        "lotes/",
+        BirdBatchClosureReportView.as_view(),
+        name="bird-batch-closure",
     ),
 ]

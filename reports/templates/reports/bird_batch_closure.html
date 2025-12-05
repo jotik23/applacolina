@@ -1,0 +1,330 @@
+{% extends "calendario/base.html" %}
+{% load static reports_extras %}
+
+{% block title %}Informes · Cierre por lote{% endblock %}
+
+{% block content %}
+  {% include "reports/_submenu.html" with active=reports_active_submenu %}
+
+  <div class="space-y-10">
+    <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.3em] text-brand">
+            <span class="inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-[10px] uppercase tracking-[0.35em] text-brand">
+              Informes
+            </span>
+            Cierre de lote
+          </div>
+          <div>
+            <h1 class="text-3xl font-semibold text-slate-900">Cierre financiero y productivo</h1>
+            <p class="mt-1 text-base text-slate-500">
+              Consolida producción, inventario, ingresos estimados y gastos asociados a cada lote para validar la rentabilidad mensual.
+            </p>
+            <p class="mt-2 text-sm font-medium text-slate-600">
+              Análisis del {{ selected_start_date|date:"d M Y" }} al {{ selected_end_date|date:"d M Y" }} · {{ range_days|number_format }} día{% if range_days != 1 %}s{% endif %}
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+            {% for preset in quick_ranges %}
+              <a
+                href="?start_date={{ preset.start|date:'Y-m-d' }}&end_date={{ preset.end|date:'Y-m-d' }}&batch={{ selected_batch_id|default:'' }}&final_notes={{ final_notes|default:''|urlencode }}&vaccination_info={{ vaccination_info|default:''|urlencode }}"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition {% if preset.days == range_days %}border-brand bg-brand/10 text-brand shadow-inner{% else %}border-slate-200 hover:border-brand hover:text-brand{% endif %}"
+              >
+                {{ preset.label }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+      <form method="get" class="space-y-6">
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Desde
+            <input
+              type="date"
+              name="start_date"
+              value="{{ selected_start_date|date:'Y-m-d' }}"
+              class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Hasta
+            <input
+              type="date"
+              name="end_date"
+              value="{{ selected_end_date|date:'Y-m-d' }}"
+              class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+            >
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:col-span-2">
+            Lote de aves
+            <select
+              name="batch"
+              class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none"
+              required
+            >
+              <option value="">Selecciona un lote</option>
+              {% for option in batch_options %}
+                <option value="{{ option.value }}" {% if option.value == selected_batch_id %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="grid gap-4 lg:grid-cols-2">
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Consideraciones finales (opcional)
+            <textarea
+              name="final_notes"
+              rows="3"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none">{{ final_notes|default_if_none:'' }}</textarea>
+          </label>
+          <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Información vacunal (opcional)
+            <textarea
+              name="vaccination_info"
+              rows="3"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand focus:outline-none">{{ vaccination_info|default_if_none:'' }}</textarea>
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            class="inline-flex items-center justify-center rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand/90"
+          >
+            Generar informe
+          </button>
+          <a href="?" class="text-xs font-semibold text-slate-500 underline underline-offset-4 transition hover:text-slate-900">
+            Limpiar filtros
+          </a>
+        </div>
+      </form>
+    </section>
+
+    {% if report %}
+      <section class="space-y-8">
+        <div class="grid gap-4 lg:grid-cols-3">
+          <article class="rounded-3xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Lote</p>
+            <h2 class="mt-2 text-2xl font-semibold text-slate-900">{{ report.batch }}</h2>
+            <dl class="mt-4 space-y-2 text-sm text-slate-600">
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Granja</dt>
+                <dd>{{ report.batch.farm.name }}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Raza</dt>
+                <dd>{{ report.batch.breed.name }}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Nacimiento</dt>
+                <dd>{{ report.batch.birth_date|date:"d M Y" }}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Edad</dt>
+                <dd>{{ report.production.age_start_weeks|number_format:1 }} – {{ report.production.age_end_weeks|number_format:1 }} semanas</dd>
+              </div>
+            </dl>
+          </article>
+          <article class="rounded-3xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Producción acumulada en rango</p>
+            <p class="mt-2 text-3xl font-semibold text-slate-900">{{ report.production.produced_eggs|number_format }} huevos</p>
+            <p class="mt-1 text-sm text-slate-500">Equivalente a {{ report.production.produced_cartons|number_format:2 }} cartones.</p>
+            <dl class="mt-4 space-y-2 text-sm text-slate-600">
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Consumo</dt>
+                <dd>{{ report.production.feed_consumption|number_format:2 }} kg</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Prom. diario ave</dt>
+                <dd>{{ report.production.avg_daily_egg_per_bird|number_format:2 }} huevos</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Consumo ave</dt>
+                <dd>{{ report.production.feed_per_bird|number_format:2 }} kg</dd>
+              </div>
+            </dl>
+          </article>
+          <article class="rounded-3xl border border-slate-200/70 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Indicadores sanitarios</p>
+            <dl class="mt-4 space-y-2 text-sm text-slate-600">
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Mortalidad periodo</dt>
+                <dd>{{ report.production.mortality|number_format }} aves</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Mortalidad acumulada</dt>
+                <dd>{{ report.production.cumulative_mortality|number_format }} aves</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Descarte acumulado</dt>
+                <dd>{{ report.production.cumulative_discard|number_format }} aves</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="font-medium text-slate-500">Población estimada</dt>
+                <dd>{{ report.production.population_estimate|number_format }} aves</dd>
+              </div>
+            </dl>
+            {% if report.production.avg_egg_weight %}
+              <p class="mt-4 text-sm text-slate-500">Peso promedio huevo: {{ report.production.avg_egg_weight|number_format:2 }} g.</p>
+            {% endif %}
+          </article>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventario y clasificación</p>
+              <h3 class="text-xl font-semibold text-slate-900">Conciliación de producción vs. cartones clasificados</h3>
+            </div>
+            <div class="grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+              <span>Producido: {{ report.inventory_alignment.produced_cartons|number_format:2 }} cart.</span>
+              <span>Reportado: {{ report.inventory_alignment.reported_cartons|number_format:2 }} cart.</span>
+              <span>Clasificado: {{ report.inventory_alignment.classified_cartons|number_format:2 }} cart.</span>
+              <span>Pendiente: {{ report.inventory_alignment.pending_classification|number_format:2 }} cart.</span>
+            </div>
+          </header>
+          <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th class="px-4 py-2">Tipo de huevo</th>
+                  <th class="px-4 py-2 text-right">Cartones clasificados</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700">
+                {% for row in report.classification.per_type %}
+                  <tr>
+                    <td class="px-4 py-2 font-medium">{{ row.label }}</td>
+                    <td class="px-4 py-2 text-right">{{ row.cartons|number_format:2 }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="2" class="px-4 py-4 text-center text-slate-500">Sin clasificaciones registradas en el rango.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex flex-col gap-2 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingresos esperados</p>
+              <h3 class="text-xl font-semibold text-slate-900">Proyección a partir de precios promedio</h3>
+              <p class="mt-1 text-sm text-slate-500">Se utiliza el precio promedio de ventas confirmadas en el rango para cada tipo de huevo, alineado con los cartones clasificados del lote.</p>
+            </div>
+            <div class="text-right">
+              <p class="text-sm font-semibold text-slate-500">Total estimado</p>
+              <p class="text-2xl font-semibold text-emerald-600">{{ report.income.total_income|peso }}</p>
+              <p class="text-xs text-slate-500">Precio medio aplicado: {{ report.income.effective_average_price|peso }}</p>
+            </div>
+          </header>
+          <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th class="px-4 py-2">Tipo</th>
+                  <th class="px-4 py-2 text-right">Cartones</th>
+                  <th class="px-4 py-2 text-right">Precio promedio</th>
+                  <th class="px-4 py-2 text-right">Ingreso estimado</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700">
+                {% for entry in report.income.entries %}
+                  <tr>
+                    <td class="px-4 py-2">
+                      <div class="flex flex-col">
+                        <span class="font-medium">{{ entry.label }}</span>
+                        <span class="text-xs text-slate-500">{% if entry.price_source == 'type' %}Precio específico{% else %}Precio general{% endif %}</span>
+                      </div>
+                    </td>
+                    <td class="px-4 py-2 text-right">{{ entry.cartons|number_format:2 }}</td>
+                    <td class="px-4 py-2 text-right">{{ entry.avg_price|peso }}</td>
+                    <td class="px-4 py-2 text-right font-semibold text-slate-900">{{ entry.estimated_income|peso }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="4" class="px-4 py-4 text-center text-slate-500">Aún no hay datos para proyectar ingresos.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+          <header class="flex flex-col gap-2 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Gastos asociados</p>
+              <h3 class="text-xl font-semibold text-slate-900">Desglose por categoría principal</h3>
+              <p class="mt-1 text-sm text-slate-500">Incluye compras etiquetadas al lote y prorrateos automáticos de gastos generales por granja o compañía.</p>
+            </div>
+            <div class="text-right">
+              <p class="text-sm font-semibold text-slate-500">Total imputado</p>
+              <p class="text-2xl font-semibold text-slate-900">{{ report.expenses.total|peso }}</p>
+              <p class="text-xs text-slate-500">Directo: {{ report.expenses.total_direct|peso }} · Granja: {{ report.expenses.total_farm|peso }} · Empresa: {{ report.expenses.total_company|peso }}</p>
+            </div>
+          </header>
+          <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th class="px-4 py-2">Categoría</th>
+                  <th class="px-4 py-2 text-right">Directo</th>
+                  <th class="px-4 py-2 text-right">Prorr. granja</th>
+                  <th class="px-4 py-2 text-right">Prorr. empresa</th>
+                  <th class="px-4 py-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-slate-700">
+                {% for entry in report.expenses.entries %}
+                  <tr>
+                    <td class="px-4 py-2 font-medium">{{ entry.category_name }}</td>
+                    <td class="px-4 py-2 text-right">{{ entry.direct|peso }}</td>
+                    <td class="px-4 py-2 text-right">{{ entry.farm_allocation|peso }}</td>
+                    <td class="px-4 py-2 text-right">{{ entry.company_allocation|peso }}</td>
+                    <td class="px-4 py-2 text-right font-semibold text-slate-900">{{ entry.total|peso }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="px-4 py-4 text-center text-slate-500">No se registran gastos para el periodo seleccionado.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <article class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+            <h3 class="text-lg font-semibold text-slate-900">Consideraciones finales</h3>
+            {% if final_notes %}
+              <p class="mt-3 whitespace-pre-line text-sm text-slate-600">{{ final_notes }}</p>
+            {% else %}
+              <p class="mt-3 text-sm text-slate-500">No se ingresaron comentarios adicionales.</p>
+            {% endif %}
+          </article>
+          <article class="rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-sm shadow-slate-900/5">
+            <h3 class="text-lg font-semibold text-slate-900">Información vacunal</h3>
+            {% if vaccination_info %}
+              <p class="mt-3 whitespace-pre-line text-sm text-slate-600">{{ vaccination_info }}</p>
+            {% else %}
+              <p class="mt-3 text-sm text-slate-500">Sin novedades reportadas para este rango.</p>
+            {% endif %}
+          </article>
+        </div>
+      </section>
+    {% else %}
+      <section class="rounded-3xl border border-dashed border-slate-300/70 bg-white/70 p-8 text-center text-slate-500">
+        <p class="text-sm font-medium">Selecciona un lote para generar el cierre y visualizar los indicadores.</p>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}
