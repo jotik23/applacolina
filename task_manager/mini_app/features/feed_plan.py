@@ -203,7 +203,7 @@ def build_feed_plan_card(
 
         birth_date = batch.birth_date
         age_days = (target_date - birth_date).days if birth_date else 0
-        age_weeks = max(age_days // 7, 0)
+        age_weeks = max((age_days // 7) + 1, 1)
         total_batch_birds = sum(live for _, live in room_snapshots)
         reference_targets = get_reference_targets(batch.breed, age_weeks, total_batch_birds)
         lot_feed_kg = Decimal(str(reference_targets.get("consumption_kg") or 0))

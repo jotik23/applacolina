@@ -68,7 +68,7 @@ class MiniAppFeedPlanCardTests(TestCase):
         )
         BreedWeeklyGuide.objects.create(
             breed=self.breed,
-            week=40,
+            week=41,
             grams_per_bird=Decimal("110.0"),
         )
 
@@ -187,3 +187,4 @@ class MiniAppFeedPlanCardTests(TestCase):
         reference = feed_plan["reference"]
         self.assertAlmostEqual(reference["grams_per_bird"], 110.0, places=1)
         self.assertAlmostEqual(reference["rounded_grams_per_bird"], 121.21, places=2)
+        self.assertEqual(reference["lots"][0]["age_weeks"], 41)

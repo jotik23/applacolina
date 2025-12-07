@@ -15,6 +15,18 @@
           <h3 class="text-lg font-semibold text-slate-900">
                 {{ feed_plan.weekday_label }}. {{ feed_plan.date_label }}
           </h3>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+            {% if feed_plan.reference.grams_per_bird %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                {{ feed_plan.reference.grams_per_bird|floatformat:0 }} g ave/día · guía actual
+              </span>
+            {% endif %}
+            {% for lot in feed_plan.reference.lots %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-slate-600 ring-1 ring-slate-200">
+                {{ lot.label }} · semana {{ lot.age_weeks }}
+              </span>
+            {% endfor %}
+          </div>
         </div>
       </header>
 
@@ -70,7 +82,7 @@
                       <tr class="border-t border-slate-100 text-slate-600 transition hover:bg-amber-50/30">
                         <td class="rounded-l-2xl border-y border-l border-emerald-100/70 bg-emerald-50/60 px-3 py-3 align-top shadow-inner">
                           <p class="text-sm font-semibold text-emerald-900">{{ room.label }}</p>
-                          <p class="text-[11px] text-emerald-700/80">{{ room.birds|intcomma }} aves</p>
+                          <p class="text-[11px] text-emerald-700/80">{{ room.birds|intcomma }} aves vivas</p>
                         </td>
                         <td class="border-y border-slate-100/70 bg-emerald-50/40 px-2 py-3 text-center">
                           <p class="text-sm font-semibold text-slate-900">{{ dosing.min.am.bags|floatformat:0 }} bl</p>
