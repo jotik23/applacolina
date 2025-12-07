@@ -9774,23 +9774,17 @@
           }
         }
 
-        const TASK_GROUPS = [
-          { label: 'Completadas', states: new Set(['completed']), key: 'completed' },
-          { label: 'En curso', states: new Set(['in_progress']), key: 'in_progress' },
-          { label: 'Pendientes', states: new Set(['pending', 'overdue', 'reopened', 'rejected']), key: 'pending' },
-        ];
         const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
         const MONTH_LABELS = ['Ene.', 'Feb.', 'Mar.', 'Abr.', 'May.', 'Jun.', 'Jul.', 'Ago.', 'Sep.', 'Oct.', 'Nov.', 'Dic.'];
+        const FEED_BAG_WEIGHT_KG = 40;
+        const COMPLETED_TASK_STATES = new Set(['completed']);
+        const PENDING_TASK_STATES = new Set(['pending', 'overdue', 'reopened', 'rejected', 'in_progress']);
 
         function buildWhatsappReport(data, integerFormatter, decimalFormatter) {
           const sections = [];
           const shiftSummary = buildShiftSummary(data);
           if (shiftSummary) {
             sections.push(shiftSummary);
-          }
-          const tasksSection = buildTasksSection(data.tasks || []);
-          if (tasksSection) {
-            sections.push(tasksSection);
           }
           const shiftType = resolveShiftType(data);
           if (shiftType === 'night') {
@@ -9804,6 +9798,10 @@
               sections.push(daySection);
             }
           }
+          const tasksSection = buildTasksSection(data.tasks || []);
+          if (tasksSection) {
+            sections.push(tasksSection);
+          }
           return sections.join('\n\n');
         }
 
@@ -9815,26 +9813,8 @@
           const lines = [];
           const summaryLabel = shift.summary_label || 'Turno nocturno';
           const shiftType = typeof shift.shift_type === 'string' ? shift.shift_type : '';
-          const shiftIcon = shiftType === 'day' ? '🌞' : shiftType === 'night' ? '🌙' : '🕘';
-          lines.push(shiftIcon + ' Turno: ' + summaryLabel);
-          const rangeLabel = buildShiftRangeLabel(shift);
-          if (rangeLabel) {
-            lines.push('📅 Fechas: ' + rangeLabel);
-          }
-          const locationParts = [];
-          if (shift.farm) {
-            locationParts.push(shift.farm);
-          }
-          if (shift.barn) {
-            locationParts.push(shift.barn);
-          }
-          if (locationParts.length) {
-            lines.push('📍 Ubicación: ' + locationParts.join(' · '));
-          }
-          const operatorName = resolveOperatorName(data);
-          if (operatorName) {
-            lines.push('👤 Operario: ' + operatorName);
-          }
+          const shiftIcon = shiftType === 'day' ? '🌞 ' : shiftType === 'night' ? '🌙 ' : '';
+          lines.push(shiftIcon + summaryLabel);
           return lines.join('\n');
         }
 
@@ -9873,36 +9853,38 @@
           }
           return '';
         }
-
+@@
         function buildTasksSection(tasks) {
           if (!Array.isArray(tasks) || !tasks.length) {
             return '';
           }
-          const groups = TASK_GROUPS.map((group) => ({ label: group.label, items: [] }));
+          const completed = [];
+          const pending = [];
           tasks.forEach(function (task) {
             const state = (task && task.status && task.status.state) || 'pending';
-            groups.forEach(function (group, index) {
-              if (TASK_GROUPS[index].states.has(state)) {
-                group.items.push(task);
-              }
-            });
+            if (COMPLETED_TASK_STATES.has(state)) {
+              completed.push(task);
+            } else if (PENDING_TASK_STATES.has(state)) {
+              pending.push(task);
+            }
           });
-          const lines = ['📋 Tareas'];
-          let hasItems = false;
-          groups.forEach(function (group, index) {
-            if (!group.items.length) {
-              return;
-            }
-            hasItems = true;
-            if (index > 0) {
-              lines.push('');
-            }
-            lines.push(group.label + ':');
-            group.items.forEach(function (task) {
+          const lines = [];
+          if (completed.length) {
+            lines.push('✅ Tareas completadas:');
+            completed.forEach(function (task) {
               lines.push(formatTaskLine(task));
             });
-          });
-          return hasItems ? lines.join('\n') : '';
+          }
+          if (pending.length) {
+            if (lines.length) {
+              lines.push('');
+            }
+            lines.push('⚠️ Tareas pendientes sin completar:');
+            pending.forEach(function (task) {
+              lines.push(formatTaskLine(task));
+            });
+          }
+          return lines.length ? lines.join('\n') : '';
         }
 
         function formatTaskLine(task) {
@@ -9922,16 +9904,6 @@
             return '';
           }
           const lines = ['🌘 Registro nocturno'];
-          const locationParts = [];
-          if (registry.farm) {
-            locationParts.push(registry.farm);
-          }
-          if (registry.shift_label) {
-            locationParts.push(registry.shift_label);
-          }
-          if (locationParts.length) {
-            lines.push('📍 Ubicación: ' + locationParts.join(' · '));
-          }
           const lots = Array.isArray(registry.lots) ? registry.lots : [];
           let hasDetails = false;
           lots.forEach(function (lot) {
@@ -9970,55 +9942,25 @@
           if (!registry || !Array.isArray(registry.lots) || !registry.lots.length) {
             return '';
           }
-          const lines = ['🌞 Reporte de producción'];
-          const locationParts = [];
-          if (registry.farm) {
-            locationParts.push(registry.farm);
-          }
-          if (registry.chicken_house) {
-            locationParts.push(registry.chicken_house);
-          }
-          if (locationParts.length) {
-            lines.push('📍 Ubicación: ' + locationParts.join(' · '));
+          const lines = [];
+          const dateLabel = registry.date_label || '';
+          if (dateLabel) {
+            lines.push('📅 Fecha: ' + dateLabel);
+            lines.push('');
           }
           let hasDetails = false;
           registry.lots.forEach(function (lot) {
-            const lotLines = buildDayLotLines(lot, integerFormatter, decimalFormatter);
-            if (!lotLines.length) {
+            const roomLines = buildDayRoomLines((lot && lot.rooms) || [], integerFormatter, decimalFormatter);
+            if (!roomLines.length) {
               return;
             }
             hasDetails = true;
-            const lotLabel = lot && lot.label ? lot.label : 'Lote asignado';
-            lines.push(lotLabel + ':');
-            lines.push.apply(lines, lotLines);
+            lines.push.apply(lines, roomLines);
           });
           if (!hasDetails) {
             lines.push('Sin registros de lotes.');
           }
           return lines.join('\n');
-        }
-
-        function buildDayLotLines(lot, integerFormatter, decimalFormatter) {
-          const lines = [];
-          if (!lot) {
-            return lines;
-          }
-          const roomLabels = Array.isArray(lot.room_labels) && lot.room_labels.length ? lot.room_labels.join(', ') : '';
-          if (roomLabels) {
-            lines.push('  Salas: ' + roomLabels);
-          }
-          const summary = formatLotSummaryLine(lot.record || null, integerFormatter, decimalFormatter);
-          if (summary) {
-            lines.push('  ' + summary);
-          }
-          const roomLines = buildDayRoomLines(lot.rooms || [], integerFormatter, decimalFormatter);
-          if (roomLines.length) {
-            lines.push.apply(lines, roomLines);
-          }
-          if (!roomLabels && !summary && !roomLines.length) {
-            lines.push('  Sin registros cargados.');
-          }
-          return lines;
         }
 
         function formatLotSummaryLine(record, integerFormatter, decimalFormatter) {
@@ -10032,7 +9974,12 @@
           }
           const consumptionLabel = formatDecimalLabel(record.consumption, decimalFormatter);
           if (consumptionLabel) {
-            parts.push('Cons ' + consumptionLabel + ' kg');
+            const bagLabel = formatBagCountLabel(record.consumption, decimalFormatter);
+            let consumptionLine = 'Cons ' + consumptionLabel + ' kg';
+            if (bagLabel) {
+              consumptionLine += ' (' + bagLabel + ' bultos)';
+            }
+            parts.push(consumptionLine);
           }
           const mortalityLabel = formatIntegerLabel(record.mortality, integerFormatter);
           if (mortalityLabel) {
@@ -10049,16 +9996,6 @@
           if (!parts.length) {
             return '';
           }
-          if (record.last_actor || record.last_updated_label) {
-            const updates = [];
-            if (record.last_actor) {
-              updates.push(record.last_actor);
-            }
-            if (record.last_updated_label) {
-              updates.push(record.last_updated_label);
-            }
-            parts.push('Act ' + updates.join(' · '));
-          }
           return parts.join(' · ');
         }
 
@@ -10074,26 +10011,38 @@
             const metrics = [];
             const productionLabel = formatDecimalLabel(room.production, decimalFormatter);
             if (productionLabel) {
-              metrics.push('Prod ' + productionLabel);
+              metrics.push('• Producción: ' + productionLabel);
             }
             const consumptionLabel = formatDecimalLabel(room.consumption, decimalFormatter);
             if (consumptionLabel) {
-              metrics.push('Cons ' + consumptionLabel + ' kg');
+              const bagLabel = formatBagCountLabel(room.consumption, decimalFormatter);
+              let consumptionLine = '• Consumo: ' + consumptionLabel + ' kg';
+              if (bagLabel) {
+                consumptionLine += ' (' + bagLabel + ' bultos)';
+              }
+              metrics.push(consumptionLine);
             }
             const mortalityLabel = formatIntegerLabel(room.mortality, integerFormatter);
             if (mortalityLabel) {
-              metrics.push('Mort ' + mortalityLabel);
+              metrics.push('• Mortalidad: ' + mortalityLabel);
             }
             const discardLabel = formatIntegerLabel(room.discard, integerFormatter);
             if (discardLabel) {
-              metrics.push('Desc ' + discardLabel);
+              metrics.push('• Descarte: ' + discardLabel);
             }
             if (!metrics.length) {
               return;
             }
             const label = room && room.label ? room.label : 'Sala';
-            lines.push('    - ' + label + ': ' + metrics.join(' · '));
+            lines.push('    🏠 Salón ' + label + ':');
+            metrics.forEach(function (metric) {
+              lines.push('      ' + metric);
+            });
+            lines.push('');
           });
+          if (lines.length && lines[lines.length - 1] === '') {
+            lines.pop();
+          }
           return lines;
         }
 
@@ -10160,6 +10109,21 @@
         function toNumber(value) {
           const numericValue = typeof value === 'number' ? value : Number(value);
           return Number.isFinite(numericValue) ? numericValue : 0;
+        }
+
+        function formatBagCountLabel(value, decimalFormatter) {
+          if (!hasNumericValue(value)) {
+            return '';
+          }
+          const numericValue = typeof value === 'number' ? value : Number(value);
+          if (!FEED_BAG_WEIGHT_KG) {
+            return '';
+          }
+          const bagCount = numericValue / FEED_BAG_WEIGHT_KG;
+          if (!Number.isFinite(bagCount) || bagCount <= 0) {
+            return '';
+          }
+          return decimalFormatter.format(bagCount);
         }
 
         if (document.readyState === 'loading') {
