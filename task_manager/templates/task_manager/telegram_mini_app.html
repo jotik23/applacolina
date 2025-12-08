@@ -9777,6 +9777,7 @@
         const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
         const MONTH_LABELS = ['Ene.', 'Feb.', 'Mar.', 'Abr.', 'May.', 'Jun.', 'Jul.', 'Ago.', 'Sep.', 'Oct.', 'Nov.', 'Dic.'];
         const FEED_BAG_WEIGHT_KG = 40;
+        const EGGS_PER_CARTON = 30;
         const COMPLETED_TASK_STATES = new Set(['completed']);
         const PENDING_TASK_STATES = new Set(['pending', 'overdue', 'reopened', 'rejected', 'in_progress']);
 
@@ -10008,9 +10009,20 @@
               return;
             }
             const metrics = [];
+            const liveBirds = resolveLiveBirds(room);
             const productionLabel = formatDecimalLabel(room.production, decimalFormatter);
             if (productionLabel) {
-              metrics.push('• Producción: ' + productionLabel);
+              const eggsValue = toNumber(room.production);
+              const cartonLabel = formatCartonCountLabel(eggsValue, decimalFormatter);
+              const postureLabel = formatPosturePercentageLabel(eggsValue, liveBirds, decimalFormatter);
+              let productionLine = '• Producción: ' + productionLabel + ' huevos';
+              if (cartonLabel) {
+                productionLine += ' (' + cartonLabel + ' cart)';
+              }
+              if (postureLabel) {
+                productionLine += '. ' + postureLabel + ' % de postura';
+              }
+              metrics.push(productionLine);
             }
             const consumptionLabel = formatDecimalLabel(room.consumption, decimalFormatter);
             if (consumptionLabel) {
@@ -10018,6 +10030,10 @@
               let consumptionLine = '• Consumo: ' + consumptionLabel + ' kg';
               if (bagLabel) {
                 consumptionLine += ' (' + bagLabel + ' bultos)';
+              }
+              const gramsPerBirdLabel = formatGramsPerBirdLabel(room.consumption, liveBirds, decimalFormatter);
+              if (gramsPerBirdLabel) {
+                consumptionLine += '. ' + gramsPerBirdLabel + ' gr/a/d';
               }
               metrics.push(consumptionLine);
             }
@@ -10055,6 +10071,19 @@
             hasNumericValue(room.mortality) ||
             hasNumericValue(room.discard)
           );
+        }
+
+        function resolveLiveBirds(room) {
+          if (!room) {
+            return null;
+          }
+          if (hasNumericValue(room.live_birds)) {
+            return room.live_birds;
+          }
+          if (hasNumericValue(room.birds)) {
+            return room.birds;
+          }
+          return null;
         }
 
         function hasNumericValue(value) {
@@ -10123,6 +10152,59 @@
             return '';
           }
           return decimalFormatter.format(bagCount);
+        }
+
+        function formatCartonCountLabel(value, decimalFormatter) {
+          if (!hasNumericValue(value) || !EGGS_PER_CARTON) {
+            return '';
+          }
+          const numericValue = typeof value === 'number' ? value : Number(value);
+          if (!Number.isFinite(numericValue) || numericValue <= 0) {
+            return '';
+          }
+          const cartonCount = numericValue / EGGS_PER_CARTON;
+          if (!Number.isFinite(cartonCount) || cartonCount < 0) {
+            return '';
+          }
+          return decimalFormatter.format(cartonCount);
+        }
+
+        function formatPosturePercentageLabel(eggsValue, liveBirds, decimalFormatter) {
+          if (!hasNumericValue(eggsValue) || !hasNumericValue(liveBirds)) {
+            return '';
+          }
+          const birds = typeof liveBirds === 'number' ? liveBirds : Number(liveBirds);
+          if (!Number.isFinite(birds) || birds <= 0) {
+            return '';
+          }
+          const eggs = typeof eggsValue === 'number' ? eggsValue : Number(eggsValue);
+          if (!Number.isFinite(eggs)) {
+            return '';
+          }
+          const posture = (eggs / birds) * 100;
+          if (!Number.isFinite(posture) || posture < 0) {
+            return '';
+          }
+          return decimalFormatter.format(posture);
+        }
+
+        function formatGramsPerBirdLabel(consumptionValue, liveBirds, decimalFormatter) {
+          if (!hasNumericValue(consumptionValue) || !hasNumericValue(liveBirds)) {
+            return '';
+          }
+          const birds = typeof liveBirds === 'number' ? liveBirds : Number(liveBirds);
+          if (!Number.isFinite(birds) || birds <= 0) {
+            return '';
+          }
+          const consumptionKg = typeof consumptionValue === 'number' ? consumptionValue : Number(consumptionValue);
+          if (!Number.isFinite(consumptionKg)) {
+            return '';
+          }
+          const gramsPerBird = (consumptionKg * 1000) / birds;
+          if (!Number.isFinite(gramsPerBird) || gramsPerBird < 0) {
+            return '';
+          }
+          return decimalFormatter.format(gramsPerBird);
         }
 
         if (document.readyState === 'loading') {

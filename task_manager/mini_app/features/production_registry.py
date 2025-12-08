@@ -7,7 +7,7 @@ from typing import Iterable, Mapping, Optional
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Sum, Value, When
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -59,6 +59,8 @@ class ProductionRoomSnapshot:
     room_id: int
     label: str
     allocated_birds: int
+    live_birds: int
+    mortality_accumulated: int
     production: Optional[Decimal]
     consumption: Optional[Decimal]
     mortality: Optional[int]
@@ -189,6 +191,27 @@ def build_production_registry(
     if not batches:
         return None
 
+    filtered_room_ids = {
+        allocation.room_id
+        for batch in batches
+        for allocation in getattr(batch, "filtered_allocations", None) or []
+    }
+    batch_ids = [batch.pk for batch in batches]
+    cumulative_mortality_by_room: dict[int, int] = {}
+    if filtered_room_ids and batch_ids:
+        mortality_entries = (
+            ProductionRoomRecord.objects.filter(
+                room_id__in=filtered_room_ids,
+                production_record__bird_batch_id__in=batch_ids,
+                production_record__date__lte=target_date,
+            )
+            .values("room_id")
+            .annotate(total=Sum("mortality"))
+        )
+        cumulative_mortality_by_room = {
+            entry["room_id"]: int(entry["total"] or 0) for entry in mortality_entries
+        }
+
     room_record_queryset = ProductionRoomRecord.objects.select_related("room", "room__chicken_house")
     records = {
         record.bird_batch_id: record
@@ -229,11 +252,16 @@ def build_production_registry(
         for allocation in allocations:
             room = allocation.room
             room_record = room_records_map.get(allocation.room_id)
+            allocated_birds = allocation.quantity or 0
+            accumulated_mortality = cumulative_mortality_by_room.get(allocation.room_id, 0)
+            live_birds = max(allocated_birds - accumulated_mortality, 0)
             room_snapshots.append(
                 ProductionRoomSnapshot(
                     room_id=allocation.room_id,
                     label=room.name,
-                    allocated_birds=allocation.quantity or 0,
+                    allocated_birds=allocated_birds,
+                    live_birds=live_birds,
+                    mortality_accumulated=accumulated_mortality,
                     production=_quantize_production(room_record.production) if room_record else None,
                     consumption=_quantize_to_int(room_record.consumption) if room_record else None,
                     mortality=room_record.mortality if room_record else None,
@@ -296,6 +324,8 @@ def serialize_production_registry(registry: ProductionRegistry) -> dict[str, obj
                 "id": room.room_id,
                 "label": room.label,
                 "birds": room.allocated_birds,
+                "live_birds": room.live_birds,
+                "mortality_accumulated": room.mortality_accumulated,
                 "production": _format_decimal(room.production) if room.production is not None else None,
                 "consumption": _format_decimal(room.consumption) if room.consumption is not None else None,
                 "mortality": room.mortality,
