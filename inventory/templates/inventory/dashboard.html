@@ -38,7 +38,7 @@
           <div class="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
             <dt class="font-semibold uppercase tracking-wide text-emerald-700">Saldo</dt>
             <dd class="mt-1 text-2xl font-semibold text-emerald-900">
-              {{ inventory_totals.net|floatformat:"-2" }}
+              {{ inventory_current_balance|floatformat:"-2" }}
               <span class="text-xs font-semibold text-emerald-600">unid.</span>
             </dd>
             <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">{{ inventory_scope_label }}</p>
@@ -107,7 +107,7 @@
                     <td class="px-4 py-3 text-sm text-slate-600">{{ entry.scope_label }}</td>
                     <td class="px-4 py-3 text-right font-semibold text-emerald-700">{{ entry.quantity_in|floatformat:"-2" }}</td>
                     <td class="px-4 py-3 text-right font-semibold text-rose-700">{{ entry.quantity_out|floatformat:"-2" }}</td>
-                    <td class="px-4 py-3 text-right font-semibold text-slate-900">{{ entry.cardex_balance|default:entry.balance_after|floatformat:"-2" }}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-900">{{ entry.balance_after|floatformat:"-2" }}</td>
                     <td class="px-4 py-3 text-sm text-slate-600">
                       {% if entry.notes %}
                         <p class="font-semibold text-slate-900">{{ entry.notes }}</p>
@@ -117,6 +117,16 @@
                       {% endif %}
                       {% if entry.recorded_by %}
                         <p>Registrado por: {{ entry.recorded_by.get_full_name }}</p>
+                      {% endif %}
+                      {% if entry.entry_type == entry.EntryType.MANUAL_CONSUMPTION %}
+                        <form method="post" class="mt-2" onsubmit="return confirm('¿Seguro que deseas eliminar este consumo manual?');">
+                          {% csrf_token %}
+                          <input type="hidden" name="form_action" value="delete_manual_entry">
+                          <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                          <button type="submit" class="text-xs font-semibold text-rose-600 hover:text-rose-700">
+                            Eliminar consumo
+                          </button>
+                        </form>
                       {% endif %}
                     </td>
                   </tr>
@@ -163,45 +173,6 @@
               {% endfor %}
               <button type="submit" class="inline-flex w-full justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
                 Registrar consumo
-              </button>
-            </form>
-          </details>
-        </section>
-
-        <section class="rounded-2xl border border-rose-200 bg-white/95 p-5 shadow-lg">
-          <details class="group space-y-4">
-            <summary class="flex cursor-pointer items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-rose-600">Reseteo por conteo físico</p>
-                <p class="text-sm text-rose-600">Actualiza el saldo real tras un conteo físico y deja rastro de la diferencia.</p>
-              </div>
-              <span aria-hidden="true" class="text-xl text-rose-400 transition-transform group-open:rotate-180">^</span>
-            </summary>
-            <form method="post" class="space-y-4 border-t border-rose-100 pt-4" novalidate>
-              {% csrf_token %}
-              <input type="hidden" name="form_action" value="inventory_reset">
-              {{ reset_form.non_field_errors }}
-              {% for field in reset_form %}
-                {% if field.name != 'csrfmiddlewaretoken' and field.name != 'form_action' and field.name != 'confirm_execution' %}
-                  <div>
-                    <label class="text-xs font-semibold uppercase tracking-wide text-rose-600">
-                      {{ field.label }}{% if field.name == 'farm' or field.name == 'chicken_house' %} (opcional){% endif %}
-                    </label>
-                    {{ field|add_class:"mt-1 w-full rounded-xl border border-rose-200 px-3 py-2 text-sm text-slate-900 focus:border-rose-500 focus:ring-rose-500" }}
-                    {% if field.errors %}<p class="mt-1 text-sm font-semibold text-rose-600">{{ field.errors.0 }}</p>{% endif %}
-                    {% if field.name == 'chicken_house' %}
-                      <p class="mt-1 text-xs text-rose-600">Selecciona un galpón si deseas aplicar el ajuste sólo ahí.</p>
-                    {% endif %}
-                  </div>
-                {% endif %}
-              {% endfor %}
-              <label class="flex items-start gap-3 rounded-xl border border-rose-200/80 bg-rose-50/60 px-3 py-2 text-sm font-semibold text-rose-700">
-                {{ reset_form.confirm_execution|add_class:"mt-1 rounded border-rose-300 text-rose-600 focus:ring-rose-500" }}
-                <span>{{ reset_form.confirm_execution.label }}</span>
-              </label>
-              {{ reset_form.confirm_execution.errors }}
-              <button type="submit" class="inline-flex w-full justify-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">
-                Confirmar reseteo
               </button>
             </form>
           </details>

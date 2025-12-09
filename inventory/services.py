@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, Iterable
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from administration.models import Product
@@ -76,7 +77,7 @@ class InventoryService:
         reference: InventoryReference | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> ProductInventoryEntry | None:
-        if quantity <= 0:
+        if quantity == 0:
             return None
         with transaction.atomic():
             return self._apply_delta(
@@ -106,9 +107,9 @@ class InventoryService:
         reference: InventoryReference | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> ProductInventoryEntry:
+        effective_date = effective_date or timezone.localdate()
         with transaction.atomic():
-            balance = self._get_balance(product, scope, farm, chicken_house, lock=True)
-            previous = balance.quantity
+            previous = self._balance_as_of(product, scope, farm, chicken_house, effective_date)
             delta = new_quantity - previous
             metadata = metadata or {}
             metadata.update(
@@ -116,6 +117,7 @@ class InventoryService:
                     "previous_balance": str(previous),
                     "reset_to": str(new_quantity),
                     "difference": str(delta),
+                    "reset_effective_date": effective_date.isoformat(),
                 }
             )
             entry = self._apply_delta(
@@ -235,12 +237,19 @@ class InventoryService:
         recorded_by=None,
         executed_by=None,
     ) -> ProductInventoryEntry:
+        effective_date = effective_date or timezone.localdate()
         balance = self._get_balance(product, scope, farm, chicken_house, lock=True)
-        new_quantity = balance.quantity + delta
-        balance.quantity = new_quantity
-        balance.save(update_fields=("quantity", "updated_at"))
         quantity_in = delta if delta > 0 else Decimal("0.00")
         quantity_out = abs(delta) if delta < 0 else Decimal("0.00")
+        previous_balance = self._balance_as_of(
+            product,
+            scope,
+            farm,
+            chicken_house,
+            effective_date,
+            default_to_current=False,
+        )
+        new_balance_after = previous_balance + delta
         entry = ProductInventoryEntry(
             product=product,
             entry_type=entry_type,
@@ -249,18 +258,38 @@ class InventoryService:
             chicken_house=chicken_house,
             quantity_in=quantity_in,
             quantity_out=quantity_out,
-            balance_after=new_quantity,
+            balance_after=new_balance_after,
             notes=notes,
             recorded_by=recorded_by or self.actor,
             executed_by=executed_by,
-            effective_date=effective_date or timezone.now().date(),
+            effective_date=effective_date,
             data=metadata or {},
         )
         if reference and reference.instance_id:
             entry.reference_type = reference.model_label
             entry.reference_id = reference.instance_id
         entry.save()
+        self._shift_future_entries(entry, -delta)
+        balance.quantity = balance.quantity + delta
+        balance.save(update_fields=("quantity", "updated_at"))
         return entry
+
+    def delete_manual_entry(self, entry: ProductInventoryEntry) -> None:
+        if entry.entry_type != ProductInventoryEntry.EntryType.MANUAL_CONSUMPTION:
+            raise ValueError("Solo se pueden eliminar consumos manuales.")
+        delta = entry.quantity_in - entry.quantity_out
+        with transaction.atomic():
+            balance = self._get_balance(
+                entry.product,
+                entry.scope,
+                entry.farm,
+                entry.chicken_house,
+                lock=True,
+            )
+            balance.quantity -= delta
+            balance.save(update_fields=("quantity", "updated_at"))
+            self._shift_future_entries(entry, delta)
+            entry.delete()
 
     def _get_balance(
         self,
@@ -282,6 +311,68 @@ class InventoryService:
             defaults={"quantity": Decimal("0.00")},
         )
         return balance
+
+    def _shift_future_entries(self, pivot: ProductInventoryEntry, delta: Decimal) -> None:
+        if delta == 0:
+            return
+        future_entries = (
+            ProductInventoryEntry.objects.select_for_update()
+            .filter(
+                product=pivot.product,
+                scope=pivot.scope,
+                farm=pivot.farm,
+                chicken_house=pivot.chicken_house,
+            )
+            .filter(
+                Q(effective_date__gt=pivot.effective_date)
+                | Q(
+                    effective_date=pivot.effective_date,
+                    created_at__gt=pivot.created_at,
+                )
+                | Q(
+                    effective_date=pivot.effective_date,
+                    created_at=pivot.created_at,
+                    pk__gt=pivot.pk,
+                )
+            )
+            .order_by("effective_date", "created_at", "pk")
+        )
+        for entry in future_entries:
+            entry.balance_after -= delta
+            entry.save(update_fields=("balance_after", "updated_at"))
+
+    def _balance_as_of(
+        self,
+        product: Product,
+        scope: str,
+        farm: Farm | None,
+        chicken_house: ChickenHouse | None,
+        target_date: date,
+        *,
+        default_to_current: bool = True,
+    ) -> Decimal:
+        latest_entry = (
+            ProductInventoryEntry.objects.filter(
+                product=product,
+                scope=scope,
+                farm=farm,
+                chicken_house=chicken_house,
+                effective_date__lte=target_date,
+            )
+            .order_by("-effective_date", "-created_at", "-id")
+            .first()
+        )
+        if latest_entry:
+            return latest_entry.balance_after
+        if not default_to_current:
+            return Decimal("0.00")
+        balance = ProductInventoryBalance.objects.filter(
+            product=product,
+            scope=scope,
+            farm=farm,
+            chicken_house=chicken_house,
+        ).first()
+        return balance.quantity if balance else Decimal("0.00")
 
 
 def resolve_product_for_room(room: Room, *, target_date: date) -> Product | None:

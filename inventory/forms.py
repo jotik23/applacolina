@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from decimal import Decimal
-
 from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -10,7 +8,7 @@ from django.utils import timezone
 from administration.models import Product
 from production.models import ChickenHouse, Farm
 
-from .models import InventoryScope, ProductConsumptionConfig, ProductInventoryBalance
+from .models import InventoryScope, ProductConsumptionConfig, ProductInventoryEntry
 from .services import InventoryService
 
 UserModel = get_user_model()
@@ -28,9 +26,22 @@ class ScopeResolutionMixin:
 
 
 class ManualConsumptionForm(ScopeResolutionMixin, forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        default_date = self.initial.get("effective_date") or timezone.localdate()
+        self.initial.setdefault("effective_date", default_date)
+        if not self.fields["effective_date"].initial:
+            self.fields["effective_date"].initial = default_date
+        self.fields["effective_date"].widget.attrs["max"] = timezone.localdate().isoformat()
+
     product = forms.ModelChoiceField(
         label="Producto",
         queryset=Product.objects.all().order_by("name"),
+    )
+    effective_date = forms.DateField(
+        label="Fecha del consumo",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
     )
     farm = forms.ModelChoiceField(
         label="Granja",
@@ -46,7 +57,6 @@ class ManualConsumptionForm(ScopeResolutionMixin, forms.Form):
         label="Cantidad",
         max_digits=12,
         decimal_places=2,
-        min_value=Decimal("0.01"),
     )
     executed_by = forms.ModelChoiceField(
         label="Colaborador que consumió",
@@ -71,66 +81,44 @@ class ManualConsumptionForm(ScopeResolutionMixin, forms.Form):
             chicken_house=chicken_house,
             notes=cleaned.get("notes") or "",
             executed_by=cleaned.get("executed_by"),
+            effective_date=cleaned["effective_date"],
         )
 
+    def clean_quantity(self):
+        quantity = self.cleaned_data["quantity"]
+        if quantity == 0:
+            raise forms.ValidationError("La cantidad no puede ser cero.")
+        return quantity
 
-class InventoryResetForm(ScopeResolutionMixin, forms.Form):
-    product = forms.ModelChoiceField(
-        label="Producto",
-        queryset=Product.objects.all().order_by("name"),
-    )
-    farm = forms.ModelChoiceField(
-        label="Granja",
-        queryset=Farm.objects.all().order_by("name"),
-        required=False,
-    )
-    chicken_house = forms.ModelChoiceField(
-        label="Galpón",
-        queryset=ChickenHouse.objects.select_related("farm").order_by("farm__name", "name"),
-        required=False,
-    )
-    physical_quantity = forms.DecimalField(
-        label="Inventario físico",
-        max_digits=12,
-        decimal_places=2,
-        min_value=Decimal("0.00"),
-    )
-    notes = forms.CharField(
-        label="Notas de conciliación",
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-    )
-    confirm_execution = forms.BooleanField(
-        label="Confirmo que deseo resetear el inventario en este ámbito.",
-        required=True,
-        error_messages={"required": "Debes confirmar el reseteo."},
-    )
+    def clean_effective_date(self):
+        effective_date = self.cleaned_data.get("effective_date")
+        today = timezone.localdate()
+        if not effective_date:
+            return today
+        if effective_date > today:
+            raise forms.ValidationError("No puedes registrar consumos en una fecha futura.")
+        return effective_date
 
-    def save(self, actor) -> None:
-        cleaned = self.cleaned_data
-        scope, farm, chicken_house = self._resolve_scope_fields(cleaned)
+
+class ManualEntryDeleteForm(forms.Form):
+    entry_id = forms.IntegerField(widget=forms.HiddenInput)
+
+    def clean_entry_id(self):
+        entry_id = self.cleaned_data["entry_id"]
+        try:
+            entry = ProductInventoryEntry.objects.select_related("product").get(pk=entry_id)
+        except ProductInventoryEntry.DoesNotExist as exc:
+            raise forms.ValidationError("No se encontró el movimiento solicitado.") from exc
+        if entry.entry_type != ProductInventoryEntry.EntryType.MANUAL_CONSUMPTION:
+            raise forms.ValidationError("Solo puedes eliminar consumos manuales.")
+        self.cleaned_data["entry"] = entry
+        return entry_id
+
+    def save(self, actor):
+        entry: ProductInventoryEntry = self.cleaned_data["entry"]
         service = InventoryService(actor=actor)
-        service.reset_scope(
-            product=cleaned["product"],
-            scope=scope,
-            new_quantity=cleaned["physical_quantity"],
-            farm=farm,
-            chicken_house=chicken_house,
-            notes=cleaned.get("notes") or "",
-            metadata={"confirmed_by": getattr(actor, "pk", None)},
-        )
-
-    def current_balance(self) -> Decimal:
-        if not self.is_bound or not self.is_valid():
-            return Decimal("0.00")
-        scope, farm, chicken_house = self._resolve_scope_fields(self.cleaned_data)
-        balance = ProductInventoryBalance.objects.filter(
-            product=self.cleaned_data["product"],
-            scope=scope,
-            farm=farm,
-            chicken_house=chicken_house,
-        ).first()
-        return balance.quantity if balance else Decimal("0.00")
+        service.delete_manual_entry(entry)
+        return entry
 
 
 class ProductConsumptionConfigForm(ScopeResolutionMixin, forms.ModelForm):

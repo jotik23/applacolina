@@ -14,8 +14,8 @@ from applacolina.mixins import StaffRequiredMixin
 
 from .forms import (
     InventoryFilterForm,
-    InventoryResetForm,
     ManualConsumptionForm,
+    ManualEntryDeleteForm,
     ProductConsumptionConfigForm,
 )
 from .models import (
@@ -36,8 +36,8 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
         action = request.POST.get("form_action")
         if action == "manual_consumption":
             return self._handle_manual_consumption()
-        if action == "inventory_reset":
-            return self._handle_inventory_reset()
+        if action == "delete_manual_entry":
+            return self._handle_delete_manual_entry()
         if action == "consumption_config":
             return self._handle_consumption_config()
         messages.error(request, "Acción no soportada.")
@@ -47,12 +47,9 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
         context = super().get_context_data(**kwargs)
         filter_form = kwargs.get("filter_form") or self._build_filter_form()
         manual_form = kwargs.get("manual_form") or ManualConsumptionForm(
-            initial={"product": self._selected_product_id(filter_form)}
-        )
-        reset_form = kwargs.get("reset_form") or InventoryResetForm(
             initial={
                 "product": self._selected_product_id(filter_form),
-                "scope": InventoryScope.CHICKEN_HOUSE,
+                "effective_date": timezone.localdate(),
             }
         )
         config_form = kwargs.get("config_form") or ProductConsumptionConfigForm(
@@ -63,26 +60,24 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
         selected_product = None
         configs = []
         scope_label = "Selecciona un producto"
+        current_balance = Decimal("0.00")
         if filter_form.is_bound and filter_form.is_valid():
             selected_product = filter_form.cleaned_data["product"]
             entries = self._fetch_entries(filter_form)
             scope_label = self._current_scope_label(filter_form.cleaned_data)
-            self._annotate_running_balances(
-                entries,
-                self._current_balance(filter_form.cleaned_data),
-            )
+            current_balance = self._current_balance(filter_form.cleaned_data)
             totals = self._build_totals(entries)
             configs = self._load_consumption_configs(selected_product)
         context.update(
             filter_form=filter_form,
             manual_form=manual_form,
-            reset_form=reset_form,
             config_form=config_form,
             inventory_entries=entries,
             inventory_totals=totals,
             inventory_selected_product=selected_product,
             inventory_consumption_configs=configs,
             inventory_scope_label=scope_label,
+            inventory_current_balance=current_balance,
         )
         context.setdefault("active_submenu", "product_inventory")
         resolver = getattr(self.request, "resolver_match", None)
@@ -102,18 +97,6 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
             self.get_context_data(manual_form=form, filter_form=filter_form)
         )
 
-    def _handle_inventory_reset(self):
-        form = InventoryResetForm(self.request.POST)
-        filter_form = self._build_filter_form()
-        if form.is_valid():
-            form.save(self.request.user)
-            messages.success(self.request, "Inventario actualizado con el conteo físico.")
-            return redirect(self._default_url(product_id=form.cleaned_data["product"].pk))
-        messages.error(self.request, "Confirma y corrige los datos del reseteo.")
-        return self.render_to_response(
-            self.get_context_data(reset_form=form, filter_form=filter_form)
-        )
-
     def _handle_consumption_config(self):
         form = ProductConsumptionConfigForm(self.request.POST)
         filter_form = self._build_filter_form()
@@ -128,6 +111,16 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
         return self.render_to_response(
             self.get_context_data(config_form=form, filter_form=filter_form)
         )
+
+    def _handle_delete_manual_entry(self):
+        form = ManualEntryDeleteForm(self.request.POST)
+        filter_form = self._build_filter_form()
+        if form.is_valid():
+            entry = form.save(self.request.user)
+            messages.success(self.request, "Consumo manual eliminado del cardex.")
+            return redirect(self._default_url(product_id=entry.product_id))
+        messages.error(self.request, "No se pudo eliminar el consumo manual seleccionado.")
+        return self.render_to_response(self.get_context_data(filter_form=filter_form))
 
     def _build_filter_form(self) -> InventoryFilterForm:
         default_start = timezone.localdate() - timedelta(days=30)
@@ -177,16 +170,6 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
         total = balances.aggregate(total=Sum("quantity"))["total"]
         return total or Decimal("0.00")
 
-    def _annotate_running_balances(
-        self,
-        entries: list[ProductInventoryEntry],
-        current_total: Decimal,
-    ) -> None:
-        running = current_total
-        for entry in entries:
-            entry.cardex_balance = running
-            delta = entry.quantity_in - entry.quantity_out
-            running -= delta
 
     def _current_scope_label(self, cleaned_data) -> str:
         chicken_house = cleaned_data.get("chicken_house")
