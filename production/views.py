@@ -2593,6 +2593,12 @@ class BirdBatchUpdateView(BatchFormViewMixin, UpdateView):
     entity_label = "lote de aves"
     success_message = 'Se actualizó el lote #%(pk)s correctamente.'
 
+    def get_success_message(self, cleaned_data):
+        """Include instance data so formatting keys like `pk` are available."""
+        context = {"pk": self.object.pk}
+        context.update(cleaned_data)
+        return self.success_message % context
+
 
 class BirdBatchDeleteView(StaffRequiredMixin, DeleteView):
     model = BirdBatch
