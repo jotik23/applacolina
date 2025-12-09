@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -10,7 +11,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from administration.models import PurchaseApproval, PurchaseRequest
+from administration.models import PurchaseApproval, PurchaseRequest, PurchasingExpenseType
 
 StageStatus = Literal['pending', 'active', 'completed', 'locked']
 
@@ -395,12 +396,36 @@ def _query_purchases(
     if end_date:
         queryset = queryset.filter(created_at__date__lte=end_date)
     if category_ids:
-        queryset = queryset.filter(expense_type_id__in=category_ids)
+        expanded_ids = _resolve_category_descendants(category_ids)
+        queryset = queryset.filter(expense_type_id__in=expanded_ids)
     if supplier_ids:
         queryset = queryset.filter(supplier_id__in=supplier_ids)
     if manager_ids:
         queryset = queryset.filter(assigned_manager_id__in=manager_ids)
     return queryset.order_by('-created_at')
+
+
+def _resolve_category_descendants(category_ids: Sequence[int]) -> tuple[int, ...]:
+    """
+    Expand the provided category identifiers to include all nested children.
+    Selecting a parent should surface purchases in child categories,
+    but selecting a child must not implicitly include its ancestors.
+    """
+    if not category_ids:
+        return tuple()
+    tree: dict[int, list[int]] = defaultdict(list)
+    for category_id, parent_id in PurchasingExpenseType.objects.values_list('id', 'parent_category_id'):
+        if parent_id:
+            tree[parent_id].append(category_id)
+    expanded: set[int] = set(category_ids)
+    stack: list[int] = list(category_ids)
+    while stack:
+        current = stack.pop()
+        for child_id in tree.get(current, ()):
+            if child_id not in expanded:
+                expanded.add(child_id)
+                stack.append(child_id)
+    return tuple(expanded)
 
 
 def _build_pagination(

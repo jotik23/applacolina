@@ -9,7 +9,11 @@ from administration.views import (
     SalesDashboardView,
     SupplierManagementView,
 )
-from production.views import daily_indicators_view, egg_inventory_dashboard_view
+from production.views import (
+    batch_production_board_view,
+    daily_indicators_view,
+    egg_inventory_dashboard_view,
+)
 from inventory.views import HomeInventoryDashboardView
 from task_manager.views import task_manager_daily_report_view
 
@@ -22,6 +26,11 @@ urlpatterns = [
     path("despachos/", EggDispatchListView.as_view(), name="dispatches"),
     path("clasificacion-inventario/", egg_inventory_dashboard_view, name="egg-inventory"),
     path("produccion-indicadores/", daily_indicators_view, name="daily-indicators"),
+    path(
+        "produccion/lotes/<int:pk>/produccion/",
+        batch_production_board_view,
+        name="batch-production-board",
+    ),
     path("reporte-tareas/", task_manager_daily_report_view, name="task-report"),
     path("compras/", AdministrationHomeView.as_view(), name="purchases"),
     path("inventario/", HomeInventoryDashboardView.as_view(), name="inventory"),

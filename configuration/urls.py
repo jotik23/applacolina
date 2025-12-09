@@ -11,7 +11,6 @@ from configuration.views import (
 from production.views import (
     batch_allocation_delete_view,
     batch_management_view,
-    batch_production_board_view,
     batch_weight_registry_submit_view,
     bird_batch_delete_view,
     bird_batch_update_view,
@@ -33,7 +32,11 @@ urlpatterns = [
     path("colaboradores/", ConfigurationCollaboratorsView.as_view(), name="collaborators"),
     path("puestos/", ConfigurationPositionsView.as_view(), name="positions"),
     path("lotes/", batch_management_view, name="batches"),
-    path("lotes/<int:pk>/produccion/", batch_production_board_view, name="batch-production-board"),
+    path(
+        "lotes/<int:pk>/produccion/",
+        RedirectView.as_view(pattern_name="home:batch-production-board", permanent=False),
+        name="batch-production-board",
+    ),
     path(
         "lotes/<int:pk>/produccion/pesos/",
         batch_weight_registry_submit_view,

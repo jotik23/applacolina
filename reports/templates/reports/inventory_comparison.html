@@ -230,7 +230,7 @@
                             {% if row.pk %}
                               {% if stage.slug == 'production' %}
                                 <a
-                                  href="{% url 'configuration:batch-production-board' row.pk %}{% if row.date %}?day={{ row.date|date:'Y-m-d' }}{% endif %}"
+                                  href="{% url 'home:batch-production-board' row.pk %}{% if row.date %}?day={{ row.date|date:'Y-m-d' }}{% endif %}"
                                   class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
                                   target="_blank"
                                 >

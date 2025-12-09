@@ -37,7 +37,7 @@ urlpatterns = [
     ),
     path(
         "lotes/<int:pk>/produccion/",
-        RedirectView.as_view(pattern_name="configuration:batch-production-board", permanent=False),
+        RedirectView.as_view(pattern_name="home:batch-production-board", permanent=False),
         name="batch-production-board",
     ),
     path(

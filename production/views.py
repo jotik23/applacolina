@@ -2828,7 +2828,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
             return {
                 "id": str(target.pk),
                 "label": resolve_batch_label(target, label_map),
-                "url": reverse("configuration:batch-production-board", args=[target.pk]),
+                "url": reverse("home:batch-production-board", args=[target.pk]),
             }
 
         previous_batch = active_batches[current_index - 1] if current_index > 0 else None
@@ -3182,7 +3182,7 @@ class BatchProductionBoardView(StaffRequiredMixin, TemplateView):
         if day < self.batch.birth_date:
             day = self.batch.birth_date
         target_index = week_index if week_index is not None else self.selected_week_index
-        base_url = reverse("configuration:batch-production-board", args=[self.batch.pk])
+        base_url = reverse("home:batch-production-board", args=[self.batch.pk])
         params = {
             "week_index": str(max(target_index, 0)),
             "day": day.isoformat(),
