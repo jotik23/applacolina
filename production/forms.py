@@ -11,6 +11,8 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from applacolina.forms import AppDateInput
+
 from production.models import (
     BirdBatch,
     BirdBatchRoomAllocation,
@@ -147,7 +149,7 @@ class BirdBatchForm(BaseInfrastructureForm):
             "breed": "Raza",
         }
         widgets = {
-            "birth_date": forms.DateInput(attrs={"type": "date"}),
+            "birth_date": AppDateInput(),
         }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -965,7 +967,7 @@ class EggDispatchForm(forms.ModelForm):
             "notes": "Notas u observaciones",
         }
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
+            "date": AppDateInput(),
             "notes": forms.Textarea(
                 attrs={
                     "rows": 3,

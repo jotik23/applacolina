@@ -10,6 +10,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import IntegerField, Max
 from django.db.models.functions import Cast
 
+from applacolina.forms import AppDateInput
+
 from .models import (
     AssignmentAlertLevel,
     CalendarStatus,
@@ -51,18 +53,16 @@ class CalendarGenerationForm(forms.Form):
     )
     start_date = forms.DateField(
         label="Fecha de inicio",
-        widget=forms.DateInput(
+        widget=AppDateInput(
             attrs={
-                "type": "date",
                 "class": DATE_INPUT_CLASSES,
             }
         ),
     )
     end_date = forms.DateField(
         label="Fecha de fin",
-        widget=forms.DateInput(
+        widget=AppDateInput(
             attrs={
-                "type": "date",
                 "class": DATE_INPUT_CLASSES,
             }
         ),
@@ -634,7 +634,9 @@ class UserCreationForm(forms.ModelForm):
         for field_name in ("employment_start_date", "employment_end_date"):
             field = self.fields.get(field_name)
             if field:
-                field.widget = forms.DateInput(attrs={"type": "date"})
+                existing_attrs = dict(field.widget.attrs)
+                existing_attrs.setdefault("class", FIELD_INPUT_CLASSES)
+                field.widget = AppDateInput(attrs=existing_attrs)
                 field.required = False
         suggested_field = self.fields.get("suggested_positions")
         if suggested_field:
@@ -726,7 +728,9 @@ class UserChangeForm(forms.ModelForm):
         for field_name in ("employment_start_date", "employment_end_date"):
             field = self.fields.get(field_name)
             if field:
-                field.widget = forms.DateInput(attrs={"type": "date"})
+                existing_attrs = dict(field.widget.attrs)
+                existing_attrs.setdefault("class", FIELD_INPUT_CLASSES)
+                field.widget = AppDateInput(attrs=existing_attrs)
                 field.required = False
         suggested_field = self.fields.get("suggested_positions")
         if suggested_field:

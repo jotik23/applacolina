@@ -4,6 +4,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from applacolina.forms import AppDateInput
+
 from administration.models import Product
 from production.models import ChickenHouse, Farm
 
@@ -40,7 +42,7 @@ class ManualConsumptionForm(ScopeResolutionMixin, forms.Form):
     effective_date = forms.DateField(
         label="Fecha del consumo",
         required=False,
-        widget=forms.DateInput(attrs={"type": "date"}),
+        widget=AppDateInput(),
     )
     farm = forms.ModelChoiceField(
         label="Granja",
@@ -126,7 +128,7 @@ class ProductConsumptionConfigForm(ScopeResolutionMixin, forms.ModelForm):
         fields = ["farm", "chicken_house", "product", "start_date", "notes"]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 2}),
-            "start_date": forms.DateInput(attrs={"type": "date"}),
+            "start_date": AppDateInput(),
         }
 
     def clean_product(self):

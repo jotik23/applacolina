@@ -7,6 +7,8 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils.translation import gettext_lazy as _
 
+from applacolina.forms import AppDateInput
+
 from personal.models import DayOfWeek, PositionDefinition, UserProfile
 from production.models import Room
 
@@ -105,9 +107,8 @@ class TaskDefinitionQuickCreateForm(forms.ModelForm):
                     "data-field-name": "task_type",
                 }
             ),
-            "scheduled_for": forms.DateInput(
+            "scheduled_for": AppDateInput(
                 attrs={
-                    "type": "date",
                     "class": FIELD_INPUT_CLASSES,
                 }
             ),

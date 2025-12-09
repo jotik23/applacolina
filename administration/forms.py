@@ -11,6 +11,8 @@ from django.db.models import Q
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
 
+from applacolina.forms import AppDateInput
+
 from production.models import EggDispatchDestination
 
 from .services.payroll import PayrollComputationError, PayrollPeriodInfo, resolve_payroll_period
@@ -138,11 +140,11 @@ ExpenseTypeWorkflowFormSet = inlineformset_factory(
 class PayrollPeriodForm(forms.Form):
     start_date = forms.DateField(
         label="Fecha inicial",
-        widget=forms.DateInput(attrs={"type": "date"}),
+        widget=AppDateInput(),
     )
     end_date = forms.DateField(
         label="Fecha final",
-        widget=forms.DateInput(attrs={"type": "date"}),
+        widget=AppDateInput(),
     )
 
     period_info: PayrollPeriodInfo | None = None
@@ -184,8 +186,8 @@ class SaleForm(forms.ModelForm):
             "notes",
         ]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
-            "payment_due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "date": AppDateInput(),
+            "payment_due_date": AppDateInput(),
             "invoice_number": forms.TextInput(),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
@@ -561,7 +563,7 @@ class SalePaymentForm(forms.ModelForm):
         model = SalePayment
         fields = ["date", "amount", "method", "notes"]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
+            "date": AppDateInput(),
             "notes": forms.Textarea(attrs={"rows": 2}),
         }
 
