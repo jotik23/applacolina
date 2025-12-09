@@ -123,13 +123,9 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
         return self.render_to_response(self.get_context_data(filter_form=filter_form))
 
     def _build_filter_form(self) -> InventoryFilterForm:
-        default_start = timezone.localdate() - timedelta(days=30)
         if self.request.GET:
-            data = self.request.GET.copy()
-            if not data.get("start_date"):
-                data["start_date"] = default_start.isoformat()
-            return InventoryFilterForm(data)
-        return InventoryFilterForm(initial={"start_date": default_start})
+            return InventoryFilterForm(self.request.GET)
+        return InventoryFilterForm()
 
     def _fetch_entries(self, form: InventoryFilterForm):
         cleaned = form.cleaned_data
@@ -146,9 +142,6 @@ class InventoryDashboardView(StaffRequiredMixin, generic.TemplateView):
             qs = qs.filter(chicken_house=chicken_house)
         elif farm:
             qs = qs.filter(farm=farm, scope__in=[InventoryScope.FARM, InventoryScope.CHICKEN_HOUSE])
-        start_date = cleaned.get("start_date")
-        if start_date:
-            qs = qs.filter(effective_date__gte=start_date)
         return list(qs.order_by("-effective_date", "-id")[:400])
 
     def _build_totals(self, entries: list[ProductInventoryEntry]) -> dict[str, Decimal]:
