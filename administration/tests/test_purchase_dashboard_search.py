@@ -18,6 +18,19 @@ class PurchaseDashboardSearchTests(TestCase):
             email='dashboard@example.com',
             password='test123',
             is_staff=True,
+            cedula='12345',
+            nombres='Dashboard',
+            apellidos='Tester',
+            telefono='3000000001',
+        )
+        self.manager = user_model.objects.create_user(
+            email='gestor@example.com',
+            password='test123',
+            is_staff=True,
+            cedula='67890',
+            nombres='Gestor',
+            apellidos='Demo',
+            telefono='3000000002',
         )
         self.supplier = Supplier.objects.create(name='Proveedor Demo', tax_id='123456789')
         self.category = PurchasingExpenseType.objects.create(name='Infraestructura')
@@ -151,6 +164,118 @@ class PurchaseDashboardSearchTests(TestCase):
         self.assertFalse(state.pagination.has_next)
         self.assertTrue(state.pagination.has_previous)
 
+    def test_filters_by_category_selection(self) -> None:
+        other_category = PurchasingExpenseType.objects.create(name='Bioseguridad')
+        match = self._create_purchase(
+            timeline_code='CP-700',
+            name='Compra filtro',
+            description='Filtro especial',
+            status=PurchaseRequest.Status.DRAFT,
+            expense_type=other_category,
+        )
+        self._create_purchase(
+            timeline_code='CP-701',
+            name='Compra general',
+            description='Otro gasto',
+            status=PurchaseRequest.Status.DRAFT,
+        )
+
+        state = self._dashboard_state(
+            scope=PurchaseRequest.Status.DRAFT,
+            categories=[other_category.pk],
+        )
+
+        self.assertEqual([match.pk], [purchase.pk for purchase in state.pagination.records])
+
+    def test_filters_by_supplier_selection(self) -> None:
+        other_supplier = Supplier.objects.create(name='Proveedor Beta', tax_id='555')
+        match = self._create_purchase(
+            timeline_code='CP-710',
+            name='Compra proveedor beta',
+            description='Proveedor especial',
+            status=PurchaseRequest.Status.DRAFT,
+            supplier=other_supplier,
+        )
+        self._create_purchase(
+            timeline_code='CP-711',
+            name='Compra proveedor alfa',
+            description='Proveedor base',
+            status=PurchaseRequest.Status.DRAFT,
+        )
+
+        state = self._dashboard_state(
+            scope=PurchaseRequest.Status.DRAFT,
+            suppliers=[other_supplier.pk],
+        )
+
+        self.assertEqual([match.pk], [purchase.pk for purchase in state.pagination.records])
+
+    def test_filters_by_manager_selection(self) -> None:
+        match = self._create_purchase(
+            timeline_code='CP-720',
+            name='Compra con gestor',
+            description='Gestor asignado',
+            status=PurchaseRequest.Status.DRAFT,
+            assigned_manager=self.manager,
+        )
+        self._create_purchase(
+            timeline_code='CP-721',
+            name='Compra sin gestor',
+            description='Sin asignar',
+            status=PurchaseRequest.Status.DRAFT,
+        )
+
+        state = self._dashboard_state(
+            scope=PurchaseRequest.Status.DRAFT,
+            managers=[self.manager.pk],
+        )
+
+        self.assertEqual([match.pk], [purchase.pk for purchase in state.pagination.records])
+
+    def test_grouped_purchases_show_aggregated_amounts(self) -> None:
+        dominant_category = PurchasingExpenseType.objects.create(name='Bioseguridad')
+        leader = PurchaseRequest.objects.create(
+            timeline_code='CP-800',
+            name='Compra líder',
+            description='Agrupada',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=self.category,
+            status=PurchaseRequest.Status.INVOICE,
+            currency='COP',
+            estimated_total=Decimal('1000000'),
+            invoice_total=Decimal('800000'),
+            payment_amount=Decimal('200000'),
+            support_group_code='SG-020',
+        )
+        follower = PurchaseRequest.objects.create(
+            timeline_code='CP-801',
+            name='Compra seguidora',
+            description='Agrupada 2',
+            requester=self.user,
+            supplier=self.supplier,
+            expense_type=dominant_category,
+            status=PurchaseRequest.Status.INVOICE,
+            currency='COP',
+            estimated_total=Decimal('900000'),
+            invoice_total=Decimal('1200000'),
+            payment_amount=Decimal('150000'),
+            support_group_code='SG-020',
+            support_group_leader=leader,
+        )
+        state = self._dashboard_state(scope=PurchaseRequest.Status.INVOICE)
+        records = {record.pk: record for record in state.pagination.records}
+        self.assertIn(leader.pk, records)
+        self.assertIn(follower.pk, records)
+        expected_total = Decimal('2000000')
+        expected_paid = Decimal('350000')
+        self.assertEqual(expected_total, records[leader.pk].total_amount)
+        self.assertEqual(expected_paid, records[leader.pk].paid_amount)
+        self.assertEqual(dominant_category.name, records[leader.pk].category_name)
+        self.assertEqual(expected_total, records[follower.pk].total_amount)
+        self.assertEqual(expected_paid, records[follower.pk].paid_amount)
+        self.assertEqual(dominant_category.name, records[follower.pk].category_name)
+
     def _create_purchase(
         self,
         *,
@@ -159,14 +284,18 @@ class PurchaseDashboardSearchTests(TestCase):
         description: str,
         status: str,
         created_at: datetime | None = None,
+        expense_type: PurchasingExpenseType | None = None,
+        supplier: Supplier | None = None,
+        assigned_manager=None,
     ) -> PurchaseRequest:
         purchase = PurchaseRequest.objects.create(
             timeline_code=timeline_code,
             name=name,
             description=description,
             requester=self.user,
-            supplier=self.supplier,
-            expense_type=self.category,
+            supplier=supplier or self.supplier,
+            expense_type=expense_type or self.category,
+            assigned_manager=assigned_manager,
             status=status,
             currency='COP',
             estimated_total=Decimal('1000000.00'),
@@ -184,6 +313,9 @@ class PurchaseDashboardSearchTests(TestCase):
         start_date: date | None = None,
         end_date: date | None = None,
         page: int | None = None,
+        categories: list[int] | None = None,
+        suppliers: list[int] | None = None,
+        managers: list[int] | None = None,
     ):
         return get_dashboard_state(
             scope_code=scope,
@@ -193,4 +325,7 @@ class PurchaseDashboardSearchTests(TestCase):
             start_date=start_date,
             end_date=end_date,
             page_number=page,
+            category_ids=categories,
+            supplier_ids=suppliers,
+            manager_ids=managers,
         )

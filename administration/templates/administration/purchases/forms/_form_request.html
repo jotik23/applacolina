@@ -589,21 +589,21 @@
         <p class="text-[11px] font-semibold text-red-600">{{ field_errors.items.0 }}</p>
       {% endif %}
       <div class="overflow-x-auto rounded-2xl border border-slate-200" data-purchase-items-table>
-        <table class="min-w-full divide-y divide-slate-200 text-xs table-fixed">
+        <table class="w-full min-w-[1250px] divide-y divide-slate-200 text-xs table-fixed">
           <colgroup>
-            <col style="width:42%;">
+            <col style="width:34%;">
             <col style="width:18%;">
+            <col style="width:12%;">
             <col style="width:14%;">
             <col style="width:12%;">
             <col style="width:10%;">
-            <col style="width:4%;">
           </colgroup>
           <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             <tr>
               <th scope="col" class="px-3 py-2 text-left font-semibold">Item</th>
               <th scope="col" class="px-3 py-2 text-left font-semibold">Área</th>
               <th scope="col" class="px-3 py-2 text-center font-semibold">Cantidad</th>
-              <th scope="col" class="px-3 py-2 text-right font-semibold align-middle w-32">Valor</th>
+              <th scope="col" class="px-3 py-2 text-right font-semibold align-middle">Valor</th>
               <th scope="col" class="px-3 py-2 text-right font-semibold">Subtotal</th>
               <th scope="col" class="px-3 py-2 text-center font-semibold">Acción</th>
             </tr>
@@ -647,6 +647,7 @@
                 </td>
                 <td class="px-3 py-2 align-middle">
                   <div class="flex flex-col gap-1">
+                    <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Área</span>
                     <select
                       name="items[{{ forloop.counter0 }}][scope_value]"
                       data-field="scope_value"
@@ -791,6 +792,7 @@
     </td>
     <td class="px-3 py-2 align-middle">
       <div class="flex flex-col gap-1">
+        <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Área</span>
         <select
           name=""
           data-field="scope_value"

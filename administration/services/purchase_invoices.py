@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from django.db import transaction
+from django.utils import timezone
 
 from administration.models import PurchaseRequest, PurchaseSupportAttachment, SupportDocumentType
 
@@ -83,6 +84,12 @@ class PurchaseInvoiceService:
             errors.setdefault("non_field", []).append(
                 "Solo puedes gestionar soportes para compras en Gestionar soporte."
             )
+        if purchase.support_group_code and purchase.support_group_leader_id:
+            leader = purchase.support_group_anchor()
+            leader_label = leader.timeline_code if leader else "otra solicitud"
+            errors.setdefault("non_field", []).append(
+                f"Esta compra hace parte del grupo {purchase.support_group_code}. Gestiona el soporte desde {leader_label}."
+            )
         if support_type.kind == SupportDocumentType.Kind.INTERNAL and not support_type.template.strip():
             errors.setdefault("non_field", []).append(
                 "El soporte interno seleccionado no tiene plantilla configurada."
@@ -104,6 +111,7 @@ class PurchaseInvoiceService:
             purchase.status = PurchaseRequest.Status.PAYMENT
             update_fields.append("status")
         purchase.save(update_fields=update_fields)
+        self._sync_support_group(purchase=purchase, move_to_payment=intent == "confirm_invoice")
 
     def _persist_attachments(self, *, purchase: PurchaseRequest, attachments: Iterable) -> None:
         for uploaded in attachments:
@@ -123,3 +131,21 @@ class PurchaseInvoiceService:
                 continue
             cleaned[normalized_key] = (value or "").strip()
         return cleaned
+
+    def _sync_support_group(self, *, purchase: PurchaseRequest, move_to_payment: bool) -> None:
+        if not purchase.support_group_code or not purchase.is_support_group_leader:
+            return
+        followers = PurchaseRequest.objects.filter(
+            support_group_code=purchase.support_group_code
+        ).exclude(pk=purchase.pk)
+        if not followers:
+            return
+        now = timezone.now()
+        update_kwargs: dict[str, object] = {
+            'support_document_type': purchase.support_document_type,
+            'support_template_values': purchase.support_template_values,
+            'updated_at': now,
+        }
+        if move_to_payment:
+            update_kwargs['status'] = PurchaseRequest.Status.PAYMENT
+        followers.update(**update_kwargs)

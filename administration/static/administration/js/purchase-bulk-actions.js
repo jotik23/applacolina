@@ -13,6 +13,8 @@ function setupPurchaseBulkActions() {
   var requiresSelection = Array.prototype.slice.call(
     form.querySelectorAll('[data-purchase-bulk-requires-selection]')
   );
+  var groupButton = form.querySelector('[data-purchase-bulk-group-button]');
+  var groupHint = form.querySelector('[data-purchase-bulk-group-hint]');
   var panel = document.querySelector('[data-purchase-bulk-panel]');
   var panelToggle = document.querySelector('[data-purchase-bulk-panel-toggle]');
   var panelStateLabel = document.querySelector('[data-purchase-bulk-panel-state]');
@@ -48,14 +50,16 @@ function setupPurchaseBulkActions() {
   }
 
   function syncState() {
-    var selectedCount = checkboxes.filter(function (checkbox) {
+    var selectedCheckboxes = checkboxes.filter(function (checkbox) {
       return !checkbox.disabled && checkbox.checked;
-    }).length;
+    });
+    var selectedCount = selectedCheckboxes.length;
     if (countLabel) {
       countLabel.textContent = String(selectedCount);
     }
     updateSummaryText(selectedCount);
     setControlsDisabled(selectedCount === 0);
+    updateGroupControls(selectedCheckboxes);
     if (masterToggle) {
       masterToggle.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
       masterToggle.checked = selectedCount > 0 && selectedCount === checkboxes.length;
@@ -77,6 +81,30 @@ function setupPurchaseBulkActions() {
       });
       syncState();
     });
+  }
+
+  function updateGroupControls(selectedCheckboxes) {
+    if (!groupButton) {
+      return;
+    }
+    var selectedCount = selectedCheckboxes.length;
+    var eligibleSelected = selectedCheckboxes.filter(function (checkbox) {
+      return checkbox.getAttribute('data-support-eligible') === 'true';
+    }).length;
+    var canGroup = selectedCount >= 2 && eligibleSelected === selectedCount;
+    groupButton.disabled = !canGroup;
+    if (groupHint) {
+      var message = '';
+      if (!selectedCount) {
+        message = 'Selecciona compras para habilitar esta acción.';
+      } else if (selectedCount < 2) {
+        message = 'Selecciona al menos dos compras en Gestionar soporte.';
+      } else if (eligibleSelected !== selectedCount) {
+        message = 'Solo puedes agrupar compras en Gestionar soporte.';
+      }
+      groupHint.textContent = message;
+      groupHint.hidden = !message;
+    }
   }
 
   function setPanelExpanded(expanded) {

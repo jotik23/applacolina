@@ -358,6 +358,20 @@ class PurchaseRequest(TimeStampedModel):
         blank=True,
         help_text="Valores usados para completar la plantilla interna.",
     )
+    support_group_code = models.CharField(
+        "Código de grupo de soporte",
+        max_length=32,
+        blank=True,
+        help_text="Identificador del lote de compras que comparten un único soporte.",
+    )
+    support_group_leader = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="support_group_children",
+        verbose_name="Líder del grupo de soporte",
+    )
     reception_mismatch = models.BooleanField(
         "Recepción con diferencias",
         default=False,
@@ -435,6 +449,21 @@ class PurchaseRequest(TimeStampedModel):
 
     def get_scope_area_display(self) -> str:
         return self.AreaScope(self.primary_scope_area).label
+
+    @property
+    def has_support_group(self) -> bool:
+        return bool(self.support_group_code)
+
+    @property
+    def is_support_group_leader(self) -> bool:
+        return self.has_support_group and self.support_group_leader_id is None
+
+    def support_group_anchor(self) -> "PurchaseRequest | None":
+        if not self.has_support_group:
+            return None
+        if self.support_group_leader:
+            return self.support_group_leader
+        return self
 
     def _primary_area_summary(self) -> dict | None:
         summaries = self._area_summaries()

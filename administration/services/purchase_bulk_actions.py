@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Sequence
 
+from django.db import transaction
 from django.db.models import Case, DecimalField, F, Q, When
 from django.utils import timezone
 
-from administration.models import PurchaseRequest
+from administration.models import PurchaseRequest, PurchaseSupportAttachment
 
 
 class PurchaseBulkActionError(Exception):
@@ -86,3 +87,97 @@ def update_purchases_requested_date(*, purchase_ids: Sequence[int], requested_da
     if to_update:
         PurchaseRequest.objects.bulk_update(to_update, ['created_at', 'updated_at'])
     return len(to_update)
+
+
+def group_purchases_for_support(*, purchase_ids: Sequence[int]) -> tuple[str, int, str, int]:
+    """
+    Bundles the selected purchases under a single support group so they can share
+    a unique support workflow.
+
+    Returns a tuple with the generated group code, the leader ID, the leader timeline code and
+    the total number of purchases grouped.
+    """
+
+    if not purchase_ids or len(purchase_ids) < 2:
+        raise PurchaseBulkActionError("Selecciona al menos dos compras para crear un grupo de soporte.")
+    with transaction.atomic():
+        purchases = list(
+            PurchaseRequest.objects.select_for_update()
+            .filter(pk__in=purchase_ids)
+            .order_by('created_at', 'pk')
+        )
+        if len(purchases) < 2:
+            raise PurchaseBulkActionError("Selecciona al menos dos compras para crear un grupo de soporte.")
+        for purchase in purchases:
+            if purchase.status != PurchaseRequest.Status.INVOICE:
+                raise PurchaseBulkActionError(
+                    "Solo puedes agrupar compras que estén en el estado Gestionar soporte."
+                )
+            if purchase.support_group_code:
+                raise PurchaseBulkActionError(
+                    f"La compra {purchase.timeline_code} ya pertenece a un grupo de soporte."
+                )
+            if PurchaseSupportAttachment.objects.filter(purchase=purchase).exists():
+                raise PurchaseBulkActionError(
+                    f"La compra {purchase.timeline_code} ya tiene soportes adjuntos; elimínalos antes de agrupar."
+                )
+        leader = purchases[0]
+        code = _generate_support_group_code()
+        now = timezone.now()
+        for purchase in purchases:
+            purchase.support_group_code = code
+            purchase.updated_at = now
+            if purchase.pk == leader.pk:
+                purchase.support_group_leader = None
+            else:
+                purchase.support_group_leader = leader
+        PurchaseRequest.objects.bulk_update(
+            purchases,
+            ['support_group_code', 'support_group_leader', 'updated_at'],
+        )
+        return code, leader.pk, leader.timeline_code, len(purchases)
+
+
+def _generate_support_group_code() -> str:
+    today_prefix = timezone.localtime().strftime("SG-%Y%m%d")
+    suffix = 1
+    while True:
+        candidate = f"{today_prefix}-{suffix:02d}"
+        exists = PurchaseRequest.objects.filter(support_group_code=candidate).exists()
+        if not exists:
+            return candidate
+        suffix += 1
+
+
+def ungroup_support_group(*, purchase_id: int | None) -> tuple[str, int, PurchaseRequest]:
+    """
+    Reverts a support group so that every purchase becomes independent again.
+
+    Returns a tuple with the former group code, the number of purchases affected and the leader instance.
+    """
+
+    if not purchase_id:
+        raise PurchaseBulkActionError("Selecciona la compra que deseas desagrupar.")
+    with transaction.atomic():
+        try:
+            purchase = PurchaseRequest.objects.select_for_update().get(pk=purchase_id)
+        except PurchaseRequest.DoesNotExist as exc:
+            raise PurchaseBulkActionError("La compra seleccionada ya no existe.") from exc
+        if not purchase.support_group_code:
+            raise PurchaseBulkActionError("Esta compra no pertenece a un grupo de soporte.")
+        if purchase.support_group_leader_id:
+            raise PurchaseBulkActionError("Solo el líder del grupo puede revertir la agrupación.")
+        group_code = purchase.support_group_code
+        members = list(
+            PurchaseRequest.objects.select_for_update()
+            .filter(support_group_code=group_code)
+            .order_by('pk')
+        )
+        now = timezone.now()
+        for member in members:
+            member.support_group_code = ''
+            member.support_group_leader = None
+            member.updated_at = now
+        PurchaseRequest.objects.bulk_update(members, ['support_group_code', 'support_group_leader', 'updated_at'])
+        purchase.refresh_from_db(fields=['support_group_code', 'support_group_leader', 'status'])
+        return group_code, len(members), purchase

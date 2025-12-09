@@ -12,6 +12,7 @@ from io import BytesIO
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -27,6 +28,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.dateparse import parse_date
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from django.utils.safestring import mark_safe
 from django.views import generic
 from openpyxl import Workbook
 
@@ -71,6 +73,7 @@ from .models import (
     PayrollSnapshot,
     Product,
     PurchaseApproval,
+    PurchaseItem,
     PurchaseRequest,
     PurchasingExpenseType,
     Sale,
@@ -87,7 +90,9 @@ from .services.purchase_orders import (
 )
 from .services.purchase_bulk_actions import (
     PurchaseBulkActionError,
+    group_purchases_for_support,
     move_purchases_to_status,
+    ungroup_support_group,
     update_purchases_requested_date,
 )
 from .services.purchase_accounting import (
@@ -1605,6 +1610,9 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         search_query = (self.request.GET.get('search') or self.request.POST.get('search') or '').strip()
         start_date_raw = (self.request.GET.get('start_date') or self.request.POST.get('start_date') or '').strip()
         end_date_raw = (self.request.GET.get('end_date') or self.request.POST.get('end_date') or '').strip()
+        category_filters = self._parse_filter_ids(self.request.GET.getlist('category'))
+        supplier_filters = self._parse_filter_ids(self.request.GET.getlist('supplier'))
+        manager_filters = self._parse_filter_ids(self.request.GET.getlist('manager'))
         page_number_raw = self.request.GET.get('page') or self.request.POST.get('page')
         page_number = _parse_int(page_number_raw) or 1
         if page_number < 1:
@@ -1619,6 +1627,36 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             start_date=start_date,
             end_date=end_date,
             page_number=page_number,
+            category_ids=category_filters,
+            supplier_ids=supplier_filters,
+            manager_ids=manager_filters,
+        )
+        has_active_filters = any(
+            [
+                search_query,
+                start_date_raw,
+                end_date_raw,
+                category_filters,
+                supplier_filters,
+                manager_filters,
+            ]
+        )
+        filter_suffix = self._build_filter_suffix(
+            search_query=search_query,
+            start_date=start_date_raw,
+            end_date=end_date_raw,
+            category_ids=category_filters,
+            supplier_ids=supplier_filters,
+            manager_ids=manager_filters,
+        )
+        filter_suffix_with_page = self._build_filter_suffix(
+            search_query=search_query,
+            start_date=start_date_raw,
+            end_date=end_date_raw,
+            category_ids=category_filters,
+            supplier_ids=supplier_filters,
+            manager_ids=manager_filters,
+            page_number=state.pagination.page_number if state.pagination else None,
         )
         context.update(
             purchases_scope=state.scope,
@@ -1630,11 +1668,20 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             purchases_search=search_query,
             purchases_start_date=start_date_raw,
             purchases_end_date=end_date_raw,
+            purchases_category_filters=category_filters,
+            purchases_supplier_filters=supplier_filters,
+            purchases_manager_filters=manager_filters,
+            purchases_has_active_filters=has_active_filters,
+            purchases_filter_suffix=filter_suffix,
+            purchases_filter_suffix_with_page=filter_suffix_with_page,
         )
         status_values = set(PurchaseRequest.Status.values)
         status_options = tuple((scope.code, scope.label) for scope in state.scopes if scope.code in status_values)
         context.setdefault('purchase_status_options', status_options)
         context.setdefault('purchase_status_default', state.scope.code if state.scope.code in status_values else '')
+        context.setdefault('purchase_category_options', self._purchase_category_options())
+        context.setdefault('purchase_supplier_options', self._purchase_supplier_options())
+        context.setdefault('purchase_manager_options', self._purchase_manager_options())
         field_errors = kwargs.get('purchase_request_field_errors') or {}
         item_errors = kwargs.get('purchase_request_item_errors') or {}
         overrides = kwargs.get('purchase_form_overrides')
@@ -1730,11 +1777,17 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         end_date_raw = (self.request.GET.get('end_date') or '').strip()
         start_date = parse_date(start_date_raw) if start_date_raw else None
         end_date = parse_date(end_date_raw) if end_date_raw else None
+        category_filters = self._parse_filter_ids(self.request.GET.getlist('category'))
+        supplier_filters = self._parse_filter_ids(self.request.GET.getlist('supplier'))
+        manager_filters = self._parse_filter_ids(self.request.GET.getlist('manager'))
         queryset, scope = get_filtered_purchases_queryset(
             scope_code=self.request.GET.get('scope'),
             search_query=search_query or None,
             start_date=start_date,
             end_date=end_date,
+            category_ids=category_filters,
+            supplier_ids=supplier_filters,
+            manager_ids=manager_filters,
         )
         workbook = Workbook()
         sheet = workbook.active
@@ -1837,6 +1890,73 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         )
         return _workbook_response(workbook, filename)
 
+    def _parse_filter_ids(self, raw_values: Iterable[str]) -> list[int]:
+        ids: list[int] = []
+        for raw in raw_values:
+            parsed = _parse_int(raw)
+            if parsed is not None:
+                ids.append(parsed)
+        return ids
+
+    def _build_filter_suffix(
+        self,
+        *,
+        search_query: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        category_ids: Iterable[int],
+        supplier_ids: Iterable[int],
+        manager_ids: Iterable[int],
+        page_number: int | None = None,
+    ) -> str:
+        params: list[tuple[str, str]] = []
+        if search_query:
+            params.append(('search', search_query))
+        if start_date:
+            params.append(('start_date', start_date))
+        if end_date:
+            params.append(('end_date', end_date))
+        for category_id in category_ids:
+            params.append(('category', str(category_id)))
+        for supplier_id in supplier_ids:
+            params.append(('supplier', str(supplier_id)))
+        for manager_id in manager_ids:
+            params.append(('manager', str(manager_id)))
+        if page_number:
+            params.append(('page', str(page_number)))
+        if not params:
+            return ''
+        return mark_safe(f"&{urlencode(params, doseq=True)}")
+
+    def _purchase_category_options(self) -> list[dict[str, Any]]:
+        queryset = (
+            PurchasingExpenseType.objects.filter(purchase_requests__isnull=False)
+            .order_by('name')
+            .distinct()
+        )
+        return [{'id': category.pk, 'label': category.name} for category in queryset]
+
+    def _purchase_supplier_options(self) -> list[dict[str, Any]]:
+        queryset = (
+            Supplier.objects.filter(purchase_requests__isnull=False)
+            .order_by('name')
+            .distinct()
+        )
+        return [{'id': supplier.pk, 'label': supplier.name} for supplier in queryset]
+
+    def _purchase_manager_options(self) -> list[dict[str, Any]]:
+        user_model = get_user_model()
+        queryset = (
+            user_model.objects.filter(managed_purchase_requests__isnull=False)
+            .order_by('nombres', 'apellidos', 'cedula')
+            .distinct()
+        )
+        options: list[dict[str, Any]] = []
+        for user in queryset:
+            label = user.get_full_name() or user.get_username()
+            options.append({'id': user.pk, 'label': label})
+        return options
+
     @staticmethod
     def _format_purchase_approval_actor(approval: PurchaseApproval) -> str:
         if approval.approver:
@@ -1911,6 +2031,22 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                     )
             next_scope = target_status if target_status in valid_statuses else scope
             return redirect(self._build_base_url(scope=next_scope))
+        if action == 'group_support':
+            try:
+                (
+                    group_code,
+                    _leader_id,
+                    leader_timeline,
+                    grouped_count,
+                ) = group_purchases_for_support(purchase_ids=selected_ids)
+            except PurchaseBulkActionError as exc:
+                messages.error(self.request, str(exc))
+            else:
+                messages.success(
+                    self.request,
+                    f"Se agruparon {grouped_count} solicitudes en el grupo {group_code}. Gestiona el soporte desde {leader_timeline}.",
+                )
+            return redirect(self._build_base_url(scope=PurchaseRequest.Status.INVOICE))
         if action == 'update_requested_date':
             requested_date_raw = (self.request.POST.get('bulk_requested_date') or '').strip()
             requested_date = parse_date(requested_date_raw)
@@ -2055,10 +2191,43 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
     def _handle_invoice_panel_post(self) -> HttpResponse:
         intent = self.request.POST.get('intent') or 'save_invoice'
         purchase_id = _parse_int(self.request.POST.get('purchase'))
+        scope_code = self.request.POST.get('scope') or PurchaseRequest.Status.INVOICE
+        if intent == 'ungroup_support':
+            if not purchase_id:
+                messages.error(self.request, "Selecciona la compra que deseas desagrupar.")
+                return redirect(self._build_base_url(scope=scope_code))
+            try:
+                group_code, count, leader = ungroup_support_group(purchase_id=purchase_id)
+            except PurchaseBulkActionError as exc:
+                messages.error(self.request, str(exc))
+                return redirect(
+                    self._build_base_url(
+                        scope=scope_code,
+                        extra={
+                            'panel': 'invoice',
+                            'purchase': purchase_id,
+                        },
+                    )
+                )
+            leader_pk = leader.pk if leader else purchase_id
+            leader_status = leader.status if leader else scope_code
+            messages.success(
+                self.request,
+                f"Se revirtió el grupo {group_code}. {count} compras vuelven a gestionarse por separado.",
+            )
+            return redirect(
+                self._build_base_url(
+                    scope=leader_status,
+                    extra={
+                        'panel': 'invoice',
+                        'purchase': leader_pk,
+                    },
+                )
+            )
         payload, overrides, field_errors = self._build_invoice_payload(purchase_id=purchase_id)
         if field_errors or payload is None:
             return self._render_invoice_form_errors(
-                scope=self.request.POST.get('scope'),
+                scope=scope_code,
                 purchase_id=purchase_id,
                 overrides=overrides,
                 field_errors=field_errors,
@@ -2071,7 +2240,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         except PurchaseInvoiceValidationError as exc:
             self._merge_field_errors(field_errors, exc.field_errors)
             return self._render_invoice_form_errors(
-                scope=self.request.POST.get('scope'),
+                scope=scope_code,
                 purchase_id=purchase_id,
                 overrides=overrides,
                 field_errors=field_errors,
@@ -2944,14 +3113,60 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
         field_errors: dict[str, list[str]],
     ) -> dict:
         purchase = panel_state.purchase if panel_state else None
+        group_context = None
+        reference_purchase = purchase
+        read_only = False
+        if purchase and purchase.support_group_code:
+            leader = purchase.support_group_anchor()
+            if leader:
+                reference_purchase = leader
+                read_only = purchase.pk != leader.pk
+                member_rows = []
+                item_prefetch = Prefetch(
+                    'items',
+                    queryset=PurchaseItem.objects.select_related(
+                        'scope_farm',
+                        'scope_chicken_house__farm',
+                    ).order_by('id'),
+                )
+                members = list(
+                    PurchaseRequest.objects.filter(support_group_code=purchase.support_group_code)
+                    .select_related('expense_type', 'supplier')
+                    .prefetch_related(item_prefetch)
+                    .order_by('timeline_code')
+                )
+                for member in members:
+                    member_rows.append(
+                        {
+                            'id': member.pk,
+                            'timeline_code': member.timeline_code,
+                            'name': member.name,
+                            'status_label': member.get_status_display(),
+                            'is_leader': leader.pk == member.pk,
+                        }
+                    )
+                group_context = {
+                    'code': purchase.support_group_code,
+                    'leader_id': leader.pk,
+                    'leader_timeline_code': leader.timeline_code,
+                    'members': member_rows,
+                    'is_follower': read_only,
+                }
+                summary_payload = self._build_support_group_summary(leader=leader, members=members)
+                group_context.update(summary_payload)
+                group_context['can_ungroup'] = bool(
+                    not read_only and purchase.status == PurchaseRequest.Status.INVOICE
+                )
         selected_support_type = None
         if overrides and overrides.get('support_document_type_id') is not None:
             selected_support_type = overrides.get('support_document_type_id')
-        elif purchase:
-            selected_support_type = purchase.support_document_type_id
+        elif reference_purchase:
+            selected_support_type = reference_purchase.support_document_type_id
         selected_support_type = _parse_int(selected_support_type)
-        template_values = overrides.get('template_fields') if overrides else (purchase.support_template_values if purchase else {})
-        template_catalog = self._build_support_template_catalog(purchase=purchase)
+        template_values = overrides.get('template_fields') if overrides else (
+            reference_purchase.support_template_values if reference_purchase else {}
+        )
+        template_catalog = self._build_support_template_catalog(purchase=reference_purchase)
         template_config = {
             'purchaseId': purchase.pk if purchase else None,
             'selectedSupportTypeId': selected_support_type,
@@ -2964,12 +3179,85 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 'support_document_type_id': selected_support_type,
             },
             'support_types': self.purchase_form_options['support_types'],
-            'attachments': purchase.support_attachments.all() if purchase else [],
+            'attachments': reference_purchase.support_attachments.all() if reference_purchase else [],
             'template_config': template_config,
+            'read_only': read_only,
+            'group': group_context,
+            'group_redirect_id': group_context['leader_id'] if group_context else None,
         }
         return {
             'purchase_invoice_form': form,
             'purchase_invoice_field_errors': field_errors,
+        }
+
+    def _build_support_group_summary(
+        self,
+        *,
+        leader: PurchaseRequest,
+        members: list[PurchaseRequest],
+    ) -> dict[str, object]:
+        currency = leader.currency or 'COP'
+        total_estimated = Decimal('0.00')
+        total_invoice = Decimal('0.00')
+        total_payment = Decimal('0.00')
+        combined_items: list[dict[str, object]] = []
+        detail_rows: list[dict[str, object]] = []
+        dominant_member: PurchaseRequest | None = None
+        dominant_amount = Decimal('-1')
+
+        for member in members:
+            estimated = member.estimated_total or Decimal('0')
+            invoice_total = member.invoice_total or Decimal('0')
+            payment_amount = member.payment_amount or Decimal('0')
+            total_estimated += estimated
+            total_invoice += invoice_total
+            total_payment += payment_amount
+            ranking_amount = invoice_total if invoice_total > 0 else estimated
+            if dominant_member is None or ranking_amount > dominant_amount:
+                dominant_member = member
+                dominant_amount = ranking_amount
+            detail_items: list[dict[str, object]] = []
+            member_items = list(getattr(member, 'items').all())
+            for item in member_items:
+                subtotal = (item.quantity or Decimal('0')) * (item.estimated_amount or Decimal('0'))
+                item_payload = {
+                    'id': item.pk,
+                    'description': item.description,
+                    'area_label': item.area_label,
+                    'quantity': item.quantity,
+                    'estimated_amount': item.estimated_amount,
+                    'subtotal': subtotal,
+                    'purchase_code': member.timeline_code,
+                }
+                detail_items.append(item_payload)
+                combined_items.append(item_payload)
+            detail_rows.append(
+                {
+                    'id': member.pk,
+                    'timeline_code': member.timeline_code,
+                    'name': member.name,
+                    'status_label': member.get_status_display(),
+                    'supplier': member.supplier.name if member.supplier else '',
+                    'category_name': member.expense_type.name if member.expense_type else '',
+                    'estimated_total': estimated,
+                    'invoice_total': invoice_total,
+                    'payment_amount': payment_amount,
+                    'items': detail_items,
+                }
+            )
+
+        summary = {
+            'currency': currency,
+            'estimated_total': total_estimated,
+            'invoice_total': total_invoice,
+            'payment_amount': total_payment,
+            'category_name': dominant_member.expense_type.name if dominant_member and dominant_member.expense_type else None,
+        }
+
+        return {
+            'summary': summary,
+            'combined_items': combined_items,
+            'details': detail_rows,
         }
 
     def _build_invoice_payload(
