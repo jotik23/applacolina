@@ -9784,26 +9784,34 @@
         function buildWhatsappReport(data, integerFormatter, decimalFormatter) {
           const sections = [];
           const shiftSummary = buildShiftSummary(data);
-          if (shiftSummary) {
-            sections.push(shiftSummary);
-          }
           const shiftType = resolveShiftType(data);
+          if (shiftSummary) {
+            sections.push({ text: shiftSummary, tightWithPrev: false });
+          }
           if (shiftType === 'night') {
             const nightSection = buildNightSection(data.night_mortality || null, integerFormatter, decimalFormatter);
             if (nightSection) {
-              sections.push(nightSection);
+              sections.push({ text: nightSection, tightWithPrev: false });
             }
           } else if (shiftType === 'day') {
             const daySection = buildDayProductionSection(data.production || null, integerFormatter, decimalFormatter);
             if (daySection) {
-              sections.push(daySection);
+              sections.push({ text: daySection, tightWithPrev: Boolean(shiftSummary) });
             }
           }
           const tasksSection = buildTasksSection(data.tasks || []);
           if (tasksSection) {
-            sections.push(tasksSection);
+            sections.push({ text: tasksSection, tightWithPrev: false });
           }
-          return sections.join('\n\n');
+          return sections.reduce(function (message, section) {
+            if (!section || !section.text) {
+              return message;
+            }
+            if (!message) {
+              return section.text;
+            }
+            return message + (section.tightWithPrev ? '\n' : '\n\n') + section.text;
+          }, '');
         }
 
         function buildShiftSummary(data) {
@@ -9946,21 +9954,92 @@
           const dateLabel = registry.date_label || '';
           if (dateLabel) {
             lines.push('📅 Fecha: ' + dateLabel);
-            lines.push('');
           }
           let hasDetails = false;
           registry.lots.forEach(function (lot) {
-            const roomLines = buildDayRoomLines((lot && lot.rooms) || [], integerFormatter, decimalFormatter);
-            if (!roomLines.length) {
+            const lotLines = buildDayLotLines(lot, integerFormatter, decimalFormatter);
+            if (!lotLines.length) {
               return;
             }
+            if (!hasDetails && dateLabel) {
+              lines.push('');
+            } else if (hasDetails) {
+              lines.push('');
+            }
+            lines.push.apply(lines, lotLines);
             hasDetails = true;
-            lines.push.apply(lines, roomLines);
           });
           if (!hasDetails) {
             lines.push('Sin registros de lotes.');
           }
           return lines.join('\n');
+        }
+
+        function buildDayLotLines(lot, integerFormatter, decimalFormatter) {
+          if (!lot) {
+            return [];
+          }
+          const rooms = Array.isArray(lot.rooms) ? lot.rooms : [];
+          const roomLines = buildDayRoomLines(rooms, integerFormatter, decimalFormatter);
+          if (!roomLines.length) {
+            return [];
+          }
+          const lines = roomLines.slice();
+          const record = lot && lot.record ? lot.record : null;
+          const totalLines = buildDayLotTotalsLines(rooms, record, integerFormatter, decimalFormatter);
+          if (totalLines.length) {
+            lines.push('');
+            lines.push.apply(lines, totalLines);
+          }
+          return lines;
+        }
+
+        function buildDayLotTotalsLines(rooms, record, integerFormatter, decimalFormatter) {
+          if (!Array.isArray(rooms) || !rooms.length) {
+            return [];
+          }
+          let productionTotal = 0;
+          let consumptionTotal = 0;
+          let mortalityTotal = 0;
+          let discardTotal = 0;
+          rooms.forEach(function (room) {
+            productionTotal += toNumber(room.production);
+            consumptionTotal += toNumber(room.consumption);
+            mortalityTotal += toNumber(room.mortality);
+            discardTotal += toNumber(room.discard);
+          });
+          const lines = ['    📊 Totales del galpón:'];
+          const productionLabel = formatDecimalLabel(productionTotal, decimalFormatter) || '0';
+          let productionLine = '      • Producción total: ' + productionLabel + ' huevos';
+          const totalCartonLabel = formatCartonCountLabel(productionTotal, decimalFormatter);
+          if (totalCartonLabel) {
+            productionLine += ' (' + totalCartonLabel + ' cart)';
+          }
+          lines.push(productionLine);
+
+          const consumptionLabel = formatDecimalLabel(consumptionTotal, decimalFormatter) || '0';
+          let consumptionLine = '      • Consumo total: ' + consumptionLabel + ' kg';
+          const totalBagLabel = formatBagCountLabel(consumptionTotal, decimalFormatter);
+          if (totalBagLabel) {
+            consumptionLine += ' (' + totalBagLabel + ' bultos)';
+          }
+          lines.push(consumptionLine);
+
+          const mortalityLabel = formatIntegerLabel(mortalityTotal, integerFormatter) || '0';
+          lines.push('      • Mortalidad total: ' + mortalityLabel);
+
+          const discardLabel = formatIntegerLabel(discardTotal, integerFormatter) || '0';
+          lines.push('      • Descarte total: ' + discardLabel);
+
+          const weightLabel =
+            record && Object.prototype.hasOwnProperty.call(record, 'average_egg_weight')
+              ? formatDecimalLabel(record.average_egg_weight, decimalFormatter)
+              : '';
+          if (weightLabel) {
+            lines.push('      • Peso promedio: ' + weightLabel + ' gr/huevo');
+          }
+
+          return lines;
         }
 
         function formatLotSummaryLine(record, integerFormatter, decimalFormatter) {
