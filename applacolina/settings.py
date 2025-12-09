@@ -99,6 +99,7 @@ LOCAL_APPS = [
     'task_manager.apps.TaskManagerConfig',
     'administration.apps.AdministrationConfig',
     'reports.apps.ReportsConfig',
+    'inventory.apps.InventoryConfig',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

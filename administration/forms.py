@@ -70,7 +70,7 @@ class SupplierImportForm(forms.Form):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ["name", "unit"]
+        fields = ["name", "unit", "category"]
 
 
 class PurchasingExpenseTypeForm(forms.ModelForm):

@@ -22,6 +22,16 @@
     {% endif %}
     {% if request.user.is_staff %}
       <a
+        href="{% url 'inventory:dashboard' %}"
+        class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'product_inventory' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
+        {% if active == 'product_inventory' %}aria-current="page"{% endif %}
+      >
+        <span class="h-2 w-2 rounded-full {% if active == 'product_inventory' %}bg-emerald-500{% else %}bg-slate-300{% endif %}"></span>
+        Inventario de productos
+      </a>
+    {% endif %}
+    {% if request.user.is_staff %}
+      <a
         href="{% url 'configuration:batches' %}"
         class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'batches' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
         {% if active == 'batches' %}aria-current="page"{% endif %}

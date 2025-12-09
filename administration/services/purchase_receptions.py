@@ -9,6 +9,8 @@ from django.db.models import F
 from django.utils import timezone
 
 from administration.models import PurchaseItem, PurchaseReceptionAttachment, PurchaseRequest
+from production.models import ChickenHouse, Farm
+from inventory.services import InventoryReference, InventoryService
 
 
 @dataclass
@@ -54,7 +56,7 @@ class PurchaseReceptionService:
     def _load_purchase(self, purchase_id: int) -> PurchaseRequest:
         return (
             PurchaseRequest.objects.select_for_update()
-            .prefetch_related("items")
+            .prefetch_related("items__product", "items__scope_farm", "items__scope_chicken_house")
             .get(pk=purchase_id)
         )
 
@@ -82,13 +84,25 @@ class PurchaseReceptionService:
     def _persist_reception(self, purchase: PurchaseRequest, payload: PurchaseReceptionPayload, *, intent: str) -> None:
         items_by_id = {item.id: item for item in purchase.items.all()}
         items_to_update: list[PurchaseItem] = []
+        previous_quantities = {item.id: item.received_quantity for item in purchase.items.all()}
+        inventory_service = InventoryService(
+            actor=self.actor if getattr(self.actor, "is_authenticated", False) else None
+        )
         for item_payload in payload.items:
             purchase_item = items_by_id.get(item_payload.item_id)
             if not purchase_item:
                 continue
+            previous_quantity = previous_quantities.get(purchase_item.id) or Decimal("0.00")
             purchase_item.received_quantity = item_payload.received_quantity
             purchase_item.updated_at = timezone.now()
             items_to_update.append(purchase_item)
+            delta = purchase_item.received_quantity - previous_quantity
+            self._register_inventory_receipt(
+                purchase=purchase,
+                item=purchase_item,
+                delta=delta,
+                inventory_service=inventory_service,
+            )
         if items_to_update:
             PurchaseItem.objects.bulk_update(items_to_update, ["received_quantity", "updated_at"])
         purchase.reception_notes = payload.notes
@@ -111,3 +125,36 @@ class PurchaseReceptionService:
                 file=uploaded,
                 uploaded_by=self.actor if getattr(self.actor, "is_authenticated", False) else None,
             )
+
+    def _register_inventory_receipt(
+        self,
+        *,
+        purchase: PurchaseRequest,
+        item: PurchaseItem,
+        delta: Decimal,
+        inventory_service: InventoryService,
+    ) -> None:
+        if delta == 0 or not item.product_id:
+            return
+        scope, farm, chicken_house = self._resolve_inventory_scope(item)
+        reference = InventoryReference(model_label="administration.purchaseitem", instance_id=item.pk)
+        inventory_service.register_receipt(
+            product=item.product,
+            scope=scope,
+            quantity=delta,
+            farm=farm,
+            chicken_house=chicken_house,
+            notes=f"Ingreso por recepción de compra {purchase.timeline_code}",
+            metadata={"purchase_id": purchase.pk, "purchase_item_id": item.pk},
+            effective_date=purchase.purchase_date or timezone.localdate(),
+            reference=reference,
+        )
+
+    def _resolve_inventory_scope(self, item: PurchaseItem) -> tuple[str, Farm | None, ChickenHouse | None]:
+        area = item.scope_area or PurchaseRequest.AreaScope.COMPANY
+        if area == PurchaseRequest.AreaScope.CHICKEN_HOUSE and item.scope_chicken_house:
+            farm = item.scope_farm or item.scope_chicken_house.farm
+            return area, farm, item.scope_chicken_house
+        if area == PurchaseRequest.AreaScope.FARM and item.scope_farm:
+            return area, item.scope_farm, None
+        return PurchaseRequest.AreaScope.COMPANY, None, None

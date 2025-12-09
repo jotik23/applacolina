@@ -58,7 +58,8 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "unit", "created_at", "updated_at")
+    list_display = ("name", "unit", "category", "created_at")
+    list_filter = ("category",)
     search_fields = ("name", "unit")
 
 

@@ -28,12 +28,23 @@ class Product(TimeStampedModel):
         PACK_120 = "Paquete x 120", "Paquete x 120"
         UNIT = "Unidad", "Unidad"
 
+    class Category(models.TextChoices):
+        FOOD = "food", "Alimento"
+        OTHER = "other", "Otros"
+
     name = models.CharField("Nombre", max_length=150, unique=True)
     unit = models.CharField(
         "Unidad",
         max_length=60,
         choices=Unit.choices,
         default=Unit.UNIT,
+    )
+    category = models.CharField(
+        "Tipo",
+        max_length=20,
+        choices=Category.choices,
+        default=Category.OTHER,
+        help_text="Determina si se descontará automáticamente cuando los galponeros registren consumo.",
     )
 
     class Meta:

@@ -10,6 +10,7 @@ from administration.views import (
     SupplierManagementView,
 )
 from production.views import daily_indicators_view, egg_inventory_dashboard_view
+from inventory.views import HomeInventoryDashboardView
 from task_manager.views import task_manager_daily_report_view
 
 app_name = "home"
@@ -23,6 +24,7 @@ urlpatterns = [
     path("produccion-indicadores/", daily_indicators_view, name="daily-indicators"),
     path("reporte-tareas/", task_manager_daily_report_view, name="task-report"),
     path("compras/", AdministrationHomeView.as_view(), name="purchases"),
+    path("inventario/", HomeInventoryDashboardView.as_view(), name="inventory"),
     path("nomina/", PayrollManagementView.as_view(), name="payroll"),
     path("terceros/", SupplierManagementView.as_view(), name="suppliers"),
 ]
