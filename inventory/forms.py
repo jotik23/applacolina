@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
 from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -175,6 +174,8 @@ class ProductConsumptionConfigForm(ScopeResolutionMixin, forms.ModelForm):
         else:
             self.add_error("scope", "Selecciona un ámbito válido.")
         return cleaned
+
+
 class InventoryFilterForm(forms.Form):
     product = forms.ModelChoiceField(
         label="Producto",
