@@ -191,17 +191,10 @@ class InventoryFilterForm(forms.Form):
         queryset=ChickenHouse.objects.select_related("farm").order_by("farm__name", "name"),
         required=False,
     )
-    start_date = forms.DateField(
-        label="Desde",
-        required=False,
-        widget=forms.DateInput(attrs={"type": "date"}),
-    )
 
     def clean(self):
         cleaned = super().clean()
         chicken_house = cleaned.get("chicken_house")
         if chicken_house:
             cleaned["farm"] = chicken_house.farm
-        if not cleaned.get("start_date"):
-            cleaned["start_date"] = timezone.localdate() - timedelta(days=30)
         return cleaned
