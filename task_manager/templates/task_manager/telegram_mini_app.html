@@ -2310,6 +2310,10 @@
               />
               <div class="mt-4 flex flex-wrap gap-2" data-task-action-list>
                 {% for action in task.actions %}
+                  {% if action.action == "evidence" %}
+                    {# Botón oculto temporalmente mientras la carga de evidencias se desactiva en la mini app. #}
+                    {% continue %}
+                  {% endif %}
                   <button
                     type="button"
                     class="rounded-full px-3 py-1 text-xs font-semibold transition {% if action.disabled %}border border-slate-200 text-slate-400 opacity-60 cursor-not-allowed{% elif forloop.first %}bg-brand text-slate-900 shadow shadow-amber-200/70 hover:bg-brand-dark{% else %}border border-slate-200 text-slate-600 hover:border-brand hover:text-brand{% endif %}"
