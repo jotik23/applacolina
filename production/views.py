@@ -1240,6 +1240,8 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
                 "dispatch_overview_url": dispatch_overview_url,
             }
         )
+        _maybe_set_home_tab(context, self.request, "egg_inventory")
+        context.setdefault("home_active_tab", "egg_inventory")
         return context
 
     def _resolve_month(self) -> date:
@@ -1526,6 +1528,8 @@ class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateVie
                 "whatsapp_share_url": whatsapp_share_url,
             }
         )
+        _maybe_set_home_tab(context, self.request, "egg_inventory")
+        context.setdefault("home_active_tab", "egg_inventory")
         return context
 
     def _display_name(self, user) -> Optional[str]:
