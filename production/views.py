@@ -521,7 +521,9 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             total_mortality = int(stats.get("total_mortality", 0) or 0)
             total_discard = int(stats.get("total_discard", 0) or 0)
             total_losses = total_mortality + total_discard
-            current_birds = max(batch.initial_quantity - total_losses, 0)
+            allocated_birds = sum(allocation.quantity or 0 for allocation in batch.allocations.all())
+            base_population = allocated_birds or batch.initial_quantity or 0
+            current_birds = max(base_population - total_losses, 0)
             bird_balance = batch.initial_quantity - current_birds
 
             weekly_consumption = float(stats.get("weekly_consumption") or Decimal("0"))
@@ -919,7 +921,7 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             barn_house_names: List[str] = []
 
             for allocation in batch.allocations.all():
-                share = allocation.quantity / batch.initial_quantity if batch.initial_quantity else 0
+                share = allocation.quantity / base_population if base_population else 0
                 allocation_current = int(round(current_birds * share))
                 occupancy_rate = (
                     round((allocation_current / allocation.quantity) * 100, 1)
