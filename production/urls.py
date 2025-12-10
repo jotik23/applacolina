@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from .views import (
+    egg_classification_session_date_update_view,
     egg_classification_shift_summary_view,
     daily_indicators_view,
     egg_inventory_batch_detail_view,
@@ -29,6 +30,11 @@ urlpatterns = [
         "inventario-huevo/lote/<int:pk>/",
         egg_inventory_batch_detail_view,
         name="egg-inventory-batch",
+    ),
+    path(
+        "inventario-huevo/sesiones/<int:pk>/fecha/",
+        egg_classification_session_date_update_view,
+        name="egg-classification-session-date",
     ),
     path(
         "lotes/",

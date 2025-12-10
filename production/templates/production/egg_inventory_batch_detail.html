@@ -249,11 +249,29 @@
               {% for session in session_rows %}
                 <li class="space-y-3 rounded-2xl border border-slate-200/70 bg-white/90 p-4">
                   <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm text-slate-600">
-                    <div>
+                    <div
+                      class="space-y-1"
+                      data-classification-date-control
+                      data-session-id="{{ session.id }}"
+                      data-update-url="{% url 'production:egg-classification-session-date' session.id %}"
+                    >
                       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Registrado el</p>
-                      <p class="font-semibold text-slate-900">
-                        {{ session.classified_at|date:"l d \\d\\e F · H:i" }}
-                      </p>
+                      <button
+                        type="button"
+                        class="font-semibold text-slate-900 underline decoration-dotted decoration-emerald-400 underline-offset-4 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                        data-date-trigger
+                        title="Editar fecha de clasificación"
+                      >
+                        <span data-date-display>{{ session.classified_at|date:"l d \\d\\e F · H:i" }}</span>
+                      </button>
+                      <input
+                        type="date"
+                        value="{{ session.classified_at|date:'Y-m-d' }}"
+                        class="sr-only"
+                        data-date-input
+                        aria-label="Selecciona la fecha de clasificación"
+                      >
+                    </div>
                     </div>
                     <div class="text-right">
                       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total</p>
@@ -396,6 +414,107 @@
         input.addEventListener('input', updatePendingDisplay);
       });
       updatePendingDisplay();
+    })();
+
+    (function () {
+      const controls = document.querySelectorAll('[data-classification-date-control]');
+      if (!controls.length) {
+        return;
+      }
+
+      function resolveCsrfToken() {
+        const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (csrfInput) {
+          return csrfInput.value;
+        }
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '';
+      }
+
+      const csrfToken = resolveCsrfToken();
+      const dateFormatter = new Intl.DateTimeFormat('es-CO', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+      });
+      const timeFormatter = new Intl.DateTimeFormat('es-CO', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      controls.forEach((control) => {
+        const trigger = control.querySelector('[data-date-trigger]');
+        const input = control.querySelector('[data-date-input]');
+        const display = control.querySelector('[data-date-display]');
+        const updateUrl = control.getAttribute('data-update-url');
+        if (!trigger || !input || !display || !updateUrl) {
+          return;
+        }
+
+        let previousValue = input.value;
+        let isSaving = false;
+
+        function formatDisplay(isoValue) {
+          if (!isoValue) {
+            return;
+          }
+          const parsedDate = new Date(isoValue);
+          const formattedDate = dateFormatter.format(parsedDate);
+          const formattedTime = timeFormatter.format(parsedDate);
+          const capitalized = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+          display.textContent = `${capitalized} · ${formattedTime}`;
+        }
+
+        async function persistDate(newValue) {
+          if (!newValue || newValue === previousValue || isSaving) {
+            return;
+          }
+          isSaving = true;
+          control.classList.add('opacity-60');
+          try {
+            const formData = new FormData();
+            formData.append('classified_date', newValue);
+            const response = await fetch(updateUrl, {
+              method: 'POST',
+              headers: {
+                'X-CSRFToken': csrfToken,
+              },
+              body: formData,
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+              throw new Error(payload.error || 'No se pudo actualizar la fecha.');
+            }
+            if (payload.classified_at) {
+              formatDisplay(payload.classified_at);
+            }
+            previousValue = newValue;
+          } catch (error) {
+            alert(error.message || 'No se pudo actualizar la fecha.');
+            input.value = previousValue;
+          } finally {
+            isSaving = false;
+            control.classList.remove('opacity-60');
+          }
+        }
+
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (typeof input.showPicker === 'function') {
+            input.showPicker();
+          } else {
+            input.click();
+          }
+        });
+
+        input.addEventListener('change', (event) => {
+          persistDate(event.target.value);
+        });
+
+        input.addEventListener('blur', (event) => {
+          persistDate(event.target.value);
+        });
+      });
     })();
   </script>
 {% endblock %}

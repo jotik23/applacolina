@@ -62,9 +62,11 @@ from production.services.egg_classification import (
     build_pending_batches,
     compute_unclassified_total,
     delete_classification_session,
+    get_classification_totals_between,
     get_inventory_balance_until,
     reset_batch_progress,
     summarize_classified_inventory,
+    update_classification_session_date,
 )
 from production.services.reference_tables import get_reference_targets, reset_reference_targets_cache
 from production.services.weight_registry import build_batch_weight_registry
@@ -1193,7 +1195,11 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
 
         dispatch_days = build_dispatch_flow_range(start_date=month_start, end_date=month_end)
         dispatch_day_map = {dispatch.day: dispatch for dispatch in dispatch_days}
-        classification_type_totals = self._build_type_totals(flows)
+        classification_type_totals = get_classification_totals_between(
+            start_date=month_start,
+            end_date=month_end,
+            farm_id=selected_farm_id,
+        )
         dispatch_type_totals = self._build_dispatch_type_totals(dispatch_days)
         previous_day = month_start - timedelta(days=1)
         starting_inventory_totals = get_inventory_balance_until(
@@ -1315,13 +1321,6 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             totals_by_day[flow.day] = dict(running)
         return totals_by_day
 
-    def _build_type_totals(self, flows: list[InventoryFlow]) -> dict[str, Decimal]:
-        totals: dict[str, Decimal] = defaultdict(Decimal)
-        for flow in flows:
-            for egg_type, qty in flow.type_breakdown.items():
-                totals[egg_type] += Decimal(qty or 0)
-        return totals
-
     def _build_dispatch_type_totals(self, dispatch_days: list[DispatchDayFlow]) -> dict[str, Decimal]:
         totals: dict[str, Decimal] = defaultdict(Decimal)
         for day in dispatch_days:
@@ -1342,8 +1341,6 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             classified = classification_totals.get(egg_type, Decimal("0"))
             dispatched = dispatch_totals.get(egg_type, Decimal("0"))
             balance = starting + classified - dispatched
-            if balance < Decimal("0"):
-                balance = Decimal("0")
             rows.append(
                 {
                     "egg_type": egg_type,
@@ -1367,8 +1364,6 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
         classified_total = sum(classification_totals.values(), Decimal("0"))
         dispatched_total = sum(dispatch_totals.values(), Decimal("0"))
         balance_total = starting_total + classified_total - dispatched_total
-        if balance_total < Decimal("0"):
-            balance_total = Decimal("0")
         return {
             "starting": starting_total,
             "classified": classified_total,
@@ -1840,6 +1835,38 @@ class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
                 }
             )
         return session_rows
+
+
+class EggClassificationSessionDateUpdateView(EggInventoryPermissionMixin, View):
+    """AJAX endpoint to edit the date of a classification session."""
+
+    permission_required = (
+        "production.access_egg_inventory",
+        "production.record_egg_classification",
+    )
+
+    def post(self, request, *args, **kwargs):
+        session = get_object_or_404(
+            EggClassificationSession.objects.select_related("batch"),
+            pk=kwargs["pk"],
+        )
+        raw_value = request.POST.get("classified_date")
+        target_date = parse_date(raw_value) if raw_value else None
+        if not target_date:
+            return JsonResponse(
+                {"error": "Selecciona una fecha válida para continuar."},
+                status=400,
+            )
+        update_classification_session_date(session=session, classified_date=target_date)
+        session.refresh_from_db(fields=["classified_at"])
+        localized_timestamp = timezone.localtime(session.classified_at)
+        return JsonResponse(
+            {
+                "status": "ok",
+                "session_id": session.pk,
+                "classified_at": localized_timestamp.isoformat(),
+            }
+        )
 
 
 class DailyIndicatorsView(ProductionDashboardContextMixin, TemplateView):
@@ -3727,6 +3754,7 @@ egg_inventory_dashboard_view = EggInventoryDashboardView.as_view()
 egg_inventory_cardex_view = EggInventoryCardexView.as_view()
 egg_classification_shift_summary_view = EggClassificationShiftSummaryView.as_view()
 egg_inventory_batch_detail_view = EggInventoryBatchDetailView.as_view()
+egg_classification_session_date_update_view = EggClassificationSessionDateUpdateView.as_view()
 daily_indicators_view = DailyIndicatorsView.as_view()
 infrastructure_home_view = InfrastructureHomeView.as_view()
 farm_update_view = FarmUpdateView.as_view()

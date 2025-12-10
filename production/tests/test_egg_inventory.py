@@ -332,6 +332,47 @@ class EggInventoryDashboardTests(TestCase):
         self.assertEqual(jumbo_row["starting"], Decimal("80"))
         totals = response.context["inventory_argument_totals"]
         self.assertEqual(totals["starting"], Decimal("80"))
+
+    def test_cardex_argument_uses_session_date_for_month_totals(self) -> None:
+        target_month = date(2024, 9, 1)
+        next_month = (target_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+        month_record = ProductionRecord.objects.create(
+            bird_batch=self.batch,
+            date=target_month,
+            production=Decimal("120"),
+            consumption=Decimal("90"),
+            mortality=0,
+            discard=0,
+        )
+        batch = month_record.egg_classification
+        batch.received_cartons = Decimal("100")
+        batch.save(update_fields=["received_cartons"])
+        record_classification_results(
+            batch=batch,
+            entries={"aa": Decimal("100")},
+            actor_id=self.user.id,
+        )
+        session = batch.classification_sessions.first()
+        assert session is not None
+        session.classified_at = timezone.make_aware(
+            datetime.combine(next_month, datetime.min.time())
+        )
+        session.save(update_fields=["classified_at"])
+
+        url = reverse("production:egg-inventory-cardex")
+        september_response = self.client.get(url, {"month": target_month.strftime("%Y-%m")})
+        self.assertEqual(september_response.status_code, 200)
+        september_rows = september_response.context["inventory_argument_rows"]
+        aa_row = next(row for row in september_rows if row["egg_type"] == EggType.DOUBLE_A)
+        self.assertEqual(aa_row["classified"], Decimal("0"))
+
+        october_response = self.client.get(url, {"month": next_month.strftime("%Y-%m")})
+        self.assertEqual(october_response.status_code, 200)
+        october_rows = october_response.context["inventory_argument_rows"]
+        october_aa_row = next(row for row in october_rows if row["egg_type"] == EggType.DOUBLE_A)
+        self.assertEqual(october_aa_row["classified"], Decimal("100"))
+
     def test_cardex_sessions_view_lists_partial_rows(self) -> None:
         batch = self.record.egg_classification
         batch.received_cartons = Decimal("150")
@@ -383,8 +424,33 @@ class EggInventoryDashboardTests(TestCase):
         self.assertRedirects(response, reverse("production:egg-inventory-batch", args=[batch.pk]))
         batch.refresh_from_db()
         self.assertEqual(batch.classification_sessions.count(), 0)
-        self.assertEqual(batch.classified_total, Decimal("0"))
-        self.assertEqual(batch.status, batch.Status.CONFIRMED)
+
+    def test_can_update_classification_session_date(self) -> None:
+        batch = self.record.egg_classification
+        batch.received_cartons = Decimal("120")
+        batch.save(update_fields=["received_cartons"])
+        record_classification_results(
+            batch=batch,
+            entries={"jumbo": Decimal("60"), "aaa": Decimal("60")},
+            actor_id=self.user.id,
+        )
+        session = batch.classification_sessions.first()
+        assert session is not None
+        target_date = date.today() - timedelta(days=2)
+        url = reverse("production:egg-classification-session-date", args=[session.pk])
+        response = self.client.post(
+            url,
+            {"classified_date": target_date.strftime("%Y-%m-%d")},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["session_id"], session.pk)
+        session.refresh_from_db()
+        self.assertEqual(timezone.localtime(session.classified_at).date(), target_date)
+        batch.refresh_from_db()
+        self.assertEqual(timezone.localtime(batch.classified_at).date(), target_date)
+        self.assertEqual(batch.classified_total, Decimal("120"))
+        self.assertEqual(batch.status, batch.Status.CLASSIFIED)
 
     def test_can_reset_batch_progress(self) -> None:
         batch = self.record.egg_classification

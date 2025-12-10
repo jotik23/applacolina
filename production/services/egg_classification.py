@@ -137,6 +137,18 @@ EGGS_PER_CARTON = Decimal("30")
 CARTON_QUANTUM = Decimal("0.01")
 
 
+def _local_day_bounds(target_date: date) -> tuple[datetime, datetime]:
+    """Return timezone-aware start/end datetimes for the provided day."""
+
+    local_tz = timezone.get_current_timezone()
+    start_naive = datetime.combine(target_date, datetime.min.time())
+    end_naive = datetime.combine(target_date + timedelta(days=1), datetime.min.time())
+    return (
+        timezone.make_aware(start_naive, local_tz),
+        timezone.make_aware(end_naive, local_tz),
+    )
+
+
 def _display_name(user) -> Optional[str]:
     if not user:
         return None
@@ -339,6 +351,37 @@ def delete_classification_session(*, session: EggClassificationSession) -> EggCl
     return batch
 
 
+def update_classification_session_date(
+    *,
+    session: EggClassificationSession,
+    classified_date: date,
+) -> EggClassificationSession:
+    """Allow adjusting the classification session date while preserving the time."""
+
+    local_tz = timezone.get_current_timezone()
+    original_timestamp = session.classified_at or timezone.now()
+    local_dt = timezone.localtime(original_timestamp, timezone=local_tz)
+    local_time = local_dt.timetz().replace(tzinfo=None)
+    new_local = datetime.combine(classified_date, local_time)
+    new_timestamp = timezone.make_aware(new_local, local_tz)
+
+    with transaction.atomic():
+        session.classified_at = new_timestamp
+        session.save(update_fields=["classified_at", "updated_at"])
+
+        batch = session.batch
+        latest_session = batch.classification_sessions.order_by("-classified_at", "-pk").first()
+        if latest_session:
+            batch.classified_at = latest_session.classified_at
+            batch.classified_by = latest_session.classified_by
+        else:
+            batch.classified_at = None
+            batch.classified_by = None
+        batch.save(update_fields=["classified_at", "classified_by", "updated_at"])
+
+    return session
+
+
 def reset_batch_progress(*, batch: EggClassificationBatch) -> EggClassificationBatch:
     """Remove confirmations and sessions so the batch can be reprocessed."""
     with transaction.atomic():
@@ -463,7 +506,8 @@ def get_inventory_balance_by_type(*, exclude_dispatch_id: Optional[int] = None) 
 def get_inventory_balance_until(*, until: date, farm_id: Optional[int] = None) -> dict[str, Decimal]:
     """Return classified inventory by type up to a given day, optionally filtered by farm."""
 
-    entry_queryset = EggClassificationEntry.objects.filter(session__classified_at__date__lte=until)
+    _, upper_bound = _local_day_bounds(until)
+    entry_queryset = EggClassificationEntry.objects.filter(session__classified_at__lt=upper_bound)
     if farm_id:
         entry_queryset = entry_queryset.filter(batch__bird_batch__farm_id=farm_id)
     classification_totals = (
@@ -487,6 +531,32 @@ def get_inventory_balance_until(*, until: date, farm_id: Optional[int] = None) -
         dispatched_total = dispatch_map.get(egg_type, Decimal("0"))
         balances[egg_type] = classified_total - dispatched_total
     return balances
+
+
+def get_classification_totals_between(
+    *,
+    start_date: date,
+    end_date: date,
+    farm_id: Optional[int] = None,
+) -> dict[str, Decimal]:
+    """Return classified totals grouped by egg type for sessions within the window."""
+
+    if start_date > end_date:
+        return {}
+
+    lower_bound, _ = _local_day_bounds(start_date)
+    _, final_upper_bound = _local_day_bounds(end_date)
+    entry_queryset = EggClassificationEntry.objects.filter(
+        session__classified_at__gte=lower_bound,
+        session__classified_at__lt=final_upper_bound,
+    )
+    if farm_id:
+        entry_queryset = entry_queryset.filter(batch__bird_batch__farm_id=farm_id)
+    aggregates = entry_queryset.values("egg_type").annotate(total=Sum("cartons")).order_by("egg_type")
+    totals: dict[str, Decimal] = {
+        row["egg_type"]: Decimal(row["total"] or 0) for row in aggregates if row["egg_type"]
+    }
+    return totals
 
 
 def summarize_classified_inventory() -> list[InventoryRow]:
