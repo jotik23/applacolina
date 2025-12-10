@@ -123,6 +123,12 @@ class DispatchDayFlow:
     dispatches: list[DispatchFlowRecord]
 
 
+@dataclass(frozen=True)
+class ClassificationTotals:
+    overall: dict[str, Decimal]
+    by_farm: dict[int, dict[str, Decimal]]
+
+
 ORDERED_EGG_TYPES = [
     EggType.JUMBO,
     EggType.TRIPLE_A,
@@ -538,11 +544,11 @@ def get_classification_totals_between(
     start_date: date,
     end_date: date,
     farm_id: Optional[int] = None,
-) -> dict[str, Decimal]:
-    """Return classified totals grouped by egg type for sessions within the window."""
+) -> ClassificationTotals:
+    """Return overall and per-farm classified totals for sessions within the window."""
 
     if start_date > end_date:
-        return {}
+        return ClassificationTotals(overall={}, by_farm={})
 
     lower_bound, _ = _local_day_bounds(start_date)
     _, final_upper_bound = _local_day_bounds(end_date)
@@ -552,11 +558,25 @@ def get_classification_totals_between(
     )
     if farm_id:
         entry_queryset = entry_queryset.filter(batch__bird_batch__farm_id=farm_id)
-    aggregates = entry_queryset.values("egg_type").annotate(total=Sum("cartons")).order_by("egg_type")
-    totals: dict[str, Decimal] = {
-        row["egg_type"]: Decimal(row["total"] or 0) for row in aggregates if row["egg_type"]
-    }
-    return totals
+    aggregates = (
+        entry_queryset.values("egg_type", "batch__bird_batch__farm_id")
+        .annotate(total=Sum("cartons"))
+        .order_by("egg_type")
+    )
+    overall_totals: dict[str, Decimal] = defaultdict(Decimal)
+    breakdown: dict[int, dict[str, Decimal]] = {}
+    for row in aggregates:
+        egg_type = row["egg_type"]
+        farm_id_value = row["batch__bird_batch__farm_id"]
+        if not egg_type:
+            continue
+        qty = Decimal(row["total"] or 0)
+        overall_totals[egg_type] += qty
+        if farm_id_value is None:
+            continue
+        farm_totals = breakdown.setdefault(farm_id_value, {})
+        farm_totals[egg_type] = farm_totals.get(egg_type, Decimal("0")) + qty
+    return ClassificationTotals(overall=dict(overall_totals), by_farm=breakdown)
 
 
 def summarize_classified_inventory() -> list[InventoryRow]:

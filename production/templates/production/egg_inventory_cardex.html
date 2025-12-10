@@ -106,8 +106,8 @@
       </div>
     </section>
 
-    <section class="grid gap-4 lg:grid-cols-3">
-      <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm lg:col-span-2">
+    <section>
+      <article class="space-y-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm">
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Argumento de inventario</p>
           <h2 class="text-lg font-semibold text-slate-900">Saldo inicial + movimientos del mes ({{ month_start|date:"F" }})</h2>
@@ -118,20 +118,41 @@
         <div class="overflow-x-auto rounded-xl border border-slate-100">
           <table class="w-full border-collapse text-sm text-slate-700">
             <thead>
-              <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                <th class="px-3 py-3 text-left">Tipo</th>
-                <th class="px-3 py-3 text-right">Saldo inicial</th>
-                <th class="px-3 py-3 text-right">Clasificado mes</th>
-                <th class="px-3 py-3 text-right">Despachado mes</th>
-                <th class="px-3 py-3 text-right">Inventario final</th>
-              </tr>
+              {% if classification_breakdown_columns %}
+                <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <th class="px-3 py-3 text-left" rowspan="2">Tipo</th>
+                  <th class="px-3 py-3 text-right" rowspan="2">Saldo inicial</th>
+                  <th class="px-3 py-3 text-center text-emerald-700" colspan="{{ classification_breakdown_colspan }}">Clasificado mes</th>
+                  <th class="px-3 py-3 text-right" rowspan="2">Despachado mes</th>
+                  <th class="px-3 py-3 text-right" rowspan="2">Inventario final</th>
+                </tr>
+                <tr class="bg-emerald-50/30 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-600">
+                  {% for farm in classification_breakdown_columns %}
+                    <th class="px-3 py-2 text-right">{{ farm.label }}</th>
+                  {% endfor %}
+                  <th class="px-3 py-2 text-right text-slate-600">Total mes</th>
+                </tr>
+              {% else %}
+                <tr class="bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <th class="px-3 py-3 text-left">Tipo</th>
+                  <th class="px-3 py-3 text-right">Saldo inicial</th>
+                  <th class="px-3 py-3 text-right">Clasificado mes</th>
+                  <th class="px-3 py-3 text-right">Despachado mes</th>
+                  <th class="px-3 py-3 text-right">Inventario final</th>
+                </tr>
+              {% endif %}
             </thead>
             <tbody>
               {% for row in inventory_argument_rows %}
                 <tr class="border-t border-slate-100">
                   <td class="px-3 py-3 font-semibold text-slate-900">{{ row.label }}</td>
                   <td class="px-3 py-3 text-right">{{ row.starting|cartons_dash_zero }}</td>
-                  <td class="px-3 py-3 text-right">{{ row.classified|cartons_dash_zero }}</td>
+                  {% for farm in classification_breakdown_columns %}
+                    {% with farm_total=row.farm_breakdown|dict_get:farm.id %}
+                      <td class="px-3 py-3 text-right text-emerald-700">{{ farm_total|cartons_dash_zero }}</td>
+                    {% endwith %}
+                  {% endfor %}
+                  <td class="px-3 py-3 text-right font-semibold text-emerald-900">{{ row.classified|cartons_dash_zero }}</td>
                   <td class="px-3 py-3 text-right">{{ row.dispatched|cartons_dash_zero }}</td>
                   <td class="px-3 py-3 text-right font-semibold text-slate-900">{{ row.balance|cartons_dash_zero }}</td>
                 </tr>
@@ -141,7 +162,10 @@
               <tr class="border-t-4 border-slate-900 bg-slate-50 font-semibold text-slate-900">
                 <td class="px-3 py-3 text-left uppercase tracking-wide text-[11px]">Totales</td>
                 <td class="px-3 py-3 text-right">{{ inventory_argument_totals.starting|cartons_dash_zero }}</td>
-                <td class="px-3 py-3 text-right">{{ inventory_argument_totals.classified|cartons_dash_zero }}</td>
+                {% for farm in classification_breakdown_columns %}
+                  <td class="px-3 py-3 text-right text-emerald-700">{{ farm.total|cartons_dash_zero }}</td>
+                {% endfor %}
+                <td class="px-3 py-3 text-right text-emerald-900">{{ inventory_argument_totals.classified|cartons_dash_zero }}</td>
                 <td class="px-3 py-3 text-right">{{ inventory_argument_totals.dispatched|cartons_dash_zero }}</td>
                 <td class="px-3 py-3 text-right">{{ inventory_argument_totals.balance|cartons_dash_zero }}</td>
               </tr>
@@ -149,33 +173,6 @@
           </table>
         </div>
       </article>
-      <aside class="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-5 py-4 shadow-sm">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Despachos del mes</p>
-          <h3 class="text-lg font-semibold text-slate-900">{{ inventory_argument_totals.dispatched|cartons_dash_zero }} cartones</h3>
-          <p class="text-sm text-slate-600">Registrados en {{ dispatch_day_count }} {% if dispatch_day_count == 1 %}día{% else %}días{% endif %} del periodo.</p>
-        </div>
-        <ul class="space-y-2 text-xs text-slate-600">
-          <li class="flex items-center justify-between rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-sm">
-            <span class="font-semibold uppercase tracking-wide text-slate-500">Saldo inicial</span>
-            <span class="text-base font-semibold text-emerald-700">{{ inventory_argument_totals.starting|cartons_dash_zero }}</span>
-          </li>
-          <li class="flex items-center justify-between rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-sm">
-            <span class="font-semibold uppercase tracking-wide text-slate-500">Clasificado mes</span>
-            <span class="text-base font-semibold text-slate-900">{{ inventory_argument_totals.classified|cartons_dash_zero }}</span>
-          </li>
-          <li class="flex items-center justify-between rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-sm">
-            <span class="font-semibold uppercase tracking-wide text-slate-500">Inventario final</span>
-            <span class="text-base font-semibold text-slate-900">{{ inventory_argument_totals.balance|cartons_dash_zero }}</span>
-          </li>
-        </ul>
-        <a
-          href="{{ dispatch_overview_url }}"
-          class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500"
-        >
-          Abrir panel de despachos
-        </a>
-      </aside>
     </section>
 
     {% if cardex_view == "production" %}

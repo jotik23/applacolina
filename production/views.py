@@ -1195,10 +1195,17 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
 
         dispatch_days = build_dispatch_flow_range(start_date=month_start, end_date=month_end)
         dispatch_day_map = {dispatch.day: dispatch for dispatch in dispatch_days}
-        classification_type_totals = get_classification_totals_between(
+        classification_totals = get_classification_totals_between(
             start_date=month_start,
             end_date=month_end,
             farm_id=selected_farm_id,
+        )
+        classification_type_totals = classification_totals.overall
+        classification_breakdown_by_farm = classification_totals.by_farm
+        classification_breakdown_columns = self._build_classification_breakdown_columns(
+            classification_breakdown_by_farm,
+            farm_options,
+            selected_farm_id,
         )
         dispatch_type_totals = self._build_dispatch_type_totals(dispatch_days)
         previous_day = month_start - timedelta(days=1)
@@ -1210,13 +1217,14 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             starting_totals=starting_inventory_totals,
             classification_totals=classification_type_totals,
             dispatch_totals=dispatch_type_totals,
+            classification_breakdown_by_farm=classification_breakdown_by_farm,
+            classification_breakdown_columns=classification_breakdown_columns,
         )
         inventory_argument_totals = self._build_argument_totals(
             starting_totals=starting_inventory_totals,
             classification_totals=classification_type_totals,
             dispatch_totals=dispatch_type_totals,
         )
-        dispatch_overview_url = self._build_dispatch_overview_url(month_start)
 
         prev_month = self._add_months(month_start, -1)
         next_month = self._add_months(month_start, 1)
@@ -1242,8 +1250,8 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
                 "dispatch_day_map": dispatch_day_map,
                 "inventory_argument_rows": inventory_argument_rows,
                 "inventory_argument_totals": inventory_argument_totals,
-                "dispatch_day_count": len(dispatch_days),
-                "dispatch_overview_url": dispatch_overview_url,
+                "classification_breakdown_columns": classification_breakdown_columns,
+                "classification_breakdown_colspan": 1 + len(classification_breakdown_columns),
             }
         )
         _maybe_set_home_tab(context, self.request, "egg_inventory")
@@ -1328,12 +1336,41 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
                 totals[egg_type] += Decimal(qty or 0)
         return totals
 
+    def _build_classification_breakdown_columns(
+        self,
+        breakdown_by_farm: Mapping[int, Mapping[str, Decimal]],
+        farm_options: list[Mapping[str, Any]],
+        selected_farm_id: Optional[int],
+    ) -> list[dict[str, Any]]:
+        label_map = {farm["id"]: farm["name"] for farm in farm_options if farm.get("id")}
+        if selected_farm_id:
+            candidate_farms = [farm for farm in farm_options if farm.get("id") == selected_farm_id]
+        else:
+            candidate_farms = [farm for farm in farm_options if farm.get("id")]
+
+        columns: list[dict[str, Any]] = []
+        for farm in candidate_farms:
+            farm_id = farm["id"]
+            farm_totals = breakdown_by_farm.get(farm_id, {})
+            total = sum(farm_totals.values(), Decimal("0"))
+            columns.append(
+                {
+                    "id": farm_id,
+                    "label": label_map.get(farm_id, f"Granja {farm_id}"),
+                    "total": total,
+                }
+            )
+        columns.sort(key=lambda column: column["label"])
+        return columns
+
     def _build_inventory_argument_rows(
         self,
         *,
         starting_totals: Mapping[str, Decimal],
         classification_totals: Mapping[str, Decimal],
         dispatch_totals: Mapping[str, Decimal],
+        classification_breakdown_by_farm: Mapping[int, Mapping[str, Decimal]],
+        classification_breakdown_columns: list[Mapping[str, Any]],
     ) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for egg_type in ORDERED_EGG_TYPES:
@@ -1341,6 +1378,11 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             classified = classification_totals.get(egg_type, Decimal("0"))
             dispatched = dispatch_totals.get(egg_type, Decimal("0"))
             balance = starting + classified - dispatched
+            farm_breakdown: dict[int, Decimal] = {}
+            for column in classification_breakdown_columns:
+                farm_id = column["id"]
+                type_totals = classification_breakdown_by_farm.get(farm_id, {})
+                farm_breakdown[farm_id] = type_totals.get(egg_type, Decimal("0"))
             rows.append(
                 {
                     "egg_type": egg_type,
@@ -1349,6 +1391,7 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
                     "classified": classified,
                     "dispatched": dispatched,
                     "balance": balance,
+                    "farm_breakdown": farm_breakdown,
                 }
             )
         return rows
@@ -1370,11 +1413,6 @@ class EggInventoryCardexView(EggInventoryPermissionMixin, TemplateView):
             "dispatched": dispatched_total,
             "balance": balance_total,
         }
-
-    def _build_dispatch_overview_url(self, month_start: date) -> str:
-        base_url = reverse("administration:egg-dispatch-list")
-        return f"{base_url}?month={self._month_slug(month_start)}"
-
 
 class EggClassificationShiftSummaryView(EggInventoryPermissionMixin, TemplateView):
     template_name = "production/egg_classification_shift_summary.html"

@@ -255,6 +255,13 @@ class EggInventoryDashboardTests(TestCase):
             response.context["inventory_argument_totals"]["dispatched"],
             Decimal("40"),
         )
+        breakdown_columns = response.context["classification_breakdown_columns"]
+        self.assertGreaterEqual(len(breakdown_columns), 2)
+        first_row = response.context["inventory_argument_rows"][0]
+        self.assertIn("farm_breakdown", first_row)
+        self.assertTrue(
+            all(column["id"] in first_row["farm_breakdown"] for column in breakdown_columns)
+        )
 
         filtered_response = self.client.get(url, {"farm": other_farm.pk})
         self.assertEqual(filtered_response.status_code, 200)
@@ -265,6 +272,9 @@ class EggInventoryDashboardTests(TestCase):
                 for flow in filtered_flows
             )
         )
+        filtered_columns = filtered_response.context["classification_breakdown_columns"]
+        self.assertEqual(len(filtered_columns), 1)
+        self.assertEqual(filtered_columns[0]["id"], other_farm.pk)
 
     def test_cardex_argument_includes_previous_balance(self) -> None:
         target_month = self.record.date.replace(day=1)
