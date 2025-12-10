@@ -520,7 +520,8 @@ class ProductionDashboardContextMixin(StaffRequiredMixin):
             stats = production_map.get(batch.id, {})
             total_mortality = int(stats.get("total_mortality", 0) or 0)
             total_discard = int(stats.get("total_discard", 0) or 0)
-            current_birds = max(batch.initial_quantity - total_mortality, 0)
+            total_losses = total_mortality + total_discard
+            current_birds = max(batch.initial_quantity - total_losses, 0)
             bird_balance = batch.initial_quantity - current_birds
 
             weekly_consumption = float(stats.get("weekly_consumption") or Decimal("0"))
