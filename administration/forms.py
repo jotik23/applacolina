@@ -590,9 +590,13 @@ class SalePaymentForm(forms.ModelForm):
         if amount <= Decimal("0"):
             raise ValidationError("El abono debe ser mayor a cero.")
         balance = self.sale.balance_due
-        if amount > balance:
+        current_amount = Decimal("0")
+        if getattr(self.instance, "pk", None):
+            current_amount = Decimal(self.instance.amount or 0)
+        allowed = balance + current_amount
+        if amount > allowed:
             raise ValidationError(
-                f"El abono supera el saldo pendiente ({balance}). Actualiza la venta si el valor a pagar cambió."
+                f"El abono supera el saldo disponible para esta venta ({allowed}). Actualiza la venta si el valor a pagar cambió."
             )
         return amount
 

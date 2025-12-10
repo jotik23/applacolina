@@ -1562,12 +1562,23 @@ class SaleUpdateView(SaleFormMixin, generic.UpdateView):
         context = super().get_context_data(**kwargs)
         sale: Sale = self.object
         payments = sale.payments.all()
-        payment_form = kwargs.get("payment_form") or SalePaymentForm(sale=sale)
+        editing_payment = kwargs.get("editing_payment")
+        if editing_payment is None:
+            editing_payment = self._get_editing_payment_from_get()
+        payment_form = kwargs.get("payment_form")
+        if not payment_form:
+            if editing_payment:
+                payment_form = SalePaymentForm(sale=sale, instance=editing_payment)
+            else:
+                payment_form = SalePaymentForm(sale=sale)
         context.update(
             {
                 "sale": sale,
                 "payments": payments,
                 "payment_form": payment_form,
+                "editing_payment": editing_payment,
+                "payment_panel_url": self._build_payment_panel_url(),
+                "payment_edit_base_url": self._build_payment_edit_base_url(),
                 "page_title": f"Venta #{sale.pk}",
                 "submit_label": "Actualizar venta",
             }
@@ -1575,22 +1586,58 @@ class SaleUpdateView(SaleFormMixin, generic.UpdateView):
         return context
 
     def _handle_payment_submission(self, request: HttpRequest) -> HttpResponse:
-        payment_form = SalePaymentForm(data=request.POST, sale=self.object)
+        payment = self._get_payment_from_request(request.POST.get("payment_id"))
+        payment_form = SalePaymentForm(data=request.POST, sale=self.object, instance=payment)
         if payment_form.is_valid():
             payment = payment_form.save(commit=False)
             payment.sale = self.object
             payment.save()
             refresh_sale_payment_state(self.object)
-            messages.success(
-                request,
-                "Abono registrado correctamente. El saldo pendiente se actualizó de inmediato.",
-            )
+            if payment and request.POST.get("payment_id"):
+                message = "Abono actualizado correctamente."
+            else:
+                message = "Abono registrado correctamente. El saldo pendiente se actualizó de inmediato."
+            messages.success(request, message)
             base_url = self.get_success_url()
             separator = "&" if "?" in base_url else "?"
             return redirect(f"{base_url}{separator}tab=payments")
         sale_form = self.build_unbound_form()
         self._forced_active_tab = "payments"
-        return self.render_to_response(self.get_context_data(form=sale_form, payment_form=payment_form))
+        return self.render_to_response(
+            self.get_context_data(form=sale_form, payment_form=payment_form, editing_payment=payment)
+        )
+
+    def _get_payment_from_request(self, payment_id_raw: str | None) -> SalePayment | None:
+        if not payment_id_raw:
+            return None
+        try:
+            payment_id = int(payment_id_raw)
+        except (TypeError, ValueError):
+            return None
+        return self.object.payments.filter(pk=payment_id).first()
+
+    def _get_editing_payment_from_get(self) -> SalePayment | None:
+        if self.request.method != "GET":
+            return None
+        payment_id = self.request.GET.get("payment_id")
+        return self._get_payment_from_request(payment_id)
+
+    def _build_payment_panel_url(self) -> str:
+        query = self.request.GET.copy()
+        if "tab" not in query:
+            query["tab"] = "payments"
+        else:
+            query["tab"] = "payments"
+        query.pop("payment_id", None)
+        encoded = query.urlencode()
+        if encoded:
+            return f"{self.request.path}?{encoded}"
+        return f"{self.request.path}?tab=payments"
+
+    def _build_payment_edit_base_url(self) -> str:
+        panel_url = self._build_payment_panel_url()
+        separator = "&" if "?" in panel_url else "?"
+        return f"{panel_url}{separator}payment_id="
 
 
 class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):

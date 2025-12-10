@@ -215,3 +215,38 @@ class SaleFormTestCase(TestCase):
         self.assertEqual(form.fields["payment_due_date"].initial, sale.payment_due_date)
         self.assertEqual(str(form["date"].value()), sale.date.isoformat())
         self.assertEqual(str(form["payment_due_date"].value()), sale.payment_due_date.isoformat())
+
+    def test_payment_form_allows_editing_existing_payment(self):
+        sale = Sale.objects.create(
+            date=timezone.localdate(),
+            customer=self.customer,
+            seller=self.seller,
+            status=Sale.Status.CONFIRMED,
+            payment_condition=Sale.PaymentCondition.CREDIT,
+            payment_due_date=timezone.localdate(),
+        )
+        SaleItem.objects.create(
+            sale=sale,
+            product_type=SaleProductType.JUMBO,
+            quantity=Decimal("100"),
+            unit_price=Decimal("1000"),
+        )
+        payment = SalePayment.objects.create(
+            sale=sale,
+            date=timezone.localdate(),
+            amount=Decimal("50000"),
+            method=SalePayment.Method.CASH,
+        )
+        form = SalePaymentForm(
+            data={
+                "date": timezone.localdate().isoformat(),
+                "amount": "60000",
+                "method": SalePayment.Method.CASH,
+                "notes": "Ajuste",
+            },
+            sale=sale,
+            instance=payment,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        updated = form.save()
+        self.assertEqual(updated.amount, Decimal("60000"))
