@@ -399,7 +399,45 @@ def _persist_single_record(
             params={"batch": lot.batch_id},
         )
 
+    _missing = object()
+    raw_average_weight = entry.get("average_egg_weight", _missing)
+    average_weight_defined = raw_average_weight is not _missing
+    average_weight = _parse_average_weight(raw_average_weight) if average_weight_defined else None
+
+    record = (
+        ProductionRecord.objects.select_for_update()
+        .filter(bird_batch_id=lot.batch_id, date=registry.date)
+        .first()
+    )
+    is_new_record = record is None
+    if record is None:
+        record = ProductionRecord(
+            bird_batch_id=lot.batch_id,
+            date=registry.date,
+        )
+
+    existing_room_records: dict[int, ProductionRoomRecord] = {}
+    if not is_new_record:
+        existing_room_records = {
+            room_record.room_id: room_record
+            for room_record in ProductionRoomRecord.objects.select_for_update().filter(production_record=record)
+        }
+
+    existing_room_values: dict[int, dict[str, object]] = {}
+    for room_id, room_record in existing_room_records.items():
+        existing_room_values[room_id] = {
+            "production": _quantize_production(Decimal(room_record.production)) or Decimal("0"),
+            "consumption": _quantize_to_int(Decimal(room_record.consumption)) or Decimal("0"),
+            "mortality": int(room_record.mortality),
+            "discard": int(room_record.discard),
+        }
+
+    merged_rooms: dict[int, dict[str, object]] = dict(existing_room_values)
     parsed_rooms: dict[int, dict[str, object]] = {}
+
+    def _has_explicit_value(value: object) -> bool:
+        return value not in (None, "", "null")
+
     for room_payload in rooms_payload:
         if not isinstance(room_payload, Mapping):
             raise ValidationError(_("Formato de salón inválido."))
@@ -416,75 +454,94 @@ def _persist_single_record(
                 params={"room": room_id, "batch": lot.batch_id},
             )
 
-        production = _coerce_decimal(
-            room_payload.get("production"),
-            field="production",
-            allow_empty=True,
-        )
-        production = _quantize_production(production)
-        consumption = _coerce_decimal(
-            room_payload.get("consumption"),
-            field="consumption",
-            allow_decimals=False,
-            allow_empty=True,
-        )
-        mortality = _coerce_int(room_payload.get("mortality"), field="mortality", allow_empty=True)
-        discard = _coerce_int(room_payload.get("discard"), field="discard", allow_empty=True)
-        parsed_rooms[room_id] = {
-            "production": production,
-            "consumption": consumption,
-            "mortality": mortality,
-            "discard": discard,
-        }
+        raw_production = room_payload.get("production")
+        raw_consumption = room_payload.get("consumption")
+        raw_mortality = room_payload.get("mortality")
+        raw_discard = room_payload.get("discard")
+        if not any(
+            _has_explicit_value(value)
+            for value in (raw_production, raw_consumption, raw_mortality, raw_discard)
+        ):
+            continue
 
-    missing_rooms = lot.room_ids - set(parsed_rooms.keys())
-    if missing_rooms:
+        previous_metrics = merged_rooms.get(room_id)
+
+        if _has_explicit_value(raw_production):
+            production_value = _quantize_production(
+                _coerce_decimal(raw_production, field="production")
+            ) or Decimal("0")
+        elif previous_metrics:
+            production_value = previous_metrics["production"]
+        else:
+            production_value = Decimal("0")
+
+        if _has_explicit_value(raw_consumption):
+            consumption_value = _quantize_to_int(
+                _coerce_decimal(
+                    raw_consumption,
+                    field="consumption",
+                    allow_decimals=False,
+                )
+            ) or Decimal("0")
+        elif previous_metrics:
+            consumption_value = previous_metrics["consumption"]
+        else:
+            consumption_value = Decimal("0")
+
+        if _has_explicit_value(raw_mortality):
+            mortality_value = _coerce_int(raw_mortality, field="mortality")
+        elif previous_metrics:
+            mortality_value = previous_metrics["mortality"]
+        else:
+            mortality_value = 0
+
+        if _has_explicit_value(raw_discard):
+            discard_value = _coerce_int(raw_discard, field="discard")
+        elif previous_metrics:
+            discard_value = previous_metrics["discard"]
+        else:
+            discard_value = 0
+
+        room_metrics = {
+            "production": production_value,
+            "consumption": consumption_value,
+            "mortality": mortality_value,
+            "discard": discard_value,
+        }
+        parsed_rooms[room_id] = room_metrics
+        merged_rooms[room_id] = room_metrics
+
+    if not parsed_rooms:
         raise ValidationError(
-            _("Debes enviar todos los salones asignados para el lote %(batch)s."),
+            _("Debes enviar al menos un salón con datos para el lote %(batch)s."),
             params={"batch": lot.batch_id},
         )
 
-    average_weight = _parse_average_weight(entry.get("average_egg_weight"))
-
-    total_production = _quantize_production(sum(value["production"] for value in parsed_rooms.values()))
-    total_consumption = _quantize_to_int(sum(value["consumption"] for value in parsed_rooms.values()))
-    total_mortality = sum(value["mortality"] for value in parsed_rooms.values())
-    total_discard = sum(value["discard"] for value in parsed_rooms.values())
-
-    defaults = {
-        "production": total_production,
-        "consumption": total_consumption,
-        "mortality": total_mortality,
-        "discard": total_discard,
-        "average_egg_weight": average_weight,
-        "created_by": user,
-        "updated_by": user,
-    }
-
-    record, created = ProductionRecord.objects.select_for_update().get_or_create(
-        bird_batch_id=lot.batch_id,
-        date=registry.date,
-        defaults=defaults,
+    total_production = (
+        _quantize_production(sum(value["production"] for value in merged_rooms.values()))
+        or Decimal("0")
     )
+    total_consumption = (
+        _quantize_to_int(sum(value["consumption"] for value in merged_rooms.values()))
+        or Decimal("0")
+    )
+    total_mortality = sum(int(value["mortality"]) for value in merged_rooms.values())
+    total_discard = sum(int(value["discard"]) for value in merged_rooms.values())
 
-    if not created:
-        record.production = total_production
-        record.consumption = total_consumption
-        record.mortality = total_mortality
-        record.discard = total_discard
+    record.production = total_production
+    record.consumption = total_consumption
+    record.mortality = total_mortality
+    record.discard = total_discard
+    if is_new_record:
+        record.created_by = user
+    elif record.created_by_id is None:
+        record.created_by = user
+    if average_weight_defined:
         record.average_egg_weight = average_weight
-        if record.created_by_id is None:
-            record.created_by = user
-        record.updated_by = user
+    record.updated_by = user
 
     record.full_clean()
     record.save()
-
-    existing_room_records = {
-        room_record.room_id: room_record
-        for room_record in ProductionRoomRecord.objects.select_for_update()
-        .filter(production_record=record)
-    }
 
     for room_id, values in parsed_rooms.items():
         room_record = existing_room_records.get(room_id)
@@ -499,8 +556,6 @@ def _persist_single_record(
         room_record.discard = values["discard"]
         room_record.full_clean()
         room_record.save()
-
-    ProductionRoomRecord.objects.filter(production_record=record).exclude(room_id__in=parsed_rooms.keys()).delete()
 
     return record
 

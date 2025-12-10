@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from datetime import timedelta
+from typing import Optional
 
 from django.contrib.auth.models import Permission
 from django.test import TestCase
@@ -93,17 +94,22 @@ class MiniAppProductionViewTests(TestCase):
             user.user_permissions.add(production_perm)
         return user
 
-    def _create_assignment(self, *, operator: UserProfile) -> ShiftAssignment:
+    def _create_assignment(
+        self,
+        *,
+        operator: UserProfile,
+        position: Optional[PositionDefinition] = None,
+    ) -> ShiftAssignment:
         today = timezone.localdate()
-        calendar = ShiftCalendar.objects.create(
-            name="Calendario Producción",
+        calendar, _ = ShiftCalendar.objects.get_or_create(
             start_date=today - timedelta(days=1),
             end_date=today + timedelta(days=1),
             status=CalendarStatus.APPROVED,
+            defaults={"name": "Calendario Producción"},
         )
         return ShiftAssignment.objects.create(
             calendar=calendar,
-            position=self.position,
+            position=position or self.position,
             date=today,
             operator=operator,
         )
@@ -420,3 +426,94 @@ class MiniAppProductionViewTests(TestCase):
         response = self.client.post(url, payload, content_type="application/json")
         self.assertEqual(response.status_code, 403)
         self.assertFalse(ProductionRecord.objects.exists())
+
+    def test_partial_room_submission_preserves_existing_values(self):
+        second_room = Room.objects.create(
+            chicken_house=self.chicken_house,
+            name="Sala 2",
+            area_m2=100.0,
+        )
+        second_position = PositionDefinition.objects.create(
+            name="Auxiliar Operativo 2",
+            code="AUX-OP-02",
+            category=self.category,
+            farm=self.farm,
+            chicken_house=self.chicken_house,
+            valid_from=self.position.valid_from,
+            valid_until=self.position.valid_until,
+        )
+        second_position.rooms.add(second_room)
+        BirdBatchRoomAllocation.objects.create(
+            bird_batch=self.bird_batch,
+            room=second_room,
+            quantity=800,
+        )
+
+        user_a = self._create_user(grant_permission=True)
+        user_b = self._create_user(grant_permission=True)
+        self._create_assignment(operator=user_a, position=self.position)
+        self._create_assignment(operator=user_b, position=second_position)
+
+        today = timezone.localdate()
+        url = reverse("task_manager:mini-app-production-records")
+
+        self.client.force_login(user_a)
+        payload_a = {
+            "date": today.isoformat(),
+            "lots": [
+                {
+                    "bird_batch": self.bird_batch.pk,
+                    "average_egg_weight": "62",
+                    "rooms": [
+                        {
+                            "room_id": self.room.pk,
+                            "production": "150",
+                            "consumption": "480",
+                            "mortality": 2,
+                            "discard": 4,
+                        }
+                    ],
+                }
+            ],
+        }
+        response = self.client.post(url, payload_a, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+
+        self.client.force_login(user_b)
+        payload_b = {
+            "date": today.isoformat(),
+            "lots": [
+                {
+                    "bird_batch": self.bird_batch.pk,
+                    "rooms": [
+                        {
+                            "room_id": second_room.pk,
+                            "production": "160",
+                            "consumption": "450",
+                            "mortality": 2,
+                            "discard": 5,
+                        }
+                    ],
+                }
+            ],
+        }
+        response = self.client.post(url, payload_b, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+
+        record = ProductionRecord.objects.get(bird_batch=self.bird_batch, date=today)
+        self.assertEqual(record.production, Decimal("310"))
+        self.assertEqual(record.consumption, Decimal("930"))
+        self.assertEqual(record.mortality, 4)
+        self.assertEqual(record.discard, 9)
+        self.assertEqual(record.average_egg_weight, Decimal("62"))
+
+        room_one = ProductionRoomRecord.objects.get(production_record=record, room=self.room)
+        room_two = ProductionRoomRecord.objects.get(production_record=record, room=second_room)
+        self.assertEqual(room_one.production, Decimal("150"))
+        self.assertEqual(room_one.consumption, Decimal("480"))
+        self.assertEqual(room_one.mortality, 2)
+        self.assertEqual(room_one.discard, 4)
+        self.assertEqual(room_two.production, Decimal("160"))
+        self.assertEqual(room_two.consumption, Decimal("450"))
+        self.assertEqual(room_two.mortality, 2)
+        self.assertEqual(room_two.discard, 5)
