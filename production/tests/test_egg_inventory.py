@@ -54,7 +54,7 @@ class EggInventoryDashboardTests(TestCase):
         )
 
     def test_dashboard_renders_pending_batches(self) -> None:
-        response = self.client.get(reverse("production:egg-inventory"))
+        response = self.client.get(reverse("home:egg-inventory"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "production/egg_inventory.html")
         self.assertIn("pending_batches", response.context)

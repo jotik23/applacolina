@@ -532,7 +532,7 @@
             <div class="mt-3 grid gap-2 text-sm">
               {% if request.user.is_staff or perms.production.access_egg_inventory %}
                 <a
-                  href="{% if request.user.is_staff %}{% url 'production:index' %}{% else %}{% url 'production:egg-inventory' %}{% endif %}"
+                  href="{% if request.user.is_staff %}{% url 'production:index' %}{% else %}{% url 'home:egg-inventory' %}{% endif %}"
                   class="flex items-center justify-between rounded-lg border px-3 py-2 transition hover:border-brand hover:text-brand {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}border-brand bg-amber-50 text-brand shadow-sm{% else %}border-slate-200 text-slate-700{% endif %}"
                   data-mobile-nav-close
                   {% if current_namespace == 'production' or current_app == 'production' or 'production' in namespaces %}aria-current="page"{% endif %}

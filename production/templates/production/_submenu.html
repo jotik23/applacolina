@@ -12,7 +12,7 @@
     {% endif %}
     {% if request.user.is_staff or perms.production.access_egg_inventory %}
       <a
-        href="{% url 'production:egg-inventory' %}"
+        href="{% url 'home:egg-inventory' %}"
         class="inline-flex items-center gap-2 rounded-t-xl border px-4 py-2 transition snap-start {% if active == 'egg_inventory' %}border-slate-200 bg-white text-slate-900 shadow-sm{% else %}border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700{% endif %}"
         {% if active == 'egg_inventory' %}aria-current="page"{% endif %}
       >

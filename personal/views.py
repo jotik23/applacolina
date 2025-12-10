@@ -115,7 +115,7 @@ class CalendarPortalView(LoginView):
         if getattr(user, "is_staff", False):
             return reverse("personal:dashboard")
         if user.has_perm("production.access_egg_inventory"):
-            return reverse("production:egg-inventory")
+            return reverse("home:egg-inventory")
         return reverse("task_manager:telegram-mini-app")
 
 

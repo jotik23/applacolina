@@ -1813,7 +1813,7 @@ class EggInventoryBatchDetailView(EggInventoryPermissionMixin, TemplateView):
                 "can_revert_sessions": can_revert_sessions,
                 "can_reset_batch": can_reset_batch,
                 "has_resettable_progress": bool(can_reset_batch and (self.batch.received_cartons or session_rows)),
-                "return_url": reverse("production:egg-inventory"),
+                "return_url": reverse("home:egg-inventory"),
             }
         )
         return context
