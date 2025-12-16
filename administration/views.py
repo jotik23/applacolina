@@ -669,6 +669,15 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         SUBJECT_PAYMENT: "Abonos",
     }
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        filters = self._build_filters()
+        export_intent = request.GET.get("export")
+        if export_intent == "payments" and filters["subject"] == self.SUBJECT_PAYMENT:
+            queryset = self._get_sales_queryset(filters)
+            sales = self._apply_payment_display_filters(list(queryset), filters)
+            return self._export_payments_to_excel(sales)
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         filters = self._build_filters()
@@ -683,12 +692,16 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
                 "filter_values": self._filter_form_values(filters),
                 "has_active_filters": self._has_active_filters(filters),
                 "customer_suggestions": self._customer_suggestions(),
+                "can_export_payments": filters["subject"] == self.SUBJECT_PAYMENT,
+                "payments_export_url": self._build_export_url(),
             }
         )
         _maybe_set_home_tab(context, self.request, "sales")
         return context
 
     def _build_filters(self) -> dict[str, Any]:
+        if hasattr(self, "_filters_cache"):
+            return self._filters_cache
         subject = self.request.GET.get("subject") or self.SUBJECT_SALE
         if subject not in self.SUBJECT_LABELS:
             subject = self.SUBJECT_SALE
@@ -698,7 +711,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         date_to_raw = self.request.GET.get("date_to") or ""
         amount_min_raw = self.request.GET.get("amount_min") or ""
         amount_max_raw = self.request.GET.get("amount_max") or ""
-        return {
+        filters = {
             "subject": subject,
             "invoice_number": invoice_number,
             "customer_query": customer_query,
@@ -711,6 +724,8 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
             "raw_amount_min": amount_min_raw,
             "raw_amount_max": amount_max_raw,
         }
+        self._filters_cache = filters
+        return filters
 
     def _get_sales_queryset(self, filters: dict[str, Any]):
         decimal_field = DecimalField(max_digits=14, decimal_places=2)
@@ -889,6 +904,55 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
         return list(
             Supplier.objects.order_by("name").values("id", "name", "tax_id")
         )
+
+    def _build_export_url(self) -> str:
+        params = self.request.GET.copy()
+        params["subject"] = self.SUBJECT_PAYMENT
+        params["export"] = "payments"
+        querystring = params.urlencode()
+        return f"{self.request.path}?{querystring}" if querystring else self.request.path
+
+    def _export_payments_to_excel(self, sales: list[Sale]) -> HttpResponse:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Abonos"
+        headers = [
+            "# factura",
+            "Cliente",
+            "Monto total factura",
+            "Fecha factura",
+            "Fecha del abono",
+            "Monto abonado",
+            "Medio de pago",
+        ]
+        worksheet.append(headers)
+        for sale in sales:
+            payments = getattr(sale, "display_payments", list(sale.payments.all()))
+            if not payments:
+                continue
+            invoice_label = sale.invoice_number or f"Venta #{sale.pk}"
+            for payment in payments:
+                worksheet.append(
+                    [
+                        invoice_label,
+                        sale.customer.name,
+                        sale.annotated_total_amount,
+                        sale.date,
+                        payment.date,
+                        payment.amount,
+                        payment.get_method_display(),
+                    ]
+                )
+        stream = BytesIO()
+        workbook.save(stream)
+        stream.seek(0)
+        response = HttpResponse(
+            stream.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        timestamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        response["Content-Disposition"] = f'attachment; filename="abonos-{timestamp}.xlsx"'
+        return response
 
 
 class SalesCardexView(StaffRequiredMixin, generic.TemplateView):
