@@ -702,7 +702,7 @@ class SalesPaymentListView(StaffRequiredMixin, generic.TemplateView):
     def _build_filters(self) -> dict[str, Any]:
         if hasattr(self, "_filters_cache"):
             return self._filters_cache
-        subject = self.request.GET.get("subject") or self.SUBJECT_SALE
+        subject = self.request.GET.get("subject") or self.SUBJECT_PAYMENT
         if subject not in self.SUBJECT_LABELS:
             subject = self.SUBJECT_SALE
         invoice_number = (self.request.GET.get("invoice_number") or "").strip()
