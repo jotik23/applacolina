@@ -1924,6 +1924,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             'Total estimado',
             'Total factura',
             'Total pagado',
+            'Fecha de solicitud',
             'ETA',
             'Fecha de orden',
             'Número de orden',
@@ -1957,6 +1958,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
             )
             created_at = timezone.localtime(purchase.created_at) if purchase.created_at else None
             updated_at = timezone.localtime(purchase.updated_at) if purchase.updated_at else None
+            requested_date = created_at.date() if created_at else None
             row = [
                 purchase.pk,
                 purchase.timeline_code,
@@ -1978,6 +1980,7 @@ class AdministrationHomeView(StaffRequiredMixin, generic.TemplateView):
                 _normalize_excel_value(purchase.estimated_total),
                 _normalize_excel_value(purchase.invoice_total),
                 _normalize_excel_value(purchase.payment_amount),
+                _normalize_excel_value(requested_date),
                 purchase.eta,
                 purchase.order_date,
                 purchase.order_number,
